@@ -1,0 +1,9 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-plugins",
+  "description": "Mikey's personal collection of Claude Code plugins",
+  "owner": {
+    "name": "mikeydotio"
+  },
+  "plugins": []
+}

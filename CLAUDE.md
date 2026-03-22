@@ -1,4 +1,4 @@
-# Claude Plugins Marketplace
+# Handy Plugins Marketplace
 
 This repo is a Claude Code plugin marketplace owned by mikeydotio.
 

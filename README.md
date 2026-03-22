@@ -1,17 +1,17 @@
-# claude-plugins
+# handy-plugins
 
 Personal Claude Code plugin marketplace.
 
 ## Install
 
 ```
-/plugin marketplace add mikeydotio/claude-plugins
+/plugin marketplace add mikeydotio/handy-plugins
 ```
 
 Then install any plugin:
 
 ```
-/plugin install <plugin-name>@claude-plugins
+/plugin install <plugin-name>@handy-plugins
 ```
 
 ## Adding a Plugin

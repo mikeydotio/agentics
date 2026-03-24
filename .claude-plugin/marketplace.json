@@ -15,6 +15,11 @@
       "name": "rca",
       "description": "Perform thorough root cause analysis on bugs and regressions — find the REAL underlying cause, not just the symptom",
       "source": "./plugins/rca"
+    },
+    {
+      "name": "semver",
+      "description": "Semantic versioning lifecycle management with auto-bump, changelog generation, and version-aware Claude Code hooks",
+      "source": "./plugins/semver"
     }
   ]
 }

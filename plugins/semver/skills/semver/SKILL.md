@@ -15,6 +15,7 @@ You are a semantic versioning lifecycle manager. You handle version tracking, bu
 - `references/claude-md-injection.md` — CLAUDE.md template and sentinel markers
 - `references/archive-format.md` — VERSIONING_ARCHIVE.md format for tracking stop/start
 - `references/sync-validation.md` — Validation checks and repair procedures for VERSION/CHANGELOG/tag sync
+- `references/user-hooks.md` — User-defined hook system for pre-bump and post-bump automation
 
 ## Hard Rules
 
@@ -81,6 +82,19 @@ Parse the ARGUMENTS string to determine which command to run:
 Extract:
 - `BUMP_TYPE`: one of `major`, `minor`, `patch` (required — if missing, show usage and stop)
 - `FORCE`: true if `--force` is present
+
+### Pre-check: Re-entrancy Guard
+
+Check if the environment variable `SEMVER_BUMP_IN_PROGRESS` is set to `1` by running:
+```
+echo "${SEMVER_BUMP_IN_PROGRESS:-}"
+```
+
+If it equals `1`:
+- Report: "A version bump is already in progress. Nested bumps are not allowed — this prevents infinite loops when hooks or PROMPT_HOOK.md instructions inadvertently trigger another bump."
+- Stop immediately. Do not proceed with any further checks or operations.
+
+**Also remember internally:** Once you begin executing this bump command (past this point), you are in a bump. Do NOT invoke `/semver bump` again until this entire flow completes, even if a PROMPT_HOOK.md or hook output suggests doing so.
 
 ### Pre-check: Tracking Active
 
@@ -183,21 +197,44 @@ If any check **FAILS**:
 
 If all checks **PASS**, proceed silently (no output needed).
 
+### Compute New Version
+
+Before entering the critical section, compute the new version so it can be passed to hooks:
+
+1. **Read current version** from VERSION file. Strip whitespace. Store as `OLD_VERSION`.
+2. Remove version prefix if present to get bare `MAJOR.MINOR.PATCH`.
+3. **Compute new version:**
+   - `major` bump: `MAJOR+1.0.0`
+   - `minor` bump: `MAJOR.MINOR+1.0`
+   - `patch` bump: `MAJOR.MINOR.PATCH+1`
+4. **Apply prefix:** Read `version_prefix` from config. Store as `NEW_VERSION` = `<prefix><MAJOR.MINOR.PATCH>`.
+
+At this point you have: `BUMP_TYPE`, `OLD_VERSION`, and `NEW_VERSION`. These are used by hooks and by the critical section.
+
+### Execute Pre-Bump Hooks
+
+Run user-defined hooks before modifying any version files. See `references/user-hooks.md` for the full contract.
+
+1. **Read PROMPT_HOOK.md:** If `.semver/hooks/pre-bump/PROMPT_HOOK.md` exists, read its contents. Follow the instructions in the file now, in the context of the current bump. The following context is available: `BUMP_TYPE`, `OLD_VERSION`, `NEW_VERSION`. **Do NOT trigger any `/semver bump` commands from within these instructions.** If the instructions indicate the bump should be aborted (e.g., a blocking issue is found), abort the bump and report the reason. After completing the PROMPT_HOOK.md instructions (or if the file does not exist), continue with the next step.
+
+2. **Run hook scripts:** Execute the hook runner:
+   ```
+   bash <plugin-root>/hooks/run-user-hooks.sh pre-bump <BUMP_TYPE> <OLD_VERSION> <NEW_VERSION> <project-dir>
+   ```
+
+   Parse the JSON result:
+   - If `status` is `"ok"`: Continue. If `hooks_run` > 0, briefly note: "Pre-bump hooks passed (<N> hooks)."
+   - If `status` is `"failed"`: Report which hook failed (`failed_hook`) and the output. **Abort the bump entirely** — do not enter the critical section. Report: "Pre-bump hook `<name>` failed (exit <code>). Bump aborted."
+   - If `status` is `"blocked"`: A re-entrancy guard was triggered. Report the reason and stop.
+   - If `hooks_run` is 0 and `prompt_hook` is null: No hooks exist. Continue silently.
+
 ### Execute Bump (Critical Section)
 
 **All steps below must be performed inside a file lock.** Follow the protocol in `references/file-locking.md`.
 
-1. **Read current version** from VERSION file. Strip whitespace. Remove version prefix if present to get bare `MAJOR.MINOR.PATCH`.
+Use the pre-computed `OLD_VERSION` and `NEW_VERSION` from the "Compute New Version" step above.
 
-2. **Compute new version:**
-   - Parse `MAJOR.MINOR.PATCH` from current version
-   - `major` bump: `MAJOR+1.0.0`
-   - `minor` bump: `MAJOR.MINOR+1.0`
-   - `patch` bump: `MAJOR.MINOR.PATCH+1`
-
-3. **Apply prefix:** Read `version_prefix` from config. New version string = `<prefix><MAJOR.MINOR.PATCH>`.
-
-4. **Generate changelog entry:**
+1. **Generate changelog entry:**
    - If FORCE and no commits: Write a brief entry noting this is a version-only adjustment
    - Otherwise:
      - Run `git log <last-tag>..HEAD --format="%h %s"` to get commits
@@ -207,17 +244,17 @@ If all checks **PASS**, proceed silently (no output needed).
      - **Flat format**: List commits linearly with hashes and descriptions
    - Determine the indicator: `_[manual]_` for explicit user bump, `_[auto]_` if triggered by auto-bump hook, `_[force]_` if `--force` was used
 
-5. **Write VERSION file:** Write the new version string (with prefix per config) followed by a newline. Nothing else in the file.
+2. **Write VERSION file:** Write the new version string (with prefix per config) followed by a newline. Nothing else in the file.
 
-6. **Update CHANGELOG.md:** Prepend the new version section after the title/header lines (before the first existing `## [` section). See `references/changelog-format.md` for exact format.
+3. **Update CHANGELOG.md:** Prepend the new version section after the title/header lines (before the first existing `## [` section). See `references/changelog-format.md` for exact format.
 
-7. **Commit:**
+4. **Commit:**
    ```
    git add VERSION CHANGELOG.md
    git commit -m "chore(release): <new-version-string>"
    ```
 
-8. **Tag:**
+5. **Tag:**
    - Check if the tag already exists: `git tag -l "<new-version-string>"`
    - If it exists:
      - Use AskUserQuestion:
@@ -232,7 +269,23 @@ If all checks **PASS**, proceed silently (no output needed).
      - **Cancel**: `git reset --soft HEAD~1`, restore VERSION and CHANGELOG from before, release lock, stop
    - If it doesn't exist: `git tag "<new-version-string>"`
 
-9. **Release lock.**
+6. **Release lock.**
+
+### Execute Post-Bump Hooks
+
+Run user-defined hooks after the version has been committed and tagged. See `references/user-hooks.md` for the full contract.
+
+1. **Run hook scripts:** Execute the hook runner:
+   ```
+   bash <plugin-root>/hooks/run-user-hooks.sh post-bump <BUMP_TYPE> <OLD_VERSION> <NEW_VERSION> <project-dir>
+   ```
+
+   Parse the JSON result:
+   - If `status` is `"ok"` with no warnings: Continue silently.
+   - If `status` is `"ok"` with warnings: For each warning, report: "Post-bump hook `<hook>` failed (exit <code>). The version bump has already been committed. Review the hook output and address any issues manually." **Do NOT roll back the bump.**
+   - If `hooks_run` is 0 and `prompt_hook` is null: No hooks exist. Continue silently.
+
+2. **Read PROMPT_HOOK.md:** If `.semver/hooks/post-bump/PROMPT_HOOK.md` exists, read its contents. Follow the instructions in the file now, in the context of the completed bump. The following context is available: `BUMP_TYPE`, `OLD_VERSION`, `NEW_VERSION`. **Do NOT trigger any `/semver bump` commands from within these instructions.** After completing the instructions (or if the file does not exist), continue to the Post-Bump Report.
 
 ### Post-Bump Report
 
@@ -340,7 +393,7 @@ If any flag has an invalid value, report the error with valid values and stop.
    ```
    If `--version` was provided, also create the git tag: `git tag "<version>"`
 
-5. Report: tracking enabled, target branch, and either the version set or "No version set — run `/semver bump` when ready."
+5. Report: tracking enabled, target branch, and either the version set or "No version set — run `/semver bump` when ready." Also mention: "Tip: You can add custom pre-bump and post-bump hooks in `.semver/hooks/`. Ask me to set one up, or see `references/user-hooks.md` for details."
 
 ---
 

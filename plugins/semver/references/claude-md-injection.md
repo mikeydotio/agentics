@@ -28,6 +28,10 @@ When recommending or performing a version bump:
 
 When you notice the user has completed a logical unit of work, suggest running `/semver bump` with the appropriate level.
 
+### Hooks
+- Custom pre-bump and post-bump hooks can be added in `.semver/hooks/`.
+- Never trigger `/semver bump` from within a hook — this causes infinite recursion.
+
 ### Configuration
 Versioning settings are in `.semver/config.yaml`. Do not modify this file unless the user explicitly asks to change semver settings.
 <!-- semver:end -->

@@ -50,6 +50,29 @@ The plugin includes two Claude Code hooks that activate based on `.semver/config
 
 Both hooks exit silently when semver is not active in the project.
 
+### User-Defined Hooks
+
+Projects can define custom pre-bump and post-bump hooks in `.semver/hooks/`:
+
+```
+.semver/hooks/
+├── pre-bump/
+│   ├── PROMPT_HOOK.md    # AI agent instructions (optional)
+│   └── *.sh              # Shell scripts run before VERSION is updated
+└── post-bump/
+    ├── PROMPT_HOOK.md    # AI agent instructions (optional)
+    └── *.sh              # Shell scripts run after commit + tag
+```
+
+- **Pre-bump scripts** can abort the bump (non-zero exit code)
+- **Post-bump scripts** warn on failure but don't roll back
+- **PROMPT_HOOK.md** files contain instructions the AI agent follows during the bump
+- Scripts receive `BUMP_TYPE`, `OLD_VERSION`, `NEW_VERSION` as environment variables
+- Scripts run in alphabetical order — use numeric prefixes (`01-test.sh`, `02-lint.sh`)
+- A re-entrancy guard (`SEMVER_BUMP_IN_PROGRESS=1`) prevents infinite loops
+
+Ask Claude to set up hooks for you, or create them manually. See `references/user-hooks.md` for the full contract and sample hooks.
+
 ### CLAUDE.md Integration
 
 The tracking start command injects a section (between `<!-- semver:start -->` and `<!-- semver:end -->` markers) that teaches Claude:

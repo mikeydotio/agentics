@@ -8,3 +8,5 @@ Thumbs.db
 *.swo
 *~
 .planning/
+
+# .storyhook/ is version-controlled project data — do not ignore

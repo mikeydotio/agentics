@@ -37,47 +37,33 @@ get_config() {
 TRACKING="$(get_config 'tracking' 'false')"
 [[ "$TRACKING" != "true" ]] && exit 0
 
-AUTO_BUMP="$(get_config 'auto_bump' 'false')"
-VERSION_PREFIX="$(get_config 'version_prefix' 'v')"
-TARGET_BRANCH="$(get_config 'target_branch' 'main')"
+GIT_TAGGING="$(get_config 'git_tagging' 'true')"
 
 # Read current version
 VERSION_FILE="${PROJECT_DIR}/VERSION"
 CURRENT_VERSION="not set"
 [[ -f "$VERSION_FILE" ]] && CURRENT_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
 
-# Count commits since last tag
-LAST_TAG="$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/null || echo "")"
-if [[ -n "$LAST_TAG" ]]; then
-  COMMIT_COUNT="$(git -C "$PROJECT_DIR" rev-list "${LAST_TAG}..HEAD" --count 2>/dev/null || echo "0")"
-  TAG_INFO="${COMMIT_COUNT} commit(s) since ${LAST_TAG}"
-else
-  TAG_INFO="no version tags yet"
-fi
+# Derive project name from directory basename
+PROJECT_NAME="$(basename "$PROJECT_DIR")"
 
-# Build status line
-AUTO_BUMP_STATUS="off"
-[[ "$AUTO_BUMP" == "true" ]] && AUTO_BUMP_STATUS="on (target: ${TARGET_BRANCH})"
+# Build minimal status line: "<Project>: <version>"
+MSG="${PROJECT_NAME} version: ${CURRENT_VERSION}"
 
-MSG="[semver] Version: ${CURRENT_VERSION} | ${TAG_INFO} | Auto-bump: ${AUTO_BUMP_STATUS}"
-
-# --- Lightweight sync check ---
-DESYNC_WARNING=""
-
-if [[ -n "$LAST_TAG" ]]; then
-  # Check: does VERSION content match the latest tag?
-  if [[ "$CURRENT_VERSION" != "$LAST_TAG" ]]; then
-    DESYNC_WARNING=" [!DESYNC] VERSION says ${CURRENT_VERSION} but latest tag is ${LAST_TAG} — run /semver validate"
-  fi
-elif [[ "$CURRENT_VERSION" != "not set" ]]; then
-  # VERSION exists but no tag at all
-  TAG_CHECK="$(git -C "$PROJECT_DIR" tag -l "$CURRENT_VERSION" 2>/dev/null || echo "")"
-  if [[ -z "$TAG_CHECK" ]]; then
-    DESYNC_WARNING=" [!NO_TAG] No git tag found for ${CURRENT_VERSION} — run /semver validate"
+# Append desync warning only if git_tagging is on and there's an issue
+if [[ "$GIT_TAGGING" == "true" ]]; then
+  LAST_TAG="$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/null || echo "")"
+  if [[ -n "$LAST_TAG" ]]; then
+    if [[ "$CURRENT_VERSION" != "$LAST_TAG" ]]; then
+      MSG="${MSG} [!DESYNC] VERSION says ${CURRENT_VERSION} but latest tag is ${LAST_TAG} — run /semver validate"
+    fi
+  elif [[ "$CURRENT_VERSION" != "not set" ]]; then
+    TAG_CHECK="$(git -C "$PROJECT_DIR" tag -l "$CURRENT_VERSION" 2>/dev/null || echo "")"
+    if [[ -z "$TAG_CHECK" ]]; then
+      MSG="${MSG} [!NO_TAG] No git tag found for ${CURRENT_VERSION} — run /semver validate"
+    fi
   fi
 fi
-
-MSG="${MSG}${DESYNC_WARNING}"
 
 # Escape for JSON
 MSG="$(printf '%s' "$MSG" | sed 's/"/\\"/g')"

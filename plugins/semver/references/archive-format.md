@@ -9,6 +9,7 @@ When `tracking stop` archives version-related information, it writes a structure
 archived_at: "2026-03-24T15:30:00Z"
 last_version: "v1.2.0"
 version_prefix: "v"
+git_tagging: true
 changelog_format: "grouped"
 target_branch: "main"
 auto_bump: false
@@ -77,6 +78,7 @@ tracking: true
 auto_bump: false
 auto_bump_confirm: true
 version_prefix: "v"
+git_tagging: true
 changelog_format: "grouped"
 target_branch: "main"
 ```
@@ -91,6 +93,7 @@ The frontmatter captures metadata needed for smart restoration:
 | `archived_at` | ISO 8601 timestamp of when archival occurred |
 | `last_version` | The version string at time of archival (with prefix) |
 | `version_prefix` | Config value at archival time |
+| `git_tagging` | Config value at archival time |
 | `changelog_format` | Config value at archival time |
 | `target_branch` | Config value at archival time |
 | `auto_bump` | Config value at archival time |

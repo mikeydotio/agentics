@@ -17,8 +17,12 @@ auto_bump: false
 auto_bump_confirm: true
 
 # Version string prefix: "" for bare numbers (1.2.3), "v" for prefixed (v1.2.3)
-# Applied to both VERSION file content and git tags
+# Applied to VERSION file content and git tags (when enabled)
 version_prefix: "v"
+
+# Git tagging: create git tags on version bumps
+# true = create tags (default), false = skip tagging (commit-only bumps)
+git_tagging: true
 
 # Changelog format:
 # "grouped" = entries organized by type (Added, Fixed, Changed, etc.)
@@ -37,6 +41,7 @@ target_branch: "main"
 | `auto_bump` | bool | `false` | `true`, `false` |
 | `auto_bump_confirm` | bool | `true` | `true`, `false` |
 | `version_prefix` | string | `"v"` | `""`, `"v"` |
+| `git_tagging` | bool | `true` | `true`, `false` |
 | `changelog_format` | string | `"grouped"` | `"grouped"`, `"flat"` |
 | `target_branch` | string | `"main"` | any branch name |
 
@@ -47,6 +52,7 @@ tracking: true
 auto_bump: true
 auto_bump_confirm: true
 version_prefix: "v"
+git_tagging: true
 changelog_format: "grouped"
 target_branch: "main"
 ```

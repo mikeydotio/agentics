@@ -22,10 +22,12 @@ You are a semantic versioning lifecycle manager. You handle version tracking, bu
 1. **Always read `.semver/config.yaml` first** (if it exists) to determine project state before any operation.
 2. **Never modify VERSION or CHANGELOG without holding the file lock** during bump operations.
 3. **Never fabricate changelog entries** — always read the actual git log and summarize real changes.
-4. **Respect the `version_prefix` setting** — apply it consistently to VERSION file content and git tags.
-5. **Every question to the user MUST use `AskUserQuestion`** with exactly 1 question per call.
-6. **Mark bump source** — every CHANGELOG version entry must end with `_[manual]_`, `_[auto]_`, or `_[force]_`.
-7. **Validate before bumping** — run sync integrity checks before every bump. If VERSION, CHANGELOG, or tags are out of sync, present repair options before proceeding.
+4. **Respect the `version_prefix` setting** — apply it consistently to VERSION file content and git tags (when enabled).
+5. **Respect the `git_tagging` setting** — only create/check/manage git tags when `git_tagging: true` in config. When false, skip all tag operations.
+6. **Every question to the user MUST use `AskUserQuestion`** with exactly 1 question per call.
+7. **Mark bump source** — every CHANGELOG version entry must end with `_[manual]_`, `_[auto]_`, or `_[force]_`.
+8. **Validate before bumping** — run sync integrity checks before every bump. If VERSION, CHANGELOG, or tags (when tagging enabled) are out of sync, present repair options before proceeding.
+9. **Git-root only** — semver tracking can only be initialized at the root of a git repository (where `.git/` exists). Subprojects should use separate git repos.
 
 ## Command Router
 
@@ -44,10 +46,10 @@ Parse the ARGUMENTS string to determine which command to run:
 **Usage help:**
 ```
 /semver current                        — Show current version and status
-/semver bump <major|minor|patch>       — Bump version, generate changelog, commit + tag
-/semver bump <major|minor|patch> --force — Bump even with no changes since last tag
+/semver bump <major|minor|patch>       — Bump version, generate changelog, commit (+ tag if enabled)
+/semver bump <major|minor|patch> --force — Bump even with no changes since last version change
 /semver tracking start                 — Initialize version tracking (no version set until first bump)
-/semver tracking start [options]       — Options: --version <ver>, --prefix <v|none>, --changelog <grouped|flat>, --branch <name>, --restore-tags
+/semver tracking start [options]       — Options: --version <ver>, --prefix <v|none>, --no-tags, --changelog <grouped|flat>, --branch <name>, --restore-tags
 /semver tracking stop                  — Archive and disable version tracking
 /semver auto-bump start                — Enable automatic version bumps on push to main
 /semver auto-bump stop                 — Disable automatic version bumps
@@ -69,9 +71,10 @@ Parse the ARGUMENTS string to determine which command to run:
 
 3. Read the `VERSION` file (if it exists). Report:
    - Current version (with prefix per config), or "No version set yet — run `/semver bump` to set the first version." if VERSION does not exist
-   - If version is set: last tag date (from `git log -1 --format=%ai <last-tag>`), number of commits since last tag (`git rev-list <last-tag>..HEAD --count`)
+   - If version is set: find the commit that last modified VERSION via `git log -1 --format="%H %ai" -- VERSION`. Report the date and count commits since: `git rev-list <commit>..HEAD --count`
    - Auto-bump status (on/off)
    - Target branch
+   - Git tagging status (on/off)
 
 ---
 
@@ -118,16 +121,16 @@ If the `VERSION` file does not exist (first bump after `tracking start`):
   ```
   git add VERSION CHANGELOG.md
   git commit -m "chore: initialize version at <version>"
-  git tag "<version>"
   ```
-- Report the version set, then stop. The user can now run `/semver bump` again to perform the actual bump.
+- If `git_tagging: true` in config: `git tag "<version>"`
+- Report the version set (and whether tag was created), then stop. The user can now run `/semver bump` again to perform the actual bump.
 
-### Pre-check: Commits Since Last Tag
+### Pre-check: Commits Since Last Bump
 
-Run `git describe --tags --abbrev=0` to find the last version tag. Then `git rev-list <last-tag>..HEAD --count`.
+Find the commit that last modified VERSION: `git log -1 --format=%H -- VERSION`. Then count commits since: `git rev-list <last-bump-commit>..HEAD --count`.
 
 If count is 0 and `FORCE` is false:
-- Report: "No commits since the last tag (<last-tag>). Nothing to bump. Use `--force` if you want a version-only bump (e.g., consolidating minor versions into a major release)."
+- Report: "No commits since the last version change (<version>). Nothing to bump. Use `--force` if you want a version-only bump (e.g., consolidating minor versions into a major release)."
 - Stop.
 
 If count is 0 and `FORCE` is true:
@@ -178,8 +181,8 @@ If current branch != target_branch:
 Run validation checks 1-5 from `/semver validate` (see `references/sync-validation.md`):
 1. Config exists and tracking active
 2. VERSION exists and well-formed
-3. Tag exists for current VERSION
-4. Tag points to correct commit (tag commit == last VERSION-modifying commit)
+3. Tag exists for current VERSION (only if `git_tagging: true`; skip if false)
+4. Tag points to correct commit (only if `git_tagging: true`; skip if false)
 5. CHANGELOG has entry for current VERSION
 
 If any check **FAILS**:
@@ -237,8 +240,9 @@ Use the pre-computed `OLD_VERSION` and `NEW_VERSION` from the "Compute New Versi
 1. **Generate changelog entry:**
    - If FORCE and no commits: Write a brief entry noting this is a version-only adjustment
    - Otherwise:
-     - Run `git log <last-tag>..HEAD --format="%h %s"` to get commits
-     - If needed for clarity, also check `git diff <last-tag>..HEAD --stat`
+     - Find the last bump commit: `git log -1 --format=%H -- VERSION` (this is the VERSION-changing commit anchor)
+     - Run `git log <last-bump-commit>..HEAD --format="%h %s"` to get commits since last version change
+     - If needed for clarity, also check `git diff <last-bump-commit>..HEAD --stat`
      - Read `changelog_format` from config
      - **Grouped format**: Categorize commits by conventional commit prefix (see `references/changelog-format.md`), write concise human-friendly descriptions with commit hashes
      - **Flat format**: List commits linearly with hashes and descriptions
@@ -254,7 +258,11 @@ Use the pre-computed `OLD_VERSION` and `NEW_VERSION` from the "Compute New Versi
    git commit -m "chore(release): <new-version-string>"
    ```
 
-5. **Tag:**
+5. **Tag (only if `git_tagging: true` in config):**
+
+   If `git_tagging: false`: skip this step entirely — the commit is the release artifact.
+
+   If `git_tagging: true`:
    - Check if the tag already exists: `git tag -l "<new-version-string>"`
    - If it exists:
      - Use AskUserQuestion:
@@ -292,24 +300,34 @@ Run user-defined hooks after the version has been committed and tagged. See `ref
 Report to the user:
 - Previous version → New version
 - Commits included (count)
-- Tag created (or skipped)
+- Tag created, skipped, or tagging disabled
 - Changelog entry preview (first few lines)
 
 ### Post-Bump Verification
 
-After the bump completes, run a quick integrity check to confirm all three artifacts are in sync:
+After the bump completes, run a quick integrity check to confirm artifacts are in sync:
 
-1. **Tag exists:** `git tag -l "<new-version-string>"` — confirm the expected tag is present.
+1. **Tag exists (only if `git_tagging: true`):** `git tag -l "<new-version-string>"` — confirm the expected tag is present.
 2. **VERSION matches:** Read VERSION file — confirm its content matches the new version string.
 3. **CHANGELOG has entry:** Read the first 20 lines of CHANGELOG.md — confirm a `## [<new-version-string>]` header is present.
 
-If all three pass: no additional output needed (the Post-Bump Report already confirms success).
+If all applicable checks pass: no additional output needed (the Post-Bump Report already confirms success).
 
 If any check fails: warn the user immediately with the specific issue and remediation steps. This should not happen under normal conditions — if it does, it indicates an environmental issue (e.g., a git hook modified files after the commit, a disk write failure, or a race condition).
 
 ---
 
 ## Command: `/semver tracking start`
+
+### Pre-check: Git Root
+
+Verify that the current working directory is the root of a git repository:
+
+1. Run `git rev-parse --show-toplevel` to get the git root.
+2. Compare it to the current project directory (normalize both paths).
+3. If they don't match:
+   - Report: "Semver tracking can only be initialized at the root of a git repository. Current directory: `<cwd>`. Git root: `<git-root>`. If you need independent versioning for a subdirectory, make it a separate git repository first (e.g., using git subrepos)."
+   - Stop.
 
 ### Check for Existing Config
 
@@ -343,6 +361,7 @@ Look for `VERSIONING_ARCHIVE.md` in the project root.
 Extract optional flags from the ARGUMENTS string (everything after `tracking start`):
 - `--version <ver>`: Starting version number (bare semver, e.g. `0.1.0`, `1.0.0`). Do not include the prefix here. If omitted, no version is set — the first `/semver bump` will prompt for it.
 - `--prefix <v|none>`: `v` for v-prefixed versions, `none` for bare numbers.
+- `--no-tags`: Disable git tagging (sets `git_tagging: false`). Version bumps will create commits but not tags.
 - `--changelog <grouped|flat>`: Changelog entry format.
 - `--branch <name>`: Target branch for auto-bump hooks and push detection.
 
@@ -358,6 +377,7 @@ Apply defaults for any option not provided:
 |------|---------|
 | `--version` | _(none — version set on first bump)_ |
 | `--prefix` | `v` |
+| `--no-tags` | _(not set — tagging enabled by default)_ |
 | `--changelog` | `grouped` |
 | `--branch` | _(detected from git)_ |
 
@@ -371,6 +391,7 @@ If any flag has an invalid value, report the error with valid values and stop.
    auto_bump: false
    auto_bump_confirm: true
    version_prefix: "<resolved>"
+   git_tagging: <true unless --no-tags was passed>
    changelog_format: "<resolved>"
    target_branch: "<resolved>"
    ```
@@ -391,9 +412,9 @@ If any flag has an invalid value, report the error with valid values and stop.
    # Also add VERSION and CHANGELOG.md if they were created
    git commit -m "chore: initialize semver tracking"
    ```
-   If `--version` was provided, also create the git tag: `git tag "<version>"`
+   If `--version` was provided and `git_tagging` is true, also create the git tag: `git tag "<version>"`
 
-5. Report: tracking enabled, target branch, and either the version set or "No version set — run `/semver bump` when ready." Also mention: "Tip: You can add custom pre-bump and post-bump hooks in `.semver/hooks/`. Ask me to set one up, or see `references/user-hooks.md` for details."
+5. Report: tracking enabled, target branch, git tagging status, and either the version set or "No version set — run `/semver bump` when ready." Also mention: "Tip: You can add custom pre-bump and post-bump hooks in `.semver/hooks/`. Ask me to set one up, or see `references/user-hooks.md` for details."
 
 ---
 
@@ -407,16 +428,20 @@ Read `.semver/config.yaml`. If missing or `tracking: false`:
 
 ### Ask What to Archive
 
+Read `git_tagging` from config. Build the archive options list:
+
 Use AskUserQuestion:
 - **header:** "Archive"
 - **question:** "Which version-related items would you like to archive? Archived items will be saved to VERSIONING_ARCHIVE.md before deletion."
 - **options:**
   - "VERSION file" / "Archive the current version number"
   - "CHANGELOG" / "Archive the full changelog history"
-  - "Git tags" / "Archive the list of version tags"
+  - _(only if `git_tagging: true`)_ "Git tags" / "Archive the list of version tags"
 - **multiSelect:** true
 
 ### Handle Git Tags
+
+**Skip this section entirely if `git_tagging: false` in config.**
 
 If the user selected git tags for archival:
 
@@ -518,14 +543,14 @@ Read `.semver/config.yaml`. If missing or `tracking: false`:
 
 ### Run Checks
 
-Execute all 6 validation checks in order. For each check, report PASS, FAIL, or WARN:
+Read `git_tagging` from config. Execute all 6 validation checks in order. For each check, report PASS, FAIL, SKIP, or WARN:
 
 1. **Config exists and tracking active** — already confirmed by pre-check, report PASS.
 2. **VERSION exists and well-formed** — read VERSION file, match against `<prefix>MAJOR.MINOR.PATCH`.
-3. **Tag exists for current VERSION** — `git tag -l "<version_string>"`.
-4. **Tag points to correct commit** — compare `git rev-list -n 1 <tag>` vs `git log -1 --format=%H -- VERSION`.
+3. **Tag exists for current VERSION** — if `git_tagging: false`, report `[SKIP] Git tagging disabled`. Otherwise: `git tag -l "<version_string>"`.
+4. **Tag points to correct commit** — if `git_tagging: false`, report `[SKIP] Git tagging disabled`. Otherwise: compare `git rev-list -n 1 <tag>` vs `git log -1 --format=%H -- VERSION`.
 5. **CHANGELOG has entry for current VERSION** — search for `## [<version_string>]` header in CHANGELOG.md.
-6. **No orphaned tags** — for each tag matching `<prefix>*`, check for a corresponding `## [<tag>]` header in CHANGELOG.md.
+6. **No orphaned tags** — if `git_tagging: false`, report `[SKIP] Git tagging disabled`. Otherwise: for each tag matching `<prefix>*`, check for a corresponding `## [<tag>]` header in CHANGELOG.md.
 
 ### Report
 
@@ -566,7 +591,9 @@ Run the full `/semver validate` check suite. If all checks pass:
 
 For each FAIL detected, present the appropriate repair options via AskUserQuestion. Handle failures in the order they were detected.
 
-**FAIL: Tag missing for current VERSION** (VERSION=`v1.3.0`, latest tag=`v1.2.0` or no tags):
+**Note:** Tag-related repair scenarios (missing tag, tag mismatch, VERSION behind tag) only apply when `git_tagging: true` in config. When tagging is disabled, these scenarios cannot occur and should be skipped.
+
+**FAIL: Tag missing for current VERSION** (only when `git_tagging: true`; VERSION=`v1.3.0`, latest tag=`v1.2.0` or no tags):
 
 Use AskUserQuestion:
 - **header:** "Missing tag"
@@ -580,19 +607,19 @@ Execute the chosen action:
 - **Create tag + changelog**: Generate changelog entry from `git log <latest_tag>..HEAD`, update CHANGELOG.md, commit, tag.
 - **Revert VERSION**: Write latest tag's version string to VERSION, commit.
 
-**FAIL: CHANGELOG entry missing** (tag exists, VERSION matches, but no `## [<version>]` in CHANGELOG):
+**FAIL: CHANGELOG entry missing** (VERSION matches but no `## [<version>]` in CHANGELOG):
 
 Use AskUserQuestion:
 - **header:** "Missing changelog"
-- **question:** "Version `<version>` is tagged but has no CHANGELOG entry."
+- **question:** "Version `<version>` has no CHANGELOG entry."
 - **options:**
   - "Generate entry" / "Create a changelog entry from the git log between the previous tag and this one"
   - "Skip" / "Leave the changelog as-is"
 
 Execute:
-- **Generate entry**: Find previous tag (`git describe --tags --abbrev=0 <tag>^`), generate entry from `git log <prev-tag>..<tag>`, insert into CHANGELOG at correct position, commit.
+- **Generate entry**: Find the previous version-changing commit (or use tags if `git_tagging: true`), generate entry from `git log <prev-commit>..<current-commit>`, insert into CHANGELOG at correct position, commit.
 
-**FAIL: Tag points to wrong commit** (tag and VERSION exist but point to different commits):
+**FAIL: Tag points to wrong commit** (only when `git_tagging: true`; tag and VERSION exist but point to different commits):
 
 Use AskUserQuestion:
 - **header:** "Tag mismatch"
@@ -606,7 +633,7 @@ Execute:
 - **Move tag**: `git tag -d <tag>`, `git tag <tag> <version_hash>`. Warn if tag exists on remote.
 - **Revert VERSION**: `git show <tag>:VERSION > VERSION`, commit.
 
-**FAIL: VERSION behind latest tag** (latest tag=`v1.3.0`, VERSION=`v1.2.0`):
+**FAIL: VERSION behind latest tag** (only when `git_tagging: true`; latest tag=`v1.3.0`, VERSION=`v1.2.0`):
 
 Use AskUserQuestion:
 - **header:** "VERSION behind tag"

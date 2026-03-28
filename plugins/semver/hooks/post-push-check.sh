@@ -39,6 +39,7 @@ AUTO_BUMP="$(get_config 'auto_bump' 'false')"
 AUTO_BUMP_CONFIRM="$(get_config 'auto_bump_confirm' 'true')"
 TARGET_BRANCH="$(get_config 'target_branch' 'main')"
 VERSION_PREFIX="$(get_config 'version_prefix' 'v')"
+GIT_TAGGING="$(get_config 'git_tagging' 'true')"
 
 # Tracking off -> silent exit
 [[ "$TRACKING" != "true" ]] && exit 0
@@ -68,13 +69,14 @@ VERSION_FILE="${CWD}/VERSION"
 CURRENT_VERSION="unknown"
 [[ -f "$VERSION_FILE" ]] && CURRENT_VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
 
-LAST_TAG="$(git -C "$CWD" describe --tags --abbrev=0 2>/dev/null || echo "")"
-if [[ -n "$LAST_TAG" ]]; then
-  COMMIT_COUNT="$(git -C "$CWD" rev-list "${LAST_TAG}..HEAD" --count 2>/dev/null || echo "unknown")"
-  SINCE_MSG="${COMMIT_COUNT} commit(s) since ${LAST_TAG}"
+# Use VERSION-commit as primary anchor (not tags)
+LAST_BUMP_COMMIT="$(git -C "$CWD" log -1 --format=%H -- VERSION 2>/dev/null || echo "")"
+if [[ -n "$LAST_BUMP_COMMIT" ]]; then
+  COMMIT_COUNT="$(git -C "$CWD" rev-list "${LAST_BUMP_COMMIT}..HEAD" --count 2>/dev/null || echo "unknown")"
+  SINCE_MSG="${COMMIT_COUNT} commit(s) since last version change"
 else
   COMMIT_COUNT="$(git -C "$CWD" rev-list HEAD --count 2>/dev/null || echo "unknown")"
-  SINCE_MSG="${COMMIT_COUNT} commit(s) total (no version tags yet)"
+  SINCE_MSG="${COMMIT_COUNT} commit(s) total (no version set yet)"
 fi
 
 # --- Build output based on config state ---
@@ -87,13 +89,13 @@ emit_message() {
 
 if [[ "$AUTO_BUMP" != "true" ]]; then
   # Nudge mode
-  emit_message "[semver] Push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Consider running /semver bump <major|minor|patch> to create a new version release. You can review recent changes with: git log ${LAST_TAG:+${LAST_TAG}..HEAD }--oneline"
+  emit_message "[semver] Push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Consider running /semver bump <major|minor|patch> to create a new version release. You can review recent changes with: git log ${LAST_BUMP_COMMIT:+${LAST_BUMP_COMMIT}..HEAD }--oneline"
 elif [[ "$AUTO_BUMP_CONFIRM" == "true" ]]; then
   # Auto-bump with confirmation
-  emit_message "[semver] Auto-bump triggered: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Analyze the git log since the last tag to determine whether this warrants a major, minor, or patch bump. Use conventional commit analysis: breaking changes = major, new features = minor, fixes = patch. Present your recommendation and ask the user to confirm before executing the bump via /semver bump <type>."
+  emit_message "[semver] Auto-bump triggered: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Analyze the git log since the last version change to determine whether this warrants a major, minor, or patch bump. Use conventional commit analysis: breaking changes = major, new features = minor, fixes = patch. Present your recommendation and ask the user to confirm before executing the bump via /semver bump <type>."
 else
   # Auto-bump without confirmation
-  emit_message "[semver] Auto-bump triggered: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Analyze the git log since the last tag to determine whether this warrants a major, minor, or patch bump. Use conventional commit analysis: breaking changes = major, new features = minor, fixes = patch. Execute the bump immediately via /semver bump <type> — no user confirmation needed."
+  emit_message "[semver] Auto-bump triggered: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Analyze the git log since the last version change to determine whether this warrants a major, minor, or patch bump. Use conventional commit analysis: breaking changes = major, new features = minor, fixes = patch. Execute the bump immediately via /semver bump <type> — no user confirmation needed."
 fi
 
 exit 0

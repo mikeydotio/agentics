@@ -20,11 +20,15 @@ Run via `/semver validate`. All checks execute in order; each reports PASS, FAIL
 
 ### Check 3: Tag exists for current VERSION
 
+**Only run if `git_tagging: true` in config. If `git_tagging: false`, report `[SKIP] Git tagging disabled`.**
+
 - **How:** `git tag -l "<version_string>"` where version_string is the content of VERSION
 - **PASS:** Tag exists
 - **FAIL:** No matching tag found — tag was never created or was deleted
 
 ### Check 4: Tag points to correct commit
+
+**Only run if `git_tagging: true` in config. If `git_tagging: false`, report `[SKIP] Git tagging disabled`.**
 
 - **How:** Compare two commit hashes:
   - Tag's commit: `git rev-list -n 1 <tag>`
@@ -39,6 +43,8 @@ Run via `/semver validate`. All checks execute in order; each reports PASS, FAIL
 - **FAIL:** No matching header — changelog entry is missing for this version
 
 ### Check 6: No orphaned tags
+
+**Only run if `git_tagging: true` in config. If `git_tagging: false`, report `[SKIP] Git tagging disabled`.**
 
 - **How:** List all tags matching the version prefix pattern (`git tag -l '<prefix>*'`), then for each tag check that CHANGELOG.md contains a `## [<tag>]` header
 - **PASS:** Every tag has a corresponding changelog entry
@@ -73,11 +79,13 @@ When all checks pass:
 
 ## Session-Start Lightweight Check
 
-The session-start hook runs a subset of the above (checks 2 and 3 only) to provide early warning without slowing down session startup:
+The session-start hook runs a subset of the above to provide early warning without slowing down session startup:
 
-- Compare VERSION content against the latest tag name from `git describe --tags --abbrev=0`
-- If they differ: append `[!DESYNC]` warning and suggest running `/semver validate`
-- If no tag exists for the VERSION content: append `[!NO_TAG]` warning
+- **Primary anchor:** Find the commit that last modified VERSION via `git log -1 --format=%H -- VERSION`. Use this to count commits since the last version change.
+- **Tag check (only if `git_tagging: true`):** Compare VERSION content against the latest tag name from `git describe --tags --abbrev=0`
+  - If they differ: append `[!DESYNC]` warning and suggest running `/semver validate`
+  - If no tag exists for the VERSION content: append `[!NO_TAG]` warning
+- **When `git_tagging: false`:** Skip tag-based checks entirely. No DESYNC/NO_TAG warnings.
 
 This is intentionally lightweight — the full `/semver validate` command runs the complete check suite.
 

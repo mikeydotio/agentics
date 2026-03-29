@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v1.2.0] - 2026-03-29
+
+### Added
+- Conductor autonomous workflow guide — end-to-end documentation for plan-to-completion autonomous execution (`5434010`)
+
+### Fixed
+- Session-start hook now uses `additionalContext` instead of `systemMessage` for proper context injection (`2d47db8`)
+
+### Changed
+- Track tool config files (`.storyhook`, `.semver`) and gitignore `.planning/` directory (`5ec366e`)
+
+_[manual]_
+
 ## [v1.1.0] - 2026-03-28
 
 ### Added

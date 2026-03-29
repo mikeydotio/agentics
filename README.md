@@ -1,17 +1,17 @@
-# handy-plugins
+# agentic-workflows
 
 Personal Claude Code plugin marketplace.
 
 ## Install
 
 ```
-/plugin marketplace add mikeydotio/handy-plugins
+/plugin marketplace add mikeydotio/agentic-workflows
 ```
 
 Then install any plugin:
 
 ```
-/plugin install <plugin-name>@handy-plugins
+/plugin install <plugin-name>@agentic-workflows
 ```
 
 ## Adding a Plugin

@@ -1,42 +1,40 @@
-# Handy Plugins Marketplace
+# CLAUDE.md
 
-This repo is a Claude Code plugin marketplace owned by mikeydotio.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Structure
+## Overview
 
-- `.claude-plugin/marketplace.json` — marketplace manifest listing all plugins
-- `plugins/<name>/` — individual plugin directories
+Agentic Workflows is a Claude Code plugin marketplace (`mikeydotio/agentic-workflows`) providing plugins for idea-to-execution workflows, root cause analysis, and semantic versioning.
 
-## Plugin Anatomy
+## Architecture
 
-Each plugin under `plugins/` follows this structure:
+**Marketplace manifest**: `.claude-plugin/marketplace.json` registers all plugins with name, description, and source path.
 
-```
-plugins/my-plugin/
-├── .claude-plugin/
-│   └── plugin.json          # Required: { "name", "description" }
-├── skills/                  # Skills (preferred format)
-│   └── skill-name/
-│       └── SKILL.md         # YAML frontmatter + markdown instructions
-├── commands/                # Legacy command format
-│   └── command-name.md
-├── .mcp.json                # Optional: MCP server config
-└── README.md                # Optional: documentation
-```
+**Plugin pattern**: Each plugin under `plugins/` has:
+- `.claude-plugin/plugin.json` — manifest (name, description)
+- `skills/<name>/SKILL.md` — main skill with YAML frontmatter (`name`, `description`, optional `argument-hint`) + markdown instructions that act as the orchestrator
+- `agents/<name>.md` — specialized subagent prompts with role descriptions, tool restrictions, and mandatory initial-read protocol
+- `references/<topic>.md` — methodology docs and detailed protocols that skills reference (keeps SKILL.md lean)
+
+**Key design patterns**:
+- **Artifact-based resumption**: Both ideate and rca use `.planning/` artifacts to track phase state. Presence of specific files (IDEA.md, DESIGN.md, PLAN.md) determines resume point.
+- **Multi-agent orchestration**: One orchestrator skill spawns specialized agents at appropriate phases. Each agent has distinct tool access and perspective.
+- **One question at a time**: All user interactions use `AskUserQuestion` with exactly one question per call.
+
+## Plugins
+
+| Plugin | Skill | Purpose |
+|--------|-------|---------|
+| ideate | `/ideate` | 5-phase pipeline: interrogation → research → design → planning → execution. 10 specialized agents. |
+| rca | `/rca` | Root cause analysis: symptom intake → evidence collection → hypothesis formation → verification → remediation. 5 agents. |
+| semver | `/semver` | Version lifecycle: tracking, bumping, changelog generation, sync validation. Has SessionStart and PostToolUse hooks. |
 
 ## When Adding a New Plugin
 
-1. Create the plugin directory under `plugins/`
-2. Add `.claude-plugin/plugin.json` with at minimum `name` and `description`
-3. Add the plugin to `.claude-plugin/marketplace.json` in the `plugins` array:
-   ```json
-   {
-     "name": "my-plugin",
-     "description": "What it does",
-     "source": "./plugins/my-plugin"
-   }
-   ```
-4. Skills use `skills/<name>/SKILL.md` format with YAML frontmatter (`name`, `description` required)
+1. Create `plugins/<name>/.claude-plugin/plugin.json` with `name` and `description`
+2. Add the skill in `plugins/<name>/skills/<name>/SKILL.md`
+3. Register in `.claude-plugin/marketplace.json`
+4. Keep SKILL.md as a thin router dispatching to reference docs for detailed procedures
 
 <!-- semver:start -->
 ## Semantic Versioning

@@ -7,6 +7,4 @@ Thumbs.db
 *.swp
 *.swo
 *~
-.planning/
-
-# .storyhook/ is version-controlled project data — do not ignore
+# .storyhook/ and .planning/ are version-controlled project data — do not ignore

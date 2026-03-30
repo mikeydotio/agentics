@@ -238,6 +238,40 @@ Commit after approval: `git commit "docs: implementation plan approved"`
 
 ---
 
+## Phase 4.5: Pilot Handoff Gate
+
+**Read**: `references/work-handoff.md`
+
+After PLAN.md is approved, check if the pilot plugin is available for autonomous execution.
+
+### Pre-Check
+
+Look for `plugins/pilot/.claude-plugin/plugin.json` (relative to the marketplace root). If not found, skip this phase entirely and proceed to Phase 5.
+
+### Execution Choice
+
+If pilot is installed, use AskUserQuestion:
+
+- **header:** "Execute?"
+- **question:** "How would you like to proceed with execution?"
+- **options:** ["Autonomous via pilot (you can walk away)", "Execute here (ideate Phase 5)", "Just the plan — I'll execute manually"]
+
+**If "Autonomous via pilot":**
+1. Invoke `/pilot plan` with `.planning/PLAN.md`
+2. Report story count and dependency structure
+3. Use AskUserQuestion:
+   - **header:** "Start?"
+   - **question:** "Start autonomous execution now?"
+   - **options:** ["Yes — start and I'll check back later", "Not yet — I'll start it manually"]
+4. If yes → invoke `/pilot run`
+5. Return — ideate is done (pilot takes over)
+
+**If "Execute here":** Proceed to Phase 5.
+
+**If "Just the plan":** Return — ideate is done.
+
+---
+
 ## Phase 5: Execution
 
 Execute the plan in waves, spawning agents appropriate to each task:
@@ -271,7 +305,7 @@ Write `.planning/COMPLETION.md` with final status. Commit: `git commit "docs: im
 
 ## Resumption Protocol
 
-If work is interrupted at any phase, the artifacts on disk define the state:
+If pilot is interrupted at any phase, the artifacts on disk define the state:
 
 | If you find... | Resume from... |
 |----------------|---------------|
@@ -279,7 +313,7 @@ If work is interrupted at any phase, the artifacts on disk define the state:
 | IDEA.md only | Phase 2: Domain Research |
 | IDEA.md + research/ | Phase 3: Design |
 | IDEA.md + DESIGN.md | Phase 4: Planning |
-| IDEA.md + DESIGN.md + PLAN.md | Phase 5: Execution (check PLAN.md for wave progress) |
+| IDEA.md + DESIGN.md + PLAN.md | Phase 4.5: Pilot Handoff Gate (or Phase 5 if pilot unavailable) |
 | COMPLETION.md | Done |
 
 When resuming, read all existing artifacts first, then continue from the appropriate phase. Summarize what's already been done before proceeding.

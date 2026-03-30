@@ -1,22 +1,22 @@
-# Conductor Workflow
+# Work Workflow
 
-How the conductor plugin turns a plan into a finished implementation while you walk away.
+How the pilot plugin turns a plan into a finished implementation while you walk away.
 
 ---
 
 ## Overview
 
 ```
-/conductor ideate "your idea"
+/pilot ideate "your idea"
         |
-    /ideate runs with conductor-aware hints
+    /ideate runs with pilot-aware hints
     (question, research, design, plan)
         |
     PLAN.md approved -> automatic handoff
         |
-    /conductor plan (decompose into stories)
+    /pilot plan (decompose into stories)
         |
-    /conductor run (canary mode: first 3 stories supervised)
+    /pilot run (canary mode: first 3 stories supervised)
         |
     Fully autonomous loop
     (generator -> deterministic checks -> evaluator -> commit)
@@ -30,9 +30,9 @@ How the conductor plugin turns a plan into a finished implementation while you w
 
 ## Step by Step
 
-### 1. Start with /conductor ideate
+### 1. Start with /pilot ideate
 
-Run `/conductor ideate` and describe what you want to build. This invokes `/ideate` behind the scenes with conductor-aware hints:
+Run `/pilot ideate` and describe what you want to build. This invokes `/ideate` behind the scenes with pilot-aware hints:
 
 - Acceptance criteria must be **machine-evaluable** (concrete, testable -- not vague)
 - Tasks should be **sized for a single agent session** (completable by one generator spawn)
@@ -40,34 +40,34 @@ Run `/conductor ideate` and describe what you want to build. This invokes `/idea
 
 Ideate runs its full workflow as usual -- questions you, researches the problem, designs the architecture, produces DESIGN.md and PLAN.md. The only difference is the hints that shape the output for autonomous execution.
 
-You can also use `/ideate` directly if you want the standard flow. Phase 4.5 still offers the conductor handoff either way.
+You can also use `/ideate` directly if you want the standard flow. Phase 4.5 still offers the pilot handoff either way.
 
 ### 2. Plan approved -- automatic handoff
 
 After you approve the plan, ideate's Phase 4.5 presents a choice:
 
-- **Autonomous via conductor** -- you walk away
+- **Autonomous via pilot** -- you walk away
 - **Execute here** -- ideate's existing Phase 5, you stay and watch
 - **Just the plan** -- you execute manually
 
-If you came through `/conductor ideate`, autonomous is the default. Pick it.
+If you came through `/pilot ideate`, autonomous is the default. Pick it.
 
-### 3. Conductor decomposes your plan
+### 3. Work decomposes your plan
 
-`/conductor plan` reads PLAN.md and:
+`/pilot plan` reads PLAN.md and:
 
 - Breaks each task into a storyhook story with acceptance criteria
 - Maps each story to the relevant DESIGN.md section (for just-in-time context)
 - Sets up dependency relationships (wave 1 before wave 2, etc.)
-- Writes `.conductor/plan-mapping.json` linking everything together
+- Writes `.pilot/plan-mapping.json` linking everything together
 
 You see a summary like: *"Created 12 stories across 3 waves."*
 
-If you run `/conductor plan` again on the same plan, it detects the existing mapping and asks whether to recreate, continue, or cancel.
+If you run `/pilot plan` again on the same plan, it detects the existing mapping and asks whether to recreate, continue, or cancel.
 
 ### 4. Canary mode -- watch the first few
 
-Conductor starts with `/conductor run`. For the first 3 stories (configurable via `canary_stories`), it pauses after each one and shows you the evaluator's verdict. This is your chance to validate:
+Work starts with `/pilot run`. For the first 3 stories (configurable via `canary_stories`), it pauses after each one and shows you the evaluator's verdict. This is your chance to validate:
 
 - Is the generator producing good code?
 - Is the evaluator catching real issues (not being too generous)?
@@ -77,7 +77,7 @@ Adjust the evaluator prompt or story granularity if needed. Once satisfied, exec
 
 ### 5. The autonomous loop
 
-For each story, conductor runs this sequence:
+For each story, pilot runs this sequence:
 
 1. **Pick next story** from storyhook (storyhook is the source of truth for story state)
 2. **Query memory** for relevant past decisions about this component
@@ -91,11 +91,11 @@ For each story, conductor runs this sequence:
    - **Max retries exhausted** -- mark story blocked for human review
    - **Generator unsure** -- mark story blocked as `needs_decision`
 
-At wave boundaries, an architect-reviewer subagent checks for consistency across all stories completed so far. If significant drift is detected, conductor pauses for your review.
+At wave boundaries, an architect-reviewer subagent checks for consistency across all stories completed so far. If significant drift is detected, pilot pauses for your review.
 
 ### 6. Session handoff and auto-resume
 
-After completing a configurable number of stories (`max_stories_per_session`, default 3-5), conductor:
+After completing a configurable number of stories (`max_stories_per_session`, default 3-5), pilot:
 
 - Writes a handoff document including a **working context summary** (patterns established, naming conventions, micro-decisions, known gotchas)
 - Updates state to `paused`
@@ -111,7 +111,7 @@ You can be asleep, at lunch, in meetings. Each session picks up where the last o
 
 ### 7. Check in whenever you want
 
-`/conductor status` shows a dashboard:
+`/pilot status` shows a dashboard:
 
 - Stories by state (done, in-progress, blocked, todo)
 - Current wave progress
@@ -119,13 +119,13 @@ You can be asleep, at lunch, in meetings. Each session picks up where the last o
 - Blocked stories with evaluator feedback
 - Timer status
 
-If something's blocked, read the evaluator feedback in the storyhook comments, make a decision, unblock the story, and conductor picks it up on the next cycle.
+If something's blocked, read the evaluator feedback in the storyhook comments, make a decision, unblock the story, and pilot picks it up on the next cycle.
 
-`/conductor stop` gracefully shuts everything down -- writes handoff, releases lock, removes timer.
+`/pilot stop` gracefully shuts everything down -- writes handoff, releases lock, removes timer.
 
 ### 8. Completion
 
-When all stories are done, conductor:
+When all stories are done, pilot:
 
 - Runs the full test suite
 - Generates a storyhook report
@@ -139,16 +139,16 @@ You come back to a finished implementation.
 
 ## When things go wrong
 
-Conductor is designed to escalate, not push through:
+Work is designed to escalate, not push through:
 
 | Situation | What happens |
 |-----------|-------------|
 | Generator can't meet criteria after 3-4 tries | Story marked `blocked` with evaluator feedback. Waits for you. |
 | Generator encounters ambiguity or needs an architectural decision | Story marked `needs_decision`. Waits for you. |
-| Storyhook is unavailable (3 consecutive failures) | Conductor pauses gracefully with handoff. |
-| Architectural drift detected at wave boundary | Conductor pauses for your review. |
+| Storyhook is unavailable (3 consecutive failures) | Work pauses gracefully with handoff. |
+| Architectural drift detected at wave boundary | Work pauses for your review. |
 | Session crashes without cleanup | Timer fires, finds stale lock (heartbeat > 5 min), breaks it, resumes from handoff + storyhook state. |
-| You need to intervene | `/conductor stop` for graceful shutdown at any time. |
+| You need to intervene | `/pilot stop` for graceful shutdown at any time. |
 
 Worst-case resume latency after a crash: ~20 minutes (5 min heartbeat window + 15 min timer interval).
 
@@ -158,19 +158,19 @@ Worst-case resume latency after a crash: ~20 minutes (5 min heartbeat window + 1
 
 | Command | What it does |
 |---------|-------------|
-| `/conductor ideate` | Start from scratch -- invokes `/ideate` with conductor-aware hints, then hands off to plan + run |
-| `/conductor init` | Validate storyhook setup, add required states |
-| `/conductor plan [file]` | Decompose PLAN.md into storyhook stories |
-| `/conductor run [--interval 15m]` | Start autonomous execution with auto-resume timer |
-| `/conductor resume` | Resume from pause (usually called by timer, not you) |
-| `/conductor status` | Dashboard of progress, blockers, retries |
-| `/conductor stop` | Graceful shutdown |
+| `/pilot ideate` | Start from scratch -- invokes `/ideate` with pilot-aware hints, then hands off to plan + run |
+| `/pilot init` | Validate storyhook setup, add required states |
+| `/pilot plan [file]` | Decompose PLAN.md into storyhook stories |
+| `/pilot run [--interval 15m]` | Start autonomous execution with auto-resume timer |
+| `/pilot resume` | Resume from pause (usually called by timer, not you) |
+| `/pilot status` | Dashboard of progress, blockers, retries |
+| `/pilot stop` | Graceful shutdown |
 
 ---
 
 ## Configuration
 
-All settings live in `.conductor/state.json` and are set at `/conductor run` time:
+All settings live in `.pilot/state.json` and are set at `/pilot run` time:
 
 | Setting | Default | What it controls |
 |---------|---------|-----------------|

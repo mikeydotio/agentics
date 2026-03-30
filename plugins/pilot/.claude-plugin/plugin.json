@@ -1,0 +1,7 @@
+{
+  "name": "pilot",
+  "description": "Autonomous execution harness — decomposes plans into stories, runs generator-evaluator loops, manages sessions with auto-resume, and orchestrates fire-and-forget workflows",
+  "author": {
+    "name": "mikeydotio"
+  }
+}

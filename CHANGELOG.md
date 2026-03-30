@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v1.3.0] - 2026-03-30
+
+### Added
+- **Pilot plugin** (`/pilot`) — autonomous execution harness with generator-evaluator loop, story decomposition, session locking, auto-resume via crontab, canary mode, and architectural drift detection (`c6cab14`)
+- **Memory plugin** (`/memory`) — graph memory interface with local JSONL cache, entity/relation storage, two-tier recall (local + memlayer), and scale-aware warnings (`c6cab14`)
+- **Ideate Phase 4.5** — conductor handoff gate offering autonomous execution via `/pilot` after plan approval (`c6cab14`)
+- Test infrastructure using bats-core with 15 tests covering state machine, locking, and plan mapping (`c6cab14`)
+
+### Changed
+- Renamed project from handy-plugins to agentic-workflows; tracked `.planning/` directory (`ce06592`)
+- Updated marketplace to register 5 plugins (ideate, rca, semver, pilot, memory) (`c6cab14`)
+
+_[manual]_
+
 ## [v1.2.0] - 2026-03-29
 
 ### Added

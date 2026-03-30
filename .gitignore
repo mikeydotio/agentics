@@ -8,3 +8,13 @@ Thumbs.db
 *.swo
 *~
 # .storyhook/ and .planning/ are version-controlled project data — do not ignore
+
+# Pilot plugin runtime artifacts (gitignored)
+.pilot/state.json
+.pilot/lock.json
+.pilot/handoff.md
+.pilot/verdicts.jsonl
+# .pilot/config.json and .pilot/plan-mapping.json are version-controlled — do not ignore
+
+# Memory local cache (gitignored)
+.memory/

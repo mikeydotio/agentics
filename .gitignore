@@ -15,6 +15,3 @@ Thumbs.db
 .pilot/handoff.md
 .pilot/verdicts.jsonl
 # .pilot/config.json and .pilot/plan-mapping.json are version-controlled — do not ignore
-
-# Memory local cache (gitignored)
-.memory/

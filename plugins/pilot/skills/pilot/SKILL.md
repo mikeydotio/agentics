@@ -354,7 +354,7 @@ loop:
   0. Storyhook health check (3 consecutive failures → pause)
   0a. Runaway safeguard check (max_sessions, max_total_retries)
   1. Pick next story (story next --json)
-  2. Load just-in-time context (criteria, design section, memory)
+  2. Load just-in-time context (criteria, design section)
   3. Generate (spawn generator subagent, isolated)
   3a. Post-generator integrity check (checksum .pilot/ files)
   4. Deterministic pre-checks (tests, linter, stub grep)
@@ -403,7 +403,6 @@ Triggered when all stories reach `done`:
    - Log: "Final test suite failed — manual review required"
 2. Generate storyhook report: `story summary` + `story handoff`
 3. Write `.planning/COMPLETION.md` (follows ideate convention)
-4. Store project knowledge to memory (if memory plugin available)
-5. Remove auto-resume trigger
-6. Set `status: "complete"`
-7. Release lock
+4. Remove auto-resume trigger
+5. Set `status: "complete"`
+6. Release lock

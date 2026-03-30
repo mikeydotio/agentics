@@ -12,9 +12,8 @@ Pilot handoffs use four complementary persistence layers:
 | Handoff | `.pilot/handoff.md` | Human-readable session narrative | No (ephemeral) |
 | Verdict Log | `.pilot/verdicts.jsonl` | Structured evaluator history | No (ephemeral) |
 | Storyhook | `.storyhook/` | Story-level state and comments | Yes |
-| Memory | memlayer / `.memory/` | Structural knowledge | Partially |
 
-**Priority**: config.json + state.json + storyhook are required for recovery. handoff.md is best-effort. Memory is post-hoc enrichment.
+**Priority**: config.json + state.json + storyhook are required for recovery. handoff.md is best-effort.
 
 ## handoff.md Format
 

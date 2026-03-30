@@ -1,7 +1,0 @@
-{
-  "name": "memory",
-  "description": "Graph memory interface backed by memlayer — stores entities, relationships, and decisions with local JSONL cache and semantic search recall",
-  "author": {
-    "name": "mikeydotio"
-  }
-}

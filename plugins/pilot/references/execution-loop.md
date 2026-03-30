@@ -68,12 +68,7 @@ Load only what this specific story needs:
 4. **Predecessor diffs**: Git diffs from recently completed stories
    - Truncated: most recent 3 stories OR 5000 lines, whichever is smaller
    - If larger → generate a brief summary instead
-5. **Memory recall**: Query memory for relevant entities
-   ```
-   memory recall "<component> patterns decisions"
-   ```
-   (If memory plugin is not available, skip this step)
-6. **Prior evaluator feedback**: If this is a retry, extract structured JSON feedback from storyhook comments on this story
+5. **Prior evaluator feedback**: If this is a retry, extract structured JSON feedback from storyhook comments on this story
 
 ### Step 3: Generate
 
@@ -180,7 +175,6 @@ Agent(
   - Commit atomically: `git add -A && git commit -m "feat(<story>): <title>"`
   - `story HP-N is done`
   - Sync git if needed
-  - Store knowledge to memory (if available)
   - Continue to step 6
 - `verdict: "fail"` →
   - Store structured JSON feedback as storyhook comment:
@@ -347,14 +341,10 @@ complete:
     - Notable decisions and patterns
     - Duration and session count
 
-  # 4. Memory
-  If memory plugin available:
-    Store project completion entities (decisions, patterns, learnings)
-
-  # 5. Remove trigger
+  # 4. Remove trigger
   Remove crontab entry (or disable systemd timer)
 
-  # 6. Update state
+  # 5. Update state
   state.status = "complete"
   Write state.json to disk
   Release lock (delete lock.json)

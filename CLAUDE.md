@@ -29,7 +29,6 @@ Agentic Workflows is a Claude Code plugin marketplace (`mikeydotio/agentic-workf
 | rca | `/rca` | Root cause analysis: symptom intake → evidence collection → hypothesis formation → verification → remediation. 5 agents. |
 | semver | `/semver` | Version lifecycle: tracking, bumping, changelog generation, sync validation. Has SessionStart and PostToolUse hooks. |
 | pilot | `/pilot` | Autonomous execution harness: plan decomposition → generator-evaluator loop → auto-resume. 2 agents (generator, evaluator). Has SessionStart and Stop hooks. |
-| memory | `/memory` | Graph memory interface: entity/relation storage in local JSONL cache with memlayer semantic search recall. |
 
 ## When Adding a New Plugin
 

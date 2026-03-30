@@ -80,13 +80,12 @@ Adjust the evaluator prompt or story granularity if needed. Once satisfied, exec
 For each story, pilot runs this sequence:
 
 1. **Pick next story** from storyhook (storyhook is the source of truth for story state)
-2. **Query memory** for relevant past decisions about this component
-3. **Extract context** -- only the relevant DESIGN.md section, plus any prior evaluator feedback from storyhook comments
+2. **Extract context** -- only the relevant DESIGN.md section, plus any prior evaluator feedback from storyhook comments
 4. **Spawn generator** as an isolated subagent with fresh context. Generator writes code but does NOT commit.
 5. **Run deterministic pre-checks** -- test suite, linter/type checker, grep for TODO/FIXME/stub patterns
 6. **Spawn evaluator** as an isolated subagent (read-only, no Write/Edit tools). Evaluator reviews the uncommitted diff against acceptance criteria with a skeptical, debiased stance.
 7. **Outcome**:
-   - **Pass** -- commit atomically, mark story done, store knowledge to memory, move on
+   - **Pass** -- commit atomically, mark story done, move on
    - **Fail** -- store structured feedback as a storyhook comment, retry (up to 3-4 attempts, configurable)
    - **Max retries exhausted** -- mark story blocked for human review
    - **Generator unsure** -- mark story blocked as `needs_decision`
@@ -129,7 +128,6 @@ When all stories are done, pilot:
 
 - Runs the full test suite
 - Generates a storyhook report
-- Stores project knowledge to memory (decisions, patterns, learnings)
 - Removes the auto-resume timer
 - Writes COMPLETION.md
 

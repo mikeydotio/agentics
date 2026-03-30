@@ -25,11 +25,6 @@
       "name": "pilot",
       "description": "Autonomous execution harness — decomposes plans into stories, runs generator-evaluator loops, manages sessions with auto-resume",
       "source": "./plugins/pilot"
-    },
-    {
-      "name": "memory",
-      "description": "Graph memory interface backed by memlayer — stores entities, relationships, and decisions with local JSONL cache and semantic search recall",
-      "source": "./plugins/memory"
     }
   ]
 }

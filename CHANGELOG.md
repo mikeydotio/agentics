@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v1.4.0] - 2026-03-30
+
+### Removed
+- **Memory plugin** (`/memory`) — collides with built-in Claude Code command; memory functionality will move to the memlayer repo as its own plugin (`a64050e`)
+
+### Changed
+- Cleaned up pilot plugin references to memory (execution loop, handoff format, completion sequence) (`a64050e`)
+
+_[manual]_
+
 ## [v1.3.0] - 2026-03-30
 
 ### Added

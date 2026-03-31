@@ -9,6 +9,9 @@ Thumbs.db
 *~
 # .storyhook/ and .planning/ are version-controlled project data — do not ignore
 
+# Freshen plugin signals (ephemeral, consumed on clear)
+.freshen/
+
 # Pilot plugin runtime artifacts (gitignored)
 .pilot/state.json
 .pilot/lock.json

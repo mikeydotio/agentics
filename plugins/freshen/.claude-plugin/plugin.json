@@ -1,0 +1,5 @@
+{
+  "name": "freshen",
+  "author": "mikeydotio",
+  "description": "Automatic context clearing via tmux — lets plugins trigger /clear and re-invocation between workflow phases"
+}

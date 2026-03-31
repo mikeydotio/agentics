@@ -173,8 +173,8 @@ Parse the user's message to determine the subcommand. Extract arguments (e.g., `
      ```json
      {
        "max_retries": 4,
-       "max_stories_per_session": 5,
-       "max_sessions": 10,
+       "max_stories_per_session": 1,
+       "max_sessions": 50,
        "max_total_retries": 20,
        "canary_stories": 3,
        "trigger_interval": "15m",
@@ -235,7 +235,7 @@ Parse the user's message to determine the subcommand. Extract arguments (e.g., `
    - If missing or malformed → error, exit
    - If `status` is `complete` → remove trigger if present, exit
 
-3. **Read handoff.md** (best-effort): Extract working context, patterns, blockers
+3. **Read handoff.md** (primary context source): Extract patterns established, micro-decisions, code landmarks, test state, blockers, and why the previous session stopped. If handoff.md is missing, pause and ask the user what to do via `AskUserQuestion` (see `references/handoff-format.md` for the missing-handoff protocol). Do NOT silently continue with degraded context.
 
 4. **Crash recovery**:
    - Query storyhook for stories in `in-progress` or `verifying` → reset to `todo`
@@ -367,7 +367,9 @@ loop:
   8. Architectural drift check (every 3 stories or wave boundary)
   9. Re-calibration prompt (every 10 stories)
   retry: git checkout ., structured feedback, retry or block
-  pause: write handoff, set paused, release lock
+  pause: write handoff (MUST include cold-start essentials), set paused, release lock,
+         queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/pilot resume" --source pilot`
+         (falls back to crontab auto-resume if freshen/tmux unavailable)
   complete: full test suite, storyhook report, COMPLETION.md, remove trigger
 ```
 

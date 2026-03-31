@@ -238,6 +238,12 @@ Update lock heartbeat
 If story reached done:
   stories_this_session += 1
 
+# Incremental handoff: update handoff.md with this story's outcomes.
+# This ensures crash recovery has fresh context even without a clean pause.
+# Append to "Stories Completed This Session" section and update "Working Context"
+# with any new patterns, micro-decisions, or code landmarks from this story.
+write_handoff(incremental=true)
+
 If stories_this_session >= config.max_stories_per_session:
   → write_handoff("Session limit reached ({stories_this_session} stories completed)")
   → goto pause
@@ -303,12 +309,22 @@ retry:
 
 ```
 pause:
-  write_handoff()  # includes working context summary — see references/handoff-format.md
+  # The handoff MUST include Cold-Start Essentials (see references/handoff-format.md):
+  #   - Patterns Established (naming, architecture, error handling)
+  #   - Micro-Decisions (not in DESIGN.md but load-bearing)
+  #   - Code Landmarks (key files and their roles)
+  #   - Test State (pass/fail/flaky, run command, env setup)
+  # This is critical because context WILL be cleared before resume.
+  write_handoff()
   state.status = "paused"
   state.sessions_completed += 1
   Write state.json to disk
   Release lock (delete lock.json)
-  # Remote trigger will resume in next cycle
+
+  # Queue automatic context clear + resume via freshen (if available):
+  #   bash plugins/freshen/bin/freshen.sh queue "/pilot resume" --source pilot
+  # If freshen is not available or tmux is missing, fall back to auto-resume
+  # via crontab (which starts a new session with fresh context naturally).
   return
 ```
 

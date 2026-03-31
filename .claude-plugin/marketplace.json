@@ -30,6 +30,11 @@
       "name": "sentry",
       "description": "Intelligent PreToolUse safety hook with deterministic command parsing, AI fallback, and permission mode awareness",
       "source": "./plugins/sentry"
+    },
+    {
+      "name": "freshen",
+      "description": "Automatic context clearing via tmux — lets plugins trigger /clear and re-invocation between workflow phases",
+      "source": "./plugins/freshen"
     }
   ]
 }

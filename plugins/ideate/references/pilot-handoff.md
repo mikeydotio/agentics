@@ -2,6 +2,8 @@
 
 How ideate's PLAN.md maps to pilot's storyhook-based execution, and what makes a plan pilot-ready.
 
+> **See also**: `references/phase-handoff.md` for the general phase transition handoff format used between ideate phases.
+
 ## PLAN.md → Storyhook Stories
 
 Work decomposes PLAN.md waves into individual storyhook stories:

@@ -17,11 +17,12 @@ Resume and recovery sequence for pilot — restoring context after session bound
 - If missing or malformed → report clear error, exit (do not guess)
 - If `status` is `complete` → remove trigger if still present, exit
 
-### 3. Handoff Read (Best-Effort)
+### 3. Handoff Read (Primary Context Source)
 
 - Read `.pilot/handoff.md` if it exists
-- Extract: why did we stop? working context? patterns? blockers?
-- If handoff.md missing → recovery continues without it
+- Extract: patterns established, micro-decisions, code landmarks, test state, blockers, why did we stop
+- Feed extracted context into the generator prompt for the next story
+- **If handoff.md is missing** → pause and ask the user via `AskUserQuestion` (see `references/handoff-format.md` for the missing-handoff protocol). Do NOT silently continue with degraded context.
 
 ### 4. Crash Recovery
 
@@ -56,22 +57,21 @@ git log --oneline -10
 
 Run test suite to verify codebase health.
 
+### 6a. Context Validation
+
+Compare handoff.md claims against actual disk state to guard against stale handoffs:
+
+- If handoff says "tests pass" → run tests to verify
+- If handoff references files that don't exist → note discrepancy, remove from code landmarks
+- If git log shows commits not mentioned in handoff → session crashed mid-story, flag this
+
+This step is especially important when the handoff is from a much older session. Trust current disk state over handoff claims when they conflict.
+
 ### 7. Decision Point
 
 - If tests fail → stop: user must fix test failures before resuming
 - If decision needed (blocked stories requiring user input) → stop
 - Otherwise → enter execution loop
-
-## Recovery Without Handoff
-
-The handoff enriches recovery but is not required:
-
-| Source | What It Provides |
-|--------|-----------------|
-| `state.json` | Work metadata, retry counts, session counts |
-| Storyhook | Story states, comments (evaluator feedback), dependencies |
-| `git log` | Recent commits, what was completed |
-| `config.json` | User limits and settings |
 
 ## Cross-Layer Inconsistency Detection
 

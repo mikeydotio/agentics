@@ -3,6 +3,29 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.0.0] - 2026-03-31
+
+### Breaking
+- **Ideate phases now clear context between each step** — the orchestrator stops after each phase and re-invokes with fresh context via the freshen plugin, changing the user-facing flow from a single continuous session to a multi-session progression
+- **Pilot `max_stories_per_session` default changed from 5 to 1** — each story gets a fresh context window; `max_sessions` raised from 10 to 50 to compensate
+
+### Added
+- **Freshen plugin** (`/freshen`) — portable automatic context clearing via tmux send-keys; any plugin can register a post-clear re-invocation signal, and the Stop + SessionStart(clear) hooks handle `/clear` and command dispatch automatically
+- **Phase Transition Protocol** for ideate — each phase writes a handoff document (`.planning/handoff-phase-N.md`), commits artifacts, queues a freshen signal, and stops
+- **Phase handoff specification** (`references/phase-handoff.md`) — defines handoff format for each phase transition with phase-specific content requirements
+- **Cold-Start Essentials** for pilot handoffs — patterns established, micro-decisions, code landmarks, and test state are now mandatory sections
+- **Incremental handoff writes** in pilot execution loop — handoff.md updates after every completed story, not just at pause
+- **Context Validation step** (6a) in pilot recovery — cross-checks handoff claims against disk state before resuming
+- **Missing-handoff protocol** — both ideate and pilot now pause and ask the user what to do via AskUserQuestion when a handoff document is missing, rather than silently continuing with degraded context
+
+### Changed
+- Ideate **Pilot Invitation** replaces Phase 4.5 — now a resumption path (not an inline gate) that activates when PLAN.md is found after context clear
+- Pilot handoff elevated from "best-effort" to **primary context source** across recovery-protocol.md, handoff-format.md, and SKILL.md
+- Fixed broken reference in ideate SKILL.md (`work-handoff.md` → `pilot-handoff.md`)
+- Fixed typo in ideate resumption protocol ("pilot" → "ideate")
+
+_[manual]_
+
 ## [v1.5.0] - 2026-03-30
 
 ### Added

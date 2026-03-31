@@ -11,6 +11,7 @@ You are an ideation orchestrator. Your job is to take a raw idea and forge it in
 **Read these references before starting:**
 - `references/questioning.md` — Questioning methodology
 - `references/team-roles.md` — Agent team roles and spawning philosophy
+- `references/phase-handoff.md` — Phase transition protocol and handoff format
 
 ## Hard Rules
 
@@ -20,6 +21,31 @@ You are an ideation orchestrator. Your job is to take a raw idea and forge it in
 4. **Research before designing.** Always check if the problem is already solved or if established patterns exist.
 5. **Right-size the team.** Not every project needs every agent. A CLI tool doesn't need a UX designer.
 6. **Document for resumption.** Every phase produces artifacts that allow work to be restarted from that point.
+7. **Clear context between phases.** After completing a phase, write a handoff document, commit, instruct the user to `/clear`, and STOP. Never proceed to the next phase inline.
+
+## Phase Transition Protocol
+
+Every phase ends the same way. After writing and committing the phase's artifacts:
+
+1. **Write handoff**: Write `.planning/handoff-phase-N.md` following the format in `references/phase-handoff.md`. Include key decisions, context the next phase needs, and open questions.
+2. **Commit**: `git add .planning/ && git commit -m "docs: complete phase N — [phase name]"`
+3. **Queue context clear**: Run via Bash:
+   ```bash
+   bash plugins/freshen/bin/freshen.sh queue "/ideate" --source ideate
+   ```
+   If this fails (e.g., no tmux), fall back to instructing the user manually:
+   ```
+   ---
+   **Phase N complete.** All artifacts committed.
+
+   To continue with fresh context:
+   1. Run `/clear`
+   2. Run `/ideate`
+
+   I'll pick up right where we left off.
+   ---
+   ```
+4. **STOP** — return from the skill. Do NOT proceed to the next phase inline. The freshen hooks will automatically clear context and re-invoke `/ideate`.
 
 ## Phase 1: The Interrogation
 
@@ -132,6 +158,8 @@ Write `.planning/IDEA.md` capturing:
 
 Commit immediately: `git commit "docs: capture idea — [project name]"`
 
+**Exit via Phase Transition Protocol** — write `handoff-phase-1.md` and stop.
+
 ---
 
 ## Phase 2: Domain Research
@@ -151,6 +179,8 @@ Present key findings to the user:
 - "Common pitfall: [thing]. Our design should account for this."
 
 Commit: `git commit "docs: domain research complete"`
+
+**Exit via Phase Transition Protocol** — write `handoff-phase-2.md` and stop.
 
 ---
 
@@ -188,6 +218,8 @@ For each section:
 If "Needs changes" — ask what to change via AskUserQuestion, revise, re-present.
 
 After user approves all sections, write `.planning/DESIGN.md` and commit: `git commit "docs: system design approved"`
+
+**Exit via Phase Transition Protocol** — write `handoff-phase-3.md` and stop.
 
 ---
 
@@ -236,25 +268,37 @@ Present the plan as plain text, then use AskUserQuestion:
 
 Commit after approval: `git commit "docs: implementation plan approved"`
 
+**Exit via Phase Transition Protocol** — write `handoff-phase-4.md` and stop.
+
 ---
 
-## Phase 4.5: Pilot Handoff Gate
+## Pilot Invitation
 
-**Read**: `references/work-handoff.md`
+**Read**: `references/pilot-handoff.md`
 
-After PLAN.md is approved, check if the pilot plugin is available for autonomous execution.
+This is not a numbered phase — it is the resumption path when PLAN.md exists without COMPLETION.md. When the user re-invokes `/ideate` after completing Phase 4 and clearing context, this flow begins.
 
-### Pre-Check
+### Entry
 
-Look for `plugins/pilot/.claude-plugin/plugin.json` (relative to the marketplace root). If not found, skip this phase entirely and proceed to Phase 5.
+1. Read `handoff-phase-4.md` (if missing, follow the missing-handoff protocol from `references/phase-handoff.md`)
+2. Read `.planning/PLAN.md`
+3. Output a brief summary of the completed plan: wave count, task count, key risks
 
 ### Execution Choice
+
+Check if `plugins/pilot/.claude-plugin/plugin.json` exists.
 
 If pilot is installed, use AskUserQuestion:
 
 - **header:** "Execute?"
-- **question:** "How would you like to proceed with execution?"
+- **question:** "Your plan is ready. How would you like to proceed with execution?"
 - **options:** ["Autonomous via pilot (you can walk away)", "Execute here (ideate Phase 5)", "Just the plan — I'll execute manually"]
+
+If pilot is NOT installed, use AskUserQuestion:
+
+- **header:** "Execute?"
+- **question:** "Your plan is ready. How would you like to proceed?"
+- **options:** ["Execute here (ideate Phase 5)", "Just the plan — I'll execute manually"]
 
 **If "Autonomous via pilot":**
 1. Invoke `/pilot plan` with `.planning/PLAN.md`
@@ -305,18 +349,25 @@ Write `.planning/COMPLETION.md` with final status. Commit: `git commit "docs: im
 
 ## Resumption Protocol
 
-If pilot is interrupted at any phase, the artifacts on disk define the state:
+If ideate is interrupted at any phase, the artifacts on disk define the state. The handoff document from the previous phase provides working context.
 
-| If you find... | Resume from... |
-|----------------|---------------|
-| Nothing in .planning/ | Phase 1: The Interrogation |
-| IDEA.md only | Phase 2: Domain Research |
-| IDEA.md + research/ | Phase 3: Design |
-| IDEA.md + DESIGN.md | Phase 4: Planning |
-| IDEA.md + DESIGN.md + PLAN.md | Phase 4.5: Pilot Handoff Gate (or Phase 5 if pilot unavailable) |
-| COMPLETION.md | Done |
+| If you find... | Handoff to read | Resume from... |
+|----------------|-----------------|---------------|
+| Nothing in `.planning/` | None | Phase 1: The Interrogation |
+| `IDEA.md` only | `handoff-phase-1.md` | Phase 2: Domain Research |
+| `IDEA.md` + `research/` | `handoff-phase-2.md` | Phase 3: Design |
+| `IDEA.md` + `DESIGN.md` | `handoff-phase-3.md` | Phase 4: Planning |
+| `IDEA.md` + `DESIGN.md` + `PLAN.md` | `handoff-phase-4.md` | Pilot Invitation |
+| `COMPLETION.md` | None | Done |
 
-When resuming, read all existing artifacts first, then continue from the appropriate phase. Summarize what's already been done before proceeding.
+### Resumption Steps
+
+1. Scan `.planning/` to determine the current phase from the table above
+2. Read the corresponding handoff document (e.g., `handoff-phase-2.md` before starting Phase 3)
+   - **If the handoff is missing**: follow the missing-handoff protocol in `references/phase-handoff.md` — pause and ask the user how to proceed via `AskUserQuestion`. Do NOT silently continue.
+3. Output a brief summary of prior phases drawn from the handoff (2-4 sentences)
+4. Read the relevant artifact files (IDEA.md, DESIGN.md, etc.)
+5. Continue with the next phase
 
 ---
 

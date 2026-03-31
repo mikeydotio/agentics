@@ -1,0 +1,29 @@
+{
+  "description": "Freshen hooks — automatic /clear and re-invocation via tmux send-keys",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/on-stop.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/on-clear.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

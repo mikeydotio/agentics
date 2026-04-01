@@ -47,12 +47,15 @@ SESSIONS_COMPLETED="$(jq -r '.sessions_completed // 0' "$STATE_FILE" 2>/dev/null
 
 CTX="Work is ${STATUS}. Sessions: ${SESSIONS_COMPLETED}, Stories attempted: ${STORIES_ATTEMPTED}, Retries: ${TOTAL_RETRIES}."
 
-# Append handoff context if available
-HANDOFF_FILE="${PROJECT_DIR}/.pilot/handoff.md"
-if [[ -f "$HANDOFF_FILE" ]]; then
-  HANDOFF_CONTENT="$(cat "$HANDOFF_FILE" 2>/dev/null)"
-  if [[ -n "$HANDOFF_CONTENT" ]]; then
-    CTX="${CTX} Last handoff: ${HANDOFF_CONTENT}"
+# Append most recent handoff context if available
+HANDOFF_DIR="${PROJECT_DIR}/.pilot/handoffs"
+if [[ -d "$HANDOFF_DIR" ]]; then
+  HANDOFF_FILE="$(ls -t "$HANDOFF_DIR"/handoff-*.md 2>/dev/null | head -1)"
+  if [[ -n "$HANDOFF_FILE" ]] && [[ -f "$HANDOFF_FILE" ]]; then
+    HANDOFF_CONTENT="$(cat "$HANDOFF_FILE" 2>/dev/null)"
+    if [[ -n "$HANDOFF_CONTENT" ]]; then
+      CTX="${CTX} Last handoff ($(basename "$HANDOFF_FILE")): ${HANDOFF_CONTENT}"
+    fi
   fi
 fi
 

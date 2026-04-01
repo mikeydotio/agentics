@@ -1,5 +1,5 @@
 {
   "name": "freshen",
-  "author": "mikeydotio",
+  "author": { "name": "mikeydotio" },
   "description": "Automatic context clearing via tmux — lets plugins trigger /clear and re-invocation between workflow phases"
 }

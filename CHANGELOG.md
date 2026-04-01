@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.1.1] - 2026-04-01
+
+### Removed
+- **Ideate plugin** — fully removed from marketplace and directory; all functionality lives in pilot (`fed674f`)
+
+### Fixed
+- Freshen plugin manifest `author` field must be an object, not a string — caused marketplace install failure (`39eba9d`)
+
+_[manual]_
+
 ## [v2.1.0] - 2026-04-01
 
 ### Added

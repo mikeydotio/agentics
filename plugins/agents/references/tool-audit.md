@@ -1,6 +1,6 @@
 # Tool Design Audit
 
-Audit of all tools across the agentics plugin ecosystem against five tool design principles from the Agentailor article. Covers storyhook MCP tools, freshen, sentry, semver, and forge.
+Audit of all tools across the agentics plugin ecosystem against five tool design principles from the Agentailor article. Covers storyhook MCP tools, freshen, greenlight, semver, and forge.
 
 ---
 
@@ -128,17 +128,17 @@ No issues. Output is minimal (1-2 lines per operation).
 
 ---
 
-## 3. Sentry Plugin
+## 3. Greenlight Plugin
 
-Sentry is a PreToolUse hook (`sentry.sh`, ~1100 lines) with a management skill (`/sentry`). It has no MCP tools.
+Greenlight is a PreToolUse hook (`greenlight.sh`, ~1100 lines) with a management skill (`/greenlight`). It has no MCP tools.
 
 ### 3.1 Strategic Consolidation
 
 | Finding | Priority |
 |---------|----------|
 | **Three-tier decision pipeline is well-consolidated** — deterministic ALLOW, deterministic PASS, AI fallback. A single hook invocation handles everything. No fragmented multi-step operations. | -- |
-| **The `/sentry` skill is a config management CLI** — `allow`, `block`, `test`, `status`, `mode`, `ai` are all single-concern commands that modify `config.yaml`. Well-scoped. | -- |
-| **Config parsing is duplicated** — `sentry.sh` uses `grep/sed` to parse config; the skill's bash snippets also use `grep/sed`. Any config format change breaks both independently. | **LOW** |
+| **The `/greenlight` skill is a config management CLI** — `allow`, `block`, `test`, `status`, `mode`, `ai` are all single-concern commands that modify `config.yaml`. Well-scoped. | -- |
+| **Config parsing is duplicated** — `greenlight.sh` uses `grep/sed` to parse config; the skill's bash snippets also use `grep/sed`. Any config format change breaks both independently. | **LOW** |
 
 No critical issues.
 
@@ -146,7 +146,7 @@ No critical issues.
 
 | Finding | Priority |
 |---------|----------|
-| **Hook output is clearly prefixed** — `[sentry]` prefix on all messages to the user. Agents and users can identify the source. | -- |
+| **Hook output is clearly prefixed** — `[greenlight]` prefix on all messages to the user. Agents and users can identify the source. | -- |
 | **Decision types are well-separated** — `ALLOW` (auto-approve), `PASS` with context (warn but defer), `PASS` silent (defer to normal permissions). The three outcomes are unambiguous. | -- |
 
 No issues.
@@ -156,7 +156,7 @@ No issues.
 | Finding | Priority |
 |---------|----------|
 | **ALLOW returns a reason string** — agents see why the command was approved (e.g., "Bash: safe readonly command(s)"). Useful for debugging but not needed for agent decision-making since the command proceeds. | -- |
-| **PASS with context returns actionable warning** — e.g., "[sentry] Detected file deletion: `rm` — requesting user confirmation." The agent and user both understand the risk. Good. | -- |
+| **PASS with context returns actionable warning** — e.g., "[greenlight] Detected file deletion: `rm` — requesting user confirmation." The agent and user both understand the risk. Good. | -- |
 | **AI fallback returns structured rationale** — when `ai_show_rationale: true`, the AI's reasoning is surfaced. Agents can understand why a command was flagged. Excellent. | -- |
 | **Log decisions include timestamps and categories** — useful for post-hoc auditing but not surfaced to agents during operation. | -- |
 
@@ -178,12 +178,12 @@ No issues.
 | Finding | Priority |
 |---------|----------|
 | **Inline code comments are thorough** — the header block explains the three-tier pipeline, features, and default behavior. Maintenance-friendly. | -- |
-| **SKILL.md provides complete command reference** — every `/sentry` subcommand has usage, examples, and bash snippets. | -- |
-| **Edge case: `update_story` one-field limitation analog** — the sentry hook processes file-writing redirections BEFORE command analysis, meaning `echo "hello" > file.txt` silently passes to user (correct) but the reason is "file-writing redirection detected" which is vague. The agent does not know if the write target is safe. | **LOW** |
-| **Scope limitation is clearly documented** — "Sentry only evaluates Bash commands. Write and Edit tool calls are not intercepted." This prevents agents from expecting sentry to guard non-Bash tools. | -- |
+| **SKILL.md provides complete command reference** — every `/greenlight` subcommand has usage, examples, and bash snippets. | -- |
+| **Edge case: `update_story` one-field limitation analog** — the greenlight hook processes file-writing redirections BEFORE command analysis, meaning `echo "hello" > file.txt` silently passes to user (correct) but the reason is "file-writing redirection detected" which is vague. The agent does not know if the write target is safe. | **LOW** |
+| **Scope limitation is clearly documented** — "Greenlight only evaluates Bash commands. Write and Edit tool calls are not intercepted." This prevents agents from expecting greenlight to guard non-Bash tools. | -- |
 
 **Recommendations:**
-1. Consider enriching the redirection warning to include the target file path: "[sentry] File write detected: `> output.txt` — requesting user confirmation."
+1. Consider enriching the redirection warning to include the target file path: "[greenlight] File write detected: `> output.txt` — requesting user confirmation."
 
 ---
 
@@ -336,7 +336,7 @@ The most significant cross-cutting issue: storyhook has three interfaces (CLI, M
 ### Hook Output Standards (LOW)
 
 Hooks across plugins use different output patterns:
-- Sentry: `[sentry]` prefix in `additionalContext`
+- Greenlight: `[greenlight]` prefix in `additionalContext`
 - Semver: plain text in `additionalContext` or `systemMessage` with `[!DESYNC]` markers
 - Forge: plain text in `additionalContext`
 - Freshen: no hook output (hooks manage side effects silently)
@@ -345,7 +345,7 @@ This works but is not standardized. Consider a convention: `[plugin-name]` prefi
 
 ### Config Parsing Duplication (LOW)
 
-Both sentry and semver parse YAML config files with `grep/sed` one-liners. This works for flat key-value configs but will break on multi-line values, comments after values, or quoted strings. Consider a shared `parse-config.sh` helper or switch to `yq` if available.
+Both greenlight and semver parse YAML config files with `grep/sed` one-liners. This works for flat key-value configs but will break on multi-line values, comments after values, or quoted strings. Consider a shared `parse-config.sh` helper or switch to `yq` if available.
 
 ---
 

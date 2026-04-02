@@ -102,7 +102,7 @@ _[manual]_
 ## [v1.5.0] - 2026-03-30
 
 ### Added
-- **Sentry plugin** (`/sentry`) — intelligent PreToolUse safety hook that intercepts dangerous commands (destructive git operations, broad file deletions, production deployments) and enforces confirmation or blocking policies (1d9d4ab)
+- **Greenlight plugin** (`/greenlight`) — intelligent PreToolUse safety hook that intercepts dangerous commands (destructive git operations, broad file deletions, production deployments) and enforces confirmation or blocking policies (1d9d4ab)
 
 _[manual]_
 

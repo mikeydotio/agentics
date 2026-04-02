@@ -1,5 +1,5 @@
 {
-  "name": "sentry",
+  "name": "greenlight",
   "description": "Intelligent PreToolUse safety hook with deterministic command parsing, AI fallback via Claude Sonnet, and permission mode awareness",
   "author": {
     "name": "mikeydotio"

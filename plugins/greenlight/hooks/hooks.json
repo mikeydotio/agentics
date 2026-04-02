@@ -1,0 +1,16 @@
+{
+  "description": "Greenlight PreToolUse safety hook — evaluates tool calls for safety with deterministic parsing and AI fallback",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/greenlight.sh",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

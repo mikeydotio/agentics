@@ -1,9 +1,9 @@
-# sentry configuration
-# Location: ~/.config/sentry/config.yaml
+# greenlight configuration
+# Location: ~/.config/greenlight/config.yaml
 # Changes take effect immediately (hook re-reads on every invocation)
-# Manage with /sentry command
+# Manage with /greenlight command
 
-# Permission modes where sentry is DISABLED (space-separated)
+# Permission modes where greenlight is DISABLED (space-separated)
 # Valid modes: default, plan, acceptEdits, bypassPermissions
 disabled_modes: bypassPermissions
 
@@ -34,7 +34,7 @@ custom_allow:
 custom_pass:
 
 # Log decisions to file (empty = disabled)
-# Example: log_file: /home/you/.config/sentry/sentry.log
+# Example: log_file: /home/you/.config/greenlight/greenlight.log
 log_file:
 
 # Verbose logging (debug-level detail)

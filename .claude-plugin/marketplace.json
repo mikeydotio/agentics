@@ -22,9 +22,9 @@
       "source": "./plugins/forge"
     },
     {
-      "name": "sentry",
+      "name": "greenlight",
       "description": "Intelligent PreToolUse safety hook with deterministic command parsing, AI fallback, and permission mode awareness",
-      "source": "./plugins/sentry"
+      "source": "./plugins/greenlight"
     },
     {
       "name": "freshen",

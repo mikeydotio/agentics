@@ -1,14 +1,14 @@
-# sentry
+# greenlight
 
 Intelligent PreToolUse safety hook for Claude Code. Evaluates every tool call using a three-tier decision pipeline:
 
 1. **Deterministic ALLOW** — 150+ known-safe readonly commands, plus deep subcommand analysis for git, gh, docker, kubectl, terraform, aws, gcloud, npm, and more
-2. **Deterministic PASS with warning** — Known-destructive commands (`rm`, `sudo`, `kill`, `chmod`, etc.) surface clear `[sentry]` warnings
+2. **Deterministic PASS with warning** — Known-destructive commands (`rm`, `sudo`, `kill`, `chmod`, etc.) surface clear `[greenlight]` warnings
 3. **AI Fallback** — Uncertain commands evaluated by Claude Sonnet via structured API call
 
 ## Permission Mode Awareness
 
-Sentry auto-disables in **Bypass Permissions** mode and stays active in all other modes. Configurable per-mode via `/sentry enable|disable <mode>`.
+Greenlight auto-disables in **Bypass Permissions** mode and stays active in all other modes. Configurable per-mode via `/greenlight enable|disable <mode>`.
 
 | Mode | Default |
 |------|---------|
@@ -19,7 +19,7 @@ Sentry auto-disables in **Bypass Permissions** mode and stays active in all othe
 
 ## Configuration
 
-Config at `~/.config/sentry/config.yaml` (auto-initialized on first run from bundled defaults).
+Config at `~/.config/greenlight/config.yaml` (auto-initialized on first run from bundled defaults).
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -33,23 +33,23 @@ Config at `~/.config/sentry/config.yaml` (auto-initialized on first run from bun
 
 ## Management
 
-Use `/sentry` to manage at runtime:
+Use `/greenlight` to manage at runtime:
 
 ```
-/sentry status                   Show config and mode status
-/sentry enable <mode>            Enable in a permission mode
-/sentry disable <mode>           Disable in a permission mode
-/sentry mode strict              Change analysis mode
-/sentry ai off                   Disable AI fallback
-/sentry allow make               Always allow 'make'
-/sentry block terraform          Always pass 'terraform' to user
-/sentry test "curl -s ..."       Dry-run through the hook
-/sentry reset                    Restore defaults
+/greenlight status                   Show config and mode status
+/greenlight enable <mode>            Enable in a permission mode
+/greenlight disable <mode>           Disable in a permission mode
+/greenlight mode strict              Change analysis mode
+/greenlight ai off                   Disable AI fallback
+/greenlight allow make               Always allow 'make'
+/greenlight block terraform          Always pass 'terraform' to user
+/greenlight test "curl -s ..."       Dry-run through the hook
+/greenlight reset                    Restore defaults
 ```
 
 ## AI Fallback
 
-Set `ANTHROPIC_API_KEY` in your environment. When a command is uncertain, sentry calls Claude Sonnet with a structured prompt asking "Is this command potentially destructive?" and gets `{answer: boolean, rationale: string}` back. The rationale is always shown to the user.
+Set `ANTHROPIC_API_KEY` in your environment. When a command is uncertain, greenlight calls Claude Sonnet with a structured prompt asking "Is this command potentially destructive?" and gets `{answer: boolean, rationale: string}` back. The rationale is always shown to the user.
 
 ## Requirements
 

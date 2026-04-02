@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# sentry — Intelligent Claude Code PreToolUse Safety Hook
+# greenlight — Intelligent Claude Code PreToolUse Safety Hook
 #
 # Three-tier decision pipeline for tool safety:
 #   1. Deterministic ALLOW — known-safe readonly commands
@@ -13,7 +13,7 @@
 #   - Command substitution / interpolation / process substitution detection
 #   - AI fallback via Anthropic API for genuinely uncertain commands
 #   - Permission mode awareness (auto-disables in bypassPermissions)
-#   - Configurable behavior via ~/.config/sentry/config.yaml
+#   - Configurable behavior via ~/.config/greenlight/config.yaml
 #
 # Default: exit 0 with no output → pass to normal permission system.
 # If anything goes wrong, we fall through to this default safely.
@@ -26,7 +26,7 @@ TOOL_NAME="$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)" ||
 #  CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-CONFIG_DIR="${HOME}/.config/sentry"
+CONFIG_DIR="${HOME}/.config/greenlight"
 CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 DEFAULT_CONFIG="${PLUGIN_ROOT}/references/default-config.yaml"
@@ -1019,13 +1019,13 @@ PROMPT_END
   # Build context message for the user
   local context_msg
   if [[ "$answer" == "true" ]]; then
-    context_msg="[sentry] AI safety analysis: POTENTIALLY DESTRUCTIVE. ${rationale}"
+    context_msg="[greenlight] AI safety analysis: POTENTIALLY DESTRUCTIVE. ${rationale}"
     pass_with_context "AI determined command is potentially destructive" "$context_msg"
   else
     # AI says safe — allow, but still surface rationale if configured
     if [[ "$CFG_AI_SHOW_RATIONALE" == "true" ]]; then
       log_decision "ALLOW" "AI confirmed safe: ${rationale}"
-      jq -n --arg rationale "[sentry] AI analysis: ${rationale}" \
+      jq -n --arg rationale "[greenlight] AI analysis: ${rationale}" \
         '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"AI confirmed safe","additionalContext":$rationale}}'
       exit 0
     else
@@ -1078,7 +1078,7 @@ fi
 
 if $any_destructive; then
   pass_with_context "known destructive command" \
-    "[sentry] Detected ${destructive_detail} — requesting user confirmation."
+    "[greenlight] Detected ${destructive_detail} — requesting user confirmation."
 fi
 
 # Uncertain commands — behavior depends on mode and AI config

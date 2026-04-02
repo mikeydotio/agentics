@@ -10,6 +10,9 @@ FRESHEN_DIR=".freshen"
 # Directory must exist
 [ -d "$FRESHEN_DIR" ] || exit 0
 
+# Disabled — silently skip
+[ -f "$FRESHEN_DIR/.disabled" ] && exit 0
+
 # Only process if clear-pending flag exists (freshen-initiated clear).
 # If missing, this was a user-initiated /clear — skip processing.
 [ -f "$FRESHEN_DIR/.clear-pending" ] || exit 0

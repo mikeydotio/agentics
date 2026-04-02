@@ -1,12 +1,16 @@
 ---
 name: freshen
 description: Manage automatic context clearing — queue a /clear + re-invocation, check status, or cancel pending signals. Requires tmux.
-argument-hint: queue <command> --source <name> | status | cancel [--source <name> | --all]
+argument-hint: queue <command> --source <name> | status | cancel [--source <name> | --all] | enable | disable
 ---
 
 # Freshen: Automatic Context Clearing
 
 You manage the freshen signal queue. Freshen lets plugins automatically clear context and re-invoke a command between workflow phases, using tmux send-keys.
+
+## Hard Rules
+
+1. **NEVER invoke `enable` or `disable` autonomously.** These commands are reserved for direct human use. Only execute them when the user explicitly types `/freshen enable` or `/freshen disable`. Do not suggest, infer, or auto-trigger these commands under any circumstance — not during troubleshooting, not as a recovery step, not as part of any workflow.
 
 ## How It Works
 
@@ -27,6 +31,8 @@ Parse the ARGUMENTS to determine the subcommand:
 | `status` | Show pending signals |
 | `cancel --source <name>` | Cancel a specific signal |
 | `cancel --all` | Cancel all pending signals |
+| `enable` | Re-enable freshen (user-only — see Hard Rules) |
+| `disable` | Disable freshen (user-only — see Hard Rules) |
 | (empty or help) | Show usage |
 
 ## Executing Commands
@@ -54,3 +60,21 @@ Then STOP (return from the skill). The freshen hooks handle `/clear` and re-invo
 - The `.freshen/` directory is gitignored and ephemeral
 - Signal files are consumed once and deleted — no stale state
 - Multiple sources can coexist, but only one is processed per clear cycle (oldest first)
+
+## User-Only Commands
+
+These commands are for human troubleshooting. **Do not invoke them autonomously** (see Hard Rules).
+
+### /freshen disable
+Disables freshen entirely. All pending signals are cancelled. Hooks become no-ops. Other freshen commands warn and do nothing until re-enabled.
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/freshen.sh disable
+```
+
+### /freshen enable
+Re-enables freshen after a disable. Normal operation resumes.
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/freshen.sh enable
+```

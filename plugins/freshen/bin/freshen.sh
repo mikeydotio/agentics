@@ -23,7 +23,19 @@ require_tmux() {
   [ -n "${TMUX_PANE:-}" ] || die "freshen requires \$TMUX_PANE. Claude must be running inside a tmux pane."
 }
 
+is_disabled() {
+  [ -f "$FRESHEN_DIR/.disabled" ]
+}
+
+require_enabled() {
+  if is_disabled; then
+    echo "freshen: disabled — run '/freshen enable' to re-enable" >&2
+    exit 0
+  fi
+}
+
 cmd_queue() {
+  require_enabled
   local command="" source=""
 
   # Parse args
@@ -63,6 +75,7 @@ cmd_queue() {
 }
 
 cmd_status() {
+  require_enabled
   local found=0
   for signal in "$FRESHEN_DIR"/*.signal; do
     [ -f "$signal" ] || continue
@@ -75,6 +88,7 @@ cmd_status() {
 }
 
 cmd_cancel() {
+  require_enabled
   local source="" all=0
 
   while [[ $# -gt 0 ]]; do
@@ -102,10 +116,32 @@ cmd_cancel() {
   fi
 }
 
+cmd_disable() {
+  if is_disabled; then
+    echo "freshen: already disabled"
+    return
+  fi
+  mkdir -p "$FRESHEN_DIR"
+  rm -f "$FRESHEN_DIR"/*.signal "$FRESHEN_DIR/.clear-pending" 2>/dev/null
+  touch "$FRESHEN_DIR/.disabled"
+  echo "freshen: disabled — all pending signals cancelled"
+}
+
+cmd_enable() {
+  if ! is_disabled; then
+    echo "freshen: already enabled"
+    return
+  fi
+  rm -f "$FRESHEN_DIR/.disabled"
+  echo "freshen: enabled"
+}
+
 # Route subcommand
 case "${1:-}" in
-  queue)  shift; cmd_queue "$@" ;;
-  status) cmd_status ;;
-  cancel) shift; cmd_cancel "$@" ;;
-  *)      die "usage: freshen.sh <queue|status|cancel> [args]" ;;
+  queue)   shift; cmd_queue "$@" ;;
+  status)  cmd_status ;;
+  cancel)  shift; cmd_cancel "$@" ;;
+  enable)  cmd_enable ;;
+  disable) cmd_disable ;;
+  *)       die "usage: freshen.sh <queue|status|cancel|enable|disable> [args]" ;;
 esac

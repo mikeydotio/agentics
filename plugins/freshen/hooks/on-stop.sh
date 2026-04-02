@@ -10,6 +10,9 @@ FRESHEN_DIR=".freshen"
 # Directory must exist
 [ -d "$FRESHEN_DIR" ] || exit 0
 
+# Disabled — silently skip
+[ -f "$FRESHEN_DIR/.disabled" ] && exit 0
+
 # Delete stale signals (older than 2 hours)
 find "$FRESHEN_DIR" -name '*.signal' -mmin +120 -delete 2>/dev/null || true
 

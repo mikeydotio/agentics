@@ -2,7 +2,7 @@
 
 ## Context
 
-Anthropic's 2026 engineering guidance establishes that **harness design determines outcome more than model capability**. The current agentic-workflows marketplace has strong planning (ideate) and debugging (rca) plugins, but lacks the autonomous execution, memory, and session management infrastructure needed for a "plan and walk away" workflow.
+Anthropic's 2026 engineering guidance establishes that **harness design determines outcome more than model capability**. The current agentics marketplace has strong planning (ideate) and debugging (rca) plugins, but lacks the autonomous execution, memory, and session management infrastructure needed for a "plan and walk away" workflow.
 
 This plan adds two new plugins (**conductor**, **memory**) and modifies **ideate** to create an end-to-end harness that **replaces GSD** as the primary work orchestration system. The user plans work with Claude, walks away, and Claude continues autonomously across session boundaries via remote triggers — true fire-and-forget execution.
 
@@ -569,12 +569,12 @@ Write-ahead cache — entities written here first, synced to memlayer when avail
 
 **`.memory/entities.jsonl`** — One entity per line:
 ```json
-{"id": "e:decision:001", "type": "decision", "name": "Use JSONL for memory cache", "project": "agentic-workflows", "created": "2026-03-28T12:00:00Z", "synced": false, "attrs": {"context": "...", "alternatives": ["SQLite"]}}
+{"id": "e:decision:001", "type": "decision", "name": "Use JSONL for memory cache", "project": "agentics", "created": "2026-03-28T12:00:00Z", "synced": false, "attrs": {"context": "...", "alternatives": ["SQLite"]}}
 ```
 
 **`.memory/relations.jsonl`** — One relationship per line:
 ```json
-{"from": "e:decision:001", "rel": "made-during", "to": "e:project:agentic-workflows", "created": "2026-03-28T12:00:00Z", "synced": false}
+{"from": "e:decision:001", "rel": "made-during", "to": "e:project:agentics", "created": "2026-03-28T12:00:00Z", "synced": false}
 ```
 
 **`.memory/index.json`** — Lightweight summary:
@@ -619,7 +619,7 @@ Searched at specific triggers, never speculatively:
 
 ### Memlayer Upgrade Roadmap (Companion Project)
 
-This is outside agentic-workflows scope but shapes the memory plugin's design:
+This is outside agentics scope but shapes the memory plugin's design:
 
 1. **Entity CRUD endpoints**: `POST /entities`, `GET /entities?type=decision`, `GET /entities/:id/relations`
 2. **Relation CRUD**: `POST /relations`, `GET /relations?from=:id`

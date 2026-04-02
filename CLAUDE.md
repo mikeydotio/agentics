@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Agentic Workflows is a Claude Code plugin marketplace (`mikeydotio/agentic-workflows`) providing plugins for idea-to-execution workflows, root cause analysis, and semantic versioning.
+Agentics is a Claude Code plugin marketplace (`mikeydotio/agentics`) providing plugins for idea-to-execution workflows, root cause analysis, and semantic versioning.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ Agentic Workflows is a Claude Code plugin marketplace (`mikeydotio/agentic-workf
 **Plugin pattern**: Each plugin under `plugins/` has:
 - `.claude-plugin/plugin.json` — manifest (name, description)
 - `skills/<name>/SKILL.md` — main skill with YAML frontmatter (`name`, `description`, optional `argument-hint`) + markdown instructions that act as the orchestrator
-- `agents/<name>.md` — specialized subagent prompts with role descriptions, tool restrictions, and mandatory initial-read protocol
+- `agents/<name>.md` — specialized subagent prompts with role descriptions, tool restrictions, and mandatory initial-read protocol (most agents now live in the shared `plugins/agents/agents/` library; consuming plugins use `agent-overrides/` for pipeline-specific context)
 - `references/<topic>.md` — methodology docs and detailed protocols that skills reference (keeps SKILL.md lean)
 
 **Key design patterns**:
@@ -26,8 +26,9 @@ Agentic Workflows is a Claude Code plugin marketplace (`mikeydotio/agentic-workf
 
 | Plugin | Skill | Purpose |
 |--------|-------|---------|
-| pilot | `/pilot` | Unified idea-to-deployment pipeline: interrogation → research → design → planning → decompose → execute → review → validate → triage → document → deploy. 15 agents, 11 pipeline skills, state-machine orchestrator. FIX/ESCALATE triage loop. Has SessionStart and Stop hooks. |
-| rca | `/rca` | Root cause analysis: symptom intake → evidence collection → hypothesis formation → verification → remediation. 5 agents. |
+| agents | `/agents` | Shared agent library — 27 research-backed specialist agent definitions (16 general-purpose, 3 platform-specific UX, 8 pipeline-specific) used by pilot, rca, and future plugins. |
+| pilot | `/pilot` | Unified idea-to-deployment pipeline: interrogation → research → design → planning → decompose → execute → review → validate → triage → document → deploy. Uses shared agents from the `agents` plugin. FIX/ESCALATE triage loop. Has SessionStart and Stop hooks. |
+| rca | `/rca` | Root cause analysis: symptom intake → evidence collection → hypothesis formation → verification → remediation. Uses shared agents (investigator, evidence-collector, hypothesis-challenger, software-architect). |
 | semver | `/semver` | Version lifecycle: tracking, bumping, changelog generation, sync validation. Has SessionStart and PostToolUse hooks. |
 
 ## Runtime Dependencies

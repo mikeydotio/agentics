@@ -1,5 +1,7 @@
 # Agent Team Roles
 
+> **Note**: Agent definitions have moved to the shared library at `plugins/agents/agents/`. See `plugins/agents/references/agent-catalog.md` for the full roster.
+
 The pilot pipeline uses a cross-functional team of specialized agents. Each agent has a distinct perspective, toolset, and responsibility. The orchestrator spawns them at the appropriate step.
 
 ## Role Catalog

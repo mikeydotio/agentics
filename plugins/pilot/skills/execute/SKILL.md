@@ -108,7 +108,7 @@ Agent(
     - Relevant DESIGN.md section (from plan-mapping.json)
     - File list to read (files_expected + related existing files)
     - Prior evaluator feedback (if retry)
-    - Generator agent instructions (from agents/generator.md)
+    - Generator agent instructions (from plugins/agents/agents/generator.md)
   >
 )
 ```
@@ -123,7 +123,7 @@ Agent(
     - git diff of uncommitted changes
     - Deterministic check output
     - Relevant DESIGN.md section
-    - Evaluator agent instructions (from agents/evaluator.md)
+    - Evaluator agent instructions (from plugins/agents/agents/evaluator.md)
   >
 )
 ```

@@ -1,0 +1,7 @@
+{
+  "name": "agents",
+  "description": "Shared agent library — research-backed specialist agent definitions for use across all agentics plugins",
+  "author": {
+    "name": "mikeydotio"
+  }
+}

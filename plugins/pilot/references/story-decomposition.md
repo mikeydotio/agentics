@@ -30,52 +30,53 @@ story new "[Project Name] — Work Execution"
 
 Record the returned ID as `project_story` in plan-mapping.json.
 
-### 4. Parse PLAN.md Waves
+### 4. Decompose via MCP (Preferred — Single Call)
 
-Extract waves and tasks from PLAN.md markdown structure:
+The PLAN.md markdown format matches what `storyhook_decompose_spec` expects:
+- `### Wave N` headings → automatic wave dependency creation (later waves blocked-by earlier waves)
+- `- [ ]` checkbox items → individual stories
+- Inline `[HIGH]`, `[MEDIUM]`, `[LOW]` markers → priority assignment
+- `#label` → label assignment
+
+**Steps:**
+
+1. **Preview**: Call `storyhook_decompose_spec(content: <PLAN.md>, dry_run: true)` to see what will be created
+2. **Create**: Call `storyhook_decompose_spec(content: <PLAN.md>, dry_run: false)` to create all stories
+3. **Record IDs**: Map returned story IDs to task references for plan-mapping.json
+
+This replaces what was previously 60-80+ sequential CLI calls with a single MCP tool call. The MCP tool handles:
+- Story creation with titles
+- Wave dependency wiring (stories in wave N+1 are blocked-by stories in wave N)
+- Priority assignment from inline markers
+- Label assignment from inline markers
+
+### 5. Add Acceptance Criteria
+
+After decomposition, add acceptance criteria as comments on each story:
 
 ```
-### Wave N (...)
-- [ ] Task N.M: [title]
-  - Acceptance: [criteria]
-  - Files: [expected files]
+storyhook_add_comment(id: "HP-N", body: "Acceptance: Config loads from YAML and returns typed object")
 ```
 
-For each task:
-1. `story new "<task title>"` — create the story
-2. Record the returned story ID
+Or via CLI: `story HP-N "Acceptance: <criteria>"`
 
-### 5. Set Dependencies (Wave Ordering)
+### CLI Fallback (If MCP Unavailable)
 
-Tasks within the same wave are parallel (no dependencies between them).
-Tasks in wave N+1 depend on ALL tasks in wave N:
+If MCP tools are unavailable, fall back to sequential CLI creation:
 
-```bash
-# For each task T in wave N and each task U in wave N+1:
-story HP-T precedes HP-U
+```
+For each wave:
+  For each task in wave:
+    story new "<task title>"
+    → record returned story ID
+    story HP-X priority <level>  (wave 1=high, 2=medium, 3+=low)
+    story HP-X "Acceptance: <criteria>"
+
+For each task T in wave N and each task U in wave N+1:
+  story HP-T precedes HP-U
 ```
 
-### 6. Set Priorities
-
-| Wave | Priority |
-|------|----------|
-| 1 | high |
-| 2 | medium |
-| 3+ | low |
-
-```bash
-story HP-N priority high    # wave 1
-story HP-N priority medium  # wave 2
-story HP-N priority low     # wave 3+
-```
-
-### 7. Add Acceptance Criteria
-
-For each story, add the acceptance criteria as a comment:
-
-```bash
-story HP-N "Acceptance: Config loads from YAML file and returns typed object"
-```
+This is significantly slower (N×3 calls + M dependency calls vs. 1 MCP call) but functionally equivalent.
 
 ### 8. Map Stories to DESIGN.md
 

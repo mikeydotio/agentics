@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.2.0] - 2026-04-01
+
+### Added
+- **Agents plugin** (`/agents`) — shared library of 27 research-backed agent definitions replacing per-plugin agent directories; 16 general-purpose agents (software-engineer, qa-engineer, security-researcher, software-architect, project-manager, technical-writer, copy-editor, skeptic, investigator, accessibility-engineer, performance-engineer, devops-engineer, api-designer, observability-engineer, data-engineer, lawyer), 3 platform-specific UX designers (CLI, web, mobile), and 8 pipeline-specific agents (generator, evaluator, reviewer, validator, triager, domain-researcher, evidence-collector, hypothesis-challenger)
+- **11 net-new agents** — copy-editor (LLM-tell detection), skeptic (Socratic questioning), investigator (multi-hypothesis RCA), 3 UX designer variants (CLI/web/mobile), performance-engineer, devops-engineer, api-designer, observability-engineer, data-engineer, lawyer (OSS license compatibility)
+- **Cross-plugin agent reference mechanism** — consuming plugins reference shared agents by path and layer pipeline-specific overrides via `agent-overrides/` directories
+- **Agent design principles reference** — research synthesis from Anthropic's "Building Effective Agents", Agentailor's tool design principles, and multi-agent orchestration research
+- **Agent validation script** (`validate-agents.sh`) — structural validation for frontmatter, tool/read-only consistency, naming, guardrails, and mandatory protocols
+- **Tool design audit** (`tool-audit.md`) — audit of all plugin tools against 5 Agentailor principles with prioritized findings
+
+### Changed
+- **Pipeline agents rewritten with cross-pollination** — generator draws from Software Engineer (TDD) + Security Researcher (secure-by-default); evaluator draws from QA (edge cases) + Skeptic (debiasing); reviewer expanded to 8-dimensional analysis; validator enforces no-mock policy; triager uses 4-dimension decision framework
+- **RCA consolidated from 5 to 2 pipeline agents** — code-archaeologist and systems-analyst absorbed into general-purpose Investigator; remediation-architect absorbed into Software Architect with RCA-specific override
+- **Storyhook contract rewritten** — removed false "Commands That DO NOT Exist" section; added full MCP tool catalog with 16 tools; added Interface Selection Guide mapping operations to preferred interface (MCP vs CLI)
+- **Decompose skill switched to batch operations** — uses `storyhook_decompose_spec` MCP tool (1 call) instead of sequential CLI story creation (60-80+ calls per plan)
+- Pilot and RCA SKILL.md files updated to reference shared agent library paths
+- CLAUDE.md updated with agents plugin in plugin table
+
+### Removed
+- `plugins/pilot/agents/` — 15 agent files replaced by shared library
+- `plugins/rca/agents/` — 5 agent files replaced by shared library (3 consolidated into general-purpose agents)
+
+_[manual]_
+
 ## [v2.1.1] - 2026-04-01
 
 ### Removed

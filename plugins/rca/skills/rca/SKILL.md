@@ -218,23 +218,22 @@ Spawn multiple agents in parallel to gather evidence from different angles. Do N
 
 ### Agent Spawns
 
-Spawn all three in parallel:
+Spawn both in parallel:
 
-1. **`rca:code-archaeologist`**
+1. **Investigator** (shared agent with RCA override — replaces former code-archaeologist + systems-analyst)
+   - Agent definition: `plugins/agents/agents/investigator.md`
+   - RCA override: `plugins/rca/agent-overrides/investigator-rca.md`
    - Prompt with: SYMPTOM.md contents, relevant file paths, timeline from symptom report
-   - Focus: git history around symptom area — recent changes, blame, diffs, dependency changes
+   - Focus: git history analysis (recent changes, blame, diffs, dependency changes) AND architecture analysis (components, dependencies, coupling, data flow)
 
-2. **`rca:systems-analyst`**
-   - Prompt with: SYMPTOM.md contents, relevant file paths
-   - Focus: architecture around the failure — components, dependencies, coupling, data flow
-
-3. **`rca:evidence-collector`**
+2. **Evidence Collector** (shared pipeline agent)
+   - Agent definition: `plugins/agents/agents/evidence-collector.md`
    - Prompt with: SYMPTOM.md contents, relevant file paths
    - Focus: code patterns — error handling, test coverage, pattern comparison, code smells, env deps
 
 ### Inconclusive Exit Ramp
 
-If all three agents return minimal or no relevant findings:
+If both agents return minimal or no relevant findings:
 - Write `.rca/<slug>/EVIDENCE.md` documenting the absence of findings
 - Write `.rca/<slug>/INCONCLUSIVE.md`:
   ```markdown
@@ -256,7 +255,7 @@ After all agents report, synthesize findings into `.rca/<slug>/EVIDENCE.md`:
 # Evidence Report
 
 ## Git History Findings
-[Summary of code-archaeologist's findings]
+[Summary of investigator's git history analysis]
 ### Recent Changes
 [Key changes with dates, commits, summaries]
 ### Blame Analysis
@@ -265,7 +264,7 @@ After all agents report, synthesize findings into `.rca/<slug>/EVIDENCE.md`:
 [If applicable — known good, known bad, test command]
 
 ## Architecture Findings
-[Summary of systems-analyst's findings]
+[Summary of investigator's architecture analysis]
 ### Component Map
 [Components involved in the failure path]
 ### Dependency Chain
@@ -309,7 +308,7 @@ Starting from the symptom, ask "Why?" iteratively. Write out the chain explicitl
 
 **Rules for the chain:**
 - Each "Why" must be answered with evidence from EVIDENCE.md, not speculation
-- If a "Why" can't be answered with evidence, spawn `rca:evidence-collector` to gather more
+- If a "Why" can't be answered with evidence, spawn the evidence-collector (`plugins/agents/agents/evidence-collector.md`) to gather more
 - If a "Why" has multiple possible answers, BRANCH the chain (create parallel hypotheses)
 - Stop when you reach a cause that is ACTIONABLE and STRUCTURAL (not just "someone made a mistake")
 
@@ -389,7 +388,7 @@ For the top-ranked hypothesis:
 
 2. **Run the falsification test.** Execute the test defined in HYPOTHESES.md. If it fails, demote this hypothesis and try the next.
 
-3. **Spawn `rca:hypothesis-challenger`:**
+3. **Spawn the hypothesis-challenger** (`plugins/agents/agents/hypothesis-challenger.md`):
    - Prompt: "Challenge this root cause hypothesis: [H1 statement]. Here's the evidence: [evidence summary]. Try to disprove it."
 
 4. **Apply symptom-vs-root-cause heuristics** (from `references/symptom-vs-root-cause.md`)
@@ -399,7 +398,7 @@ For the top-ranked hypothesis:
 ### Verification Outcomes
 
 - **VERIFIED:** The causal chain is complete, traceable in code, passes all heuristics, and survives the challenger's scrutiny. Write VERIFICATION.md.
-- **PARTIALLY VERIFIED:** Some links are solid, others are uncertain. Gather more evidence for the weak links — spawn `rca:evidence-collector` with targeted queries.
+- **PARTIALLY VERIFIED:** Some links are solid, others are uncertain. Gather more evidence for the weak links — spawn the evidence-collector (`plugins/agents/agents/evidence-collector.md`) with targeted queries.
 - **REFUTED:** The hypothesis fails verification. Demote H1, promote H2, and repeat Phase 4.
 - **DEEPER CAUSE FOUND:** The challenger or heuristics reveal a cause beneath the proposed one. Update the 5 Whys chain, generate new hypothesis, and re-verify.
 
@@ -494,9 +493,11 @@ If the user pushes back, treat it as new evidence and potentially re-run parts o
 
 ### Design Remediation
 
-Spawn `rca:remediation-architect`:
+Spawn the **Software Architect** with the RCA remediation override:
+- Agent definition: `plugins/agents/agents/software-architect.md`
+- RCA override: `plugins/rca/agent-overrides/architect-rca.md`
 - Prompt: "Design a fix for this verified root cause: [root cause statement]. The fix must: (1) address the structural issue, not just mask the symptom, (2) prevent recurrence, (3) not introduce new invariant violations, (4) include regression tests."
-- Provide all investigation artifacts as context.
+- Provide all investigation artifacts (SYMPTOM.md, EVIDENCE.md, HYPOTHESES.md, VERIFICATION.md) as context.
 
 ### Fix Quality Checks
 

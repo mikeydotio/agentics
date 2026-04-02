@@ -59,38 +59,36 @@ story new "[Project Name] — Work Execution"
 
 Record the returned ID as `project_story`.
 
-### 4. Parse PLAN.md Waves
+### 4. Prepare PLAN.md for Decomposition
 
-Extract waves and tasks:
-```
-### Wave N (...)
-- [ ] Task N.M: [title]
-  - Acceptance: [criteria]
-  - Files: [expected files]
-```
+The PLAN.md already uses the format `storyhook_decompose_spec` expects:
+- `### Wave N` headings for sequencing (auto-creates wave dependencies)
+- `- [ ]` checkbox items for stories
+- Inline `[HIGH]`, `[MEDIUM]`, `[LOW]` markers for priority
+
+Verify the PLAN.md has this structure. If the wave headings use a different format, normalize them to `### Wave N` before passing to decompose_spec.
 
 Error if no waves found or waves are empty.
 
-### 5. Create Stories Sequentially
+### 5. Decompose via MCP (Single Call)
 
-```
-For each wave:
-  For each task in wave:
-    story new "<task title>"
-    -> record returned story ID
-    story HP-X priority <level>  (wave 1=high, 2=medium, 3+=low)
-    story HP-X "Acceptance: <criteria>"
-```
+Use `storyhook_decompose_spec` to create all stories with wave dependencies and priorities in one call:
 
-### 6. Set Wave Dependencies
+1. **Preview first** with `dry_run: true`:
+   ```
+   storyhook_decompose_spec(content: <PLAN.md content>, dry_run: true)
+   ```
+   Verify the preview shows the expected story count, wave structure, and relationships.
 
-Tasks within the same wave are parallel (no dependencies between them).
-Tasks in wave N+1 depend on ALL tasks in wave N:
+2. **Create stories**:
+   ```
+   storyhook_decompose_spec(content: <PLAN.md content>, dry_run: false)
+   ```
+   This single call replaces what was previously 60-80+ sequential CLI calls.
 
-```bash
-# For each task T in wave N and each task U in wave N+1:
-story HP-T precedes HP-U
-```
+3. **Record returned story IDs** from the response for plan-mapping.json.
+
+**Fallback**: If `storyhook_decompose_spec` is unavailable, use `storyhook_bulk_create` with pre-constructed relationship arrays. If MCP tools are entirely unavailable, fall back to sequential CLI creation (see `references/story-decomposition.md` for the CLI fallback procedure).
 
 ### 7. Map Stories to DESIGN.md Sections
 

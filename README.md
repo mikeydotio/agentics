@@ -1,17 +1,17 @@
-# agentic-workflows
+# agentics
 
 Personal Claude Code plugin marketplace.
 
 ## Install
 
 ```
-/plugin marketplace add mikeydotio/agentic-workflows
+/plugin marketplace add mikeydotio/agentics
 ```
 
 Then install any plugin:
 
 ```
-/plugin install <plugin-name>@agentic-workflows
+/plugin install <plugin-name>@agentics
 ```
 
 ## Adding a Plugin

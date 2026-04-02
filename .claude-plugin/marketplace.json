@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "agentic-workflows",
+  "name": "agentics",
   "description": "Mikey's personal collection of Claude Code plugins",
   "owner": {
     "name": "mikeydotio"
@@ -30,6 +30,11 @@
       "name": "freshen",
       "description": "Automatic context clearing via tmux — lets plugins trigger /clear and re-invocation between workflow phases",
       "source": "./plugins/freshen"
+    },
+    {
+      "name": "agents",
+      "description": "Shared agent library — research-backed specialist agent definitions for cross-plugin use",
+      "source": "./plugins/agents"
     }
   ]
 }

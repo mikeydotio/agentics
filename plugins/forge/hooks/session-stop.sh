@@ -6,8 +6,12 @@
 # Output: JSON on stdout (or nothing for no-op)
 #
 # CRITICAL: Uses jq for all JSON construction.
+#
+# Every exit path must write to stderr to prevent Claude Code's "No stderr
+# output" feedback from creating an infinite conversation loop.
 
 set -uo pipefail
+trap 'echo "forge: ok" >&2' EXIT
 
 # Locate project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"

@@ -4,6 +4,10 @@ set -euo pipefail
 #
 # Reads the signal file, sends the re-invocation command via tmux send-keys,
 # then deletes the signal only on success.
+#
+# Every exit path must write to stderr to prevent Claude Code's "No stderr
+# output" feedback from creating an infinite conversation loop.
+trap '[ $? -eq 0 ] && echo "freshen: ok" >&2 || echo "freshen: error" >&2' EXIT
 
 FRESHEN_DIR=".freshen"
 

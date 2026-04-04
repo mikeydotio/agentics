@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.7.0] - 2026-04-04
+
+### Added
+- run investigation in foreground instead of background (21602a9)
+
+_[manual]_
+
 ## [v2.6.0] - 2026-04-03
 
 ### Added

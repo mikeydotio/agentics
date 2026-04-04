@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.5.0] - 2026-04-03
+
+### Added
+- add /forge resume command, pre-compute resume context in hooks (e1c9680)
+- add enable/disable commands for troubleshooting (b9be83d)
+- rename sentry plugin to greenlight (8c7bca6)
+
+### Fixed
+- distinguish ok/error in EXIT trap stderr output (896b6a2)
+- add stderr output to prevent infinite stop-hook loop (4ade8d5)
+
+### Changed
+- Merge pull request #1 from mikeydotio/fix/freshen-stop-hook-stderr (8a9b47b)
+
+_[manual]_
+
 ## [v2.4.0] - 2026-04-02
 
 ### Added

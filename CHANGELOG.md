@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.9.0] - 2026-04-05
+
+### Fixed
+- prevent set -e abort on empty ls|head pipelines (988edef)
+
+_[manual]_
+
 ## [v2.8.0] - 2026-04-05
 
 ### Added

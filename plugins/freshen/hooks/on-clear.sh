@@ -22,7 +22,7 @@ FRESHEN_DIR=".freshen"
 [ -f "$FRESHEN_DIR/.clear-pending" ] || exit 0
 
 # Find the oldest signal file (by modification time)
-SIGNAL=$(ls -tr "$FRESHEN_DIR"/*.signal 2>/dev/null | head -1)
+SIGNAL=$(ls -tr "$FRESHEN_DIR"/*.signal 2>/dev/null | head -1) || true
 [ -n "$SIGNAL" ] || { rm -f "$FRESHEN_DIR/.clear-pending"; exit 0; }
 
 COMMAND=$(head -1 "$SIGNAL")

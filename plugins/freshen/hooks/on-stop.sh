@@ -22,7 +22,7 @@ FRESHEN_DIR=".freshen"
 find "$FRESHEN_DIR" -name '*.signal' -mmin +120 -delete 2>/dev/null || true
 
 # Any signal files pending?
-SIGNAL=$(ls "$FRESHEN_DIR"/*.signal 2>/dev/null | head -1)
+SIGNAL=$(ls "$FRESHEN_DIR"/*.signal 2>/dev/null | head -1) || true
 [ -n "$SIGNAL" ] || exit 0
 
 # tmux is required — if not available, leave the signal for manual handling

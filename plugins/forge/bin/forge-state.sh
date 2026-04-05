@@ -99,7 +99,7 @@ detect_handoff() {
   latest_handoff=""
   if [ -d "$FORGE_DIR/handoffs" ]; then
     local latest
-    latest=$(ls -t "$FORGE_DIR/handoffs/"*.md 2>/dev/null | head -1)
+    latest=$(ls -t "$FORGE_DIR/handoffs/"*.md 2>/dev/null | head -1) || true
     if [ -n "$latest" ]; then
       has_handoff=true
       latest_handoff="handoffs/$(basename "$latest")"

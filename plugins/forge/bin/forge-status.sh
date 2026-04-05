@@ -76,7 +76,7 @@ count_fix_cycles() {
 
 list_handoffs() {
   if [ -d "$FORGE_DIR/handoffs" ]; then
-    ls -t "$FORGE_DIR/handoffs/"*.md 2>/dev/null | head -3 | while read -r f; do
+    { ls -t "$FORGE_DIR/handoffs/"*.md 2>/dev/null || true; } | head -3 | while read -r f; do
       basename "$f"
     done
   fi

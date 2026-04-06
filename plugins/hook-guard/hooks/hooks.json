@@ -1,0 +1,17 @@
+{
+  "description": "Hook-guard — clears circuit breaker state on new sessions",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup,resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

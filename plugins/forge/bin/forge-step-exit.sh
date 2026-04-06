@@ -3,6 +3,8 @@
 # Usage: forge-step-exit.sh --step <name> --summary <text> --next <command>
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 step="" summary="" next_cmd=""
 
 while [[ $# -gt 0 ]]; do
@@ -31,7 +33,7 @@ committed=true
 freshen_queued=false
 fallback_message=null
 
-if bash plugins/freshen/bin/freshen.sh queue "$next_cmd" --source forge --summary "$summary" 2>/dev/null; then
+if bash "$SCRIPT_DIR/../../freshen/bin/freshen.sh" queue "$next_cmd" --source forge --summary "$summary" 2>/dev/null; then
   freshen_queued=true
 else
   fallback_message="Run /clear then: ${next_cmd}"

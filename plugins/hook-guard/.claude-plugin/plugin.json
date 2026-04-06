@@ -1,0 +1,4 @@
+{
+  "name": "hook-guard",
+  "description": "Circuit breaker for Claude Code hooks — prevents stop hook infinite loops by detecting rapid repeated firings"
+}

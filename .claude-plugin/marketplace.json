@@ -35,6 +35,11 @@
       "name": "agents",
       "description": "Shared agent library — research-backed specialist agent definitions for cross-plugin use",
       "source": "./plugins/agents"
+    },
+    {
+      "name": "hook-guard",
+      "description": "Circuit breaker for Claude Code hooks — prevents stop hook infinite loops by detecting rapid repeated firings",
+      "source": "./plugins/hook-guard"
     }
   ]
 }

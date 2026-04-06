@@ -30,7 +30,7 @@ is_disabled() {
 require_enabled() {
   if is_disabled; then
     echo "freshen: disabled — run '/freshen enable' to re-enable" >&2
-    exit 0
+    exit 1
   fi
 }
 

@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.10.0] - 2026-04-07
+
+### Added
+- detect incomplete work before starting new pipeline (cd75e83)
+
+_[manual]_
+
 ## [v2.9.1] - 2026-04-06
 
 ### Fixed

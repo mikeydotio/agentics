@@ -277,6 +277,8 @@ is_always_safe() {
     zipinfo) return 0 ;;
     # misc dev tools (pure stdout)
     json_verify|json_reformat|xml_pp|xmllint|tidy) return 0 ;;
+    # Apple profiling / analysis (readonly)
+    instruments|xctrace|xcresulttool) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -811,6 +813,118 @@ is_safe_version_manager() {
   esac
 }
 
+# ── vercel: dev/query safe, deploy/publish unsafe ──
+is_safe_vercel() {
+  local segment="$1"
+  local subcmd
+  subcmd="$(printf '%s\n' "$segment" | awk '{for(i=1;i<=NF;i++){if($i=="vercel"){print $(i+1);exit}}}')"
+  case "$subcmd" in
+    dev|build|ls|list|inspect|logs|whoami|project|teams|link|pull|help|--version|-V) return 0 ;;
+    env)
+      if printf '%s\n' "$segment" | grep -qE 'env[[:space:]]+(ls|list|pull)'; then return 0; fi
+      return 1 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ── netlify: dev/query safe, deploy unsafe ──
+is_safe_netlify() {
+  local segment="$1"
+  local subcmd
+  subcmd="$(printf '%s\n' "$segment" | awk '{for(i=1;i<=NF;i++){if($i=="netlify"){print $(i+1);exit}}}')"
+  case "$subcmd" in
+    dev|build|status|open|login|link|unlink|env|logs|recipes|help|--version|-V) return 0 ;;
+    sites)
+      if printf '%s\n' "$segment" | grep -qE 'sites[[:space:]]+(list|show)'; then return 0; fi
+      return 1 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ── wrangler (Cloudflare): dev/query safe, deploy unsafe ──
+is_safe_wrangler() {
+  local segment="$1"
+  local subcmd
+  subcmd="$(printf '%s\n' "$segment" | awk '{for(i=1;i<=NF;i++){if($i=="wrangler"){print $(i+1);exit}}}')"
+  case "$subcmd" in
+    dev|build|init|generate|types|whoami|login|docs|help|--version|-V) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ── xcodebuild: build/test/analyze safe, exportArchive unsafe ──
+is_safe_xcodebuild() {
+  local segment="$1"
+  # exportArchive produces distributable artifacts (IPAs, etc.)
+  if printf '%s\n' "$segment" | grep -qE -- '-exportArchive'; then
+    return 1
+  fi
+  # All other operations (build, test, analyze, clean, archive, query) write to default build products
+  return 0
+}
+
+# ── swift: SPM build/test/run + version safe ──
+is_safe_swift() {
+  local segment="$1"
+  local subcmd
+  subcmd="$(printf '%s\n' "$segment" | awk '{for(i=1;i<=NF;i++){if($i=="swift"){print $(i+1);exit}}}')"
+  case "$subcmd" in
+    # SPM operations (write to .build/ — default build products)
+    build|test|run|package) return 0 ;;
+    # version/help/REPL
+    --version|-version|-V|help|repl) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ── xcrun: build tools and simulator management safe ──
+is_safe_xcrun() {
+  local segment="$1"
+  local tool
+  tool="$(printf '%s\n' "$segment" | awk '{for(i=1;i<=NF;i++){if($i=="xcrun"){print $(i+1);exit}}}')"
+  case "$tool" in
+    # SDK / tool path queries
+    --sdk|--find|--show-sdk-path|--show-sdk-platform-path|--show-sdk-version|--version) return 0 ;;
+    # Simulator management (local-only state)
+    simctl) return 0 ;;
+    # Build tools (output to default build products)
+    swift|swiftc|clang|clang++|ld|libtool|lipo|otool|nm|size|strings|dsymutil|dwarfdump|bitcode_strip) return 0 ;;
+    # Asset compilation tools
+    actool|ibtool|momc|mapc|xcresulttool|stapler) return 0 ;;
+    # Delegate to xcodebuild checker
+    xcodebuild) is_safe_xcodebuild "$segment" && return 0; return 1 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ── CocoaPods: install/update/query safe, trunk publish unsafe ──
+is_safe_pod() {
+  local segment="$1"
+  local subcmd
+  subcmd="$(printf '%s\n' "$segment" | awk '{for(i=1;i<=NF;i++){if($i=="pod"){print $(i+1);exit}}}')"
+  case "$subcmd" in
+    # Dependency resolution (writes to Pods/ and Podfile.lock — standard)
+    install|update|deintegrate|init) return 0 ;;
+    # Query commands
+    list|search|try|spec|env|outdated|cache|repo|version|help|--version) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ── Carthage: build/update safe ──
+is_safe_carthage() {
+  local segment="$1"
+  local subcmd
+  subcmd="$(printf '%s\n' "$segment" | awk '{for(i=1;i<=NF;i++){if($i=="carthage"){print $(i+1);exit}}}')"
+  case "$subcmd" in
+    # Build/dependency resolution (writes to Carthage/ — default location)
+    build|bootstrap|update|checkout) return 0 ;;
+    # Query
+    version|help|outdated|--version) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  SEGMENT SAFETY CHECK
 #  Returns: 0 = safe, 1 = uncertain, 2 = known destructive
@@ -886,7 +1000,7 @@ is_safe_segment() {
     curl|curlie)                      is_safe_curl "$segment" && return 0 ;;
     wget)                             is_safe_wget "$segment" && return 0 ;;
     # linters / formatters — safe unless --fix or --write
-    eslint|prettier|biome|stylelint|rubocop|autopep8|black|isort|ruff|gofmt|goimports|rustfmt|clang-format|shfmt|taplo|dprint)
+    eslint|prettier|biome|stylelint|rubocop|autopep8|black|isort|ruff|gofmt|goimports|rustfmt|clang-format|shfmt|taplo|dprint|swiftlint|swiftformat)
                                       is_safe_linter "$segment" && return 0 ;;
     # type checkers / compilers (readonly analysis modes)
     tsc|mypy|pyright|flow|typecheck)  is_safe_linter "$segment" && return 0 ;;
@@ -909,13 +1023,31 @@ is_safe_segment() {
     # package runners — execute arbitrary code, always uncertain
     npx|bunx|pipx|uvx)               return 1 ;;
     # interpreters / compilers — version flag only
-    node|python|python3|ruby|perl|php|java|javac|rustc|gcc|g++|clang|clang++|cc|swift|kotlin|scala)
+    node|python|python3|ruby|perl|php|java|javac|rustc|gcc|g++|clang|clang++|cc|kotlin|scala)
                                       is_safe_version_check "$segment" "$cmd_name" && return 0 ;;
     # test runners — generally safe (they run tests, don't modify code)
-    jest|vitest|mocha|pytest|rspec|phpunit|junit|ava|tap|nyc|c8)
+    jest|vitest|mocha|pytest|rspec|phpunit|junit|ava|tap|nyc|c8|xctest)
                                       return 0 ;;
     # pandoc — safe for rendering, but -o flag writes files
     pandoc)                           [[ "$segment" != *" -o "* && "$segment" != *" --output"* ]] && return 0 ;;
+    # ── web build tools (output to default build dirs — dist/, .next/, etc.) ──
+    vite|next|nuxt|nuxi|astro|webpack|rollup|esbuild|parcel|turbo|tsup|remix|svelte-kit)
+                                      return 0 ;;
+    # web deployment CLIs — dev/query safe, deploy/publish unsafe
+    vercel)                           is_safe_vercel "$segment" && return 0 ;;
+    netlify)                          is_safe_netlify "$segment" && return 0 ;;
+    wrangler)                         is_safe_wrangler "$segment" && return 0 ;;
+    # ── Apple / iOS / macOS development ──
+    xcodebuild)                       is_safe_xcodebuild "$segment" && return 0 ;;
+    swift)                            is_safe_swift "$segment" && return 0 ;;
+    xcrun)                            is_safe_xcrun "$segment" && return 0 ;;
+    # compilers / generators (output to default build products)
+    swiftc|xcodegen)                  return 0 ;;
+    # dependency managers
+    pod)                              is_safe_pod "$segment" && return 0 ;;
+    carthage)                         is_safe_carthage "$segment" && return 0 ;;
+    # automation — uncertain by default (lanes can deploy)
+    fastlane)                         return 1 ;;
   esac
 
   return 1  # uncertain

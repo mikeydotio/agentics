@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.11.0] - 2026-04-08
+
+### Maintenance
+- track tool config (.storyhook, .semver, .planning) (fb4a49b)
+
+_[manual]_
+
 ## [v2.10.0] - 2026-04-07
 
 ### Added

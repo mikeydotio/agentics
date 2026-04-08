@@ -277,8 +277,8 @@ is_always_safe() {
     zipinfo) return 0 ;;
     # misc dev tools (pure stdout)
     json_verify|json_reformat|xml_pp|xmllint|tidy) return 0 ;;
-    # Apple profiling / analysis (readonly)
-    instruments|xctrace|xcresulttool) return 0 ;;
+    # Apple profiling / analysis / inspection (readonly)
+    instruments|xctrace|xcresulttool|otool|nm) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -1041,8 +1041,8 @@ is_safe_segment() {
     xcodebuild)                       is_safe_xcodebuild "$segment" && return 0 ;;
     swift)                            is_safe_swift "$segment" && return 0 ;;
     xcrun)                            is_safe_xcrun "$segment" && return 0 ;;
-    # compilers / generators (output to default build products)
-    swiftc|xcodegen)                  return 0 ;;
+    # compilers / generators / build tools (output to default build products)
+    swiftc|xcodegen|lipo)             return 0 ;;
     # dependency managers
     pod)                              is_safe_pod "$segment" && return 0 ;;
     carthage)                         is_safe_carthage "$segment" && return 0 ;;

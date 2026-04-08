@@ -1167,6 +1167,94 @@ PROMPT_END
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  QUOTE-AWARE HELPERS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Split a command on ||, &&, |, ; while respecting single/double quotes.
+# Outputs one segment per line.
+split_segments() {
+  printf '%s\n' "$1" | awk '
+  BEGIN { seg = ""; in_sq = 0; in_dq = 0 }
+  {
+    n = length($0)
+    for (i = 1; i <= n; i++) {
+      c = substr($0, i, 1)
+
+      # inside single quotes — everything literal until closing quote
+      if (in_sq) {
+        seg = seg c
+        if (c == "\047") in_sq = 0
+        continue
+      }
+
+      # inside double quotes — handle backslash escapes
+      if (in_dq) {
+        if (c == "\\" && i < n) { seg = seg c substr($0, i+1, 1); i++; continue }
+        seg = seg c
+        if (c == "\"") in_dq = 0
+        continue
+      }
+
+      # outside all quotes
+      if (c == "\\" && i < n) { seg = seg c substr($0, i+1, 1); i++; continue }
+      if (c == "\047") { in_sq = 1; seg = seg c; continue }
+      if (c == "\"")   { in_dq = 1; seg = seg c; continue }
+
+      # shell operators — split here
+      if (c == "|" && i < n && substr($0, i+1, 1) == "|") { print seg; seg = ""; i++; continue }
+      if (c == "&" && i < n && substr($0, i+1, 1) == "&") { print seg; seg = ""; i++; continue }
+      if (c == "|") { print seg; seg = ""; continue }
+      if (c == ";") { print seg; seg = ""; continue }
+
+      seg = seg c
+    }
+  }
+  END { if (seg != "") print seg }
+  '
+}
+
+# Extract the inner commands from $(...) and backtick substitutions.
+# Handles nested $() via paren-depth counting. Skips single-quoted regions.
+# Outputs one extracted command per line.
+extract_cmd_subs() {
+  printf '%s\n' "$1" | awk '
+  {
+    s = $0; n = length(s); in_sq = 0
+    for (i = 1; i <= n; i++) {
+      c = substr(s, i, 1)
+
+      # single-quoted region — $() is literal inside
+      if (c == "\047") { in_sq = !in_sq; continue }
+      if (in_sq) continue
+
+      # $(...) — balanced paren extraction
+      if (c == "$" && i < n && substr(s, i+1, 1) == "(") {
+        i += 2; depth = 1; cmd = ""
+        while (i <= n && depth > 0) {
+          ch = substr(s, i, 1)
+          if (ch == "(") depth++
+          else if (ch == ")") { depth--; if (depth == 0) break }
+          cmd = cmd ch; i++
+        }
+        if (cmd != "") print cmd
+        continue
+      }
+
+      # backtick substitution
+      if (c == "`") {
+        i++; cmd = ""
+        while (i <= n && substr(s, i, 1) != "`") {
+          cmd = cmd substr(s, i, 1); i++
+        }
+        if (cmd != "") print cmd
+        continue
+      }
+    }
+  }
+  '
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  MAIN: split command into segments & check each one
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1176,8 +1264,7 @@ any_uncertain=false
 destructive_detail=""
 
 # Split on shell operators: ||, &&, |, ;
-# (Best-effort parse — operators inside quotes may be mis-split,
-#  which is conservative: unclear segments pass to the user.)
+# Quote-aware — operators inside single/double quotes are not split points.
 while IFS= read -r segment; do
   segment="${segment#"${segment%%[![:space:]]*}"}"   # trim leading
   segment="${segment%"${segment##*[![:space:]]}"}"   # trim trailing
@@ -1192,10 +1279,31 @@ while IFS= read -r segment; do
     2) all_safe=false; any_destructive=true
        destructive_detail="$(destructive_reason "$DESTRUCTIVE_CMD"): \`${DESTRUCTIVE_CMD}\`" ;;
   esac
-done < <(printf '%s\n' "$COMMAND" | sed -E 's/\|\|/\n/g; s/&&/\n/g; s/\|/\n/g; s/;/\n/g')
+done < <(split_segments "$COMMAND")
 
-# ── Also flag as uncertain if command substitution or process substitution is present ──
-if $all_safe && ($HAS_CMD_SUBSTITUTION || $HAS_PROC_SUBSTITUTION); then
+# ── Check command substitutions for safety ──
+# Instead of blanket-rejecting $() / backticks, extract each inner command
+# and run it through the same safety checks.
+if $all_safe && $HAS_CMD_SUBSTITUTION; then
+  while IFS= read -r inner_cmd; do
+    [[ -z "$inner_cmd" ]] && continue
+    # Inner commands may contain pipes — split and check each sub-segment
+    while IFS= read -r inner_seg; do
+      inner_seg="${inner_seg#"${inner_seg%%[![:space:]]*}"}"
+      inner_seg="${inner_seg%"${inner_seg##*[![:space:]]}"}"
+      [[ -z "$inner_seg" ]] && continue
+      is_safe_segment "$inner_seg"
+      if [[ $? -ne 0 ]]; then
+        all_safe=false
+        any_uncertain=true
+        break 2
+      fi
+    done < <(split_segments "$inner_cmd")
+  done < <(extract_cmd_subs "$COMMAND")
+fi
+
+# Process substitution <(...) / >(...) remains blanket-uncertain (rare, hard to analyze)
+if $all_safe && $HAS_PROC_SUBSTITUTION; then
   all_safe=false
   any_uncertain=true
 fi

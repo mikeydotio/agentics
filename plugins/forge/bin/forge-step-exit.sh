@@ -29,6 +29,16 @@ git add .forge/
 commit_hash=$(git commit -q -m "$commit_msg" && git rev-parse --short HEAD)
 committed=true
 
+# Set status to paused so session-stop.sh won't overwrite the freshen signal
+STATE_FILE=".forge/state.json"
+if [ -f "$STATE_FILE" ] && command -v jq &>/dev/null; then
+  jq --arg cmd "$next_cmd" --arg sum "$summary" \
+    '.status = "paused"
+     | .updated_at = (now | todate)
+     | .resume = {command: $cmd, summary: $sum}' \
+    "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+fi
+
 # Try to queue freshen
 freshen_queued=false
 fallback_message=null

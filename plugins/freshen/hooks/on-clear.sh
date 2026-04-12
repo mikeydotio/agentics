@@ -9,11 +9,6 @@ set -euo pipefail
 # output" feedback from creating an infinite conversation loop.
 trap '[ $? -eq 0 ] && echo "freshen: ok" >&2 || echo "freshen: error" >&2' EXIT
 
-# Circuit breaker — prevent stop hook infinite loops
-_GUARD_LIB="${CLAUDE_PLUGIN_ROOT}/../hook-guard/lib/stop-guard.sh"
-# shellcheck source=plugins/hook-guard/lib/stop-guard.sh
-[ -f "$_GUARD_LIB" ] && . "$_GUARD_LIB" && stop_guard_check || true
-
 FRESHEN_DIR=".freshen"
 
 # Directory must exist

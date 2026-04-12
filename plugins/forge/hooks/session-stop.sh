@@ -125,7 +125,7 @@ if [[ -n "${TMUX:-}" ]] && [[ -n "${TMUX_PANE:-}" ]]; then
       break
     fi
   done
-  if [[ "$CONFLICT" -eq 0 ]]; then
+  if [[ "$CONFLICT" -eq 0 ]] && [[ ! -f "$FRESHEN_DIR/forge.signal" ]]; then
     printf '/forge resume\nEmergency stop — session interrupted, degraded handoff written\n' > "$FRESHEN_DIR/forge.signal"
   fi
 fi

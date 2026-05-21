@@ -1,0 +1,7 @@
+{
+  "name": "deployit",
+  "description": "On-tailnet OTA deploys for iOS, macOS, and visionOS apps. Archives, signs, and serves Development-method builds from each Mac via Tailscale Serve; cross-machine shared listing rendered from a git-backed index.",
+  "author": {
+    "name": "mikeydotio"
+  }
+}

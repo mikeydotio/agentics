@@ -40,6 +40,11 @@
       "name": "hook-guard",
       "description": "Circuit breaker for Claude Code hooks — prevents stop hook infinite loops by detecting rapid repeated firings",
       "source": "./plugins/hook-guard"
+    },
+    {
+      "name": "deployit",
+      "description": "On-tailnet OTA deploys for iOS, macOS, and visionOS apps via Tailscale Serve, with a shared cross-machine build index",
+      "source": "./plugins/deployit"
     }
   ]
 }

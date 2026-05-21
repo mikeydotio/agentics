@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""deployit CLI — orchestrates archive/export/serve/push.
+
+Subcommands:
+  bootstrap          one-time per-machine setup
+  deploy             archive and publish a build
+  list               show recent builds across the tailnet
+  url                print this machine's listing URL
+  status             backend health + recent local deploys
+  gc                 prune local artifacts; archive in index
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+__version__ = "0.1.0"
+
+
+def ok(payload):
+    payload["ok"] = True
+    print(json.dumps(payload, indent=2))
+
+
+def fail(message, **extra):
+    payload = {"ok": False, "display": message, **extra}
+    print(json.dumps(payload, indent=2))
+    sys.exit(1)
+
+
+def not_implemented(name):
+    fail(f"{name}: not implemented yet")
+
+
+def cmd_bootstrap(args):     not_implemented("bootstrap")
+def cmd_deploy(args):        not_implemented("deploy")
+def cmd_list(args):          not_implemented("list")
+def cmd_url(args):           not_implemented("url")
+def cmd_status(args):        not_implemented("status")
+def cmd_gc(args):            not_implemented("gc")
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog="deployit")
+    parser.add_argument("--plugin-root", required=True, type=Path)
+    parser.add_argument("--version", action="store_true")
+    sub = parser.add_subparsers(dest="cmd")
+
+    sub.add_parser("bootstrap").set_defaults(func=cmd_bootstrap)
+
+    p_deploy = sub.add_parser("deploy")
+    p_deploy.add_argument("--platform", choices=["ios", "macos", "visionos"])
+    p_deploy.add_argument("--scheme")
+    p_deploy.set_defaults(func=cmd_deploy)
+
+    p_list = sub.add_parser("list")
+    p_list.add_argument("--platform", choices=["ios", "macos", "visionos"])
+    p_list.add_argument("--project")
+    p_list.set_defaults(func=cmd_list)
+
+    sub.add_parser("url").set_defaults(func=cmd_url)
+    sub.add_parser("status").set_defaults(func=cmd_status)
+
+    p_gc = sub.add_parser("gc")
+    p_gc.add_argument("--keep", type=int)
+    p_gc.add_argument("--older-than", type=int, help="days")
+    p_gc.set_defaults(func=cmd_gc)
+
+    return parser
+
+
+def main(argv):
+    args = build_parser().parse_args(argv)
+    if args.version:
+        ok({"version": __version__})
+        return
+    if not args.cmd:
+        fail("no subcommand given")
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

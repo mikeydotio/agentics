@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""deployit backend — long-running http server.
+
+Endpoints:
+  GET  /deployit/                       listing (git pull + render)
+  GET  /deployit/<build_id>/            per-build landing page
+  GET  /deployit/<build_id>/<artifact>  manifest.plist / ipa / dmg
+  POST /deployit/_internal/refresh      force git pull
+  GET  /deployit/_healthz               liveness probe
+
+Stdlib only. Designed to be supervised by launchd.
+"""
+
+import argparse
+import datetime as _dt
+import html
+import json
+import mimetypes
+import re
+import string
+import subprocess
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+
+_BUILD_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_pull_lock = threading.Lock()
+_last_pull = "never"
+
+
+class Handler(BaseHTTPRequestHandler):
+    root: Path = Path()
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write("backend: " + fmt % args + "\n")
+
+    def _send_json(self, status, payload):
+        body = json.dumps(payload).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if self.path == "/deployit/_healthz":
+            self._send_json(200, {"ok": True})
+            return
+        self._send_json(404, {"ok": False, "error": "not_found"})
+
+
+def make_handler(root: Path):
+    return type("Handler", (Handler,), {"root": root})
+
+
+def main(argv):
+    p = argparse.ArgumentParser()
+    p.add_argument("--port", type=int, required=True)
+    p.add_argument("--root", type=Path, required=True)
+    p.add_argument("--plugin-root", type=Path,
+                   help="Plugin root (for template lookup). Defaults to a symlink at <root>/_plugin_root.")
+    p.add_argument("--no-git-pull", action="store_true",
+                   help="Disable git pull on listing requests (for tests).")
+    p.add_argument("--local-host", default="localhost")
+    args = p.parse_args(argv)
+
+    if args.plugin_root:
+        link = args.root / "_plugin_root"
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(args.plugin_root)
+
+    handler_cls = make_handler(args.root)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_cls)
+    server.git_pull_enabled = not args.no_git_pull
+    server.local_host = args.local_host
+    sys.stderr.write(f"backend: listening on 127.0.0.1:{args.port}, root={args.root}\n")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

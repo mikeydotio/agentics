@@ -30,6 +30,82 @@ _pull_lock = threading.Lock()
 _last_pull = "never"
 
 
+def _read_index(root: Path):
+    try:
+        return json.loads((root / "index" / "builds.json").read_text())
+    except FileNotFoundError:
+        return {"version": 1, "builds": []}
+
+
+def _relative_time(iso: str) -> str:
+    when = _dt.datetime.fromisoformat(iso)
+    now = _dt.datetime.now(when.tzinfo)
+    delta = now - when
+    secs = int(delta.total_seconds())
+    if secs < 60:    return f"{secs}s ago"
+    if secs < 3600:  return f"{secs // 60}m ago"
+    if secs < 86400: return f"{secs // 3600}h ago"
+    return f"{secs // 86400}d ago"
+
+
+def _install_link(build):
+    inst = build["install"]
+    if inst["kind"] == "itms-services":
+        href = "itms-services://?action=download-manifest&url=" + inst["manifest_url"]
+        return href, "Install"
+    return inst["dmg_url"], "Download"
+
+
+_ROW_TEMPLATE = string.Template("""<li class="$archived_class">
+  <div class="row">
+    <span class="title">$project · $platform · $version (build $build_number)</span>
+    <a class="install" href="$install_href">$install_label</a>
+  </div>
+  <div class="sub">$origin_host · $commit · $rel</div>
+</li>""")
+
+
+def _git_pull(root: Path):
+    """Pull the index repo. Best-effort; logs and returns on failure."""
+    global _last_pull
+    with _pull_lock:
+        try:
+            subprocess.run(
+                ["git", "-C", str(root / "index"), "pull", "--rebase", "--quiet"],
+                check=True, timeout=15,
+            )
+            _last_pull = _dt.datetime.now().isoformat(timespec="seconds")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            sys.stderr.write(f"backend: git pull failed: {exc}\n")
+
+
+def _render_listing(root: Path, local_host: str) -> bytes:
+    data = _read_index(root)
+    rows = []
+    for b in data["builds"]:
+        href, label = _install_link(b)
+        rows.append(_ROW_TEMPLATE.substitute(
+            archived_class="archived" if b.get("archived") else "",
+            project=html.escape(b["project"]),
+            platform=html.escape(b["platform"]),
+            version=html.escape(b["marketing_version"]),
+            build_number=html.escape(b["build_number"]),
+            install_href=html.escape(href, quote=True),
+            install_label=label,
+            origin_host=html.escape(b["origin_host"]),
+            commit=html.escape(b["commit"][:7]),
+            rel=html.escape(_relative_time(b["timestamp"])),
+        ))
+    template_path = root / "_plugin_root" / "assets" / "listing.template.html"
+    tmpl = string.Template(template_path.read_text())
+    return tmpl.substitute(
+        LAST_PULL=html.escape(f"last pull: {_last_pull}"),
+        TOTAL_BUILDS=str(len(data["builds"])),
+        LOCAL_HOST=html.escape(local_host),
+        ROWS="\n".join(rows),
+    ).encode()
+
+
 class Handler(BaseHTTPRequestHandler):
     root: Path = Path()
 
@@ -44,9 +120,23 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_bytes(self, status, ctype, body):
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
-        if self.path == "/deployit/_healthz":
+        path = self.path
+        if path == "/deployit/_healthz":
             self._send_json(200, {"ok": True})
+            return
+        if path in ("/deployit/", "/deployit"):
+            if self.server.git_pull_enabled:
+                _git_pull(self.root)
+            body = _render_listing(self.root, self.server.local_host)
+            self._send_bytes(200, "text/html; charset=utf-8", body)
             return
         self._send_json(404, {"ok": False, "error": "not_found"})
 

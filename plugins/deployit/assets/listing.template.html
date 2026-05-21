@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>deployit · builds</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.5 -apple-system, system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 24px; }
+  h1 { font-size: 22px; margin: 0 0 16px; }
+  .meta { color: #888; font-size: 13px; margin-bottom: 16px; }
+  ul { list-style: none; padding: 0; }
+  li { border-bottom: 1px solid rgba(127,127,127,0.2); padding: 14px 0; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .title { font-weight: 600; }
+  .sub { color: #888; font-size: 13px; }
+  a.install { display: inline-block; background: #2563eb; color: #fff; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 14px; }
+  .archived { opacity: 0.5; }
+</style>
+</head>
+<body>
+<h1>deployit · builds</h1>
+<p class="meta">$LAST_PULL · $TOTAL_BUILDS builds · this view: $LOCAL_HOST</p>
+<ul>
+$ROWS
+</ul>
+</body>
+</html>

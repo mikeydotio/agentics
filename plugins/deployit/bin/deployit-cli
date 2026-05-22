@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import os
+import re as _re
 import shutil
 import subprocess
 from textwrap import dedent
@@ -176,6 +177,58 @@ def _install_launchd(plugin_root: Path, state: Path, port: int) -> dict:
     }
 
 
+def _find_workspace(cwd: Path):
+    for p in cwd.glob("*.xcworkspace"):
+        return p
+    return None
+
+
+def _find_project_yml(cwd: Path, platform: str):
+    """Return the first project.yml under Apps/ whose name suggests the platform.
+    Falls back to any Apps/*/project.yml."""
+    candidates = sorted(cwd.glob(f"Apps/*-{platform.title()}/project.yml")) \
+              or sorted(cwd.glob("Apps/*/project.yml"))
+    return candidates[0] if candidates else None
+
+
+def _read_marketing_version(project_yml: Path) -> str:
+    m = _re.search(r'MARKETING_VERSION:\s*"([^"]+)"', project_yml.read_text())
+    if not m:
+        fail(f"Could not parse MARKETING_VERSION from {project_yml}")
+    return m.group(1)
+
+
+def _read_bundle_id(project_yml: Path) -> str:
+    m = _re.search(r'PRODUCT_BUNDLE_IDENTIFIER:\s*"([^"]+)"', project_yml.read_text())
+    if not m:
+        fail(f"Could not parse PRODUCT_BUNDLE_IDENTIFIER from {project_yml}")
+    return m.group(1)
+
+
+def _short_sha(cwd: Path) -> str:
+    res = subprocess.run(["git", "-C", str(cwd), "rev-parse", "--short", "HEAD"],
+                         capture_output=True, text=True, check=True)
+    return res.stdout.strip()
+
+
+def _derive_metadata(cwd: Path, platform: str) -> dict:
+    workspace = _find_workspace(cwd)
+    if workspace is None:
+        fail("no .xcworkspace in cwd")
+    project_yml = _find_project_yml(cwd, platform)
+    if project_yml is None:
+        fail(f"no Apps/*/project.yml found for platform {platform}")
+    return {
+        "project": workspace.stem,
+        "platform": platform,
+        "bundle_id": _read_bundle_id(project_yml),
+        "marketing_version": _read_marketing_version(project_yml),
+        "commit": _short_sha(cwd),
+        "workspace": str(workspace),
+        "project_yml": str(project_yml),
+    }
+
+
 def cmd_bootstrap(args):
     args.plugin_root = args.plugin_root.resolve()
     state = _state_dir()
@@ -199,7 +252,15 @@ def cmd_bootstrap(args):
     })
 
 
-def cmd_deploy(args):        not_implemented("deploy")
+def cmd_deploy(args):
+    if not args.platform:
+        fail("--platform required (one of ios | macos | visionos)")
+    cwd = Path.cwd()
+    meta = _derive_metadata(cwd, args.platform)
+    if getattr(args, "dump_metadata", False):
+        ok({"display": "metadata", **meta})
+        return
+    not_implemented("deploy (orchestration — filled in by next commit)")
 def cmd_list(args):          not_implemented("list")
 def cmd_url(args):           not_implemented("url")
 def cmd_status(args):        not_implemented("status")
@@ -217,6 +278,8 @@ def build_parser():
     p_deploy = sub.add_parser("deploy")
     p_deploy.add_argument("--platform", choices=["ios", "macos", "visionos"])
     p_deploy.add_argument("--scheme")
+    p_deploy.add_argument("--__dump-metadata", action="store_true",
+                          help=argparse.SUPPRESS, dest="dump_metadata")
     p_deploy.set_defaults(func=cmd_deploy)
 
     p_list = sub.add_parser("list")

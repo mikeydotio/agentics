@@ -213,6 +213,14 @@ class Handler(BaseHTTPRequestHandler):
             ctype = "application/x-plist"
         self._send_file(200, ctype or "application/octet-stream", artifact_path)
 
+    def do_POST(self):
+        if self.path == "/deployit/_internal/refresh":
+            if self.server.git_pull_enabled:
+                _git_pull(self.root)
+            self._send_json(200, {"ok": True, "last_pull": _last_pull})
+            return
+        self._send_json(404, {"ok": False, "error": "not_found"})
+
 
 def make_handler(root: Path):
     return type("Handler", (Handler,), {"root": root})

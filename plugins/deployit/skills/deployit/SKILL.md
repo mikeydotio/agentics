@@ -6,7 +6,7 @@ argument-hint: <bootstrap | deploy [--platform P] [--scheme S] | list | url | st
 
 # deployit Orchestrator
 
-`/deployit` archives the current Xcode workspace, exports a
+`/deployit` archives the current Xcode workspace or project, exports a
 Development- or Developer-ID-signed binary, stages it under
 `~/Library/Application Support/deployit/serve/`, appends an entry
 to the shared `mikeydotio/deployit-index` repo, and points the
@@ -34,10 +34,18 @@ user at a Tailscale-served URL.
 - **bootstrap** is idempotent. Run it once on each Mac, and re-run any time
   the plugin version changes (it rewrites the launchd plist with the
   current plugin path).
-- **deploy** auto-detects project + bundle ID + marketing version from
-  `*.xcworkspace` + `Apps/*/project.yml`. If the CLI fails with a "no
-  workspace" or "no project.yml" error, the user is likely in the wrong
-  directory — confirm with them before suggesting a scheme override.
+- **deploy** auto-detects project + bundle ID + marketing version from one
+  of two repo layouts (Apps-layout wins when both signals are present):
+
+  1. **Apps-layout (monorepo):** `./<Name>.xcworkspace` + `./Apps/<Name>-<Platform>/project.yml`.
+     Default scheme is `<Name>-<Platform>` (e.g. `Lillist-iOS`).
+  2. **Single-app layout:** `./<Name>.xcodeproj` + `./project.yml`. Default
+     scheme is `<Name>` (e.g. `moshtail`).
+
+  `MARKETING_VERSION` and `PRODUCT_BUNDLE_IDENTIFIER` may be quoted or
+  unquoted in `project.yml`. If the CLI fails with "no recognised Xcode
+  project layout in cwd," the user is likely in the wrong directory —
+  confirm with them before suggesting a scheme override.
 - **list / status / url** are read-only; no confirmations needed.
 - **gc** requires `--keep N` or `--older-than D` — never run unqualified.
 

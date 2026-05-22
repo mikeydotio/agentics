@@ -579,10 +579,109 @@ def cmd_deploy(args):
         "install_url": install_url,
         "listing_url": listing_url,
     })
-def cmd_list(args):          not_implemented("list")
-def cmd_url(args):           not_implemented("url")
-def cmd_status(args):        not_implemented("status")
-def cmd_gc(args):            not_implemented("gc")
+def cmd_url(args):
+    state = _state_dir()
+    cfg = _read_config(state)
+    base_url = cfg["server"]["base_url"].rstrip("/")
+    ok({"display": f"{base_url}/", "url": f"{base_url}/"})
+
+
+def cmd_status(args):
+    state = _state_dir()
+    cfg = _read_config(state)
+    port = cfg["server"]["port"]
+    base_url = cfg["server"]["base_url"].rstrip("/")
+    try:
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/deployit/_healthz", timeout=2) as r:
+            health = json.loads(r.read())
+            backend_ok = bool(health.get("ok"))
+    except Exception:
+        backend_ok = False
+
+    builds_path = state / "index" / "builds.json"
+    try:
+        data = json.loads(builds_path.read_text())
+        local_builds = [b for b in data["builds"]
+                        if b["origin_base_url"] == base_url]
+    except FileNotFoundError:
+        local_builds = []
+
+    lines = [
+        f"backend:  {'up' if backend_ok else 'DOWN'} (port {port})",
+        f"base_url: {base_url}/",
+        f"recent local deploys:",
+    ]
+    for b in local_builds[:5]:
+        lines.append(f"  - {b['id']}  {b['project']} {b['platform']} "
+                     f"{b['marketing_version']} ({b['timestamp']})")
+    if not local_builds:
+        lines.append("  (none)")
+    ok({"display": "\n".join(lines), "backend_ok": backend_ok})
+
+
+def cmd_list(args):
+    state = _state_dir()
+    builds_path = state / "index" / "builds.json"
+    if not builds_path.exists():
+        fail("no local index — run /deployit bootstrap")
+    data = json.loads(builds_path.read_text())
+    rows = data["builds"]
+    if args.platform:
+        rows = [b for b in rows if b["platform"] == args.platform]
+    if args.project:
+        rows = [b for b in rows if b["project"].lower() == args.project.lower()]
+    lines = []
+    for b in rows[:30]:
+        flag = " [archived]" if b.get("archived") else ""
+        lines.append(f"{b['id']}{flag}\n"
+                     f"  {b['project']} {b['platform']} {b['marketing_version']} "
+                     f"(build {b['build_number']}) · {b['timestamp']} · {b['origin_host']}")
+    ok({"display": "\n".join(lines) if lines else "(no builds)",
+        "count": len(rows)})
+
+
+def cmd_gc(args):
+    state = _state_dir()
+    cfg = _read_config(state)
+    base_url = cfg["server"]["base_url"].rstrip("/")
+    builds_path = state / "index" / "builds.json"
+    data = json.loads(builds_path.read_text())
+
+    local = [b for b in data["builds"]
+             if b["origin_base_url"] == base_url and not b.get("archived")]
+    local.sort(key=lambda b: b["timestamp"], reverse=True)
+
+    if args.keep is not None:
+        to_archive = local[args.keep:]
+    elif getattr(args, "older_than", None) is not None:
+        cutoff = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=args.older_than)
+        to_archive = [b for b in local
+                      if _dt.datetime.fromisoformat(b["timestamp"]).astimezone(_dt.timezone.utc) < cutoff]
+    else:
+        fail("gc requires --keep N or --older-than DAYS")
+
+    removed = 0
+    for b in to_archive:
+        d = state / "serve" / b["id"]
+        if d.exists():
+            _shutil.rmtree(d)
+            removed += 1
+        b["archived"] = True
+
+    builds_path.write_text(json.dumps(data, indent=2) + "\n")
+    if to_archive and not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+        subprocess.run(["git", "-C", str(state / "index"), "add", "builds.json"], check=True)
+        subprocess.run(["git", "-C", str(state / "index"), "commit", "-m",
+                        f"chore(deploy): archive {len(to_archive)} build(s) from {base_url}"],
+                       check=True)
+        subprocess.run(["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
+                        "-C", str(state / "index"), "push", "origin", "main"],
+                       check=True, timeout=60)
+        _refresh_local_backend(cfg["server"]["port"])
+
+    ok({"display": f"archived {len(to_archive)} build(s); removed {removed} local dir(s)",
+        "archived": len(to_archive), "removed_local": removed})
 
 
 def build_parser():

@@ -35,6 +35,9 @@ def _read_index(root: Path):
         return json.loads((root / "index" / "builds.json").read_text())
     except FileNotFoundError:
         return {"version": 1, "builds": []}
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"backend: corrupt index/builds.json: {exc}\n")
+        return {"version": 1, "builds": []}
 
 
 def _relative_time(iso: str) -> str:
@@ -143,6 +146,8 @@ class Handler(BaseHTTPRequestHandler):
     root: Path = Path()
 
     def log_message(self, fmt, *args):
+        if self.path == "/deployit/_healthz":
+            return
         sys.stderr.write("backend: " + fmt % args + "\n")
 
     def _send_json(self, status, payload):
@@ -170,6 +175,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
 
     def do_GET(self):
+        try:
+            self._dispatch_get()
+        except Exception as exc:
+            sys.stderr.write(f"backend: GET {self.path} failed: {exc!r}\n")
+            self._send_json(500, {"ok": False, "error": "internal_error"})
+
+    def _dispatch_get(self):
         path = self.path
         if path == "/deployit/_healthz":
             self._send_json(200, {"ok": True})
@@ -214,6 +226,13 @@ class Handler(BaseHTTPRequestHandler):
         self._send_file(200, ctype or "application/octet-stream", artifact_path)
 
     def do_POST(self):
+        try:
+            self._dispatch_post()
+        except Exception as exc:
+            sys.stderr.write(f"backend: POST {self.path} failed: {exc!r}\n")
+            self._send_json(500, {"ok": False, "error": "internal_error"})
+
+    def _dispatch_post(self):
         if self.path == "/deployit/_internal/refresh":
             if self.server.git_pull_enabled:
                 _git_pull(self.root)

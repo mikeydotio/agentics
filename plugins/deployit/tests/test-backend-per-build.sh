@@ -54,8 +54,8 @@ ipa=$(curl -sf "http://127.0.0.1:$PORT/deployit/$BUILD_ID/Lillist.ipa")
 status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/deployit/$BUILD_ID/nope.bin")
 [[ "$status" == "404" ]] || { echo "FAIL: expected 404, got $status"; exit 1; }
 
-# Path traversal → 404
-status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/deployit/$BUILD_ID/../../etc/passwd")
+# Path traversal → 404 (use --path-as-is so curl doesn't normalize)
+status=$(curl -s -o /dev/null -w '%{http_code}' --path-as-is "http://127.0.0.1:$PORT/deployit/$BUILD_ID/../../etc/passwd")
 [[ "$status" == "404" ]] || { echo "FAIL: traversal not blocked: $status"; exit 1; }
 
 echo "PASS"

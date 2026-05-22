@@ -11,12 +11,17 @@ Subcommands:
 """
 
 import argparse
+import datetime as _dt
 import json
+import re as _re
+import shutil as _shutil
+import string
 import sys
+import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 import os
-import re as _re
 import shutil
 import subprocess
 from textwrap import dedent
@@ -229,6 +234,172 @@ def _derive_metadata(cwd: Path, platform: str) -> dict:
     }
 
 
+def _read_config(state: Path) -> dict:
+    """Parse the bits we need out of config.toml. Use tomllib when available
+    (Python 3.11+), fall back to regex on older Pythons. macOS 26 ships 3.13."""
+    try:
+        import tomllib
+        return tomllib.loads((state / "config.toml").read_text())
+    except ModuleNotFoundError:
+        text = (state / "config.toml").read_text()
+        port = int(_re.search(r'port\s*=\s*(\d+)', text).group(1))
+        base_url = _re.search(r'base_url\s*=\s*"([^"]+)"', text).group(1)
+        notarize = bool(_re.search(r'notarize\s*=\s*true', text))
+        notary_profile_m = _re.search(r'notary_profile\s*=\s*"([^"]+)"', text)
+        return {
+            "server": {"port": port, "base_url": base_url},
+            "macos":  {"notarize": notarize,
+                       "notary_profile": notary_profile_m.group(1) if notary_profile_m else ""},
+        }
+
+
+def _build_id(project: str, platform: str, commit: str) -> str:
+    stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"{project.lower()}-{platform}-{stamp}-{commit}"
+
+
+def _destination_for(platform: str) -> str:
+    return {
+        "ios":      "generic/platform=iOS",
+        "visionos": "generic/platform=visionOS",
+        "macos":    "generic/platform=macOS",
+    }[platform]
+
+
+def _default_scheme(project: str, platform: str) -> str:
+    """Lillist's iOS scheme is `Lillist-iOS`, macOS is `Lillist-macOS`. Mirror that."""
+    suffix = {"ios": "iOS", "macos": "macOS", "visionos": "visionOS"}[platform]
+    return f"{project}-{suffix}"
+
+
+def _xcodebuild_archive(meta: dict, archive_path: Path, scheme):
+    cmd = [
+        "xcodebuild",
+        "-workspace", meta["workspace"],
+        "-scheme", scheme or _default_scheme(meta["project"], meta["platform"]),
+        "-configuration", "Debug",
+        "-destination", _destination_for(meta["platform"]),
+        "-archivePath", str(archive_path),
+        "-allowProvisioningUpdates",
+        "archive",
+    ]
+    res = subprocess.run(cmd)
+    if res.returncode != 0:
+        fail("xcodebuild archive failed — see Xcode output above; "
+             "common causes in references/troubleshooting.md")
+
+
+def _read_archive_build_number(archive_path: Path, project: str) -> str:
+    plist = archive_path / "Products" / "Applications" / f"{project}.app" / "Info.plist"
+    if not plist.is_file():
+        fail(f"built Info.plist not found at {plist}")
+    res = subprocess.run(
+        ["/usr/libexec/PlistBuddy", "-c", "Print :CFBundleVersion", str(plist)],
+        capture_output=True, text=True, check=True,
+    )
+    return res.stdout.strip()
+
+
+def _xcodebuild_export(archive_path: Path, export_dir: Path, plugin_root: Path, platform: str):
+    options = plugin_root / "assets" / f"ExportOptions.{platform}.plist"
+    if not options.is_file():
+        fail(f"missing export options plist: {options}")
+    cmd = [
+        "xcodebuild", "-exportArchive",
+        "-archivePath", str(archive_path),
+        "-exportOptionsPlist", str(options),
+        "-exportPath", str(export_dir),
+        "-allowProvisioningUpdates",
+    ]
+    res = subprocess.run(cmd)
+    if res.returncode != 0:
+        fail("xcodebuild -exportArchive failed — see Xcode output above")
+
+
+def _stage_ios_or_visionos(state: Path, plugin_root: Path,
+                           build_id: str, ipa_src: Path, meta_full: dict):
+    """Move the IPA into serve/<build_id>/, render manifest.plist and _meta.json.
+    Returns (artifact_name, ipa_url, manifest_url)."""
+    dst = state / "serve" / build_id
+    if dst.exists():
+        _shutil.rmtree(dst)
+    dst.mkdir(parents=True)
+
+    artifact_name = ipa_src.name
+    _shutil.move(str(ipa_src), dst / artifact_name)
+
+    ipa_url      = f"{meta_full['origin_base_url']}/{build_id}/{artifact_name}"
+    manifest_url = f"{meta_full['origin_base_url']}/{build_id}/manifest.plist"
+
+    manifest_tmpl = string.Template(
+        (plugin_root / "assets" / "manifest.template.plist").read_text())
+    (dst / "manifest.plist").write_text(manifest_tmpl.substitute(
+        IPA_URL=ipa_url,
+        BUNDLE_ID=meta_full["bundle_id"],
+        BUNDLE_VERSION=meta_full["marketing_version"],
+        TITLE=meta_full["project"],
+    ))
+
+    (dst / "_meta.json").write_text(json.dumps({
+        **{k: meta_full[k] for k in (
+            "id", "platform", "project", "bundle_id",
+            "marketing_version", "build_number", "commit",
+            "timestamp", "origin_host", "origin_base_url",
+        )},
+        "install": {
+            "kind": "itms-services",
+            "manifest_url": manifest_url,
+            "ipa_url": ipa_url,
+        },
+        "primary_artifact": artifact_name,
+    }, indent=2))
+
+    return artifact_name, ipa_url, manifest_url
+
+
+def _append_to_index(state: Path, entry: dict, attempts: int = 3):
+    """Pull, prepend entry to builds.json (newest first), commit, push.
+    Retry up to `attempts` times on push conflict; on final failure, raise via fail()."""
+    index_dir = state / "index"
+    builds_path = index_dir / "builds.json"
+
+    last_stderr = ""
+    for attempt in range(1, attempts + 1):
+        subprocess.run(["git", "-C", str(index_dir), "pull", "--rebase", "--quiet"],
+                       check=True, timeout=30)
+        data = json.loads(builds_path.read_text())
+        data["builds"].insert(0, entry)
+        builds_path.write_text(json.dumps(data, indent=2) + "\n")
+
+        msg = (f"feat(deploy): {entry['project']} {entry['platform']} "
+               f"{entry['marketing_version']} (build {entry['build_number']}) "
+               f"from {entry['origin_host']}")
+        subprocess.run(["git", "-C", str(index_dir), "add", "builds.json"], check=True)
+        subprocess.run(["git", "-C", str(index_dir), "commit", "-m", msg], check=True)
+        push = subprocess.run(
+            ["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
+             "-C", str(index_dir), "push", "origin", "main"],
+            capture_output=True, text=True,
+        )
+        if push.returncode == 0:
+            return
+        last_stderr = push.stderr.strip()
+        subprocess.run(["git", "-C", str(index_dir), "reset", "--hard", "origin/main"],
+                       check=True)
+
+    fail("push to deployit-index failed after retries; local artifacts retained",
+         stderr=last_stderr)
+
+
+def _refresh_local_backend(port: int):
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/deployit/_internal/refresh", method="POST")
+        urllib.request.urlopen(req, timeout=3).read()
+    except Exception as exc:
+        sys.stderr.write(f"warning: local backend refresh failed: {exc}\n")
+
+
 def cmd_bootstrap(args):
     args.plugin_root = args.plugin_root.resolve()
     state = _state_dir()
@@ -260,7 +431,53 @@ def cmd_deploy(args):
     if getattr(args, "dump_metadata", False):
         ok({"display": "metadata", **meta})
         return
-    not_implemented("deploy (orchestration — filled in by next commit)")
+
+    state = _state_dir()
+    cfg = _read_config(state)
+    base_url = cfg["server"]["base_url"].rstrip("/")
+    origin_host = urlparse(base_url).netloc
+
+    build_id = _build_id(meta["project"], meta["platform"], meta["commit"])
+    timestamp = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+    builds_dir = state / "builds"
+    builds_dir.mkdir(exist_ok=True)
+    archive_path = builds_dir / f"{build_id}.xcarchive"
+    export_dir = builds_dir / f"{build_id}.export"
+    if archive_path.exists(): _shutil.rmtree(archive_path)
+    if export_dir.exists():   _shutil.rmtree(export_dir)
+    export_dir.mkdir(parents=True)
+
+    _xcodebuild_archive(meta, archive_path, args.scheme)
+    build_number = _read_archive_build_number(archive_path, meta["project"])
+    _xcodebuild_export(archive_path, export_dir, args.plugin_root, args.platform)
+
+    meta_full = {
+        **meta,
+        "id": build_id,
+        "build_number": build_number,
+        "timestamp": timestamp,
+        "origin_host": origin_host,
+        "origin_base_url": base_url,
+    }
+
+    if args.platform in ("ios", "visionos"):
+        ipa = next(export_dir.glob("*.ipa"), None)
+        if ipa is None:
+            fail("export produced no .ipa")
+        _stage_ios_or_visionos(state, args.plugin_root, build_id, ipa, meta_full)
+    else:
+        not_implemented("macos staging (filled in by Wave 6)")
+
+    _shutil.rmtree(archive_path, ignore_errors=True)
+    _shutil.rmtree(export_dir, ignore_errors=True)
+
+    install_url = f"{base_url}/{build_id}/"
+    ok({
+        "display": f"built. install: {install_url}",
+        "build_id": build_id,
+        "install_url": install_url,
+    })
 def cmd_list(args):          not_implemented("list")
 def cmd_url(args):           not_implemented("url")
 def cmd_status(args):        not_implemented("status")

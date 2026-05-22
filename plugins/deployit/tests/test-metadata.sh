@@ -11,8 +11,8 @@ git config user.email "test@test"
 git config user.name  "test"
 git commit --allow-empty -q -m "init"
 
-mkdir -p Apps/SampleApp
-cat > Apps/SampleApp/project.yml <<YAML
+mkdir -p Apps/SampleApp-iOS
+cat > Apps/SampleApp-iOS/project.yml <<YAML
 name: SampleApp
 targets:
   SampleApp-iOS:
@@ -30,4 +30,6 @@ out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" deplo
 echo "$out" | grep -q '"project": "SampleApp"'              || { echo "FAIL: project"; echo "$out"; exit 1; }
 echo "$out" | grep -q '"marketing_version": "1.2.3"'        || { echo "FAIL: version"; echo "$out"; exit 1; }
 echo "$out" | grep -q '"bundle_id": "com.example.SampleApp"'|| { echo "FAIL: bundle"; echo "$out"; exit 1; }
+echo "$out" | grep -q '"project_yml": ".*/Apps/SampleApp-iOS/project.yml"' \
+    || { echo "FAIL: project_yml path wrong"; echo "$out"; exit 1; }
 echo "PASS"

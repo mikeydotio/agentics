@@ -182,6 +182,9 @@ def _install_launchd(plugin_root: Path, state: Path, port: int) -> dict:
     }
 
 
+_PLATFORM_SUFFIX = {"ios": "iOS", "macos": "macOS", "visionos": "visionOS"}
+
+
 def _find_workspace(cwd: Path):
     for p in cwd.glob("*.xcworkspace"):
         return p
@@ -191,7 +194,8 @@ def _find_workspace(cwd: Path):
 def _find_project_yml(cwd: Path, platform: str):
     """Return the first project.yml under Apps/ whose name suggests the platform.
     Falls back to any Apps/*/project.yml."""
-    candidates = sorted(cwd.glob(f"Apps/*-{platform.title()}/project.yml")) \
+    suffix = _PLATFORM_SUFFIX[platform]
+    candidates = sorted(cwd.glob(f"Apps/*-{suffix}/project.yml")) \
               or sorted(cwd.glob("Apps/*/project.yml"))
     return candidates[0] if candidates else None
 
@@ -211,8 +215,17 @@ def _read_bundle_id(project_yml: Path) -> str:
 
 
 def _short_sha(cwd: Path) -> str:
-    res = subprocess.run(["git", "-C", str(cwd), "rev-parse", "--short", "HEAD"],
-                         capture_output=True, text=True, check=True)
+    try:
+        res = subprocess.run(
+            ["git", "-C", str(cwd), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True, timeout=5,
+        )
+    except FileNotFoundError:
+        fail("git binary not found on PATH")
+    except subprocess.CalledProcessError as exc:
+        fail(f"git rev-parse failed (not a git repo or no commits?): {exc.stderr.strip() or exc}")
+    except subprocess.TimeoutExpired:
+        fail("git rev-parse timed out")
     return res.stdout.strip()
 
 
@@ -242,12 +255,14 @@ def _read_config(state: Path) -> dict:
         return tomllib.loads((state / "config.toml").read_text())
     except ModuleNotFoundError:
         text = (state / "config.toml").read_text()
-        port = int(_re.search(r'port\s*=\s*(\d+)', text).group(1))
-        base_url = _re.search(r'base_url\s*=\s*"([^"]+)"', text).group(1)
+        port_m = _re.search(r'port\s*=\s*(\d+)', text)
+        base_m = _re.search(r'base_url\s*=\s*"([^"]+)"', text)
+        if port_m is None or base_m is None:
+            fail("config.toml missing required server.port or server.base_url")
         notarize = bool(_re.search(r'notarize\s*=\s*true', text))
         notary_profile_m = _re.search(r'notary_profile\s*=\s*"([^"]+)"', text)
         return {
-            "server": {"port": port, "base_url": base_url},
+            "server": {"port": int(port_m.group(1)), "base_url": base_m.group(1)},
             "macos":  {"notarize": notarize,
                        "notary_profile": notary_profile_m.group(1) if notary_profile_m else ""},
         }
@@ -268,8 +283,7 @@ def _destination_for(platform: str) -> str:
 
 def _default_scheme(project: str, platform: str) -> str:
     """Lillist's iOS scheme is `Lillist-iOS`, macOS is `Lillist-macOS`. Mirror that."""
-    suffix = {"ios": "iOS", "macos": "macOS", "visionos": "visionOS"}[platform]
-    return f"{project}-{suffix}"
+    return f"{project}-{_PLATFORM_SUFFIX[platform]}"
 
 
 def _xcodebuild_archive(meta: dict, archive_path: Path, scheme):
@@ -376,11 +390,17 @@ def _append_to_index(state: Path, entry: dict, attempts: int = 3):
                f"from {entry['origin_host']}")
         subprocess.run(["git", "-C", str(index_dir), "add", "builds.json"], check=True)
         subprocess.run(["git", "-C", str(index_dir), "commit", "-m", msg], check=True)
-        push = subprocess.run(
-            ["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
-             "-C", str(index_dir), "push", "origin", "main"],
-            capture_output=True, text=True,
-        )
+        try:
+            push = subprocess.run(
+                ["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
+                 "-C", str(index_dir), "push", "origin", "main"],
+                capture_output=True, text=True, timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            last_stderr = "git push timed out after 60s"
+            subprocess.run(["git", "-C", str(index_dir), "reset", "--hard", "origin/main"],
+                           check=True)
+            continue
         if push.returncode == 0:
             return
         last_stderr = push.stderr.strip()
@@ -473,7 +493,7 @@ def cmd_deploy(args):
     _shutil.rmtree(export_dir, ignore_errors=True)
 
     entry = json.loads((state / "serve" / build_id / "_meta.json").read_text())
-    primary = entry["primary_artifact"]
+    primary = entry.pop("primary_artifact")
     artifact_path = state / "serve" / build_id / primary
     entry["size_bytes"] = artifact_path.stat().st_size
     entry["archived"] = False

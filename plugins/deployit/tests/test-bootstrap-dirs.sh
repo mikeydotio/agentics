@@ -16,8 +16,8 @@ trap 'rm -rf "$ROOT"' EXIT
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" bootstrap)
 echo "$out" | grep -q '"ok": true' || { echo "FAIL: not ok: $out"; exit 1; }
 
-[[ -d "$ROOT/serve" && -d "$ROOT/index" && -d "$ROOT/logs" ]] \
-    || { echo "FAIL: directory layout missing"; ls "$ROOT"; exit 1; }
+[[ -d "$ROOT/serve" && -d "$ROOT/index" && -d "$ROOT/logs" && -d "$ROOT/bin" ]] \
+    || { echo "FAIL: directory layout missing (serve/index/logs/bin)"; ls "$ROOT"; exit 1; }
 [[ -f "$ROOT/config.toml" ]] || { echo "FAIL: config.toml missing"; exit 1; }
 grep -q 'base_url = "https://studio.tail-abc.ts.net/deployit"' "$ROOT/config.toml" \
     || { echo "FAIL: base_url not derived"; cat "$ROOT/config.toml"; exit 1; }

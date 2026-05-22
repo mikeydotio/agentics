@@ -371,6 +371,62 @@ def _stage_ios_or_visionos(state: Path, plugin_root: Path,
     return artifact_name, ipa_url, manifest_url
 
 
+def _stage_macos(state: Path, plugin_root: Path, build_id: str,
+                 app_src: Path, meta_full: dict, notarize: bool,
+                 notary_profile: str):
+    """Wrap the exported .app in a .dmg, optionally notarize + staple,
+    write _meta.json. Returns (dmg_name, dmg_url)."""
+    dst = state / "serve" / build_id
+    if dst.exists():
+        _shutil.rmtree(dst)
+    dst.mkdir(parents=True)
+
+    dmg_name = f"{meta_full['project']}.dmg"
+    dmg_path = dst / dmg_name
+
+    staging_app = dst / app_src.name
+    _shutil.move(str(app_src), staging_app)
+
+    res = subprocess.run([
+        "hdiutil", "create",
+        "-srcfolder", str(staging_app),
+        "-volname", meta_full["project"],
+        "-format", "UDZO",
+        "-ov",
+        str(dmg_path),
+    ], capture_output=True, text=True)
+    if res.returncode != 0:
+        fail(f"hdiutil create failed: {res.stderr.strip() or res.stdout.strip()}")
+    _shutil.rmtree(staging_app)
+
+    if notarize:
+        if not notary_profile:
+            fail("macos.notarize=true but macos.notary_profile is empty in config.toml")
+        notary = subprocess.run([
+            "xcrun", "notarytool", "submit", str(dmg_path),
+            "--keychain-profile", notary_profile,
+            "--wait",
+        ], capture_output=True, text=True)
+        if notary.returncode != 0:
+            fail(f"notarytool submit failed: {notary.stderr.strip() or notary.stdout.strip()}")
+        staple = subprocess.run(["xcrun", "stapler", "staple", str(dmg_path)],
+                                capture_output=True, text=True)
+        if staple.returncode != 0:
+            fail(f"stapler staple failed: {staple.stderr.strip() or staple.stdout.strip()}")
+
+    dmg_url = f"{meta_full['origin_base_url']}/{build_id}/{dmg_name}"
+    (dst / "_meta.json").write_text(json.dumps({
+        **{k: meta_full[k] for k in (
+            "id", "platform", "project", "bundle_id",
+            "marketing_version", "build_number", "commit",
+            "timestamp", "origin_host", "origin_base_url",
+        )},
+        "install": {"kind": "direct-download", "dmg_url": dmg_url},
+        "primary_artifact": dmg_name,
+    }, indent=2))
+    return dmg_name, dmg_url
+
+
 def _append_to_index(state: Path, entry: dict, attempts: int = 3):
     """Pull, prepend entry to builds.json (newest first), commit, push.
     Retry up to `attempts` times on push conflict; on final failure, raise via fail()."""
@@ -486,8 +542,16 @@ def cmd_deploy(args):
         if ipa is None:
             fail("export produced no .ipa")
         _stage_ios_or_visionos(state, args.plugin_root, build_id, ipa, meta_full)
+    elif args.platform == "macos":
+        app = next(export_dir.glob("*.app"), None)
+        if app is None:
+            fail("export produced no .app")
+        notarize = cfg["macos"]["notarize"]
+        notary_profile = cfg["macos"].get("notary_profile", "")
+        _stage_macos(state, args.plugin_root, build_id, app, meta_full,
+                     notarize, notary_profile)
     else:
-        not_implemented("macos staging (filled in by Wave 6)")
+        fail(f"unsupported platform: {args.platform}")
 
     _shutil.rmtree(archive_path, ignore_errors=True)
     _shutil.rmtree(export_dir, ignore_errors=True)

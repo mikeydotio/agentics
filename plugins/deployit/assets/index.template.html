@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>$TITLE · build $BUILD_NUMBER</title>
+<style>
+  :root { color-scheme: light dark; --fg:#0a0a0a; --bg:#f6f6f6; --muted:#6b6b6b; --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#f6f6f6; --bg:#0a0a0a; --muted:#9a9a9a; --accent:#3b82f6; } }
+  body { font: 16px/1.5 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--fg); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; margin: 0; }
+  main { max-width: 420px; width: 100%; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  dd { margin: 0; color: var(--fg); font-variant-numeric: tabular-nums; }
+  a.install { display: block; background: var(--accent); color: #fff; text-align: center; font-weight: 600; padding: 14px; border-radius: 12px; text-decoration: none; margin-bottom: 20px; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <h1>$TITLE</h1>
+  <p class="sub">$PLATFORM build · from $ORIGIN_HOST</p>
+  <dl>
+    <dt>Version</dt><dd>$VERSION (build $BUILD_NUMBER)</dd>
+    <dt>Commit</dt><dd><code>$COMMIT</code></dd>
+    <dt>Built</dt><dd>$TIMESTAMP</dd>
+  </dl>
+  <a class="install" href="$INSTALL_HREF">$INSTALL_LABEL</a>
+  $TRUST_NOTE
+</main>
+</body>
+</html>

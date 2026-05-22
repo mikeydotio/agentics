@@ -79,6 +79,39 @@ def _git_pull(root: Path):
             sys.stderr.write(f"backend: git pull failed: {exc}\n")
 
 
+_TRUST_NOTE_HTML = (
+    '<p style="color:#888;font-size:13px;">'
+    '<strong>First install only:</strong> if iOS warns about an '
+    'untrusted developer, open <em>Settings → General → VPN &amp; '
+    'Device Management</em> and trust your team, then re-tap Install.'
+    '</p>'
+)
+
+
+def _read_build_meta(root: Path, build_id: str):
+    meta_path = root / "serve" / build_id / "_meta.json"
+    if not meta_path.is_file():
+        return None
+    return json.loads(meta_path.read_text())
+
+
+def _render_build_landing(root: Path, build) -> bytes:
+    href, label = _install_link(build)
+    tmpl = string.Template((root / "_plugin_root" / "assets" / "index.template.html").read_text())
+    return tmpl.substitute(
+        TITLE=html.escape(build["project"]),
+        PLATFORM=html.escape(build["platform"]),
+        ORIGIN_HOST=html.escape(build["origin_host"]),
+        VERSION=html.escape(build["marketing_version"]),
+        BUILD_NUMBER=html.escape(build["build_number"]),
+        COMMIT=html.escape(build["commit"][:7]),
+        TIMESTAMP=html.escape(build["timestamp"]),
+        INSTALL_HREF=html.escape(href, quote=True),
+        INSTALL_LABEL=label,
+        TRUST_NOTE=_TRUST_NOTE_HTML if build["platform"] in ("ios", "visionos") else "",
+    ).encode()
+
+
 def _render_listing(root: Path, local_host: str) -> bytes:
     data = _read_index(root)
     rows = []
@@ -127,6 +160,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_file(self, status, ctype, path: Path):
+        self.send_response(status)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(path.stat().st_size))
+        self.end_headers()
+        with path.open("rb") as f:
+            while chunk := f.read(64 * 1024):
+                self.wfile.write(chunk)
+
     def do_GET(self):
         path = self.path
         if path == "/deployit/_healthz":
@@ -138,7 +180,38 @@ class Handler(BaseHTTPRequestHandler):
             body = _render_listing(self.root, self.server.local_host)
             self._send_bytes(200, "text/html; charset=utf-8", body)
             return
-        self._send_json(404, {"ok": False, "error": "not_found"})
+
+        m = re.match(r"^/deployit/([^/]+)/(.*)$", path)
+        if not m:
+            self._send_json(404, {"ok": False, "error": "not_found"})
+            return
+        build_id, sub = m.group(1), m.group(2)
+        if not _BUILD_ID_RE.match(build_id):
+            self._send_json(404, {"ok": False, "error": "bad_build_id"})
+            return
+        build = _read_build_meta(self.root, build_id)
+        if not build:
+            self._send_json(404, {"ok": False, "error": "unknown_build"})
+            return
+
+        if sub == "" or sub == "/":
+            self._send_bytes(200, "text/html; charset=utf-8",
+                             _render_build_landing(self.root, build))
+            return
+
+        if "/" in sub or sub.startswith(".") or ".." in sub:
+            self._send_json(404, {"ok": False, "error": "bad_artifact"})
+            return
+        artifact_path = self.root / "serve" / build_id / sub
+        if not artifact_path.is_file():
+            self._send_json(404, {"ok": False, "error": "missing_artifact"})
+            return
+        ctype, _ = mimetypes.guess_type(sub)
+        if sub.endswith(".ipa"):
+            ctype = "application/octet-stream"
+        elif sub.endswith(".plist"):
+            ctype = "application/x-plist"
+        self._send_file(200, ctype or "application/octet-stream", artifact_path)
 
 
 def make_handler(root: Path):

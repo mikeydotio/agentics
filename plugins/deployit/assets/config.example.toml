@@ -1,0 +1,17 @@
+# deployit per-machine config.
+# Bootstrap writes this file the first time; subsequent runs preserve overrides.
+
+[server]
+port = 8729
+# Tailscale-served base URL. Bootstrap auto-derives from `tailscale status`.
+# Must NOT have a trailing slash.
+base_url = "https://<host>.<tailnet>.ts.net/deployit"
+
+[index]
+repo = "https://github.com/mikeydotio/deployit-index.git"
+
+[macos]
+# Whether to notarize macOS builds (.dmg) before serving. Requires an Apple
+# Developer API key configured via `xcrun notarytool store-credentials`.
+notarize = false
+notary_profile = ""

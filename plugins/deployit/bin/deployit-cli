@@ -15,6 +15,11 @@ import json
 import sys
 from pathlib import Path
 
+import os
+import shutil
+import subprocess
+from textwrap import dedent
+
 __version__ = "0.1.0"
 
 
@@ -38,7 +43,142 @@ class JsonArgumentParser(argparse.ArgumentParser):
         fail(f"argument error: {message}")
 
 
-def cmd_bootstrap(args):     not_implemented("bootstrap")
+def _state_dir() -> Path:
+    """Per-machine state directory. Overridable for tests via DEPLOYIT_STATE_DIR."""
+    override = os.environ.get("DEPLOYIT_STATE_DIR")
+    if override:
+        return Path(override)
+    return Path.home() / "Library" / "Application Support" / "deployit"
+
+
+def _tailscale_bin() -> str:
+    return os.environ.get("DEPLOYIT_TAILSCALE_BIN", "tailscale")
+
+
+def _derive_base_url() -> str:
+    """Build the listing base URL from `tailscale status --json`."""
+    res = subprocess.run(
+        [_tailscale_bin(), "status", "--json"],
+        capture_output=True, text=True, check=True, timeout=5,
+    )
+    data = json.loads(res.stdout)
+    dns = data["Self"]["DNSName"].rstrip(".")
+    return f"https://{dns}/deployit"
+
+
+def _write_config(state: Path, plugin_root: Path, base_url: str) -> Path:
+    """Write config.toml on first run; preserve user edits on re-run."""
+    cfg = state / "config.toml"
+    if cfg.exists():
+        return cfg
+    template = (plugin_root / "assets" / "config.example.toml").read_text()
+    template = template.replace(
+        'base_url = "https://<host>.<tailnet>.ts.net/deployit"',
+        f'base_url = "{base_url}"',
+    )
+    cfg.write_text(template)
+    return cfg
+
+
+def _ensure_dirs(state: Path):
+    for sub in ("serve", "index", "logs", "bin"):
+        (state / sub).mkdir(parents=True, exist_ok=True)
+
+
+def _symlink_plugin_root(state: Path, plugin_root: Path):
+    """Create or refresh <state>/_plugin_root → plugin_root. Backend uses this
+    to find assets (templates) on disk without knowing the plugin's install path."""
+    link = state / "_plugin_root"
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(plugin_root)
+
+
+def _clone_index(state: Path):
+    """Clone the shared index repo. Skipped in tests via DEPLOYIT_SKIP_INDEX_CLONE."""
+    if os.environ.get("DEPLOYIT_SKIP_INDEX_CLONE"):
+        (state / "index" / "builds.json").write_text(
+            json.dumps({"version": 1, "builds": []}))
+        return
+    index_dir = state / "index"
+    if (index_dir / ".git").is_dir():
+        return
+    # Re-clone fresh; the placeholder builds.json from _ensure_dirs is overwritten.
+    shutil.rmtree(index_dir)
+    subprocess.run(
+        ["git", "clone", "https://github.com/mikeydotio/deployit-index.git", str(index_dir)],
+        check=True, timeout=30,
+    )
+
+
+def _configure_tailscale_serve(port: int):
+    """Front the local backend with HTTPS via Tailscale Serve. Idempotent."""
+    if os.environ.get("DEPLOYIT_SKIP_TAILSCALE_SERVE"):
+        return
+    subprocess.run(
+        [_tailscale_bin(), "serve", "--bg", str(port)],
+        check=False, timeout=10,
+    )
+
+
+def _launchd_plist(plugin_root: Path, state: Path, port: int) -> str:
+    return dedent(f"""\
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>Label</key><string>com.mikeydotio.deployit.backend</string>
+          <key>ProgramArguments</key>
+          <array>
+            <string>/usr/bin/env</string>
+            <string>python3</string>
+            <string>{plugin_root}/bin/deployit-backend</string>
+            <string>--port</string><string>{port}</string>
+            <string>--root</string><string>{state}</string>
+            <string>--plugin-root</string><string>{plugin_root}</string>
+          </array>
+          <key>RunAtLoad</key><true/>
+          <key>KeepAlive</key><true/>
+          <key>StandardOutPath</key><string>{state}/logs/backend.log</string>
+          <key>StandardErrorPath</key><string>{state}/logs/backend.err.log</string>
+        </dict>
+        </plist>
+        """)
+
+
+def _install_launchd(plugin_root: Path, state: Path, port: int):
+    """Write and load the launchd agent. Skipped in tests via DEPLOYIT_SKIP_LAUNCHD."""
+    if os.environ.get("DEPLOYIT_SKIP_LAUNCHD"):
+        return
+    plist_dir = Path.home() / "Library" / "LaunchAgents"
+    plist_dir.mkdir(parents=True, exist_ok=True)
+    plist_path = plist_dir / "com.mikeydotio.deployit.backend.plist"
+    plist_path.write_text(_launchd_plist(plugin_root, state, port))
+    launchctl = os.environ.get("DEPLOYIT_LAUNCHCTL_BIN", "launchctl")
+    subprocess.run([launchctl, "bootout", f"gui/{os.getuid()}/com.mikeydotio.deployit.backend"],
+                   check=False)
+    subprocess.run([launchctl, "bootstrap", f"gui/{os.getuid()}", str(plist_path)],
+                   check=False)
+
+
+def cmd_bootstrap(args):
+    state = _state_dir()
+    state.mkdir(parents=True, exist_ok=True)
+    _ensure_dirs(state)
+    _symlink_plugin_root(state, args.plugin_root)
+    base_url = _derive_base_url()
+    cfg_path = _write_config(state, args.plugin_root, base_url)
+    _clone_index(state)
+    _configure_tailscale_serve(8729)
+    _install_launchd(args.plugin_root, state, 8729)
+    ok({
+        "display": f"deployit bootstrapped. Bookmark on iPhone: {base_url}/",
+        "state_dir": str(state),
+        "config_path": str(cfg_path),
+        "base_url": base_url,
+    })
+
+
 def cmd_deploy(args):        not_implemented("deploy")
 def cmd_list(args):          not_implemented("list")
 def cmd_url(args):           not_implemented("url")

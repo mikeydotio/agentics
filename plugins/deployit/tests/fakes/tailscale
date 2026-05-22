@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+case "$*" in
+  "status --json")
+    cat <<'JSON'
+{"Self": {"DNSName": "studio.tail-abc.ts.net."}}
+JSON
+    ;;
+  "status") echo "100.64.0.1 studio.tail-abc.ts.net studio.tail-abc.ts.net active" ;;
+  *) echo "fake-tailscale: $*" >&2 ;;
+esac

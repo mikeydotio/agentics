@@ -472,11 +472,28 @@ def cmd_deploy(args):
     _shutil.rmtree(archive_path, ignore_errors=True)
     _shutil.rmtree(export_dir, ignore_errors=True)
 
+    entry = json.loads((state / "serve" / build_id / "_meta.json").read_text())
+    primary = entry["primary_artifact"]
+    artifact_path = state / "serve" / build_id / primary
+    entry["size_bytes"] = artifact_path.stat().st_size
+    entry["archived"] = False
+    entry["notes"] = None
+
+    _append_to_index(state, entry)
+    _refresh_local_backend(cfg["server"]["port"])
+
     install_url = f"{base_url}/{build_id}/"
+    listing_url = f"{base_url}/"
     ok({
-        "display": f"built. install: {install_url}",
+        "display": (
+            f"deployed: {entry['project']} {entry['platform']} "
+            f"{entry['marketing_version']} (build {entry['build_number']})\n"
+            f"install:  {install_url}\n"
+            f"listing:  {listing_url}"
+        ),
         "build_id": build_id,
         "install_url": install_url,
+        "listing_url": listing_url,
     })
 def cmd_list(args):          not_implemented("list")
 def cmd_url(args):           not_implemented("url")

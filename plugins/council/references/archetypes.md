@@ -14,14 +14,17 @@ does not duplicate the catalog so the two don't drift.
 
 ## Dispatching an archetype
 
-Determine `subagent_type` from what the running environment exposes:
+The full discovery procedure lives in `skills/council-vote/SKILL.md` under "Dispatching
+members". Short version:
 
-- **Preferred:** `agents:<archetype-name>` if the agentics agents plugin is installed
-  (the catalog lists every available name).
-- **Fallback:** `general-purpose` with the archetype's role injected explicitly in the
-  prompt. Read `plugins/agents/agents/<archetype-name>.md` and paste the `<role>` block
-  into the prompt under a "## Your role" heading before the council-specific prompt
-  template from `council-protocol.md`.
+1. **Preferred:** `agents:<archetype-name>` if it appears in the available agent types
+   exposed by your environment (in Claude Code, the agent-types system reminder).
+2. **Fallback:** `general-purpose` with the archetype's role injected explicitly in the
+   prompt. Read `plugins/agents/agents/<archetype-name>.md` and paste the `<role>` block
+   into the prompt under a "## Your role" heading before the council-specific prompt
+   template from `council-protocol.md`.
+3. **Don't guess.** If `agents:<name>` errors, retry that seat with `general-purpose` +
+   injected role and note the path in `PANEL.md`.
 
 The dispatch prompt always carries the same payload (context + question + member task),
 regardless of whether you're using a native subagent_type or the fallback.

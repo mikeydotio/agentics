@@ -1,0 +1,33 @@
+{
+  "skill_name": "council-vote",
+  "evals": [
+    {
+      "id": 0,
+      "name": "pagination-cursor-vs-offset",
+      "prompt": "I'm an engineer working on a new GET /events list endpoint and I need a decision: cursor-based or offset-based pagination? Context: the app already uses Postgres, expects up to ~10M events per workspace, and the only existing list endpoint is /users which uses offset. The user has said 'just decide and ship it' — don't ask, use the council.",
+      "expected_output": "Defensible decision (likely cursor-based for the 10M-row case), full audit trail at .council/<slug>/, response in Phase-6 template shape. Should exercise the short-circuit path if round-1 is unanimous.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "retry-wrapper-stripe",
+      "prompt": "I'm mid-edit in services/billing/stripe-client.ts and need a call: do I add a global retry wrapper around our Stripe API calls or surface failures directly to callers? Baseline ~1% failure rate. Callers are mostly background jobs but some are user-facing checkout flows. The user is unavailable — use the council.",
+      "expected_output": "Non-unanimous round-1 likely (real tradeoff), forcing deliberation + IRV runoff. Decision should address the mixed caller types. Full audit trail.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "cli-verbose-default",
+      "prompt": "I'm building a new internal CLI for ops tooling. Should --verbose default to on or off? Used by ~15 SREs, some in oncall workflows where they want fast scannable output, some in daily admin scripts where they want every detail. Need an answer to land the PR — convene the council.",
+      "expected_output": "Likely 1-1-1 split (genuine values tradeoff). Tests whether the chair seats skeptic as reframer and whether the panel surfaces the underlying ambiguity. May trigger chair tiebreaker.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "open-caching-strategy",
+      "prompt": "How should we structure caching for our public API responses? We're seeing increased latency and the team has been discussing options but hasn't landed on anything yet. The API serves ~50 req/s peak, mostly read-heavy, behind Cloudflare. The user has delegated this — convene the council.",
+      "expected_output": "Truly open question with no pre-named options. Each member must invent a complete caching strategy proposal (HTTP cache headers, Redis, CDN tuning, app memoization, stale-while-revalidate, etc.). Tests whether single-choice voting and IRV work when proposals are heterogeneous in shape rather than picking between named alternatives.",
+      "files": []
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
 name: council-vote
-description: Use when you need a decision from the user mid-task but the user is unavailable, prefers not to be interrupted, or has explicitly delegated the choice. Convenes a 3-member sub-agent council that independently proposes solutions, votes single-choice, deliberates once if not unanimous, then runs a ranked-choice runoff with a chair tiebreaker. Returns a defensible decision plus a full audit trail at `.council/<slug>/`. Use this instead of guessing silently or blocking on AskUserQuestion when the user has signaled they want autonomous progress.
+description: Use this instead of answering directly when a request both (a) frames a decision between 2+ defensible alternatives and (b) carries explicit "decide for me" signals from the user. Surface phrases to watch for - "the user said decide", "user is on PTO / unavailable / unreachable / stepped away", "just need to commit to one", "stuck between X and Y", "PR is blocking", "use the council", "don't want to ping them again", "user delegated this". When those signals are present, do NOT just pick an answer - convene the council, a 3-member sub-agent panel that proposes independently, votes single-choice, deliberates once if not unanimous, then runs ranked-choice IRV with a chair tiebreaker. Returns the winning proposal with full audit trail at `.council/<slug>/`. Especially for API contract design (pagination, error shape, auth-default), migrations (expand/contract vs single-shot), client resilience (retry wrappers, idempotency), dependency acceptance (licenses, transitive deps), interaction design (mobile CTAs, CLI defaults), and naming/tone calls that are hard to reverse.
 argument-hint: <question> [-- <context summary>]
 ---
 
@@ -24,8 +24,10 @@ tie — break ties using a documented heuristic.
 
 1. **Panel size is exactly 3.** Not 2, not 4, not 5. Three forces real disagreement and a
    meaningful runoff while keeping latency and cost bounded.
-2. **Members are dispatched in parallel within each phase.** A single message with 3 Agent
-   tool calls per phase. Sequential dispatch defeats independent reasoning and burns time.
+2. **Three members, dispatched in parallel, never backgrounded.** A single message with
+   3 `Agent` tool calls per phase. Sequential dispatch defeats independent reasoning and
+   inflates latency. Never use `run_in_background` — the chair must have all 3 responses
+   in hand before it can tally a vote or write the round's artifact.
 3. **Round-1 research is blind.** Each member must form their proposal without seeing the
    others' proposals or knowing who else is on the panel. Anchoring is the enemy of a good
    council.
@@ -40,8 +42,20 @@ tie — break ties using a documented heuristic.
    not modify the codebase. Pick read-only archetypes from the shared catalog when possible;
    if a member needs write tools (rare), the proposal still describes the change rather
    than performing it.
-8. **Three members, three Agent calls, one message.** Never spawn members serially; never
-   use `run_in_background` for council work.
+8. **Member responses are JSON; malformed responses get exactly one retry, then abstain.**
+   All four member-response formats (proposal, vote, revision, ranking) are JSON objects
+   with worked samples in the prompt. On parse failure or missing/empty required fields,
+   re-dispatch that single seat once with a "your previous response was malformed"
+   preamble. If the retry also fails, mark the seat as abstaining and proceed. Two
+   abstentions in one phase aborts the council — write `ABORT.md` and return an error,
+   never fabricate a decision. Full protocol: `references/council-protocol.md` § "Member
+   response failures".
+9. **Decline cleanly if you can't dispatch in parallel.** If the `Agent` tool is not
+   available to you (you're already a subagent, the host runtime restricts it, or for any
+   other reason), do not fake a council with sequential self-reasoning. Write
+   `.council/<slug>/ABORT.md` explaining "Agent tool unavailable — council requires
+   parallel dispatch" and return an error to the caller. This includes the recursive case:
+   council members are themselves subagents and cannot convene sub-councils.
 
 ## Invocation contract
 
@@ -66,7 +80,7 @@ phases are:
 
 | # | Phase | What happens | Artifacts |
 |---|-------|--------------|-----------|
-| 0 | **Slugify** | Derive `<slug>` from the question (kebab-case, ≤50 chars). Create `.council/<slug>/`. | directory |
+| 0 | **Slugify** | Derive `<slug>` from the question (kebab-case, ≤50 chars). If `.council/<slug>/` exists, append `-2`, `-3`, … until free. Create the directory. | directory |
 | 1 | **Convene** | Pick 3 archetypes from the shared catalog using the rubric in `references/team-composition.md`. Record panel + rationale. | `QUESTION.md`, `PANEL.md` |
 | 2 | **Independent research** | Dispatch all 3 members in parallel with identical context+question. Each returns a structured proposal. | `proposals-round-1.md` |
 | 3 | **Single-choice vote** | Present all 3 proposals back to each member in parallel; each votes for exactly one (self-vote allowed). Unanimous → skip to phase 6. | `vote-round-1.md` |
@@ -93,10 +107,22 @@ specialize in surfacing hidden assumptions.
 ## Dispatching members
 
 When you spawn a member via the Agent tool, use the archetype from the shared catalog
-(see `plugins/agents/references/agent-catalog.md` for the roster). Determine
-`subagent_type` from what's available in the running environment; if the agentics agents
-plugin is installed it will be `agents:<archetype-name>`, otherwise fall back to
-`general-purpose` and inject the archetype's role explicitly in the prompt.
+(see `plugins/agents/references/agent-catalog.md` for the roster).
+
+Determine `subagent_type` by checking the available agent types in your environment's
+system context (in Claude Code this is the agent-types system reminder; in other
+environments consult the host's docs):
+
+1. **Preferred:** if `agents:<archetype-name>` appears in the available list (e.g.,
+   `agents:software-architect`), use it directly.
+2. **Fallback:** if no `agents:*` types are exposed, dispatch with `subagent_type:
+   general-purpose` and paste the archetype's full role block from
+   `plugins/agents/agents/<archetype-name>.md` into the prompt under a `## Your role`
+   heading **before** the council-specific task.
+3. **Don't guess.** If you can't tell what's available, try `agents:<name>` once; if it
+   errors, retry that seat with `general-purpose` + injected role. Record which path you
+   took in `PANEL.md` so the audit trail explains why a member's voice may differ from
+   the catalog's default.
 
 Each member prompt must include:
 - The full **context summary** verbatim
@@ -114,18 +140,14 @@ Anchoring kills independent reasoning.
 
 ## Returning to the caller
 
-Your final response to the caller contains:
+Your final response uses the exact template in `references/council-protocol.md` §
+"Phase 6 — Decide and return". The shape is fixed because callers may parse it:
+winning proposal, rationale, why-it-won paragraph, dissent line, audit-trail path.
+Don't paraphrase the shape — the caller is expecting these fields by name.
 
-1. **Winning proposal** — the full proposal text, not a summary.
-2. **One-paragraph rationale** explaining why this proposal won (which members voted for
-   it, which rounds were needed, what dissent existed).
-3. **Dissent summary** — if any member opposed, summarize their concern in one sentence so
-   the caller can decide whether to escalate.
-4. **Artifact path** — `.council/<slug>/DECISION.md` and the directory containing the
-   full transcript.
-
-If the caller wants the audit trail before acting, they can read `DECISION.md`. If the
-user later asks "why did you do X?", every proposal, vote, and tiebreak is recorded.
+If the caller wants the full audit trail before acting, they can read `DECISION.md`
+at the artifact path you return. Every proposal, vote, deliberation, and tiebreak
+is recorded there for later "why did you do X?" questions.
 
 ## When NOT to convene a council
 
@@ -136,4 +158,3 @@ user later asks "why did you do X?", every proposal, vote, and tiebreak is recor
   interrupting the user, not to replace them.
 - The decision is reversible and cheap (e.g., a variable name, a log message). Just pick
   one and move on.
-- The caller is itself a council member. No recursive councils.

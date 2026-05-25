@@ -3,6 +3,42 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.13.0] - 2026-05-24
+
+### Added
+- support single-app repo layout (xcodeproj + root project.yml) (6a84a8e)
+- SKILL.md orchestrator (ee81b3f)
+- url + status commands (77ea4cb)
+- macOS .dmg packaging + optional notarization (c9d7610)
+- visionos ExportOptions (1cef61f)
+- push build entry to index + refresh local backend (ac00225)
+- iOS archive + export + stage (c383611)
+- metadata derivation from workspace + project.yml (663fe14)
+- bootstrap creates state, config, launchd plist (6221db6)
+- test runner discovering test-*.sh files (24e089b)
+- backend POST /_internal/refresh (90d8990)
+- per-build landing, manifest, and artifact endpoints (b2f454e)
+- backend listing endpoint with git pull (1770a4a)
+- backend skeleton with healthz (d3f28eb)
+- CLI skeleton with subcommand stubs (6bed2b7)
+- router shell (80a6556)
+- plugin manifest + marketplace registration (cbff65e)
+
+### Fixed
+- schema-valid index entries; correct platform glob casing; harden subprocess error handling (3dfeb77)
+- JSON errors from tailscale failure; absolute plugin-root symlink; surface launchctl status (e06992f)
+- return 500 on render errors; harden traversal test; quiet healthz log (5b05185)
+- emit JSON for argparse errors; align router shebang dirname (e4c7ce2)
+- prevent circuit breaker from killing freshen auto-clear between forge phases (eaf6b5f)
+
+### Documentation
+- bootstrap + per-platform + troubleshooting references (494f3ca)
+
+### Testing
+- automated gc test (--keep, no-op, bare-fail) (273a959)
+
+_[manual]_
+
 ## [v2.12.1] - 2026-04-08
 
 _[force]_

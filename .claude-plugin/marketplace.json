@@ -45,6 +45,11 @@
       "name": "deployit",
       "description": "On-tailnet OTA deploys for iOS, macOS, and visionOS apps via Tailscale Serve, with a shared cross-machine build index",
       "source": "./plugins/deployit"
+    },
+    {
+      "name": "council",
+      "description": "Convene a 3-member sub-agent council to deliberate and vote on a decision when the user is unavailable — independent proposals, single-choice vote, one deliberation round, ranked-choice runoff",
+      "source": "./plugins/council"
     }
   ]
 }

@@ -29,6 +29,19 @@ _BUILD_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _pull_lock = threading.Lock()
 _last_pull = "never"
 
+# Static assets served from <plugin_root>/assets/. URL → (relative path, content-type).
+# Listed explicitly (not directory-served) so the backend's exposed filesystem
+# surface stays a closed allowlist.
+_STATIC_ASSETS = {
+    "/deployit/manifest.webmanifest":             ("manifest.webmanifest",          "application/manifest+json"),
+    "/deployit/icon.svg":                         ("icons/icon.svg",                "image/svg+xml"),
+    "/deployit/apple-touch-icon.png":             ("icons/apple-touch-icon.png",    "image/png"),
+    "/deployit/apple-touch-icon-precomposed.png": ("icons/apple-touch-icon.png",    "image/png"),
+    "/deployit/icons/icon-192.png":               ("icons/icon-192.png",            "image/png"),
+    "/deployit/icons/icon-512.png":               ("icons/icon-512.png",            "image/png"),
+    "/deployit/icons/icon-maskable-512.png":      ("icons/icon-maskable-512.png",   "image/png"),
+}
+
 
 def _read_index(root: Path):
     try:
@@ -165,10 +178,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_file(self, status, ctype, path: Path):
+    def _send_file(self, status, ctype, path: Path, cache_seconds=None):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(path.stat().st_size))
+        if cache_seconds is not None:
+            self.send_header("Cache-Control", f"public, max-age={cache_seconds}")
         self.end_headers()
         with path.open("rb") as f:
             while chunk := f.read(64 * 1024):
@@ -191,6 +206,16 @@ class Handler(BaseHTTPRequestHandler):
                 _git_pull(self.root)
             body = _render_listing(self.root, self.server.local_host)
             self._send_bytes(200, "text/html; charset=utf-8", body)
+            return
+
+        static = _STATIC_ASSETS.get(path)
+        if static is not None:
+            rel, ctype = static
+            asset_path = self.root / "_plugin_root" / "assets" / rel
+            if not asset_path.is_file():
+                self._send_json(404, {"ok": False, "error": "missing_asset"})
+                return
+            self._send_file(200, ctype, asset_path, cache_seconds=86400)
             return
 
         m = re.match(r"^/deployit/([^/]+)/(.*)$", path)

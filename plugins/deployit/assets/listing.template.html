@@ -4,17 +4,43 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>deployit · builds</title>
+<meta name="theme-color" content="#f6f6f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="deployit">
+<link rel="manifest" href="/deployit/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/deployit/icon.svg">
+<link rel="apple-touch-icon" href="/deployit/apple-touch-icon.png">
 <style>
-  :root { color-scheme: light dark; }
-  body { font: 16px/1.5 -apple-system, system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 24px; }
+  :root { color-scheme: light dark; --fg:#0a0a0a; --bg:#f6f6f6; --muted:#6b6b6b; --border:rgba(0,0,0,0.1); --accent:#2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#f6f6f6; --bg:#0a0a0a; --muted:#9a9a9a; --border:rgba(255,255,255,0.12); --accent:#3b82f6; } }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font: 16px/1.5 -apple-system, system-ui, sans-serif;
+    background: var(--bg); color: var(--fg);
+    max-width: 720px; margin: 0 auto;
+    padding:
+      max(24px, env(safe-area-inset-top))
+      max(24px, env(safe-area-inset-right))
+      max(24px, env(safe-area-inset-bottom))
+      max(24px, env(safe-area-inset-left));
+  }
+  a, button { -webkit-tap-highlight-color: rgba(37,99,235,0.2); }
   h1 { font-size: 22px; margin: 0 0 16px; }
-  .meta { color: #888; font-size: 13px; margin-bottom: 16px; }
-  ul { list-style: none; padding: 0; }
-  li { border-bottom: 1px solid rgba(127,127,127,0.2); padding: 14px 0; }
-  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { border-bottom: 1px solid var(--border); padding: 14px 0; min-height: 44px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .title { font-weight: 600; }
-  .sub { color: #888; font-size: 13px; }
-  a.install { display: inline-block; background: #2563eb; color: #fff; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 14px; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  a.install {
+    display: inline-block; background: var(--accent); color: #fff;
+    padding: 10px 16px; border-radius: 8px; text-decoration: none;
+    font-size: 14px; font-weight: 600; white-space: nowrap;
+    min-height: 24px; line-height: 1.2;
+  }
   .archived { opacity: 0.5; }
 </style>
 </head>

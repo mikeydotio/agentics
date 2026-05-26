@@ -59,15 +59,36 @@ wrong directory root.
 All deployit URLs use the `/deployit/` prefix:
 
 ```
-https://<host>.<tailnet>.ts.net/deployit/          # listing
-https://<host>.<tailnet>.ts.net/deployit/<id>/     # per-build landing page
+https://<host>.<tailnet>.ts.net/deployit/                       # listing
+https://<host>.<tailnet>.ts.net/deployit/<id>/                  # per-build landing page
 https://<host>.<tailnet>.ts.net/deployit/<id>/manifest.plist
 https://<host>.<tailnet>.ts.net/deployit/<id>/<App>.ipa
-https://<host>.<tailnet>.ts.net/deployit/_healthz  # liveness probe
+https://<host>.<tailnet>.ts.net/deployit/_healthz               # liveness probe
+https://<host>.<tailnet>.ts.net/deployit/manifest.webmanifest   # PWA manifest
+https://<host>.<tailnet>.ts.net/deployit/icon.svg               # SVG favicon
+https://<host>.<tailnet>.ts.net/deployit/apple-touch-icon.png   # iOS Home Screen icon
+https://<host>.<tailnet>.ts.net/deployit/icons/icon-{192,512,maskable-512}.png
 ```
 
 The backend routes all `/deployit/` paths; anything outside that prefix
 returns 404 (intentional — the root is not a general-purpose file server).
+Static PWA assets (manifest, icons) come from a closed allowlist in the
+backend — adding new ones requires editing `_STATIC_ASSETS` in `deployit-backend`.
+
+## Installing the listing as a PWA on iOS
+
+The listing page is an installable Progressive Web App. To put it on the
+iPhone Home Screen as a standalone app icon:
+
+1. Run `/deployit url` and open the URL in **iOS Safari** (not Chrome/Firefox
+   on iOS — only Safari supports Add-to-Home-Screen for PWAs).
+2. Tap the Share button → **Add to Home Screen**.
+3. The icon and name preload from the web manifest — accept the defaults.
+
+Launching from the Home Screen icon opens deployit chromeless (no Safari
+toolbar) with a translucent status bar, respects the notch and Home
+indicator via `safe-area-inset`, and stays inside the `/deployit/` scope so
+tapping a build still uses the standalone window for the install page.
 
 ## Tearing down Tailscale Serve
 

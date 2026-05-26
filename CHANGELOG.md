@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.14.0] - 2026-05-25
+
+### Added
+- harden member dispatch + abort path + triggering description (76948e1)
+
+_[manual]_
+
 ## [v2.13.0] - 2026-05-24
 
 ### Added

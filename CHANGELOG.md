@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.15.0] - 2026-05-25
+
+### Added
+- pull-to-refresh, product grouping, history pages, auto-prune (aa80a1c)
+
+_[manual]_
+
 ## [v2.14.0] - 2026-05-25
 
 ### Added

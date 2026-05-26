@@ -41,8 +41,8 @@ BASE="http://127.0.0.1:$PORT"
 PASS=0
 FAIL=0
 
-pass() { printf '  PASS  %s\n' "$1"; ((PASS++)); }
-fail() { printf '  FAIL  %s\n      %s\n' "$1" "${2:-}"; ((FAIL++)); }
+pass() { printf '  PASS  %s\n' "$1"; PASS=$((PASS + 1)); }
+fail() { printf '  FAIL  %s\n      %s\n' "$1" "${2:-}"; FAIL=$((FAIL + 1)); }
 
 # 1. healthz
 body=$(curl -sf "$BASE/deployit/_healthz" 2>/dev/null) \

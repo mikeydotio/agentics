@@ -363,9 +363,14 @@ def main(argv):
 
     if args.plugin_root:
         link = args.root / "_plugin_root"
-        if link.is_symlink() or link.exists():
-            link.unlink()
-        link.symlink_to(args.plugin_root)
+        # Skip if invoked with --plugin-root pointing at the canonical symlink
+        # itself (the stable-path plist does this). Recreating it would produce
+        # a self-loop. Whoever launched us is responsible for keeping that
+        # symlink fresh (the CLI's _sync_plugin_root).
+        if args.plugin_root != link:
+            if link.is_symlink() or link.exists():
+                link.unlink()
+            link.symlink_to(args.plugin_root)
 
     handler_cls = make_handler(args.root)
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_cls)

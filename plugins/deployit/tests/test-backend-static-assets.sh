@@ -38,6 +38,8 @@ check() {
 }
 
 check /deployit/manifest.webmanifest             "application/manifest+json"
+check /deployit/app.css                          "text/css"
+check /deployit/app.js                           "application/javascript"
 check /deployit/icon.svg                         "image/svg+xml"
 check /deployit/apple-touch-icon.png             "image/png"
 check /deployit/apple-touch-icon-precomposed.png "image/png"

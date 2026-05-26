@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>deployit · builds</title>
+<title>$PROJECT · $PLATFORM · deployit</title>
 <meta name="theme-color" content="#f6f6f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -17,8 +17,9 @@
 </head>
 <body>
 <div id="ptr">Pull to refresh</div>
-<h1>deployit · builds</h1>
-<p class="meta">$LAST_PULL · $TOTAL_PRODUCTS products · $TOTAL_BUILDS builds · this view: $LOCAL_HOST</p>
+<a class="back" href="/deployit/">← all products</a>
+<h1>$PROJECT · $PLATFORM</h1>
+<p class="meta">$LAST_PULL · $BUNDLE_ID · $TOTAL_BUILDS builds</p>
 <ul>
 $ROWS
 </ul>

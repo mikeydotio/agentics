@@ -21,6 +21,7 @@ import string
 import subprocess
 import sys
 import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -34,6 +35,8 @@ _last_pull = "never"
 # surface stays a closed allowlist.
 _STATIC_ASSETS = {
     "/deployit/manifest.webmanifest":             ("manifest.webmanifest",          "application/manifest+json"),
+    "/deployit/app.css":                          ("app.css",                       "text/css; charset=utf-8"),
+    "/deployit/app.js":                           ("app.js",                        "application/javascript; charset=utf-8"),
     "/deployit/icon.svg":                         ("icons/icon.svg",                "image/svg+xml"),
     "/deployit/apple-touch-icon.png":             ("icons/apple-touch-icon.png",    "image/png"),
     "/deployit/apple-touch-icon-precomposed.png": ("icons/apple-touch-icon.png",    "image/png"),
@@ -72,13 +75,45 @@ def _install_link(build):
     return inst["dmg_url"], "Download"
 
 
-_ROW_TEMPLATE = string.Template("""<li class="$archived_class">
+_ROW_TEMPLATE = string.Template("""<li class="$archived_class"$data_href_attr>
   <div class="row">
     <span class="title">$project · $platform · $version (build $build_number)</span>
     <a class="install" href="$install_href">$install_label</a>
   </div>
-  <div class="sub">$origin_host · $commit · $rel</div>
+  <div class="sub">$origin_host · $commit · $rel$older_html</div>
 </li>""")
+
+
+def _product_path(bundle_id: str, platform: str) -> str:
+    return f"/deployit/p/{urllib.parse.quote(bundle_id, safe='')}/{platform}/"
+
+
+def _render_row(build, *, older_count: int, link_to_product: bool) -> str:
+    href, label = _install_link(build)
+    if link_to_product:
+        data_attr = f' data-href="{html.escape(_product_path(build["bundle_id"], build["platform"]), quote=True)}"'
+    else:
+        data_attr = ""
+    if older_count > 0:
+        older_html = (
+            f' · <span class="older">+{older_count} older</span>'
+        )
+    else:
+        older_html = ""
+    return _ROW_TEMPLATE.substitute(
+        archived_class="archived" if build.get("archived") else "",
+        data_href_attr=data_attr,
+        project=html.escape(build["project"]),
+        platform=html.escape(build["platform"]),
+        version=html.escape(build["marketing_version"]),
+        build_number=html.escape(build["build_number"]),
+        install_href=html.escape(href, quote=True),
+        install_label=label,
+        origin_host=html.escape(build["origin_host"]),
+        commit=html.escape(build["commit"][:7]),
+        rel=html.escape(_relative_time(build["timestamp"])),
+        older_html=older_html,
+    )
 
 
 def _git_pull(root: Path):
@@ -128,31 +163,65 @@ def _render_build_landing(root: Path, build) -> bytes:
     ).encode()
 
 
+def _group_by_product(builds):
+    """Return (newest_per_product, counts) preserving input order.
+
+    Input is expected newest-first (matching builds.json ordering). The first
+    occurrence of each (bundle_id, platform) is its newest; subsequent
+    occurrences increment its older-count.
+    """
+    newest = []
+    counts = {}
+    seen_index = {}
+    for b in builds:
+        key = (b.get("bundle_id"), b.get("platform"))
+        if key not in seen_index:
+            seen_index[key] = len(newest)
+            newest.append(b)
+            counts[key] = 0
+        else:
+            counts[key] += 1
+    return newest, counts
+
+
 def _render_listing(root: Path, local_host: str) -> bytes:
     data = _read_index(root)
+    newest, counts = _group_by_product(data["builds"])
     rows = []
-    for b in data["builds"]:
-        href, label = _install_link(b)
-        rows.append(_ROW_TEMPLATE.substitute(
-            archived_class="archived" if b.get("archived") else "",
-            project=html.escape(b["project"]),
-            platform=html.escape(b["platform"]),
-            version=html.escape(b["marketing_version"]),
-            build_number=html.escape(b["build_number"]),
-            install_href=html.escape(href, quote=True),
-            install_label=label,
-            origin_host=html.escape(b["origin_host"]),
-            commit=html.escape(b["commit"][:7]),
-            rel=html.escape(_relative_time(b["timestamp"])),
-        ))
+    for b in newest:
+        key = (b.get("bundle_id"), b.get("platform"))
+        rows.append(_render_row(b, older_count=counts[key], link_to_product=True))
     template_path = root / "_plugin_root" / "assets" / "listing.template.html"
     tmpl = string.Template(template_path.read_text())
     return tmpl.substitute(
         LAST_PULL=html.escape(f"last pull: {_last_pull}"),
+        TOTAL_PRODUCTS=str(len(newest)),
         TOTAL_BUILDS=str(len(data["builds"])),
         LOCAL_HOST=html.escape(local_host),
         ROWS="\n".join(rows),
     ).encode()
+
+
+def _render_product(root: Path, bundle_id: str, platform: str):
+    """Return (200, html) for a product page, or (404, None) if no builds match."""
+    data = _read_index(root)
+    matches = [b for b in data["builds"]
+               if b.get("bundle_id") == bundle_id and b.get("platform") == platform]
+    if not matches:
+        return 404, None
+    matches.sort(key=lambda b: b["timestamp"], reverse=True)
+    rows = [_render_row(b, older_count=0, link_to_product=False) for b in matches]
+    template_path = root / "_plugin_root" / "assets" / "product.template.html"
+    tmpl = string.Template(template_path.read_text())
+    body = tmpl.substitute(
+        LAST_PULL=html.escape(f"last pull: {_last_pull}"),
+        PROJECT=html.escape(matches[0]["project"]),
+        PLATFORM=html.escape(platform),
+        BUNDLE_ID=html.escape(bundle_id),
+        TOTAL_BUILDS=str(len(matches)),
+        ROWS="\n".join(rows),
+    ).encode()
+    return 200, body
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -216,6 +285,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(404, {"ok": False, "error": "missing_asset"})
                 return
             self._send_file(200, ctype, asset_path, cache_seconds=86400)
+            return
+
+        product_m = re.match(r"^/deployit/p/([^/]+)/(ios|macos|visionos)/?$", path)
+        if product_m:
+            bundle_id = urllib.parse.unquote(product_m.group(1))
+            platform = product_m.group(2)
+            status, body = _render_product(self.root, bundle_id, platform)
+            if status == 404:
+                self._send_json(404, {"ok": False, "error": "unknown_product"})
+                return
+            self._send_bytes(200, "text/html; charset=utf-8", body)
             return
 
         m = re.match(r"^/deployit/([^/]+)/(.*)$", path)

@@ -472,8 +472,39 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     return dmg_name, dmg_url
 
 
+PRUNE_KEEP_PER_PRODUCT = 10
+
+
+def _prune_old_builds(state: Path, data: dict, new_entry: dict) -> int:
+    """Hard-delete this machine's older builds of the same (bundle_id, platform).
+
+    Mutates `data["builds"]` in place. Removes the entry from the index AND
+    deletes serve/<id>/ from disk. Returns the number of pruned entries.
+
+    Only touches builds matching the new entry's `origin_base_url` — other
+    machines manage their own pruning.
+    """
+    origin = new_entry["origin_base_url"]
+    bundle = new_entry["bundle_id"]
+    platform = new_entry["platform"]
+    same_product = [b for b in data["builds"]
+                    if b.get("origin_base_url") == origin
+                    and b.get("bundle_id") == bundle
+                    and b.get("platform") == platform]
+    same_product.sort(key=lambda b: b["timestamp"], reverse=True)
+    to_drop = same_product[PRUNE_KEEP_PER_PRODUCT:]
+    if not to_drop:
+        return 0
+    drop_ids = {b["id"] for b in to_drop}
+    data["builds"] = [b for b in data["builds"] if b["id"] not in drop_ids]
+    for b in to_drop:
+        _shutil.rmtree(state / "serve" / b["id"], ignore_errors=True)
+    return len(to_drop)
+
+
 def _append_to_index(state: Path, entry: dict, attempts: int = 3):
-    """Pull, prepend entry to builds.json (newest first), commit, push.
+    """Pull, prepend entry to builds.json (newest first), prune this product's
+    older builds beyond PRUNE_KEEP_PER_PRODUCT on this origin, commit, push.
     Retry up to `attempts` times on push conflict; on final failure, raise via fail()."""
     index_dir = state / "index"
     builds_path = index_dir / "builds.json"
@@ -484,11 +515,13 @@ def _append_to_index(state: Path, entry: dict, attempts: int = 3):
                        check=True, timeout=30)
         data = json.loads(builds_path.read_text())
         data["builds"].insert(0, entry)
+        pruned = _prune_old_builds(state, data, entry)
         builds_path.write_text(json.dumps(data, indent=2) + "\n")
 
+        suffix = f" [pruned {pruned}]" if pruned else ""
         msg = (f"feat(deploy): {entry['project']} {entry['platform']} "
                f"{entry['marketing_version']} (build {entry['build_number']}) "
-               f"from {entry['origin_host']}")
+               f"from {entry['origin_host']}{suffix}")
         subprocess.run(["git", "-C", str(index_dir), "add", "builds.json"], check=True)
         subprocess.run(["git", "-C", str(index_dir), "commit", "-m", msg], check=True)
         try:

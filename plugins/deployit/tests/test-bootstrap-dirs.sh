@@ -26,6 +26,12 @@ grep -q 'base_url = "https://studio.tail-abc.ts.net/deployit"' "$ROOT/config.tom
 [[ -L "$ROOT/_plugin_root" ]] \
     || { echo "FAIL: _plugin_root symlink missing"; exit 1; }
 
+# bin/deployit-backend symlink created (stable indirection for launchd)
+[[ -L "$ROOT/bin/deployit-backend" ]] \
+    || { echo "FAIL: bin/deployit-backend symlink missing"; ls -l "$ROOT/bin/"; exit 1; }
+[[ "$(readlink "$ROOT/bin/deployit-backend")" == "$PLUGIN_ROOT/bin/deployit-backend" ]] \
+    || { echo "FAIL: bin/deployit-backend target wrong: $(readlink "$ROOT/bin/deployit-backend")"; exit 1; }
+
 # Re-run is idempotent
 out2=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" bootstrap)
 echo "$out2" | grep -q '"ok": true' || { echo "FAIL: second run not ok"; exit 1; }

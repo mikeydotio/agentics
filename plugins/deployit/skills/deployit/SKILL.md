@@ -1,7 +1,7 @@
 ---
 name: deployit
-description: Use when the user wants to deploy an iOS / macOS / visionOS app to their tailnet for OTA install on their own devices. Commands are `/deployit bootstrap` (one-time per Mac), `/deployit deploy [--platform ios|macos|visionos] [--scheme NAME]`, `/deployit list`, `/deployit url`, `/deployit status`, and `/deployit gc`. Replaces hand-rolled `Tools/Deploy/deploy-ios.sh`-style scripts.
-argument-hint: <bootstrap | deploy [--platform P] [--scheme S] | list | url | status | gc>
+description: Use when the user wants to deploy an iOS / macOS / visionOS app to their tailnet for OTA install on their own devices. Commands are `/deployit bootstrap` (one-time per Mac), `/deployit deploy [--platform ios|macos|visionos] [--scheme NAME]`, `/deployit list`, `/deployit url`, `/deployit status`, `/deployit gc`, and `/deployit redeploy [--source PATH]` (refresh daemon + verify after PWA changes). Replaces hand-rolled `Tools/Deploy/deploy-ios.sh`-style scripts.
+argument-hint: <bootstrap | deploy [--platform P] [--scheme S] | list | url | status | gc | redeploy [--source PATH]>
 ---
 
 # deployit Orchestrator
@@ -48,6 +48,12 @@ user at a Tailscale-served URL.
   confirm with them before suggesting a scheme override.
 - **list / status / url** are read-only; no confirmations needed.
 - **gc** requires `--keep N` or `--older-than D` — never run unqualified.
+- **redeploy** updates the daemon's stable `_plugin_root` and
+  `bin/deployit-backend` symlinks, rewrites a legacy hash-pinned plist if
+  detected, kickstarts launchd, and runs `tests/verify-live.sh` against the
+  live HTTP endpoint. Pass `--source PATH` to point at a dev checkout instead
+  of the cached release. **Run this after every change to `plugins/deployit/`**
+  — `_healthz` alone is not enough to confirm the new code is live.
 
 ## Question loop
 

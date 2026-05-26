@@ -24,6 +24,7 @@ from urllib.parse import urlparse
 import os
 import shutil
 import subprocess
+import time
 from textwrap import dedent
 
 __version__ = "0.1.0"
@@ -101,13 +102,30 @@ def _ensure_dirs(state: Path):
         (state / sub).mkdir(parents=True, exist_ok=True)
 
 
-def _symlink_plugin_root(state: Path, plugin_root: Path):
-    """Create or refresh <state>/_plugin_root → plugin_root. Backend uses this
-    to find assets (templates) on disk without knowing the plugin's install path."""
-    link = state / "_plugin_root"
-    if link.is_symlink() or link.exists():
-        link.unlink()
-    link.symlink_to(plugin_root)
+def _atomic_symlink(target: Path, link: Path):
+    """Atomically point `link` at `target` via tmpfile + os.replace, so a
+    concurrent reader never sees a missing or half-formed symlink."""
+    link.parent.mkdir(parents=True, exist_ok=True)
+    tmp = link.with_name(link.name + ".tmp")
+    if tmp.is_symlink() or tmp.exists():
+        tmp.unlink()
+    tmp.symlink_to(target)
+    os.replace(tmp, link)
+
+
+def _sync_plugin_root(state: Path, plugin_root: Path):
+    """Point the daemon's stable indirection symlinks at `plugin_root`:
+      <state>/_plugin_root              → <plugin_root>
+      <state>/bin/deployit-backend      → <plugin_root>/bin/deployit-backend
+
+    The launchd plist references these stable paths, so plugin upgrades only
+    need to move the symlinks — never regenerate the plist."""
+    plugin_root = plugin_root.resolve()
+    backend = plugin_root / "bin" / "deployit-backend"
+    if not backend.is_file():
+        fail(f"plugin_root has no bin/deployit-backend: {plugin_root}")
+    _atomic_symlink(plugin_root, state / "_plugin_root")
+    _atomic_symlink(backend, state / "bin" / "deployit-backend")
 
 
 def _clone_index(state: Path):
@@ -137,7 +155,12 @@ def _configure_tailscale_serve(port: int):
     )
 
 
-def _launchd_plist(plugin_root: Path, state: Path, port: int) -> str:
+def _launchd_plist(state: Path, port: int) -> str:
+    """Generate a launchd plist that references STABLE symlinks under <state>.
+
+    The plist is immutable across plugin upgrades — only `_sync_plugin_root`'s
+    symlinks move. This prevents the daemon from getting pinned to a stale
+    content-addressed plugin cache directory."""
     return dedent(f"""\
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -148,10 +171,10 @@ def _launchd_plist(plugin_root: Path, state: Path, port: int) -> str:
           <array>
             <string>/usr/bin/env</string>
             <string>python3</string>
-            <string>{plugin_root}/bin/deployit-backend</string>
+            <string>{state}/bin/deployit-backend</string>
             <string>--port</string><string>{port}</string>
             <string>--root</string><string>{state}</string>
-            <string>--plugin-root</string><string>{plugin_root}</string>
+            <string>--plugin-root</string><string>{state}/_plugin_root</string>
           </array>
           <key>RunAtLoad</key><true/>
           <key>KeepAlive</key><true/>
@@ -162,14 +185,14 @@ def _launchd_plist(plugin_root: Path, state: Path, port: int) -> str:
         """)
 
 
-def _install_launchd(plugin_root: Path, state: Path, port: int) -> dict:
+def _install_launchd(state: Path, port: int) -> dict:
     """Write and load the launchd agent. Skipped in tests via DEPLOYIT_SKIP_LAUNCHD."""
     if os.environ.get("DEPLOYIT_SKIP_LAUNCHD"):
         return {"loaded": False, "skipped": True}
     plist_dir = Path.home() / "Library" / "LaunchAgents"
     plist_dir.mkdir(parents=True, exist_ok=True)
     plist_path = plist_dir / "com.mikeydotio.deployit.backend.plist"
-    plist_path.write_text(_launchd_plist(plugin_root, state, port))
+    plist_path.write_text(_launchd_plist(state, port))
     launchctl = os.environ.get("DEPLOYIT_LAUNCHCTL_BIN", "launchctl")
     subprocess.run([launchctl, "bootout", f"gui/{os.getuid()}/com.mikeydotio.deployit.backend"],
                    check=False)
@@ -559,12 +582,12 @@ def cmd_bootstrap(args):
     state = _state_dir()
     state.mkdir(parents=True, exist_ok=True)
     _ensure_dirs(state)
-    _symlink_plugin_root(state, args.plugin_root)
+    _sync_plugin_root(state, args.plugin_root)
     base_url = _derive_base_url()
     cfg_path = _write_config(state, args.plugin_root, base_url)
     _clone_index(state)
     _configure_tailscale_serve(8729)
-    launchd_status = _install_launchd(args.plugin_root, state, 8729)
+    launchd_status = _install_launchd(state, 8729)
     display = f"deployit bootstrapped. Bookmark on iPhone: {base_url}/"
     if not launchd_status["skipped"] and not launchd_status["loaded"]:
         display += f"\nWARNING: launchctl bootstrap failed: {launchd_status['launchctl_stderr']}"
@@ -762,6 +785,108 @@ def cmd_gc(args):
         "archived": len(to_archive), "removed_local": removed})
 
 
+def _plist_is_legacy(state: Path) -> bool:
+    """True iff the installed plist references something OTHER than the stable
+    <state>/bin/deployit-backend path (i.e., still pins to a cache-hash dir)."""
+    plist_path = Path.home() / "Library" / "LaunchAgents" / "com.mikeydotio.deployit.backend.plist"
+    if not plist_path.is_file():
+        return True
+    try:
+        body = plist_path.read_text()
+    except OSError:
+        return True
+    return f"{state}/bin/deployit-backend" not in body
+
+
+def _kickstart_daemon():
+    """Restart the launchd-managed backend. Skipped via DEPLOYIT_SKIP_KICKSTART."""
+    if os.environ.get("DEPLOYIT_SKIP_KICKSTART"):
+        return
+    launchctl = os.environ.get("DEPLOYIT_LAUNCHCTL_BIN", "launchctl")
+    subprocess.run(
+        [launchctl, "kickstart", "-k", f"gui/{os.getuid()}/com.mikeydotio.deployit.backend"],
+        check=True, timeout=10,
+    )
+
+
+def _wait_for_health(port: int, timeout_s: float = 5.0) -> bool:
+    """Poll /deployit/_healthz until it returns ok or timeout."""
+    if os.environ.get("DEPLOYIT_SKIP_VERIFY"):
+        return True
+    deadline = time.monotonic() + timeout_s
+    last_err = ""
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/deployit/_healthz", timeout=1) as r:
+                if json.loads(r.read()).get("ok"):
+                    return True
+        except Exception as exc:
+            last_err = repr(exc)
+        time.sleep(0.1)
+    sys.stderr.write(f"deployit: health probe failed: {last_err}\n")
+    return False
+
+
+def cmd_redeploy(args):
+    """Re-sync the daemon's plugin-root symlinks, repair a legacy plist if
+    needed, restart launchd, wait for health, and run verify-live.sh.
+
+    Defaults the target to args.plugin_root (the runtime cache dir). Pass
+    --source PATH to point at an arbitrary plugin checkout (e.g., a dev
+    repo) for fast iteration without waiting for a new release."""
+    state = _state_dir()
+    if not state.exists():
+        fail("deployit not bootstrapped — run /deployit bootstrap first")
+    _ensure_dirs(state)
+
+    target = (args.source if args.source else args.plugin_root).resolve()
+    if not (target / "bin" / "deployit-backend").is_file():
+        fail(f"target has no bin/deployit-backend: {target}")
+
+    cfg = _read_config(state)
+    port = cfg["server"]["port"]
+
+    _sync_plugin_root(state, target)
+
+    # Repair legacy hash-pinned plists from older bootstrap runs.
+    plist_rewritten = False
+    if _plist_is_legacy(state):
+        _install_launchd(state, port)
+        plist_rewritten = True
+
+    _kickstart_daemon()
+
+    if not _wait_for_health(port):
+        fail(f"daemon did not become healthy on port {port} after kickstart",
+             port=port)
+
+    # Live verification: run verify-live.sh against the running daemon.
+    if not os.environ.get("DEPLOYIT_SKIP_VERIFY"):
+        verify = target / "tests" / "verify-live.sh"
+        if not verify.is_file():
+            fail(f"verify-live.sh not found at {verify}")
+        env = {**os.environ, "DEPLOYIT_STATE_DIR": str(state)}
+        res = subprocess.run(
+            ["bash", str(verify), "--port", str(port)],
+            capture_output=True, text=True, env=env, timeout=15,
+        )
+        if res.returncode != 0:
+            fail("live verification failed",
+                 verify_stdout=res.stdout, verify_stderr=res.stderr)
+
+    parts = [f"redeployed daemon: target={target}"]
+    if plist_rewritten:
+        parts.append("plist rewritten to stable paths")
+    parts.append("health + live checks passed")
+    ok({
+        "display": "\n  ".join(parts),
+        "target": str(target),
+        "port": port,
+        "plist_rewritten": plist_rewritten,
+    })
+
+
 def build_parser():
     parser = JsonArgumentParser(prog="deployit")
     parser.add_argument("--plugin-root", required=True, type=Path)
@@ -789,6 +914,11 @@ def build_parser():
     p_gc.add_argument("--keep", type=int)
     p_gc.add_argument("--older-than", type=int, help="days")
     p_gc.set_defaults(func=cmd_gc)
+
+    p_redeploy = sub.add_parser("redeploy")
+    p_redeploy.add_argument("--source", type=Path, default=None,
+        help="point the daemon at this plugin dir instead of the cached release")
+    p_redeploy.set_defaults(func=cmd_redeploy)
 
     return parser
 

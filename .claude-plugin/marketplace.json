@@ -43,7 +43,7 @@
     },
     {
       "name": "deployit",
-      "description": "On-tailnet OTA deploys for iOS, macOS, and visionOS apps via Tailscale Serve, with a shared cross-machine build index",
+      "description": "On-tailnet OTA deploys for iOS, macOS, and visionOS apps via Tailscale Serve, with a shared cross-machine build index and semver-aware version reporting + deploy-time bumping",
       "source": "./plugins/deployit"
     },
     {

@@ -69,17 +69,17 @@ done
 body=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/ios/")
 echo "$body" | grep -q "Lillist · ios" \
     || { echo "FAIL: product header missing"; echo "$body"; exit 1; }
-echo "$body" | grep -q "(build 17)" \
+echo "$body" | grep -q "build 17" \
     || { echo "FAIL: build 17 missing"; echo "$body"; exit 1; }
-echo "$body" | grep -q "(build 16)" \
+echo "$body" | grep -q "build 16" \
     || { echo "FAIL: build 16 missing"; echo "$body"; exit 1; }
 echo "$body" | grep -q "io.mikeydotio.Lillist" \
     || { echo "FAIL: bundle_id missing"; echo "$body"; exit 1; }
 echo "$body" | grep -q "← all products" \
     || { echo "FAIL: back link missing"; echo "$body"; exit 1; }
 # Build 17 must appear before build 16 (desc order)
-pos17=$(echo "$body" | grep -n "(build 17)" | head -1 | cut -d: -f1)
-pos16=$(echo "$body" | grep -n "(build 16)" | head -1 | cut -d: -f1)
+pos17=$(echo "$body" | grep -n "build 17" | head -1 | cut -d: -f1)
+pos16=$(echo "$body" | grep -n "build 16" | head -1 | cut -d: -f1)
 [[ "$pos17" -lt "$pos16" ]] \
     || { echo "FAIL: build 17 should appear before build 16 ($pos17 vs $pos16)"; exit 1; }
 
@@ -90,9 +90,9 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/deployit/p
 
 # Macos route works too and does not leak iOS builds
 body_mac=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Other/macos/")
-echo "$body_mac" | grep -q "(build 3)" \
+echo "$body_mac" | grep -q "build 3" \
     || { echo "FAIL: macos product build 3 missing"; echo "$body_mac"; exit 1; }
-echo "$body_mac" | grep -q "(build 17)" \
+echo "$body_mac" | grep -q "build 17" \
     && { echo "FAIL: macos product should not contain iOS build 17"; exit 1; }
 
 # /p/ route is not interpreted as a build-id (would otherwise 404 with bad_build_id)

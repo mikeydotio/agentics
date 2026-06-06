@@ -320,6 +320,126 @@ def _derive_metadata(cwd: Path, platform: str) -> dict:
     }
 
 
+def _parse_semver_config(cwd: Path):
+    """Parse <cwd>/.semver/config.yaml into a flat dict, or None if absent.
+
+    The file is flat `key: value` YAML (no nesting); mirror semver's own
+    line-split + quote-strip parser rather than take a dependency on the
+    semver plugin or a YAML library."""
+    cfg = cwd / ".semver" / "config.yaml"
+    if not cfg.is_file():
+        return None
+    out = {}
+    for line in cfg.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        out[key.strip()] = val.strip().strip('"').strip("'")
+    return out
+
+
+def _semver_active_version(cwd: Path):
+    """Return the semver VERSION string iff semver is *active* for the project
+    rooted at `cwd` — `.semver/config.yaml` exists with `tracking: true` and a
+    readable VERSION file. Otherwise None.
+
+    deployit reads semver's on-disk artifacts directly (no code dependency on
+    the semver plugin). cwd is the project root, matching `_derive_metadata`
+    and `semver-cli`'s own cwd-relative behaviour."""
+    config = _parse_semver_config(cwd)
+    if not config or config.get("tracking") != "true":
+        return None
+    version_file = cwd / "VERSION"
+    if not version_file.is_file():
+        return None
+    return version_file.read_text().strip() or None
+
+
+def _semver_prefix(cwd: Path) -> str:
+    """Return the configured semver `version_prefix` (e.g. 'v'), default ''."""
+    config = _parse_semver_config(cwd)
+    return config.get("version_prefix", "") if config else ""
+
+
+def _next_versions(version: str, prefix: str):
+    """Compute {major, minor, patch} successors of a semver string, prefix-aware,
+    or None if unparseable. e.g. 'v2.16.1' →
+    {'major':'v3.0.0','minor':'v2.17.0','patch':'v2.16.2'}. Universal SemVer
+    arithmetic used only to label the bump question — the bump itself is done
+    by semver-cli."""
+    bare = version[len(prefix):] if prefix and version.startswith(prefix) else version
+    m = _re.match(r"^(\d+)\.(\d+)\.(\d+)$", bare)
+    if not m:
+        return None
+    major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    return {
+        "major": f"{prefix}{major + 1}.0.0",
+        "minor": f"{prefix}{major}.{minor + 1}.0",
+        "patch": f"{prefix}{major}.{minor}.{patch + 1}",
+    }
+
+
+def _find_semver_cli(plugin_root: Path):
+    """Locate the semver plugin's CLI so a deploy can drive a version bump.
+    Order: $DEPLOYIT_SEMVER_CLI → sibling plugin in the same marketplace →
+    a glob under ~/.claude. Returns a Path or None."""
+    env = os.environ.get("DEPLOYIT_SEMVER_CLI")
+    if env:
+        p = Path(env)
+        return p if p.is_file() else None
+    sibling = plugin_root.parent / "semver" / "bin" / "semver-cli"
+    if sibling.is_file():
+        return sibling
+    base = Path.home() / ".claude"
+    if base.is_dir():
+        for cand in base.glob("**/semver/bin/semver-cli"):
+            if cand.is_file():
+                return cand
+    return None
+
+
+def _current_branch(cwd: Path):
+    """Current git branch name, or None if it cannot be determined."""
+    try:
+        res = subprocess.run(["git", "-C", str(cwd), "rev-parse", "--abbrev-ref", "HEAD"],
+                             capture_output=True, text=True, timeout=5)
+        return res.stdout.strip() if res.returncode == 0 else None
+    except Exception:
+        return None
+
+
+def _is_dirty(cwd: Path) -> bool:
+    """True if the working tree has uncommitted changes."""
+    try:
+        res = subprocess.run(["git", "-C", str(cwd), "status", "--porcelain"],
+                             capture_output=True, text=True, timeout=5)
+        return bool(res.stdout.strip())
+    except Exception:
+        return False
+
+
+def _pull_index(state: Path):
+    """Best-effort refresh of the shared index before a read. Never fatal;
+    skippable via DEPLOYIT_SKIP_INDEX_PULL (e.g. remote-less test indexes)."""
+    if os.environ.get("DEPLOYIT_SKIP_INDEX_PULL"):
+        return
+    try:
+        subprocess.run(["git", "-C", str(state / "index"), "pull", "--rebase", "--quiet"],
+                       check=False, timeout=15)
+    except Exception:
+        pass
+
+
+def _latest_build_for(builds, bundle_id: str, platform: str):
+    """Newest build entry matching (bundle_id, platform), or None. builds.json is
+    newest-first, so the first match is the newest."""
+    for b in builds:
+        if b.get("bundle_id") == bundle_id and b.get("platform") == platform:
+            return b
+    return None
+
+
 def _read_config(state: Path) -> dict:
     """Parse the bits we need out of config.toml. Use tomllib when available
     (Python 3.11+), fall back to regex on older Pythons. macOS 26 ships 3.13."""
@@ -425,7 +545,7 @@ def _stage_ios_or_visionos(state: Path, plugin_root: Path,
     (dst / "_meta.json").write_text(json.dumps({
         **{k: meta_full[k] for k in (
             "id", "platform", "project", "bundle_id",
-            "marketing_version", "build_number", "commit",
+            "marketing_version", "semver_version", "build_number", "commit",
             "timestamp", "origin_host", "origin_base_url",
         )},
         "install": {
@@ -486,7 +606,7 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     (dst / "_meta.json").write_text(json.dumps({
         **{k: meta_full[k] for k in (
             "id", "platform", "project", "bundle_id",
-            "marketing_version", "build_number", "commit",
+            "marketing_version", "semver_version", "build_number", "commit",
             "timestamp", "origin_host", "origin_base_url",
         )},
         "install": {"kind": "direct-download", "dmg_url": dmg_url},
@@ -609,6 +729,10 @@ def cmd_deploy(args):
         ok({"display": "metadata", **meta})
         return
 
+    # Semver awareness: when the project tracks its version with the semver
+    # plugin, capture that version so the web UI reports it (else build number).
+    semver_version = _semver_active_version(cwd)
+
     state = _state_dir()
     cfg = _read_config(state)
     base_url = cfg["server"]["base_url"].rstrip("/")
@@ -633,6 +757,7 @@ def cmd_deploy(args):
         **meta,
         "id": build_id,
         "build_number": build_number,
+        "semver_version": semver_version,
         "timestamp": timestamp,
         "origin_host": origin_host,
         "origin_base_url": base_url,
@@ -680,6 +805,112 @@ def cmd_deploy(args):
         "install_url": install_url,
         "listing_url": listing_url,
     })
+
+
+def cmd_preflight(args):
+    """Read-only pre-deploy check: is a semver version bump needed before this
+    deploy? Drives the SKILL's bump prompt. Never builds or mutates anything.
+
+    When semver is inactive the deploy proceeds normally (the web UI reports the
+    build number). When active, compares the current VERSION against the newest
+    already-published build of this (bundle_id, platform): if unchanged, a bump
+    is required so no two published builds share a version."""
+    if not args.platform:
+        fail("--platform required (one of ios | macos | visionos)")
+    cwd = Path.cwd()
+    meta = _derive_metadata(cwd, args.platform)
+    semver_version = _semver_active_version(cwd)
+
+    if semver_version is None:
+        ok({
+            "display": "semver inactive — deploy will report the build number",
+            "semver_active": False,
+            "bump_needed": False,
+            "project": meta["project"],
+            "bundle_id": meta["bundle_id"],
+            "platform": meta["platform"],
+        })
+        return
+
+    prefix = _semver_prefix(cwd)
+    state = _state_dir()
+    _pull_index(state)
+    try:
+        builds = json.loads((state / "index" / "builds.json").read_text()).get("builds", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        builds = []
+    latest = _latest_build_for(builds, meta["bundle_id"], meta["platform"])
+    latest_version = latest.get("semver_version") if latest else None
+    version_changed = (latest is None or latest_version is None
+                       or latest_version != semver_version)
+    bump_needed = not version_changed
+
+    if bump_needed:
+        display = (f"semver {semver_version} is already the latest published build of "
+                   f"{meta['project']} {meta['platform']} — a version bump is required")
+    else:
+        display = (f"semver {semver_version} — OK to deploy "
+                   f"(latest published: {latest_version or 'none'})")
+
+    ok({
+        "display": display,
+        "semver_active": True,
+        "bump_needed": bump_needed,
+        "version_changed": version_changed,
+        "current_version": semver_version,
+        "latest_version": latest_version,
+        "candidates": _next_versions(semver_version, prefix),
+        "project": meta["project"],
+        "bundle_id": meta["bundle_id"],
+        "platform": meta["platform"],
+        "dirty_tree": _is_dirty(cwd),
+        "current_branch": _current_branch(cwd),
+        "target_branch": (_parse_semver_config(cwd) or {}).get("target_branch", "main"),
+    })
+
+
+def cmd_bump(args):
+    """Drive a semver version bump as part of a deploy: non-interactive, folding
+    any uncommitted changes into the chore(release) commit ("auto-include").
+
+    Delegates the bump to the semver plugin's CLI (discovered at runtime) so all
+    of semver's behaviour — changelog, tagging, shell hooks — is reused. Bypasses
+    semver's interactive `gather` step: the deploy already chose the component and
+    pre-authorised include semantics, so there are no extra prompts. `--force`
+    permits a version-only bump when there are no new commits; a pre-existing tag
+    is non-fatal."""
+    if not args.component:
+        fail("--component required (one of major | minor | patch)")
+    cwd = Path.cwd()
+    if _semver_active_version(cwd) is None:
+        fail("semver is not active for this project — nothing to bump")
+    cli = _find_semver_cli(args.plugin_root)
+    if cli is None:
+        fail(f"semver CLI not found — run `/semver bump {args.component}` "
+             "manually, then re-run the deploy")
+    semver_root = cli.parent.parent
+    res = subprocess.run(
+        ["python3", str(cli), "bump", "execute", args.component,
+         "--source", "force", "--force", "--dirty-action", "include",
+         "--plugin-root", str(semver_root)],
+        capture_output=True, text=True,
+    )
+    try:
+        payload = json.loads(res.stdout)
+    except json.JSONDecodeError:
+        fail("semver bump produced no JSON",
+             stderr=res.stderr.strip() or res.stdout.strip())
+    if not payload.get("ok"):
+        fail(payload.get("display") or payload.get("message") or "semver bump failed",
+             semver=payload)
+    old_v, new_v = payload.get("old_version", "?"), payload.get("new_version", "?")
+    ok({
+        "display": f"semver bump: {old_v} → {new_v} ({args.component})",
+        "old_version": old_v,
+        "new_version": new_v,
+    })
+
+
 def cmd_url(args):
     state = _state_dir()
     cfg = _read_config(state)
@@ -919,6 +1150,15 @@ def build_parser():
     p_redeploy.add_argument("--source", type=Path, default=None,
         help="point the daemon at this plugin dir instead of the cached release")
     p_redeploy.set_defaults(func=cmd_redeploy)
+
+    p_preflight = sub.add_parser("preflight")
+    p_preflight.add_argument("--platform", choices=["ios", "macos", "visionos"])
+    p_preflight.add_argument("--scheme")  # accepted for symmetry with deploy; unused
+    p_preflight.set_defaults(func=cmd_preflight)
+
+    p_bump = sub.add_parser("bump")
+    p_bump.add_argument("--component", choices=["major", "minor", "patch"])
+    p_bump.set_defaults(func=cmd_bump)
 
     return parser
 

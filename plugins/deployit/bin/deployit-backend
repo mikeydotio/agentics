@@ -75,9 +75,19 @@ def _install_link(build):
     return inst["dmg_url"], "Download"
 
 
+def _version_label(build) -> str:
+    """The version shown in the UI for a build. When the project tracked its
+    version with semver at deploy time, show that (e.g. 'v2.16.1 (build 16)');
+    otherwise fall back to the app's build number ('build 16'). `.get` keeps
+    pre-semver index entries safe."""
+    bn = build.get("build_number", "?")
+    sv = build.get("semver_version")
+    return f"{sv} (build {bn})" if sv else f"build {bn}"
+
+
 _ROW_TEMPLATE = string.Template("""<li class="$archived_class"$data_href_attr>
   <div class="row">
-    <span class="title">$project · $platform · $version (build $build_number)</span>
+    <span class="title">$project · $platform · $version_label</span>
     <a class="install" href="$install_href">$install_label</a>
   </div>
   <div class="sub">$origin_host · $commit · $rel$older_html</div>
@@ -105,8 +115,7 @@ def _render_row(build, *, older_count: int, link_to_product: bool) -> str:
         data_href_attr=data_attr,
         project=html.escape(build["project"]),
         platform=html.escape(build["platform"]),
-        version=html.escape(build["marketing_version"]),
-        build_number=html.escape(build["build_number"]),
+        version_label=html.escape(_version_label(build)),
         install_href=html.escape(href, quote=True),
         install_label=label,
         origin_host=html.escape(build["origin_host"]),
@@ -153,7 +162,7 @@ def _render_build_landing(root: Path, build) -> bytes:
         TITLE=html.escape(build["project"]),
         PLATFORM=html.escape(build["platform"]),
         ORIGIN_HOST=html.escape(build["origin_host"]),
-        VERSION=html.escape(build["marketing_version"]),
+        VERSION_LABEL=html.escape(_version_label(build)),
         BUILD_NUMBER=html.escape(build["build_number"]),
         COMMIT=html.escape(build["commit"][:7]),
         TIMESTAMP=html.escape(build["timestamp"]),

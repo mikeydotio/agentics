@@ -46,7 +46,7 @@ for _ in {1..50}; do
 done
 
 body=$(curl -sf "http://127.0.0.1:$PORT/deployit/")
-echo "$body" | grep -q "Lillist · ios · 0.1.0 (build 16)" \
+echo "$body" | grep -q "Lillist · ios · build 16" \
     || { echo "FAIL: row not rendered"; echo "$body"; exit 1; }
 echo "$body" | grep -q 'itms-services' \
     || { echo "FAIL: install link missing"; echo "$body"; exit 1; }

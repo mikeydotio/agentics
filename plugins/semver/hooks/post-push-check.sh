@@ -86,6 +86,24 @@ else
   SINCE_MSG="${COMMIT_COUNT} commit(s) total (no version set yet)"
 fi
 
+# Deterministic bump recommendation from conventional commits (cheap: reads
+# commit subjects only, never diffs). Replaces asking the agent to "analyze the
+# git log" — saves tokens and avoids pulling an unbounded log into context.
+PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RECO_JSON="$(cd "$CWD" 2>/dev/null && python3 "${PLUGIN_ROOT}/bin/semver-cli" recommend 2>/dev/null || true)"
+RECO=""; RECO_RATIONALE=""
+if [[ -n "$RECO_JSON" ]]; then
+  RECO="$(printf '%s' "$RECO_JSON" | jq -r '.recommended // empty' 2>/dev/null || true)"
+  RECO_RATIONALE="$(printf '%s' "$RECO_JSON" | jq -r '.rationale // empty' 2>/dev/null || true)"
+fi
+if [[ -n "$RECO" ]]; then
+  REC_PHRASE="Recommended bump: ${RECO} (${RECO_RATIONALE})."
+  REC_LEVEL="$RECO"
+else
+  REC_PHRASE="Review the changes to choose a bump level."
+  REC_LEVEL="<major|minor|patch>"
+fi
+
 # --- Build output based on config state ---
 emit_message() {
   local msg="$1"
@@ -94,13 +112,13 @@ emit_message() {
 
 if [[ "$AUTO_BUMP" != "true" ]]; then
   # Nudge mode
-  emit_message "[semver] Push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Consider running /semver bump <major|minor|patch> to create a new version release. You can review recent changes with: git log ${LAST_BUMP_COMMIT:+${LAST_BUMP_COMMIT}..HEAD }--oneline"
+  emit_message "[semver] Push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. ${REC_PHRASE} Run /semver bump ${REC_LEVEL} to create a new version release."
 elif [[ "$AUTO_BUMP_CONFIRM" == "true" ]]; then
   # Auto-bump with confirmation
-  emit_message "[semver] Auto-bump triggered: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Analyze the git log since the last version change to determine whether this warrants a major, minor, or patch bump. Use conventional commit analysis: breaking changes = major, new features = minor, fixes = patch. Present your recommendation and ask the user to confirm before executing the bump via /semver bump <type>."
+  emit_message "[semver] Auto-bump: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. ${REC_PHRASE} Confirm with the user, then run /semver bump ${REC_LEVEL}."
 else
   # Auto-bump without confirmation
-  emit_message "[semver] Auto-bump triggered: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. Analyze the git log since the last version change to determine whether this warrants a major, minor, or patch bump. Use conventional commit analysis: breaking changes = major, new features = minor, fixes = patch. Execute the bump immediately via /semver bump <type> — no user confirmation needed."
+  emit_message "[semver] Auto-bump: push to ${TARGET_BRANCH} detected. Current version: ${CURRENT_VERSION}. ${SINCE_MSG}. ${REC_PHRASE} Run /semver bump ${REC_LEVEL} now — no user confirmation needed."
 fi
 
 exit 0

@@ -900,8 +900,96 @@ def cmd_validate(args):
     })
 
 
+def cmd_recommend(args):
+    """Recommend a bump level from conventional commits since the last version.
+
+    Deterministic replacement for asking the orchestrator to "analyze the git
+    log": any breaking change -> major, any feat -> minor, otherwise -> patch.
+    """
+    project_dir = os.getcwd()
+    config_path = os.path.join(project_dir, ".semver", "config.yaml")
+    config = Config(config_path)
+
+    if not config.exists or not config.get_bool("tracking"):
+        output({"ok": True, "tracking": False, "recommended": None,
+                "message": "Version tracking is not active."})
+
+    lvc = last_version_commit()
+    commits = commits_since(lvc) if lvc else commits_since(None)
+    commits = [c for c in commits
+               if not c["subject"].startswith("chore(release):")]
+
+    breaking, feats, fixes, other = [], [], [], []
+    for c in commits:
+        category = parse_commit_type(c["subject"])
+        if category == "Breaking":
+            breaking.append(c)
+        elif category == "Added":
+            feats.append(c)
+        elif category == "Fixed":
+            fixes.append(c)
+        else:
+            other.append(c)
+
+    counts = {
+        "breaking": len(breaking),
+        "feat": len(feats),
+        "fix": len(fixes),
+        "other": len(other),
+        "total": len(commits),
+    }
+
+    if not commits:
+        recommended = None
+        rationale = "no commits since the last version change"
+    elif breaking:
+        recommended = "major"
+        rationale = f"{len(breaking)} breaking change(s)"
+    elif feats:
+        recommended = "minor"
+        rationale = f"{len(feats)} new feature(s)"
+    else:
+        recommended = "patch"
+        bits = []
+        if fixes:
+            bits.append(f"{len(fixes)} fix(es)")
+        if other:
+            bits.append(f"{len(other)} other change(s)")
+        rationale = ", ".join(bits) if bits else "non-feature changes only"
+
+    if recommended:
+        display = build_display([
+            f"[semver] Recommended bump: {recommended} ({rationale})",
+            f"  {counts['breaking']} breaking, {counts['feat']} feat, "
+            f"{counts['fix']} fix, {counts['other']} other",
+        ])
+    else:
+        display = build_display(
+            ["[semver] No commits to release since the last version change."])
+
+    output({
+        "ok": True,
+        "tracking": True,
+        "recommended": recommended,
+        "rationale": rationale,
+        "counts": counts,
+        "commits_analyzed": len(commits),
+        "display": display,
+    })
+
+
 def cmd_bump_gather(args):
     """Gather all pre-check state for a bump without modifying anything."""
+    output(_gather_bump_state(args))
+
+
+def _gather_bump_state(args):
+    """Compute pre-check state for a bump and return it (no process exit).
+
+    Callers decide what to do with the state: ``cmd_bump_gather`` prints it for
+    the interactive question loop, while ``cmd_bump_run`` inspects it and
+    proceeds straight to execution when no questions or prompt hooks apply.
+    """
     project_dir = os.getcwd()
     config_path = os.path.join(project_dir, ".semver", "config.yaml")
     config = Config(config_path)
@@ -910,13 +998,13 @@ def cmd_bump_gather(args):
 
     # Re-entrancy guard
     if os.environ.get("SEMVER_BUMP_IN_PROGRESS") == "1":
-        output({"ok": False, "error": "reentrancy",
-                "message": "A version bump is already in progress. Nested bumps are not allowed."})
+        return {"ok": False, "error": "reentrancy",
+                "message": "A version bump is already in progress. Nested bumps are not allowed."}
 
     # Tracking check
     if not config.exists or not config.get_bool("tracking"):
-        output({"ok": False, "error": "tracking_inactive",
-                "message": "Version tracking is not active. Run /semver tracking start first."})
+        return {"ok": False, "error": "tracking_inactive",
+                "message": "Version tracking is not active. Run /semver tracking start first."}
 
     prefix = config.get("version_prefix")
     tagging = config.get_bool("git_tagging")
@@ -925,6 +1013,7 @@ def cmd_bump_gather(args):
 
     result = {
         "ok": True,
+        "executed": False,
         "bump_type": bump_type,
         "force": force,
         "version_prefix": prefix,
@@ -950,7 +1039,7 @@ def cmd_bump_gather(args):
             "type": "first_version",
         }]
         result["display"] = build_display(["[semver] No version set — first version selection required."])
-        output(result)
+        return result
 
     result["version_exists"] = True
     result["old_version"] = version
@@ -958,8 +1047,8 @@ def cmd_bump_gather(args):
     # Parse and compute new version
     parsed = parse_version(version, prefix)
     if parsed is None:
-        output({"ok": False, "error": "version_parse_error",
-                "message": f"Cannot parse VERSION file content: '{version}'"})
+        return {"ok": False, "error": "version_parse_error",
+                "message": f"Cannot parse VERSION file content: '{version}'"}
 
     new_parts = increment_version(*parsed, bump_type)
     new_version = format_version(*new_parts, prefix=prefix)
@@ -976,10 +1065,7 @@ def cmd_bump_gather(args):
         result["message"] = f"No commits since the last version change ({version}). Use --force for a version-only bump."
         result["questions"] = []
         result["display"] = build_display([f"[semver] No commits since {version}. Use --force for a version-only bump."])
-        output(result)
-
-    # Get commit list for changelog
-    result["commits"] = commits_since(lvc) if lvc else commits_since(None)
+        return result
 
     # Dirty tree
     d_files = dirty_files()
@@ -1111,7 +1197,51 @@ def cmd_bump_gather(args):
         lines.append("[semver] No version set — first version selection required.")
     result["display"] = build_display(lines)
 
-    output(result)
+    return result
+
+
+def cmd_bump_run(args):
+    """Single-call bump: gather state, then execute when no interaction is needed.
+
+    On the happy path (clean tree, on target branch, validation passing, no tag
+    conflict, no prompt hooks) this executes the bump in one call so the
+    orchestrator never needs a second round-trip. Otherwise it returns the
+    gather state (identical to ``bump gather``) for the interactive question
+    loop, or — with ``--non-interactive`` — aborts safely instead of asking.
+    """
+    state = _gather_bump_state(args)
+
+    # A hard error (reentrancy / tracking inactive / parse error) is handed
+    # straight back; the orchestrator surfaces the message and stops.
+    if not state.get("ok"):
+        output(state)
+
+    # Reasons a human/orchestrator must intervene before we may execute.
+    blockers = []
+    if "first_version" in state.get("questions_needed", []):
+        blockers.append("no version set yet (first version must be chosen)")
+    if state.get("no_commits"):
+        blockers.append("no commits since the last version change")
+    if state.get("questions"):
+        blockers.append("open questions: " + ", ".join(state.get("questions_needed", [])))
+    if state.get("has_pre_bump_prompt_hook"):
+        blockers.append("a pre-bump PROMPT_HOOK.md must run first")
+
+    if blockers:
+        if getattr(args, "non_interactive", False):
+            state["ok"] = False
+            state["error"] = "non_interactive_blocked"
+            state["message"] = ("Cannot auto-bump non-interactively: "
+                                + "; ".join(blockers)
+                                + ". Re-run /semver bump interactively to resolve.")
+            state["display"] = build_display(
+                ["[semver] Auto-bump aborted — manual attention needed:"]
+                + [f"  - {b}" for b in blockers])
+        # Interactive path: return the gather state for the question loop.
+        output(state)
+
+    # Happy path: nothing to ask — execute straight through (outputs + exits).
+    cmd_bump_execute(args)
 
 
 def cmd_bump_execute(args):
@@ -1162,7 +1292,7 @@ def cmd_bump_execute(args):
 
     lock = FileLock(project_dir)
     stashed = False
-    result = {"ok": True, "old_version": old_version, "new_version": new_version}
+    result = {"ok": True, "executed": True, "old_version": old_version, "new_version": new_version}
 
     try:
         with lock:
@@ -2063,6 +2193,10 @@ def main():
     # validate
     subparsers.add_parser("validate", help="Run validation checks")
 
+    # recommend
+    subparsers.add_parser("recommend",
+                          help="Recommend a bump level from commits since last version")
+
     # bump
     bump_parser = subparsers.add_parser("bump", help="Version bump operations")
     bump_sub = bump_parser.add_subparsers(dest="bump_command")
@@ -2082,6 +2216,20 @@ def main():
     execute.add_argument("--overwrite-tag", action="store_true")
     execute.add_argument("--skip-validation", action="store_true")
     execute.add_argument("--plugin-root", default=None)
+
+    # bump run (single call: gather then execute on the happy path)
+    run = bump_sub.add_parser(
+        "run", help="Gather then execute in one call when no questions apply")
+    run.add_argument("type", choices=["major", "minor", "patch"])
+    run.add_argument("--force", action="store_true")
+    run.add_argument("--source", choices=["manual", "auto", "force"], default="manual")
+    run.add_argument("--dirty-action", choices=["include", "stash", "none"], default="none")
+    run.add_argument("--skip-tag", action="store_true")
+    run.add_argument("--overwrite-tag", action="store_true")
+    run.add_argument("--skip-validation", action="store_true")
+    run.add_argument("--plugin-root", default=None)
+    run.add_argument("--non-interactive", action="store_true",
+                     help="Abort instead of returning questions (unattended auto-bump)")
 
     # bump first-version
     first_v = bump_sub.add_parser("first-version", help="Set initial version")
@@ -2144,16 +2292,20 @@ def main():
         cmd_current(args)
     elif args.command == "validate":
         cmd_validate(args)
+    elif args.command == "recommend":
+        cmd_recommend(args)
     elif args.command == "bump":
         if args.bump_command == "gather":
             cmd_bump_gather(args)
+        elif args.bump_command == "run":
+            cmd_bump_run(args)
         elif args.bump_command == "execute":
             cmd_bump_execute(args)
         elif args.bump_command == "first-version":
             cmd_bump_first_version(args)
         else:
             print(json.dumps({"ok": False, "error": "usage",
-                               "message": "Usage: semver-cli bump <gather|execute|first-version>"}))
+                               "message": "Usage: semver-cli bump <run|gather|execute|first-version>"}))
             sys.exit(2)
     elif args.command == "tracking":
         if args.tracking_command == "start":

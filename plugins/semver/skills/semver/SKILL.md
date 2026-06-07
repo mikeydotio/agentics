@@ -49,16 +49,23 @@ After processing all questions, if flags were collected, append them to the exec
 
 ## Bump Flow
 
-The bump command uses a gather→questions→execute pattern:
+The router runs `bump run <type>`, which **gathers state and — on the happy path (no
+questions, no pre-bump prompt hook) — executes the bump in the same call**. A clean bump
+therefore needs only one round-trip. Inspect the response:
 
-1. Router calls `bump gather <type>` → returns state + questions
-2. If `no_commits` is true (and not `--force`): show message and stop
-3. Process the `questions` array (dirty_tree, wrong_branch, validation_failed, tag_conflict)
-4. **Pre-bump PROMPT_HOOK**: If `has_pre_bump_prompt_hook` is true, read the file at `pre_bump_prompt_hook_path` and follow its instructions. Context: bump type, old_version, new_version. **Do NOT trigger `/semver bump`**.
-5. Execute: `python3 ${CLAUDE_PLUGIN_ROOT}/bin/semver-cli bump execute <TYPE> --source <manual|force> [collected flags] --plugin-root ${CLAUDE_PLUGIN_ROOT}`
-   - Use `--source force` if `--force` was used, otherwise `--source manual`.
-6. **Post-bump PROMPT_HOOK**: If execute result's `post_hooks.prompt_hook` is not null, follow those instructions. **Do NOT trigger `/semver bump`**.
-7. Report any `post_hooks.warnings`, then show the `display` field.
+1. If `ok` is false: show the `display`/`message` and stop.
+2. If **`executed` is true** → the bump already ran. Then:
+   - If `post_hooks.prompt_hook` is not null, follow those instructions. **Do NOT trigger `/semver bump`**.
+   - Report any `post_hooks.warnings`, show the `display` field, and stop.
+3. If **`executed` is false** → interaction is needed. Continue:
+   a. If `no_commits` is true (and not `--force`): show the message and stop.
+   b. Process the `questions` array (dirty_tree, wrong_branch, validation_failed, tag_conflict) via the Question Loop.
+   c. **Pre-bump PROMPT_HOOK**: If `has_pre_bump_prompt_hook` is true, read the file at `pre_bump_prompt_hook_path` and follow its instructions. Context: bump type, old_version, new_version. **Do NOT trigger `/semver bump`**.
+   d. Execute with the collected flags:
+      `python3 ${CLAUDE_PLUGIN_ROOT}/bin/semver-cli bump execute <TYPE> --source <manual|force> [collected flags] --plugin-root ${CLAUDE_PLUGIN_ROOT}`
+      (use `--source force` if `--force` was used, otherwise `--source manual`).
+   e. **Post-bump PROMPT_HOOK**: If the execute result's `post_hooks.prompt_hook` is not null, follow those instructions. **Do NOT trigger `/semver bump`**.
+   f. Report any `post_hooks.warnings`, then show the `display` field.
 
 ## Tracking Stop Flow
 
@@ -82,4 +89,7 @@ If the router returns `needs_input: true` with questions, ask the question, then
 
 ## Simple Commands
 
-`current`, `validate`, `auto-bump stop`, `tracking start [options]`: just route, check ok, show display.
+`current`, `validate`, `recommend`, `auto-bump stop`, `tracking start [options]` are
+**pure passthrough**: route once, check `ok`, show the `display` field, and stop. They
+never return a `questions` array or prompt hooks — do **not** enter the Question Loop or
+perform any extra analysis (e.g. reading the git log) for these.

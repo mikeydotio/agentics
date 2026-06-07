@@ -82,7 +82,7 @@ test_route_current_runs_current() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 2. Bump routing (calls gather, not execute)
+# 2. Bump routing (bump run: executes in one call on the happy path)
 # ═══════════════════════════════════════════════════════════════════════════
 
 test_route_bump_major() {
@@ -97,7 +97,8 @@ test_route_bump_major() {
     local result
     result=$(bash "$ROUTER" bump major)
     assert_json_field "$result" ".ok" "true"
-    assert_json_field "$result" ".bump_type" "major"
+    assert_json_field "$result" ".executed" "true"
+    assert_json_field "$result" ".new_version" "v2.0.0"
 
     rm -rf "$dir"
 }
@@ -114,7 +115,8 @@ test_route_bump_minor() {
     local result
     result=$(bash "$ROUTER" bump minor)
     assert_json_field "$result" ".ok" "true"
-    assert_json_field "$result" ".bump_type" "minor"
+    assert_json_field "$result" ".executed" "true"
+    assert_json_field "$result" ".new_version" "v1.1.0"
 
     rm -rf "$dir"
 }
@@ -131,7 +133,8 @@ test_route_bump_patch() {
     local result
     result=$(bash "$ROUTER" bump patch)
     assert_json_field "$result" ".ok" "true"
-    assert_json_field "$result" ".bump_type" "patch"
+    assert_json_field "$result" ".executed" "true"
+    assert_json_field "$result" ".new_version" "v1.0.1"
 
     rm -rf "$dir"
 }

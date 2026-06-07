@@ -5,6 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CLI="python3 ${SCRIPT_DIR}/semver-cli"
 
 usage_json() {
@@ -29,7 +30,10 @@ case "$cmd" in
     bump)
         level="${1:-}"
         shift 2>/dev/null || true
-        run_cli bump gather "$level" "$@"
+        # Single-call path: bump run gathers, then executes itself when no
+        # questions/prompt-hooks apply (one round-trip on the happy path).
+        # Plugin root is passed so execute can run user hooks.
+        run_cli bump run "$level" --plugin-root "$PLUGIN_ROOT" "$@"
         ;;
     tracking)
         subcmd="${1:-}"
@@ -63,6 +67,9 @@ case "$cmd" in
         ;;
     validate|check)
         run_cli validate
+        ;;
+    recommend)
+        run_cli recommend
         ;;
     repair|fix)
         run_cli repair diagnose

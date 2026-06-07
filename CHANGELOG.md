@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.17.0] - 2026-06-06
+
+### Added
+- cut agent tokens with single-call bump and deterministic recommend (14c528d)
+- report the semver version in the web UI (5cd5fee)
+- capture semver version + guard deploys with a bump (d621fb8)
+
+### Fixed
+- prevent context-window overflow on skill invocation (8b73a59)
+
+### Documentation
+- document semver awareness (2c468bf)
+
+### Testing
+- make the test suite portable to BSD/macOS (567da1b)
+
+_[manual]_
+
 ## [v2.16.1] - 2026-05-25
 
 ### Fixed

@@ -81,7 +81,7 @@ test_current_tracking_inactive() {
     trap "cleanup_test_repo '$repo'" RETURN
 
     # Disable tracking
-    sed -i 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
+    sed_inplace 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
 
     local out
     out=$(cd "$repo" && "$CLI" current)
@@ -190,7 +190,7 @@ test_validate_tagging_disabled_skips() {
     trap "cleanup_test_repo '$repo'" RETURN
 
     # Disable tagging
-    sed -i 's/git_tagging: true/git_tagging: false/' "$repo/.semver/config.yaml"
+    sed_inplace 's/git_tagging: true/git_tagging: false/' "$repo/.semver/config.yaml"
 
     local out
     out=$(cd "$repo" && "$CLI" validate)
@@ -503,7 +503,7 @@ test_changelog_flat_format() {
     trap "cleanup_test_repo '$repo'" RETURN
 
     # Switch to flat format
-    sed -i 's/changelog_format: "grouped"/changelog_format: "flat"/' "$repo/.semver/config.yaml"
+    sed_inplace 's/changelog_format: "grouped"/changelog_format: "flat"/' "$repo/.semver/config.yaml"
 
     echo "a" > "$repo/a.txt"
     git -C "$repo" add -A
@@ -551,7 +551,7 @@ test_changelog_filters_release_commits() {
     # The v1.2.0 entry should NOT contain "chore(release): v1.1.0"
     # Extract just the v1.2.0 section from the changelog
     local v120_section
-    v120_section=$(sed -n '/## \[v1.2.0\]/,/## \[v1.1.0\]/p' "$repo/CHANGELOG.md" | head -n -1)
+    v120_section=$(sed -n '/## \[v1.2.0\]/,/## \[v1.1.0\]/p' "$repo/CHANGELOG.md" | sed '$d')
     local has_release
     has_release=$(echo "$v120_section" | grep -c "chore(release)" || true)
     assert_eq "0" "$has_release" "release commits should be filtered out"
@@ -667,7 +667,7 @@ test_tracking_stop_gather_inactive() {
     repo=$(create_semver_repo)
     trap "cleanup_test_repo '$repo'" RETURN
 
-    sed -i 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
+    sed_inplace 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
 
     local out
     out=$(cd "$repo" && "$CLI" tracking stop-gather)
@@ -824,7 +824,7 @@ test_bump_gather_tracking_inactive() {
     repo=$(create_semver_repo)
     trap "cleanup_test_repo '$repo'" RETURN
 
-    sed -i 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
+    sed_inplace 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
 
     local out
     out=$(cd "$repo" && "$CLI" bump gather minor)
@@ -929,7 +929,7 @@ test_validate_tracking_inactive_returns_ok() {
     repo=$(create_semver_repo)
     trap "cleanup_test_repo '$repo'" RETURN
 
-    sed -i 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
+    sed_inplace 's/tracking: true/tracking: false/' "$repo/.semver/config.yaml"
 
     local out
     out=$(cd "$repo" && "$CLI" validate)

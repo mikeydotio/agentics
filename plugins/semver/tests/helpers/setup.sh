@@ -11,6 +11,17 @@ PASS_COUNT=0
 FAIL_COUNT=0
 FAIL_NAMES=()
 
+# --- Portability Helpers ---
+
+# Portable in-place sed. BSD sed (macOS) needs `-i ''` while GNU sed needs `-i`;
+# this sidesteps both by editing through a temp file with plain sed.
+# Usage: sed_inplace 's/pattern/replacement/' <file>
+sed_inplace() {
+    local script="$1" file="$2" tmp
+    tmp=$(mktemp)
+    sed "$script" "$file" > "$tmp" && mv "$tmp" "$file"
+}
+
 # --- Fixture Helpers ---
 
 create_test_repo() {

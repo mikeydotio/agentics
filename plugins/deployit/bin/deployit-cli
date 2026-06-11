@@ -503,7 +503,18 @@ def _read_archive_build_number(archive_path: Path, project: str) -> str:
 
 
 def _xcodebuild_export(archive_path: Path, export_dir: Path, plugin_root: Path, platform: str):
-    options = plugin_root / "assets" / f"ExportOptions.{platform}.plist"
+    # Prefer an explicit override or a project-local
+    # .deployit/ExportOptions.<platform>.plist before the bundled default,
+    # so projects that need custom export options (e.g. manual signing for
+    # headless/CI deploys) can supply their own without editing the plugin.
+    _env_eo = os.environ.get("DEPLOYIT_EXPORT_OPTIONS_PATH")
+    _local_eo = Path.cwd() / ".deployit" / f"ExportOptions.{platform}.plist"
+    if _env_eo and Path(_env_eo).is_file():
+        options = Path(_env_eo)
+    elif _local_eo.is_file():
+        options = _local_eo
+    else:
+        options = plugin_root / "assets" / f"ExportOptions.{platform}.plist"
     if not options.is_file():
         fail(f"missing export options plist: {options}")
     cmd = [

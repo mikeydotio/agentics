@@ -132,6 +132,11 @@ docs, INDEX chars vs budget, lint warning counts by check, token-estimate vs
 actual agent count, and the standing advice that `/atlas update` keeps the map
 fresh incrementally.
 
+If `.gitattributes` does not already cover the map, append the optional
+suggestion: `docs/atlas/** linguist-generated=true` collapses map churn in PR
+diffs (README §Collapsing map diffs). Suggest only — atlas NEVER writes
+`.gitattributes` itself.
+
 ## Failure discipline
 
 - Any abort path: `lock release` first, partial docs LEFT ON DISK uncommitted

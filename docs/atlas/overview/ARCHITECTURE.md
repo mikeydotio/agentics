@@ -3,7 +3,7 @@ module: overview/ARCHITECTURE
 summary: "System shape, module relationships, and cross-plugin invariants of the agentics marketplace"
 sources:
   - path: docs/atlas/modules/plugins-agents-agents-chunk-1.md
-    blob: 83f97b238db9d35cb8dc26fa9e9eca3aa86c07ff
+    blob: ba9ad71828d6a1992502af03ed6a35a9c0c263b7
   - path: docs/atlas/modules/plugins-agents-agents-chunk-2.md
     blob: 9f93adcafa6255045a843dd2c1274d235b97ac97
   - path: docs/atlas/modules/plugins-agents-agents-chunk-3.md
@@ -15,11 +15,11 @@ sources:
   - path: docs/atlas/modules/plugins-agents-references.md
     blob: 1b7e2f101fe5a67313d58196adb202cfae5dd82c
   - path: docs/atlas/modules/plugins-atlas-misc.md
-    blob: 417a8429598db1d7587c9df980e6a89067d7a8b0
+    blob: 77e6b96f03e9b68eceea9091489d0cae3902aff9
   - path: docs/atlas/modules/plugins-atlas-references.md
-    blob: 9bcf60683ca69585b6277603f68bb82c4cdf13f1
+    blob: 58bafb5f843a6ab68e1f0ea5cf5c8ce68d24cb81
   - path: docs/atlas/modules/plugins-atlas-tests.md
-    blob: 0e0bc56b3eb6492412b8c162495b9274896f0622
+    blob: 8bd3728b96d784d316581d2d42db26e2e18492d9
   - path: docs/atlas/modules/plugins-council.md
     blob: 3f13dbba9eab880139632767c967a135d1f35fbd
   - path: docs/atlas/modules/plugins-deployit-assets.md
@@ -63,16 +63,16 @@ sources:
   - path: docs/atlas/modules/plugins-semver-tests.md
     blob: 1e5da4704bb1b156495e771d35234862141adf0e
   - path: docs/atlas/modules/root-misc.md
-    blob: 7a46591e6608b5a1508d4929c22a61c34cc8ee93
+    blob: d1f68b67a4a22635bdfa0f6c8befb876fbffcf5d
   - path: docs/atlas/modules/tests.md
     blob: 9d72ed08c7b45fd7fc6c474366e62d2dfee2292a
 scopes:
   - tree: plugins
-    sha: 224db90f5191521372b88f72de14a57d7f6e5552
+    sha: 32aa45cb2ce1a2eab44cf7d707fac3904e045793
   - tree: tests
     sha: f726161a1df6bcd639771ffdde7d527eaba66cdf
 generator: cartographer/1
-baseline: 6c8b6fd6abf561a6044b7fd6b40950bffb56c8f2
+baseline: dc00e9cd63fa7cd062a89006bbf54e8ca17cff21
 ---
 
 # Architecture

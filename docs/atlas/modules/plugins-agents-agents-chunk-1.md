@@ -6,7 +6,7 @@ sources:
   - path: plugins/agents/agents/_guardrails.md
     blob: 5213bd863520baa4ca42aef7fd1cd5828704f457
   - path: plugins/agents/agents/_template.md
-    blob: 05328175c329e42eda38ea41af3f38c2f4b34a26
+    blob: 011662bc9353e45dc267ae89dc35c1a9ced7ec11
   - path: plugins/agents/agents/accessibility-engineer.md
     blob: 9d5eb2340b5689f35405334abbe71a8aee9801c1
   - path: plugins/agents/agents/api-designer.md
@@ -31,7 +31,7 @@ sources:
     blob: 49dac36dfb6c0f7a022497710e490b2d0869881e
 references_modules: [plugins-agents-agents-chunk-2, plugins-atlas-references]
 generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
+baseline: dc00e9cd63fa7cd062a89006bbf54e8ca17cff21
 verified: true
 ---
 
@@ -102,5 +102,4 @@ body the methodology that must beat a bare LLM call. Holds the pipeline-specific
 
 ## Gotchas
 
-- cartographer's `pipeline: atlas` is not in the enum — `plugins/agents/agents/_template.md:14`
 - code-archaeologist/systems-analyst merged — `plugins/agents/agents/hypothesis-challenger.md:18`

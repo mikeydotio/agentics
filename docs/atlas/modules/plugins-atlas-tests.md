@@ -13,8 +13,10 @@ sources:
     blob: a3bce143e30dbdef734d31c870c6ebbf696d6ced
   - path: plugins/atlas/tests/test-doc.sh
     blob: a8fb82305896d7e1549bd0e213205fb5357c7012
+  - path: plugins/atlas/tests/test-edge-cases.sh
+    blob: 70a071fe0b9a69631fc40ce7a103cb03670d4cc9
   - path: plugins/atlas/tests/test-ground.sh
-    blob: a6bddad7cdecaf512472a53f199baaa07f2b3a31
+    blob: ad33b9b1e3d65b5dc128a68c9579572be600db30
   - path: plugins/atlas/tests/test-hook.sh
     blob: 5545302a4317791ae60c63e45833dc34b822636f
   - path: plugins/atlas/tests/test-index.sh
@@ -24,7 +26,7 @@ sources:
   - path: plugins/atlas/tests/test-ledger.sh
     blob: abe078f0fd272c428a003fad154a15c54fea57d6
   - path: plugins/atlas/tests/test-lint.sh
-    blob: 68f14c678b9cd861c77f034ab4d807275508cc0b
+    blob: dfea42963e14496622975a31988ff8420d5e5656
   - path: plugins/atlas/tests/test-lock.sh
     blob: 9b6c39e83aab4b0db326b19e51dd4111553d463b
   - path: plugins/atlas/tests/test-partition.sh
@@ -37,7 +39,7 @@ sources:
     blob: 7c4643183c99a2ff6ce20afa169e0e7fdd6baed7
 references_modules: [plugins-atlas-misc]
 generator: cartographer/1
-baseline: 545be2bb7ff18f328277446829f1be6457ac6363
+baseline: dc00e9cd63fa7cd062a89006bbf54e8ca17cff21
 verified: true
 ---
 
@@ -97,6 +99,7 @@ tests. If the suite vanished, drift in envelopes, error codes, and tiers would s
 - Per-file `_*_fixture` builders echo a ready repo path; the underscore prefix escapes discovery.
 - `_ledger_fixture` sets references_modules for ripple runs (plugins/atlas/tests/test-ledger.sh:7).
 - `_doc_hash` pins byte-identity via git hash-object (plugins/atlas/tests/test-update-flow.sh:37).
+- Edge-case sweep skips angles already pinned elsewhere (plugins/atlas/tests/test-edge-cases.sh:2).
 
 ## External deps
 

@@ -6,16 +6,16 @@ sources:
   - path: plugins/atlas/references/claude-md-injection.md
     blob: fb192f9f878111762ca863b12091dfe9036eeef8
   - path: plugins/atlas/references/design.md
-    blob: 471a0bbfdcbc9c03eed60e5f174212cdc740b7b5
+    blob: ea972cd04b9d9ca0d9790e5086974e52f30fcf4a
   - path: plugins/atlas/references/map-format.md
-    blob: 0b795e86fe999259e2f6aed1ccd24449a7534dde
+    blob: 6c60104126e309cda0b3becefd1d79c2b2cbe27e
   - path: plugins/atlas/references/mapping-protocol.md
-    blob: 1703faec5b4012c471e1c615da1305b136a07ec4
+    blob: 2b356d94b589e7d56566d27901612bf1f7e333ea
   - path: plugins/atlas/references/update-protocol.md
     blob: eefd4c2e9c51855c6a69efd1890b3180933ae008
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-misc]
 generator: cartographer/1
-baseline: 545be2bb7ff18f328277446829f1be6457ac6363
+baseline: dc00e9cd63fa7cd062a89006bbf54e8ca17cff21
 verified: true
 ---
 
@@ -46,10 +46,10 @@ injection contract.
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `<!-- atlas:index-facts -->` | marker | `plugins/atlas/references/map-format.md:194` | Overview block extracted verbatim into the INDEX; spends the INDEX's 7,000-char budget |
+| `<!-- atlas:index-facts -->` | marker | `plugins/atlas/references/map-format.md:201` | Overview block extracted verbatim into the INDEX; spends the INDEX's 7,000-char budget |
 | `<!-- atlas:start -->` | marker | `plugins/atlas/references/claude-md-injection.md:11` | Managed-block delimiter; `init` and `remove` key on the exact marker pair |
-| `Failure discipline` | section | `plugins/atlas/references/mapping-protocol.md:135` | Every abort path releases the lock; a map that fails lint is never committed; never `git add -A` |
-| `Generator fingerprint` | section | `plugins/atlas/references/map-format.md:227` | Prompt-version + model stamp; a bump marks every doc fingerprint-stale on the next ledger diff |
+| `Failure discipline` | section | `plugins/atlas/references/mapping-protocol.md:140` | Every abort path releases the lock; a map that fails lint is never committed; never `git add -A` |
+| `Generator fingerprint` | section | `plugins/atlas/references/map-format.md:234` | Prompt-version + model stamp; a bump marks every doc fingerprint-stale on the next ledger diff |
 | `Partitioning algorithm` | section | `plugins/atlas/references/design.md:170` | Deterministic partitioning keeps module identity — and therefore doc identity — stable |
 | `Staleness tiers` | section | `plugins/atlas/references/design.md:108` | T0–T3 trust ladder; the T3 "disregard the imported INDEX" suppression is load-bearing, not polish |
 | `Step order is load-bearing` | rule | `plugins/atlas/references/update-protocol.md:10` | Verify before overview, wave A before ripple wave B, every mutation before the final finalize |
@@ -91,6 +91,6 @@ Design lineage: the no-PID heartbeat lock adopts the forge plugin's session-lock
 ## Gotchas
 
 - Changing map-format.md or the cartographer prompt without a generator-version bump freezes
-  stale docs in place (plugins/atlas/references/map-format.md:232)
+  stale docs in place (plugins/atlas/references/map-format.md:239)
 - INDEX.md and atlas-ledger.json conflicts are resolved by rebuilding, never hand-merged;
-  `merge=union` corrupts map files (plugins/atlas/references/map-format.md:223)
+  `merge=union` corrupts map files (plugins/atlas/references/map-format.md:230)

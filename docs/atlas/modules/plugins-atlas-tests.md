@@ -31,7 +31,7 @@ sources:
     blob: fdde9f2ee86018efefcd6e1794a0a90d04cf1be0
 references_modules: [plugins-atlas-misc]
 generator: cartographer/1
-baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
+baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
 verified: true
 ---
 

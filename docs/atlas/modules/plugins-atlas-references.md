@@ -6,7 +6,7 @@ sources:
   - path: plugins/atlas/references/claude-md-injection.md
     blob: fb192f9f878111762ca863b12091dfe9036eeef8
   - path: plugins/atlas/references/design.md
-    blob: 7a9fbdd96a615d689a6881d158e17f708e20eebf
+    blob: 6e2e2489a19c3c91b97e93099ae9de70e150edf6
   - path: plugins/atlas/references/map-format.md
     blob: 0b795e86fe999259e2f6aed1ccd24449a7534dde
   - path: plugins/atlas/references/mapping-protocol.md
@@ -15,7 +15,7 @@ sources:
     blob: 89ca721f833c93b20d250bd8c190c619519da1a6
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-misc]
 generator: cartographer/1
-baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
+baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
 verified: true
 ---
 

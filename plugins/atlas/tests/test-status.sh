@@ -10,9 +10,9 @@ _status_fixture() {
         seed_file "$repo" "src/m$i/f.txt"
         write_module_doc "$repo" "src-m$i" "src/m$i" "" "src/m$i/f.txt"
     done
-    echo "# Atlas INDEX" > "$repo/docs/atlas/INDEX.md"
     commit_all "$repo"
     run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
     git -C "$repo" add -A
     git -C "$repo" commit -q -m "map"
     echo "$repo"

@@ -3,6 +3,50 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.18.0] - 2026-06-12
+
+### Added
+- incremental-update CLI surface (9640bb2)
+- add ledger set-verified and role-by-reference prompt assembly (cdb99b7)
+- add full-map orchestration skill, protocols, and wiring CLI (b68d753)
+- add cartographer and map-verifier agents with normative map format (c699900)
+- add lint, derived INDEX rebuild, router, and session hook (26d15ba)
+- add blob-SHA ledger, heartbeat lock, and staleness tiers (5be291d)
+- add deterministic scan and partition core with test suite (7a3e4f5)
+- scaffold plugin and register in marketplace (8e9df56)
+
+### Fixed
+- ground skips markdown prose; lint L6 skips non-citation paths (eda25cb)
+- dogfood-driven fixes to INDEX layout, lint rules, and frontmatter round-trip (c5dfb17)
+- make validate-agents.sh portable to macOS bash 3.2 (d810687)
+
+### Documentation
+- update map (6 docs — phase-7 hardening, README, handoff retirement) (69ab624)
+- roadmap complete — all seven phases shipped; retire HANDOFF (dc00e9c)
+- full README — quick start, ledger explainer, config, FAQ (1be4fae)
+- edge-line length exemption + external-path citation rule (22e5896)
+- add atlas to the _template pipeline enum (4d66cb8)
+- regenerate plugins-hook-guard after conflict-marker corruption (eaa54c6)
+- update map (6 docs — phase-6 incremental layer) (6c8b6fd)
+- conflict recipe in README, design-record updates, phase 7 handoff (545be2b)
+- replace update-protocol stub with the real incremental + verify protocol (4045ed9)
+- re-baseline after roadmap/handoff commit (ac7dff0)
+- mark phases 1-5 complete in roadmap, write handoff for 6-7 (65c6f5e)
+- final re-baseline for the v1 map (f44d83c)
+- drop self-referential docs scope from overview (0ce4ca4)
+- encode dogfood protocol lessons — scope exclusion and init ordering (42cc6d0)
+- re-baseline ledger after map and wiring commits (b9203a6)
+- full codebase map (32 modules) (b1e1f9d)
+
+### Testing
+- edge-case sweep — degenerate repos, corruption, hostile config (2659973)
+- e2e update-flow scenarios + index.lock retry coverage (343f6e4)
+
+### Maintenance
+- add root make test entrypoint covering plugin suites (fa41920)
+
+_[manual]_
+
 ## [v2.17.0] - 2026-06-06
 
 ### Added

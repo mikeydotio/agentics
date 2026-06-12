@@ -11,7 +11,7 @@ sources:
     blob: 47d2ee61ac977b280271bab4bb2567c765db198b
 references_modules: [plugins-agents-misc, plugins-agents-references, plugins-council]
 generator: cartographer/1
-baseline: cdb99b78f7feadd24f898adb2545c7589790c375
+baseline: b1e1f9d1dbced518c625c38bb87814de5af1a1b7
 verified: true
 ---
 

@@ -50,6 +50,11 @@
       "name": "council",
       "description": "Convene a 3-member sub-agent council to deliberate and vote on a decision when the user is unavailable — independent proposals, single-choice vote, one deliberation round, ranked-choice runoff",
       "source": "./plugins/council"
+    },
+    {
+      "name": "atlas",
+      "description": "Committed markdown codebase maps for agentic tools — full mapping plus git-aware incremental updates via a blob-SHA dependency ledger, with a token-budgeted always-loaded INDEX and staleness-aware session hooks",
+      "source": "./plugins/atlas"
     }
   ]
 }

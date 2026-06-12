@@ -18,10 +18,11 @@ test_index_rebuild_creates_index() {
 
     local index
     index=$(cat "$repo/docs/atlas/INDEX.md")
-    echo "$index" | grep -q "## Routing" || { echo "    FAIL: no Routing section"; return 1; }
-    echo "$index" | grep -q "docs/atlas/modules/src-auth.md" \
-        || { echo "    FAIL: routing row missing"; return 1; }
     echo "$index" | grep -q "## Modules" || { echo "    FAIL: no Modules section"; return 1; }
+    echo "$index" | grep -q "| src-auth |" \
+        || { echo "    FAIL: module routing row missing"; return 1; }
+    echo "$index" | grep -q "docs/atlas/modules/<id>.md" \
+        || { echo "    FAIL: id-to-path rule missing from header"; return 1; }
 
     cleanup_fixture_repo "$repo"
 }
@@ -69,11 +70,11 @@ test_index_includes_overview_facts() {
 test_index_over_budget_refused() {
     local repo i
     repo=$(create_fixture_repo)
-    local long_summary
-    long_summary=$(python3 -c "print('A very long module summary sentence. ' * 12)")
+    local long_read_when
+    long_read_when=$(python3 -c "print('Touching anything that resembles this very long area. ' * 8)")
     for i in $(seq -w 1 25); do
         seed_file "$repo" "src/m$i/f.txt"
-        ATLAS_TEST_SUMMARY="$long_summary" \
+        ATLAS_TEST_READ_WHEN="$long_read_when" \
             write_module_doc "$repo" "src-m$i" "src/m$i" "" "src/m$i/f.txt"
     done
     commit_all "$repo"

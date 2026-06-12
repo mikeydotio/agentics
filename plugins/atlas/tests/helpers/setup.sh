@@ -84,7 +84,7 @@ write_module_doc() {
         echo "---"
         echo "module: $module"
         echo "summary: \"${ATLAS_TEST_SUMMARY:-Test module $doc_id}\""
-        echo "read_when: \"Touching $module\""
+        echo "read_when: \"${ATLAS_TEST_READ_WHEN:-Touching $module}\""
         echo "sources:"
         local src
         for src in "$@"; do

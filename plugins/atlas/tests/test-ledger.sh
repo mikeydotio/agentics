@@ -253,6 +253,29 @@ test_ledger_diff_scope_change() {
     cleanup_fixture_repo "$repo"
 }
 
+test_ledger_unicode_frontmatter_round_trips() {
+    local repo
+    repo=$(create_fixture_repo)
+    seed_file "$repo" "src/a.txt"
+    ATLAS_TEST_SUMMARY="Relay — drives /clear via tmux (em-dash survives)" \
+        write_module_doc "$repo" "src" "src" "" src/a.txt
+    commit_all "$repo"
+
+    # Multiple serialize/parse cycles must not mutate the value.
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" ledger set-verified modules/src.md true
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    if grep -q 'u2014' "$repo/docs/atlas/modules/src.md"; then
+        echo "    FAIL: em-dash was escape-mangled by frontmatter round-trip"
+        grep "^summary" "$repo/docs/atlas/modules/src.md" | sed 's/^/      /'
+        return 1
+    fi
+    grep -q "Relay — drives /clear" "$repo/docs/atlas/modules/src.md" \
+        || { echo "    FAIL: summary content lost"; return 1; }
+
+    cleanup_fixture_repo "$repo"
+}
+
 test_ledger_set_verified() {
     local repo
     repo=$(_ledger_fixture)

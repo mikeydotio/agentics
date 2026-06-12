@@ -212,10 +212,13 @@ whenever any module doc changed); `scopes` are the mapped root directories
 ## INDEX.md (derived — never write or edit by hand)
 
 `atlas-cli index rebuild` assembles INDEX.md from doc frontmatter and the
-index-facts block: header + freshness line, routing table (from `read_when`),
-module inventory (from `summary`), key facts, footer reminders. Hard budget
+index-facts block: header + freshness line, a single Modules routing table
+(module id + `read_when` — one row per doc; the header states the
+id→path rule once), key facts, footer reminders. `summary` stays in
+frontmatter and the ledger; it is not repeated in the INDEX — at real-world
+module counts the budget cannot carry two per-module tables. Hard budget
 7,000 chars (≈2k tokens), warning at 6,000. If a rebuild refuses on budget,
-trim module `summary` lines and index facts — never raise the budget.
+trim `read_when` lines and index facts — never raise the budget.
 
 Merge conflicts on INDEX.md or atlas-ledger.json are resolved by REBUILDING
 (`index rebuild`, `ledger finalize`), never by hand-merging. `merge=union` is

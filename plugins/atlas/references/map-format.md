@@ -145,12 +145,19 @@ section when there are none.
 ### Content rules (all sections)
 
 - One fact per line. A fact split across lines is invisible to grep.
-- Lines ≤100 chars except table rows.
+- Lines ≤100 chars except table rows and relationship edge lines. Long module
+  ids can make an edge impossible to fit; never break an edge across lines —
+  a wrapped edge is invisible to grep.
 - Code-exact, fully-qualified names — an agent greps the literal identifier
   from a stack trace; the map must match on it.
 - Every path citation is repo-root-relative, everywhere — tables AND prose.
   Never module-relative shorthand (`hooks/on-stop.sh:34`); lint L6 flags
   shorthand as a dead path because it cannot resolve from the repo root.
+- Paths that exist outside the repo (server-side artifacts, deploy targets,
+  runtime output) are written WITHOUT a line number. L6 only resolves tokens
+  that look like repo citations: anything with a `:line` suffix, plus
+  line-numberless paths whose first segment is a repo directory. `./`-prefixed
+  tokens are treated as shell-command idiom, not citations.
 - No volatile content: no dates, no commit SHAs, no counts ("17 functions"),
   no "currently/recently/new". Frontmatter carries freshness; bodies must
   stay stable so unchanged docs never churn.

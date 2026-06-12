@@ -202,10 +202,11 @@ update flow ignores those entries because quarantine recovery owns them.
 - [x] Phase 6 — Incremental update + verify flows (update-protocol.md real;
       doc apply-renames/remove + diffpack + churn-free finalize; e2e fixture
       flows incl. hash-gating byte-identity proof; dogfooded on this repo)
-- [ ] Phase 7 — Hardening, docs, release (known items: _template.md
-      pipeline enum lacks `atlas`; map-format 100-char rule needs an
-      edge-line exemption; ground skips .md prose candidates; L6 residue
-      for ./-prefixed and server-side paths)
+- [x] Phase 7 — Hardening, docs, release (full README at the semver
+      quality bar incl. linguist-generated guidance; edge-case sweep
+      pinning degenerate repos, corrupted maps, and hostile config;
+      ground skips .md prose; L6 non-citation path rules; edge-line
+      length exemption; `atlas` in the agent-template pipeline enum)
 
 ## Out of scope for v1
 

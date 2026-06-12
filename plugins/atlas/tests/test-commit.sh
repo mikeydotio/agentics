@@ -73,6 +73,35 @@ test_commit_nothing_to_commit() {
     cleanup_fixture_repo "$repo"
 }
 
+test_commit_retries_through_transient_index_lock() {
+    local repo
+    repo=$(_commit_fixture)
+    # Simulate another git process holding the index: the lock vanishes
+    # before atlas-cli's retries (0.5s, then 1.0s backoff) are exhausted.
+    touch "$repo/.git/index.lock"
+    ( sleep 0.8; rm -f "$repo/.git/index.lock" ) &
+
+    run_atlas "$repo" commit --message "docs(atlas): survives index.lock"
+    wait
+    assert_exit_code 0 "$EXIT_CODE" "commit succeeds after retry" || return 1
+    assert_json_field "$OUTPUT" '.committed' "true" "committed" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_commit_fails_when_index_lock_persists() {
+    local repo
+    repo=$(_commit_fixture)
+    touch "$repo/.git/index.lock"
+
+    run_atlas "$repo" commit --message "docs(atlas): should fail"
+    assert_exit_code 1 "$EXIT_CODE" "persistent lock fails" || return 1
+    assert_json_field "$OUTPUT" '.error' "git_add_failed" "error code" || return 1
+
+    rm -f "$repo/.git/index.lock"
+    cleanup_fixture_repo "$repo"
+}
+
 test_commit_also_paths() {
     local repo
     repo=$(_commit_fixture)

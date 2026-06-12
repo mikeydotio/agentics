@@ -91,7 +91,9 @@ Then stamp results: `... ledger set-verified <doc-id> true|false` per doc.
 
 One cartographer for `docs/atlas/overview/ARCHITECTURE.md`. Its sources are
 the MODULE DOCS (not source files); its `scopes` are the mapped root
-directories (from the partition labels' top-level dirs). `<files_to_read>` =
+directories (from the partition labels' top-level dirs) — but NEVER a
+directory that contains `docs/atlas` itself, or every map commit would
+re-invalidate the overview forever (self-referential staleness). `<files_to_read>` =
 map-format.md + every module doc. Provide the import-line sections from the
 grounding packs as the cross-module signal. Remind it: index-facts block is
 mandatory, 8–15 bullets, ≤100 chars each.
@@ -114,6 +116,11 @@ again (hashes the overview's sources — the now-final module docs).
 ## 7 — Wire and commit
 
 1. `... init` — CLAUDE.md managed block + `.atlas/` gitignore entry.
+   **Init must run BEFORE the final `ledger finalize`** of step 5/6 when
+   CLAUDE.md or .gitignore is a mapped source (root module): init mutates
+   both files, and hashing before mutating leaves the root doc stale at
+   birth. Canonical order: verify → set-verified → overview → **init** →
+   finalize → index rebuild → lint → commit.
 2. `... commit --message "docs(atlas): full codebase map (<M> modules)"
    --also CLAUDE.md --also .gitignore`
    (the CLI stages by pathspec only and refuses mid-merge).

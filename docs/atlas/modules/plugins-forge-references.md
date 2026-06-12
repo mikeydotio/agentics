@@ -33,7 +33,7 @@ sources:
     blob: d8bc49795bc4f87f355994db97a5b084ba2c82be
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-references, plugins-forge-bin, plugins-forge-hooks, plugins-forge-skills, plugins-freshen]
 generator: cartographer/1
-baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
+baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
 verified: true
 ---
 

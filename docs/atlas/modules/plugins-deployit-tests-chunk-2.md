@@ -17,7 +17,7 @@ sources:
     blob: 678de11417e159376c10cd722f2569e53f91970b
 references_modules: [plugins-deployit-bin, plugins-deployit-tests-chunk-1]
 generator: cartographer/1
-baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
+baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
 verified: true
 ---
 

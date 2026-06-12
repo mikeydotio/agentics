@@ -29,7 +29,7 @@ sources:
     blob: 9981ff4600c847f5fdafc76be727dd5375d49606
 references_modules: [plugins-semver-hooks, plugins-semver-misc]
 generator: cartographer/1
-baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
+baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
 verified: true
 ---
 

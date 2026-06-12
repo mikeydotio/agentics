@@ -3,76 +3,76 @@ module: overview/ARCHITECTURE
 summary: "System shape, module relationships, and cross-plugin invariants of the agentics marketplace"
 sources:
   - path: docs/atlas/modules/plugins-agents-agents-chunk-1.md
-    blob: 16d26af7b173860f1176b5f18741ce99502f4e56
+    blob: ff1636aeac1a65d31ec77b16c1f5b60e78083e40
   - path: docs/atlas/modules/plugins-agents-agents-chunk-2.md
-    blob: e3bb6f399defe7e48fc18eb4260f163d2c91d6dd
+    blob: 5b4e29e8474ef0fb3a9540dac318cfaf7a7d32e1
   - path: docs/atlas/modules/plugins-agents-agents-chunk-3.md
-    blob: 29594d9fcd8c96256e4bb73679b1643d466b716c
+    blob: 93bead5ffb02b1feb95ded578f04afb895f2dc97
   - path: docs/atlas/modules/plugins-agents-agents-ux.md
-    blob: 2f51efc14bb8f7953aee8ce1ce4d65c950ae669e
+    blob: b89cd071d6e2220adbc36f5cce2247fe63914a06
   - path: docs/atlas/modules/plugins-agents-misc.md
-    blob: f92d2dda653d0075814cd3947915655a30e5b82b
+    blob: b8a31be15884358ea01477412b0efea31cbf24ea
   - path: docs/atlas/modules/plugins-agents-references.md
-    blob: 075228f0c0aa9a6c2889a38ea5af7a5e623eb57e
+    blob: 5c3fa913f4390e9cba2523b704e47c78d936d53f
   - path: docs/atlas/modules/plugins-atlas-misc.md
-    blob: 3c8134fdd0aa2861bcb3eb49d1ced77b16c376c7
+    blob: 94c6efce9edff2df84bb1501a356ce2f07662776
   - path: docs/atlas/modules/plugins-atlas-references.md
-    blob: 6eae408b4b2db5491400ff2716e683da986ffff7
+    blob: a29a40ced4db7df2c4eab61223e5222456d39216
   - path: docs/atlas/modules/plugins-atlas-tests.md
-    blob: 5ffce3b30b82a1a8aca03ad1b59229187de33c6c
+    blob: fe39de0803127b4f290602548559c234c81ba5c4
   - path: docs/atlas/modules/plugins-council.md
-    blob: a9776eaa1839130575e4b5294ce9092084498934
+    blob: 6793ff08dbb7e9e761c21af507d337b91afc90ef
   - path: docs/atlas/modules/plugins-deployit-assets.md
-    blob: 0cc746ce2f241a1d5a995fade38cf620423ed402
+    blob: 6b63071d60db5bbf1ae7d039419d9804a24f28ac
   - path: docs/atlas/modules/plugins-deployit-bin.md
-    blob: 002060baf98539410eaf94a3de127be09f05c24e
+    blob: 289446b530bfc93d7a494726d76f92cef1cf0852
   - path: docs/atlas/modules/plugins-deployit-misc.md
-    blob: d100ed9ab0dffa400fe80ada7906d1842af44752
+    blob: 7342e5ae5dc6596e7fb352fd0e45d5b64a75e9d6
   - path: docs/atlas/modules/plugins-deployit-references.md
-    blob: 75f6e1586e96755406291176da2d76dd4a5a2632
+    blob: 0f1dd53b966f858368803ebc3d8d87ecfa54fd12
   - path: docs/atlas/modules/plugins-deployit-tests-chunk-1.md
-    blob: 33105d48390d6d41b55fd15e031c23c00711c66e
+    blob: c3c9a5fd479c8b5f5ab2e5b91d2b3b8348eb6a23
   - path: docs/atlas/modules/plugins-deployit-tests-chunk-2.md
-    blob: c864cf274759cdd836c63cd8b04903bcd76182d0
+    blob: 2dfde1572c249e37b9c3b4b16bd12595f2644b19
   - path: docs/atlas/modules/plugins-forge-agent-overrides.md
-    blob: 8121848f2ae9283251097b61ee0e1677c020344d
+    blob: ec96b49c0e1f1dcfd61a43ed020a5f109e6c5529
   - path: docs/atlas/modules/plugins-forge-bin.md
-    blob: 243f38c21cc575b264fb66e21b574acff0707147
+    blob: ddfd98e1f7b190c3510eee328514398dfb3f9f2a
   - path: docs/atlas/modules/plugins-forge-hooks.md
-    blob: 1165d446626bc0b1d8b201458d6d9c3b4554806d
+    blob: 9a127e208e1838b863d8df6651bc5c520e68a8c2
   - path: docs/atlas/modules/plugins-forge-misc.md
-    blob: a18f1c2df1cb40bb7bbe1a004cbe52e3c7889d29
+    blob: 40e607e81dedc14bb5548d34598ee4b8318d50f9
   - path: docs/atlas/modules/plugins-forge-references.md
-    blob: eaea7e932abc28022cf3ac0fc6d815b25d1565f2
+    blob: 0446ad46e1b382076654118c65c9365c8d8aab5e
   - path: docs/atlas/modules/plugins-forge-skills.md
-    blob: bb975385231a8db011ec923309cbe6f95b995df3
+    blob: 086176fee223d3dbfae264f8319008cf6deff583
   - path: docs/atlas/modules/plugins-freshen.md
-    blob: 1687e64dff30961bb46cfd14abc4ce330ecfb630
+    blob: 278ec432b0a4739dc7474d2ac92f0486d07782cf
   - path: docs/atlas/modules/plugins-greenlight.md
-    blob: 23f7c913dd013cd09ab07c4623ea7e0b0cd69068
+    blob: 0fa444f69698c645f5229d6b387d2ae308440097
   - path: docs/atlas/modules/plugins-hook-guard.md
-    blob: 22404b72d93eedeb50a5d0f5f0bba9a99eeb8419
+    blob: 943e74c200614ff71ce0b2843e8d0659bdf28834
   - path: docs/atlas/modules/plugins-rca.md
-    blob: b0a9851562b9d4d4bc537065edaf59c36d62f0e8
+    blob: e9b1674223a1517e6898f6f56703dbe92cee03cb
   - path: docs/atlas/modules/plugins-semver-hooks.md
-    blob: 5e5126d32f89d8fe302e022e727762b5720749a9
+    blob: 698539ea14918a32ae6e54969932b33055833723
   - path: docs/atlas/modules/plugins-semver-misc.md
-    blob: df14bfd23880eb2ab5ab326f493cfcf67afe2094
+    blob: c348be508a5490cec16a160af8029990c6d1da2b
   - path: docs/atlas/modules/plugins-semver-references.md
-    blob: 905bad0c2736244e9391d00760a7d442eda72660
+    blob: efcaf48896c923fb43043c2622b207b0827c75de
   - path: docs/atlas/modules/plugins-semver-tests.md
-    blob: e7af975f76741c2123925b7828eb142a2e958a19
+    blob: 282687a438e32701babf077aef13b498446cf142
   - path: docs/atlas/modules/root-misc.md
-    blob: 6fa0a9f041c69d1a1151a0420f56853c2fad0e96
+    blob: 775305d548ef7054925d8367eb8e0a59bbf55aaa
   - path: docs/atlas/modules/tests.md
-    blob: 6969eb85a2db40c7d0b8c1cf62ed14133ece8138
+    blob: 9f299fc251cb39f9853ed9ced6a9c70ed109238b
 scopes:
   - tree: plugins
-    sha: 1aeb8d775b58d2b80eccbceda1dd0d01c4bdebda
+    sha: 8b6510659ad9af77aa4b7197286686e31c9c958a
   - tree: tests
     sha: f726161a1df6bcd639771ffdde7d527eaba66cdf
 generator: cartographer/1
-baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
+baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
 ---
 
 # Architecture

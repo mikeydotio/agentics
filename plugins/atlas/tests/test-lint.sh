@@ -101,6 +101,39 @@ test_lint_warns_dead_backtick_path() {
     cleanup_fixture_repo "$repo"
 }
 
+test_lint_l6_skips_non_citation_paths() {
+    local repo
+    repo=$(_lint_fixture)
+    # None of these are repo-root citations: cwd-relative command idiom,
+    # parent-relative paths, absolute machine paths, and a line-numberless
+    # path whose first segment is not a repo directory (server-side artifact).
+    {
+        printf '\nRun `./project.yml` or `../scratch/app.yml` by hand.\n'
+        printf 'The daemon writes `/var/www/app/index.html` and `index/builds.json`.\n'
+    } >> "$repo/docs/atlas/modules/src-auth.md"
+
+    run_atlas "$repo" lint
+    assert_json_field "$OUTPUT" '[.warnings[] | select(.check == "L6")] | length' "0" \
+        "non-citation paths are not L6 findings" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_lint_l6_still_flags_shorthand_citation() {
+    local repo
+    repo=$(_lint_fixture)
+    # A :line suffix claims a repo code location — module-relative shorthand
+    # stays flagged even though `hooks/` is not a repo top-level directory.
+    printf '\nRegistered in `hooks/on-stop.sh:34`.\n' \
+        >> "$repo/docs/atlas/modules/src-auth.md"
+
+    run_atlas "$repo" lint
+    assert_json_contains "$OUTPUT" '[.warnings[].check]' "L6" \
+        "shorthand citation with line number flagged" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
 test_lint_warns_missing_symbol() {
     local repo
     repo=$(create_fixture_repo)

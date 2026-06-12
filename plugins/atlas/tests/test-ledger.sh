@@ -296,6 +296,96 @@ test_ledger_set_verified() {
     cleanup_fixture_repo "$repo"
 }
 
+test_ledger_diff_reports_dirty_paths() {
+    local repo
+    repo=$(_ledger_fixture)
+    run_atlas "$repo" ledger finalize --refresh-hashes
+
+    # Map docs rewritten by finalize are dirty too — they must NOT appear:
+    # dirty_paths is about source inputs, not map files.
+    echo "// changed" >> "$repo/src/auth/a.txt"   # dirty mapped source
+    seed_file "$repo" "src/brand-new.txt"          # dirty unmapped (new) file
+
+    run_atlas "$repo" ledger diff
+    assert_exit_code 0 "$EXIT_CODE" "diff exits 0" || return 1
+    assert_json_contains "$OUTPUT" '.dirty_paths' "src/auth/a.txt" \
+        "dirty mapped source reported" || return 1
+    assert_json_contains "$OUTPUT" '.dirty_paths' "src/brand-new.txt" \
+        "dirty new file reported" || return 1
+    assert_json_field "$OUTPUT" '.dirty_paths | length' "2" \
+        "map files and untouched sources excluded" || return 1
+
+    commit_all "$repo" "commit everything"
+    run_atlas "$repo" ledger diff
+    assert_json_field "$OUTPUT" '.dirty_paths | length' "0" \
+        "clean tree reports no dirty paths" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_ledger_diff_assigns_new_files_by_directory() {
+    local repo
+    repo=$(_ledger_fixture)
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    seed_file "$repo" "src/auth/d.txt"
+    seed_file "$repo" "src/api/d2.txt"
+
+    run_atlas "$repo" ledger diff
+    assert_json_field "$OUTPUT" \
+        '[.new_file_assignments.to_existing[] | select(.doc == "modules/src-auth.md")][0].files[0]' \
+        "src/auth/d.txt" "same-directory file assigned to owning doc" || return 1
+    assert_json_field "$OUTPUT" \
+        '[.new_file_assignments.to_existing[] | select(.doc == "modules/src-auth.md")][0].via' \
+        "directory" "assignment reason recorded" || return 1
+    assert_json_field "$OUTPUT" \
+        '[.new_file_assignments.to_existing[] | select(.doc == "modules/src-api.md")][0].files[0]' \
+        "src/api/d2.txt" "each file goes to its own directory's doc" || return 1
+    assert_json_field "$OUTPUT" '.new_file_assignments.new_modules | length' "0" \
+        "no new modules proposed" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_ledger_diff_assigns_orphan_dir_file_by_partition_mates() {
+    local repo
+    repo=$(_ledger_fixture)
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    # No doc owns anything in zzz/; the claiming partition contains files
+    # owned by src-auth (2 files) and src-api (1 file) — majority wins.
+    seed_file "$repo" "zzz/single.txt"
+
+    run_atlas "$repo" ledger diff
+    assert_json_field "$OUTPUT" \
+        '.new_file_assignments.to_existing[0].doc' "modules/src-auth.md" \
+        "majority partition-mate owner claims the stray file" || return 1
+    assert_json_field "$OUTPUT" \
+        '.new_file_assignments.to_existing[0].via' "partition" \
+        "fallback reason recorded" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_ledger_diff_proposes_new_module_for_new_directory() {
+    local repo i
+    repo=$(_ledger_fixture)
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    # 14 new files force the partitioner to recurse, making lib/ its own
+    # partition with no matching doc — a brand-new module proposal.
+    for i in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
+        seed_file "$repo" "lib/f$i.txt"
+    done
+
+    run_atlas "$repo" ledger diff
+    assert_json_field "$OUTPUT" '.new_file_assignments.new_modules[0].module' \
+        "lib" "new directory proposed as a new module" || return 1
+    assert_json_field "$OUTPUT" '.new_file_assignments.new_modules[0].files | length' \
+        "14" "all new files claimed by the proposal" || return 1
+    assert_json_field "$OUTPUT" '.new_file_assignments.to_existing | length' "0" \
+        "nothing force-fit onto existing docs" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
 test_ledger_diff_shallow_clone() {
     local repo clone
     repo=$(_ledger_fixture)

@@ -569,6 +569,7 @@ def cmd_ledger_finalize(args):
 
     baseline = git_head(root)
     sources_count = 0
+    docs_rewritten = 0
     if args.refresh_hashes:
         # Module docs first, then overview docs — overview sources are module
         # doc files, which must carry their final bytes before being hashed.
@@ -584,6 +585,7 @@ def cmd_ledger_finalize(args):
                     "{}: source files not found: {}".format(
                         doc["doc_id"], ", ".join(missing)),
                 )
+            snapshot = json.dumps(fm, sort_keys=True, default=str)
             hashes = git_hash_paths(root, [e["path"] for e in fm["sources"]])
             for entry in fm["sources"]:
                 entry["blob"] = hashes.get(entry["path"])
@@ -593,8 +595,19 @@ def cmd_ledger_finalize(args):
                     scope["sha"] = git_tree_oid(root, scope["tree"])
             if args.generator:
                 fm["generator"] = args.generator
-            fm["baseline"] = baseline
-            write_doc(doc)
+            # Hash-gating: a doc whose recorded inputs are unchanged must
+            # stay byte-identical across updates, so the advisory baseline
+            # only moves when something else in the frontmatter did.
+            if ("baseline" not in fm
+                    or json.dumps(fm, sort_keys=True, default=str) != snapshot):
+                fm["baseline"] = baseline
+            new_text = serialize_frontmatter(fm) + doc["body"]
+            with open(doc["abspath"], "r", encoding="utf-8",
+                      errors="replace") as f:
+                old_text = f.read()
+            if new_text != old_text:
+                write_doc(doc)
+                docs_rewritten += 1
     else:
         for doc in docs:
             for entry in doc["fm"]["sources"]:
@@ -614,8 +627,95 @@ def cmd_ledger_finalize(args):
         f.write("\n")
 
     return emit_ok(
-        docs_count=len(docs), sources_count=sources_count, baseline=baseline,
+        docs_count=len(docs), sources_count=sources_count,
+        docs_rewritten=docs_rewritten, baseline=baseline,
     )
+
+
+def assign_new_files(root, docs, new_files):
+    """Deterministic destinations for unmapped files. A module doc that
+    already owns sources in the file's directory wins (majority, then
+    lexicographic doc id); otherwise the partition claiming the file points
+    at a doc (module-id match, then majority owner of the partition's other
+    files); whatever remains is proposed as a new module."""
+    out = {"to_existing": [], "new_modules": []}
+    if not new_files:
+        return out
+
+    path_owner = {}
+    dir_owners = {}
+    module_docs = {}
+    for doc in docs:
+        if not doc["doc_id"].startswith("modules/"):
+            continue
+        module_docs[doc_module_id(doc["doc_id"])] = doc["doc_id"]
+        for entry in doc["fm"].get("sources", []):
+            path = entry["path"]
+            if path.startswith("docs/atlas/"):
+                continue
+            path_owner[path] = doc["doc_id"]
+            parent = path.rsplit("/", 1)[0] if "/" in path else ""
+            counts = dir_owners.setdefault(parent, {})
+            counts[doc["doc_id"]] = counts.get(doc["doc_id"], 0) + 1
+
+    claiming = {}
+    part = do_partition(root)
+    if part.get("ok"):
+        for module in part["modules"]:
+            for path in module["paths"]:
+                claiming[path] = module
+
+    def majority(counts):
+        return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+
+    to_existing = {}
+    new_modules = {}
+    for path in new_files:
+        parent = path.rsplit("/", 1)[0] if "/" in path else ""
+        if parent in dir_owners:
+            doc_id = majority(dir_owners[parent])
+            entry = to_existing.setdefault(
+                doc_id, {"via": "directory", "files": []})
+            entry["files"].append(path)
+            continue
+        module = claiming.get(path)
+        if module is not None:
+            doc_id = module_docs.get(module["id"])
+            if doc_id is None:
+                mates = {}
+                for mate in module["paths"]:
+                    owner = path_owner.get(mate)
+                    if owner:
+                        mates[owner] = mates.get(owner, 0) + 1
+                if mates:
+                    doc_id = majority(mates)
+            if doc_id is not None:
+                entry = to_existing.setdefault(
+                    doc_id, {"via": "partition", "files": []})
+                entry["files"].append(path)
+            else:
+                proposal = new_modules.setdefault(
+                    module["id"], {"label": module["label"], "files": []})
+                proposal["files"].append(path)
+            continue
+        # Unclaimed by any partition (over-ceiling repo, scan hiccup) — still
+        # deterministic: propose a module named after the file's directory.
+        seed = sanitize_id(parent or "root")
+        proposal = new_modules.setdefault(
+            seed, {"label": parent or "root", "files": []})
+        proposal["files"].append(path)
+
+    out["to_existing"] = [
+        {"doc": doc_id, "module": doc_module_id(doc_id),
+         "via": data["via"], "files": sorted(data["files"])}
+        for doc_id, data in sorted(to_existing.items())
+    ]
+    out["new_modules"] = [
+        {"module": module_id, "label": data["label"],
+         "files": sorted(data["files"])}
+        for module_id, data in sorted(new_modules.items())
+    ]
+    return out
 
 
 def compute_diff(root, generator=None):
@@ -704,6 +804,15 @@ def compute_diff(root, generator=None):
     new_files = [f["path"] for f in scan.get("files", [])
                  if f["path"] not in covered_paths] if scan.get("ok") else []
 
+    # Dirty-tree honesty: paths whose working-tree bytes diverge from HEAD
+    # and that feed the map (covered sources or unmapped candidates). The
+    # diff above already hashed these as they exist NOW; this list lets the
+    # update flow say so in its summary.
+    dirty_paths = sorted(
+        git_status_paths(root) & (covered_paths | set(new_files)))
+
+    assignments = assign_new_files(root, docs, new_files)
+
     edited_paths = {r["path"] for d in stale_docs for r in d["reasons"]
                     if r["kind"] in ("edited", "deleted")}
     changed_files = len(edited_paths | set(new_files))
@@ -736,6 +845,8 @@ def compute_diff(root, generator=None):
         "fingerprint_stale": fingerprint_stale,
         "ripple_docs": ripple_docs,
         "new_files": new_files,
+        "new_file_assignments": assignments,
+        "dirty_paths": dirty_paths,
         "unchanged_docs": unchanged_docs,
         "summary": {
             "total_docs": total_docs,
@@ -783,6 +894,197 @@ def cmd_ledger_set_verified(args):
             json.dump(ledger, f, indent=2, sort_keys=True)
             f.write("\n")
     return emit_ok(doc=args.doc_id, verified=doc["fm"]["verified"])
+
+
+# ─── doc (mechanical map-doc mutations for the update flow) ──────────────────
+#
+# These exist so the update orchestrator never freehand-edits or deletes map
+# files: pure renames are path-string rewrites (no LLM), and orphaned or
+# conflict-corrupted docs are removed through a path-guarded subcommand that
+# echoes back what a fresh regeneration needs (module identity + sources).
+
+def normalize_doc_id(doc_id):
+    """A valid doc id ('modules/x.md' or 'overview/x.md') or None."""
+    norm = os.path.normpath(doc_id)
+    parts = norm.split(os.sep)
+    if (len(parts) != 2 or parts[0] not in ("modules", "overview")
+            or not parts[1].endswith(".md")):
+        return None
+    return "{}/{}".format(parts[0], parts[1])
+
+
+def cmd_doc_apply_renames(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    diff = compute_diff(root)
+    if not diff["ok"]:
+        emit(diff)
+        return 1
+
+    targets = [(e["doc"], e["renames"]) for e in diff["renamed_docs"]]
+    targets += [(e["doc"], e["renames"]) for e in diff["stale_docs"]
+                if e.get("renames")]
+
+    rewritten = []
+    for doc_id, renames in targets:
+        doc = load_doc(root, doc_id)
+        # Longest old path first so nested/prefixed paths cannot mangle
+        # each other mid-rewrite.
+        pairs = sorted(((r["from"], r["to"]) for r in renames),
+                       key=lambda p: -len(p[0]))
+        for entry in doc["fm"].get("sources", []):
+            for old, new in pairs:
+                if entry.get("path") == old:
+                    entry["path"] = new
+        body = doc["body"]
+        replacements = 0
+        for old, new in pairs:
+            replacements += body.count(old)
+            body = body.replace(old, new)
+        doc["body"] = body
+        write_doc(doc)
+        rewritten.append({
+            "doc": doc_id,
+            "renames": [{"from": old, "to": new} for old, new in pairs],
+            "body_replacements": replacements,
+        })
+    return emit_ok(rewritten=rewritten)
+
+
+def cmd_doc_remove(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    # Validate the whole batch before touching anything — all or nothing.
+    targets = []
+    for doc_id in args.doc_ids:
+        norm = normalize_doc_id(doc_id)
+        if norm is None:
+            return emit_fail(
+                "invalid_doc_id",
+                "'{}' is not a removable map doc id (expected "
+                "modules/<id>.md or overview/<id>.md).".format(doc_id),
+            )
+        abspath = os.path.join(root, MAP_DIR, norm)
+        if not os.path.isfile(abspath):
+            return emit_fail(
+                "unknown_doc", "No map doc at docs/atlas/{}".format(norm))
+        targets.append((norm, abspath))
+
+    removed = []
+    for norm, abspath in targets:
+        doc = load_doc(root, norm)  # frontmatter may be corrupt — best effort
+        fm = doc["fm"] if isinstance(doc["fm"], dict) else {}
+        sources = [e.get("path") for e in (fm.get("sources") or [])
+                   if isinstance(e, dict) and isinstance(e.get("path"), str)]
+        os.remove(abspath)
+        removed.append({
+            "doc": norm,
+            "module": fm.get("module"),
+            "sources": sources,
+        })
+    return emit_ok(removed=removed)
+
+
+# ─── diffpack (anchored-regeneration input for cartographers) ────────────────
+#
+# Cartographer agents have no Bash, and pasting diffs into agent prompts
+# would route change content through the orchestrator's context. Instead the
+# CLI writes one patch file per doc under .atlas/diffs/ — `git diff` between
+# each source's recorded and current blob, plus deleted/new-source notes —
+# and the agent reads it from disk.
+
+DIFFS_RELDIR = os.path.join(".atlas", "diffs")
+
+
+def blob_to_worktree_diff(root, recorded_blob, path):
+    """Unified diff from a recorded blob to the file's working-tree bytes.
+
+    The recorded blob may predate HEAD (mapped from a dirty tree) and the
+    current bytes may be uncommitted, so neither side is guaranteed to be in
+    the object database. `git cat-file` materializes the old side when it
+    exists; `git diff --no-index` against the live file needs no objects at
+    all and never writes any.
+    """
+    code, old_bytes = run_git(["cat-file", "blob", recorded_blob], cwd=root)
+    if code != 0:
+        return "(prior content unavailable — read the file fully)\n"
+    tmp_dir = os.path.join(root, DIFFS_RELDIR)
+    os.makedirs(tmp_dir, exist_ok=True)
+    tmp_path = os.path.join(tmp_dir, ".prior-blob.tmp")
+    try:
+        with open(tmp_path, "wb") as f:
+            f.write(old_bytes)
+        code, out, _ = run_git_capture(
+            ["diff", "--no-index", "--", tmp_path, path], cwd=root)
+        if code not in (0, 1):  # --no-index exits 1 when files differ
+            return "(blob diff unavailable — read the file fully)\n"
+        return out.decode("utf-8", errors="replace")
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def cmd_diffpack(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    norm = normalize_doc_id(args.doc_id)
+    if norm is None or not os.path.isfile(os.path.join(root, MAP_DIR, norm)):
+        return emit_fail(
+            "unknown_doc", "No map doc at docs/atlas/{}".format(args.doc_id))
+    doc = load_doc(root, norm)
+    if doc["fm"] is None or not isinstance(doc["fm"].get("sources"), list):
+        return emit_fail(
+            "invalid_frontmatter",
+            "{} has no usable sources frontmatter.".format(norm))
+
+    current = current_blob_map(root)
+    sections = []
+    changed = deleted = 0
+    for entry in doc["fm"]["sources"]:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+            continue
+        path, recorded = entry["path"], entry.get("blob")
+        cur = current.get(path)
+        if cur is None:
+            sections.append(
+                "### {} (deleted) — drop every claim drawn from this file\n"
+                .format(path))
+            deleted += 1
+        elif not recorded:
+            sections.append(
+                "### {} (no recorded blob) — read it fully\n".format(path))
+            changed += 1
+        elif cur != recorded:
+            sections.append("### {} (edited)\n{}".format(
+                path, blob_to_worktree_diff(root, recorded, path)))
+            changed += 1
+    for path in args.add or []:
+        sections.append(
+            "### {} (new source) — read it fully and add it to sources\n"
+            .format(path))
+    added = len(args.add or [])
+
+    if not sections:
+        return emit_ok(patch=None, sources_changed=0, sources_deleted=0,
+                       sources_added=0)
+
+    rel_patch = os.path.join(DIFFS_RELDIR, norm[:-3].replace("/", "-") + ".patch")
+    abs_patch = os.path.join(root, rel_patch)
+    os.makedirs(os.path.dirname(abs_patch), exist_ok=True)
+    with open(abs_patch, "w", encoding="utf-8") as f:
+        f.write("# diffpack for docs/atlas/{} — changes since the doc was "
+                "written\n\n".format(norm))
+        f.write("\n".join(sections))
+    return emit_ok(patch=rel_patch, sources_changed=changed,
+                   sources_deleted=deleted, sources_added=added)
 
 
 # ─── lock ────────────────────────────────────────────────────────────────────
@@ -2062,6 +2364,22 @@ def main():
     set_verified.add_argument("doc_id", help="Doc id, e.g. modules/src-auth.md")
     set_verified.add_argument("value", choices=["true", "false"])
 
+    doc = sub.add_parser("doc", help="Mechanical map-doc mutations")
+    doc_sub = doc.add_subparsers(dest="doc_command")
+    doc_sub.add_parser(
+        "apply-renames",
+        help="Rewrite pure-renamed source paths inside map docs (no LLM)")
+    doc_remove = doc_sub.add_parser(
+        "remove", help="Delete map docs (orphaned or conflict-corrupted)")
+    doc_remove.add_argument("doc_ids", nargs="+",
+                            help="Doc ids, e.g. modules/src-auth.md")
+
+    diffpack = sub.add_parser(
+        "diffpack", help="Write a doc's anchored-regeneration patch file")
+    diffpack.add_argument("doc_id", help="Doc id, e.g. modules/src-auth.md")
+    diffpack.add_argument("--add", action="append", default=[],
+                          help="New source path to note in the pack (repeatable)")
+
     lock = sub.add_parser("lock", help="Heartbeat lock for map operations")
     lock_sub = lock.add_subparsers(dest="lock_command")
     acquire = lock_sub.add_parser("acquire", help="Acquire the lock")
@@ -2110,6 +2428,16 @@ def main():
         emit_fail("usage", "Unknown ledger command. "
                   "Available: finalize, diff, set-verified.")
         return 2
+    if args.command == "doc":
+        if args.doc_command == "apply-renames":
+            return cmd_doc_apply_renames(args)
+        if args.doc_command == "remove":
+            return cmd_doc_remove(args)
+        emit_fail("usage", "Unknown doc command. "
+                  "Available: apply-renames, remove.")
+        return 2
+    if args.command == "diffpack":
+        return cmd_diffpack(args)
     if args.command == "lock":
         if args.lock_command in ("acquire", "heartbeat", "release"):
             return cmd_lock(args)

@@ -44,6 +44,18 @@ case "$cmd" in
     index)
         run_cli index "$@"
         ;;
+    ground)
+        run_cli ground "$@"
+        ;;
+    commit)
+        run_cli commit "$@"
+        ;;
+    init)
+        run_cli init
+        ;;
+    remove)
+        run_cli remove
+        ;;
     *)
         usage_json
         ;;

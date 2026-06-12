@@ -1043,6 +1043,241 @@ def cmd_status(args):
     return 0
 
 
+# ─── ground (grounding pack for mapper agents) ──────────────────────────────
+#
+# Deterministic signals that keep LLM mappers grounded: the module's files with
+# working-tree blob hashes, import-ish lines, and definition candidates ranked
+# by external fan-in (aider-derived heuristics, grep-portable).
+
+DEF_LINE_RE = re.compile(
+    r"^\s*(?:public\s+|private\s+|internal\s+|open\s+|final\s+|abstract\s+"
+    r"|export\s+|static\s+|async\s+|sealed\s+|data\s+)*"
+    r"(func|def|class|struct|enum|protocol|interface|fn|function|type"
+    r"|extension|actor|trait|impl|module|defmodule|object)"
+    r"\s+([A-Za-z_][A-Za-z0-9_]*)")
+
+IMPORT_LINE_RE = re.compile(
+    r"^\s*(import|from|require|use|using|include|#include|@import|source)\b")
+
+GROUND_MAX_IMPORT_LINES = 20   # per file
+GROUND_MAX_SYMBOLS = 40
+GROUND_MAX_FILE_BYTES = 200_000  # skip giants when computing fan-in
+
+
+def read_text(abspath):
+    try:
+        with open(abspath, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def cmd_ground(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    part = do_partition(root)
+    if not part["ok"]:
+        emit(part)
+        return 1
+    module = next((m for m in part["modules"] if m["id"] == args.module_id), None)
+    if module is None:
+        return emit_fail(
+            "unknown_module",
+            "No module '{}' in the current partition. Known: {}".format(
+                args.module_id, ", ".join(m["id"] for m in part["modules"])),
+        )
+
+    hashes = git_hash_paths(root, module["paths"])
+    files = [{"path": p, "bytes": b, "blob": hashes.get(p)}
+             for p, b in ((f, os.path.getsize(os.path.join(root, f)))
+                          for f in module["paths"])]
+
+    imports = {}
+    candidates = {}  # name -> (kind, "path:line")
+    for relpath in module["paths"]:
+        text = read_text(os.path.join(root, relpath))
+        if text is None:
+            continue
+        import_lines = []
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if IMPORT_LINE_RE.match(line) and len(import_lines) < GROUND_MAX_IMPORT_LINES:
+                import_lines.append(line.strip())
+            m = DEF_LINE_RE.match(line)
+            if m and m.group(2) not in candidates:
+                candidates[m.group(2)] = (m.group(1), "{}:{}".format(relpath, lineno))
+        if import_lines:
+            imports[relpath] = import_lines
+
+    # Fan-in: how many files OUTSIDE this module reference each candidate.
+    scan = do_scan(root, enforce_ceiling=False)
+    module_paths = set(module["paths"])
+    outside_texts = []
+    if scan.get("ok"):
+        for f in scan["files"]:
+            if f["path"] in module_paths or f["bytes"] > GROUND_MAX_FILE_BYTES:
+                continue
+            text = read_text(os.path.join(root, f["path"]))
+            if text is not None:
+                outside_texts.append(text)
+
+    symbols = []
+    for name in sorted(candidates):
+        kind, defined_at = candidates[name]
+        pattern = re.compile(WORDISH_BOUNDARY.format(re.escape(name)))
+        fan_in = sum(1 for text in outside_texts if pattern.search(text))
+        # aider-derived scoring: sqrt-dampened fan-in (0.1 keep-alive for
+        # unreferenced definitions), 10x for descriptive names.
+        score = (fan_in ** 0.5) if fan_in > 0 else 0.1
+        if len(name) >= 8:
+            score *= 10
+        symbols.append({"name": name, "kind": kind, "defined_at": defined_at,
+                        "fan_in": fan_in, "score": round(score, 2)})
+    symbols.sort(key=lambda s: (-s["score"], s["name"]))
+    symbols = symbols[:GROUND_MAX_SYMBOLS]
+
+    return emit_ok(module={"id": module["id"], "label": module["label"],
+                           "strategy": module["strategy"]},
+                   files=files, imports=imports, symbols=symbols)
+
+
+# ─── commit (guarded, pathspec-scoped) ───────────────────────────────────────
+
+def run_git_capture(args, cwd):
+    proc = subprocess.run(["git"] + args, cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def git_with_index_retry(args, cwd, attempts=3):
+    """Retry on index.lock contention from the user's own git activity."""
+    for attempt in range(attempts):
+        code, out, err = run_git_capture(args, cwd)
+        if code == 0 or b"index.lock" not in err:
+            return code, out, err
+        time.sleep(0.5 * (attempt + 1))
+    return code, out, err
+
+
+def cmd_commit(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    code, _ = run_git(["rev-parse", "-q", "--verify", "MERGE_HEAD"], cwd=root)
+    if code == 0:
+        return emit_fail(
+            "mid_merge",
+            "A merge is in progress — git refuses partial commits mid-merge. "
+            "Complete or abort the merge, then run /atlas update.",
+        )
+
+    paths = ["docs/atlas/"] + [p for p in (args.also or [])
+                               if os.path.exists(os.path.join(root, p))]
+    code, out = run_git(["status", "--porcelain", "-z", "--"] + paths, cwd=root)
+    if code == 0 and not out.strip():
+        return emit_ok(committed=False, message="Nothing to commit in the map paths.")
+
+    code, _, err = git_with_index_retry(["add", "--"] + paths, cwd=root)
+    if code != 0:
+        return emit_fail("git_add_failed", err.decode("utf-8", errors="replace").strip())
+    code, _, err = git_with_index_retry(
+        ["commit", "-m", args.message, "--"] + paths, cwd=root)
+    if code != 0:
+        return emit_fail("git_commit_failed", err.decode("utf-8", errors="replace").strip())
+
+    sha = git_head(root)
+    return emit_ok(committed=True, sha=sha)
+
+
+# ─── init / remove (CLAUDE.md managed block + gitignore wiring) ──────────────
+
+CLAUDE_MD_START = "<!-- atlas:start -->"
+CLAUDE_MD_END = "<!-- atlas:end -->"
+
+CLAUDE_MD_BLOCK = """<!-- atlas:start -->
+## Codebase Map (atlas)
+
+@docs/atlas/INDEX.md
+
+- The imported INDEX above is this project's codebase map. Use its routing
+  table: read the listed module doc before working in that area.
+- The map covers code structure only; build/test/workflow guidance lives in
+  the rest of this file.
+- After committing changes to mapped source files, suggest running
+  `/atlas update`.
+<!-- atlas:end -->"""
+
+GITIGNORE_LINE = ".atlas/"
+GITIGNORE_COMMENT = "# Atlas runtime state (ephemeral, never committed)"
+
+
+def claude_md_block_re():
+    return re.compile(
+        re.escape(CLAUDE_MD_START) + r".*?" + re.escape(CLAUDE_MD_END),
+        re.DOTALL)
+
+
+def cmd_init(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    claude_path = os.path.join(root, "CLAUDE.md")
+    if os.path.isfile(claude_path):
+        with open(claude_path, "r", encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        if CLAUDE_MD_START in text:
+            text = claude_md_block_re().sub(CLAUDE_MD_BLOCK, text, count=1)
+            action = "replaced"
+        else:
+            text = text.rstrip("\n") + "\n\n" + CLAUDE_MD_BLOCK + "\n"
+            action = "appended"
+    else:
+        text = CLAUDE_MD_BLOCK + "\n"
+        action = "created"
+    with open(claude_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    gitignore_path = os.path.join(root, ".gitignore")
+    gitignore_action = "present"
+    lines = []
+    if os.path.isfile(gitignore_path):
+        with open(gitignore_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    if GITIGNORE_LINE not in lines:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.extend([GITIGNORE_COMMENT, GITIGNORE_LINE])
+        with open(gitignore_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        gitignore_action = "added"
+
+    return emit_ok(claude_md=action, gitignore=gitignore_action)
+
+
+def cmd_remove(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    claude_path = os.path.join(root, "CLAUDE.md")
+    if not os.path.isfile(claude_path):
+        return emit_ok(claude_md="absent")
+    with open(claude_path, "r", encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    if CLAUDE_MD_START not in text:
+        return emit_ok(claude_md="absent")
+    text = claude_md_block_re().sub("", text, count=1)
+    text = re.sub(r"\n{3,}", "\n\n", text).rstrip("\n") + "\n"
+    with open(claude_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return emit_ok(claude_md="removed",
+                   note="The .atlas/ gitignore entry and docs/atlas/ map files "
+                        "are left in place; delete them manually if desired.")
+
+
 # ─── INDEX rebuild ───────────────────────────────────────────────────────────
 #
 # INDEX.md is DERIVED — assembled mechanically from doc frontmatter plus the
@@ -1793,6 +2028,17 @@ def main():
     lint.add_argument("--fast", action="store_true",
                       help="Cheap subset only (markers, drift, INDEX checks)")
 
+    ground = sub.add_parser("ground", help="Grounding pack for a mapper agent")
+    ground.add_argument("module_id", help="Module id from `partition`")
+
+    commit = sub.add_parser("commit", help="Guarded pathspec-scoped map commit")
+    commit.add_argument("--message", required=True)
+    commit.add_argument("--also", action="append", default=[],
+                        help="Additional path to include (repeatable)")
+
+    sub.add_parser("init", help="Inject the CLAUDE.md block + gitignore entry")
+    sub.add_parser("remove", help="Remove the CLAUDE.md block")
+
     args = parser.parse_args()
     if args.command == "scan":
         return cmd_scan(args)
@@ -1820,9 +2066,18 @@ def main():
         return 2
     if args.command == "lint":
         return cmd_lint(args)
+    if args.command == "ground":
+        return cmd_ground(args)
+    if args.command == "commit":
+        return cmd_commit(args)
+    if args.command == "init":
+        return cmd_init(args)
+    if args.command == "remove":
+        return cmd_remove(args)
 
     emit_fail("usage", "Unknown or missing subcommand. Available: scan, "
-              "partition, ledger, lock, status, index, lint.")
+              "partition, ledger, lock, status, index, lint, ground, "
+              "commit, init, remove.")
     return 2
 
 

@@ -134,6 +134,16 @@ Exit codes: 0 success, 1 operation failed, 2 usage error.
 | `lint [--fast]` | integrity checks L1–L11 | 3 |
 | `index rebuild` | mechanical INDEX assembly + budget enforcement | 3 |
 | `commit` | guarded pathspec-scoped map commit | 3+ |
+| `doc apply-renames` | mechanical path rewrite for pure renames (no LLM) | 6 |
+| `doc remove` | path-guarded doc deletion; echoes module + sources for regen | 6 |
+| `diffpack` | per-doc anchored-regen patch file under `.atlas/diffs/` | 6 |
+
+`ledger diff` additionally reports `dirty_paths` (working-tree-divergent map
+inputs — hashed as they exist now) and `new_file_assignments` (see below).
+`ledger finalize --refresh-hashes` is churn-free: a doc is rewritten only when
+its frontmatter values or bytes actually changed, and the advisory `baseline`
+moves only with such a change — unchanged docs stay byte-identical, which is
+the hash-gating property `/atlas update` proves with `git show --stat`.
 
 ### config.yaml (restricted YAML subset)
 
@@ -171,6 +181,16 @@ modules:                 # manual partition overrides — first match wins
 5. Module ids sanitize paths (`/`→`-`, non-alphanumerics collapsed); collisions get a
    numeric suffix; output sorted by id.
 
+## New-file assignment (`ledger diff`)
+
+Unmapped files get deterministic destinations, strongest signal first:
+(1) a module doc already owning sources in the file's directory (majority,
+tie → lexicographic doc id); (2) the partition claiming the file — by
+module-id match against an existing doc, then by majority owner of the
+partition's other files; (3) a new-module proposal named by the claiming
+partition. Quarantined docs' files reappear here by construction — the
+update flow ignores those entries because quarantine recovery owns them.
+
 ## Roadmap
 
 - [x] Phase 1 — Scaffold, design record, scan + partition
@@ -179,8 +199,9 @@ modules:                 # manual partition overrides — first match wins
 - [x] Phase 4 — Agents (cartographer, map-verifier) and map format
 - [x] Phase 5 — Full-map orchestration + CLAUDE.md injection (dogfooded:
       32-module map of this repo, 32/32 verifier pass, INDEX 5.6k chars)
-- [ ] Phase 6 — Incremental update + verify flows (update-protocol.md is
-      currently a stub; ledger diff/classification already built in P2)
+- [x] Phase 6 — Incremental update + verify flows (update-protocol.md real;
+      doc apply-renames/remove + diffpack + churn-free finalize; e2e fixture
+      flows incl. hash-gating byte-identity proof; dogfooded on this repo)
 - [ ] Phase 7 — Hardening, docs, release (known items: _template.md
       pipeline enum lacks `atlas`; map-format 100-char rule needs an
       edge-line exemption; ground skips .md prose candidates; L6 residue

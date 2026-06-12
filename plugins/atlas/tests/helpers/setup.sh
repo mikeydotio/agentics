@@ -137,11 +137,17 @@ write_overview_doc() {
     } > "$doc"
 }
 
-# write_full_module_doc <repo> <doc-id> <module> <symbol> <source-path>
-# A single-source module doc with the COMPLETE canonical skeleton (passes
-# lint L1) and a Public API table row claiming <symbol> at <source-path>:1.
+# write_full_module_doc <repo> <doc-id> <module> <symbol> <source-path> \
+#                       [refs-csv] [extra-source...]
+# A module doc with the COMPLETE canonical skeleton (passes lint L1) and a
+# Public API table row claiming <symbol> at <source-path>:1. Optional
+# [refs-csv] fills references_modules; optional extra sources join the
+# frontmatter sources list (body only references the first source).
 write_full_module_doc() {
     local repo="$1" doc_id="$2" module="$3" symbol="$4" src="$5"
+    local refs_csv="${6:-}"
+    shift 5
+    [ $# -gt 0 ] && shift   # drop refs-csv; the rest are extra sources
     local doc="$repo/docs/atlas/modules/$doc_id.md"
     mkdir -p "$(dirname "$doc")"
     {
@@ -151,6 +157,13 @@ write_full_module_doc() {
         echo "read_when: \"Touching $module\""
         echo "sources:"
         echo "  - path: $src"
+        local extra
+        for extra in "$@"; do
+            echo "  - path: $extra"
+        done
+        if [ -n "$refs_csv" ]; then
+            echo "references_modules: [$refs_csv]"
+        fi
         echo "generator: cartographer/1 model=test"
         echo "---"
         echo ""

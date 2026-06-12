@@ -1,5 +1,5 @@
 {
-  "baseline": "65c6f5e8e65713af63741fbe8d498384f530200e",
+  "baseline": "545be2bb7ff18f328277446829f1be6457ac6363",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/1",
@@ -132,11 +132,11 @@
       ],
       "sources": {
         "plugins/atlas/.claude-plugin/plugin.json": "48214a1798f73c5934e857252cb034cac416d031",
-        "plugins/atlas/README.md": "b425bd2e7b2eab011326a8ac19091a0931b7729f",
+        "plugins/atlas/README.md": "253f5d72b97394e3584cffedb180e1c87695dd26",
         "plugins/atlas/agent-overrides/cartographer-context.md": "958ae88df7fb648d7d0ef704546f4b22e8997a6f",
         "plugins/atlas/agent-overrides/map-verifier-context.md": "7233cde0eb20367f4f0bd64eed2858d387df7839",
-        "plugins/atlas/bin/atlas-cli": "b166e95ef0511153f34b03c6babda59cdc60da6b",
-        "plugins/atlas/bin/atlas-router.sh": "048600f5049437b86d10ca7252fee5e57452d5ca",
+        "plugins/atlas/bin/atlas-cli": "a32b337bfb3a27220fcabadd6d4452934cb80714",
+        "plugins/atlas/bin/atlas-router.sh": "e08879da3530c0e2caf42be238e400355fe54a60",
         "plugins/atlas/hooks/hooks.json": "41851681fe5ce7fdd0fc14b33dd4868d38398e6a",
         "plugins/atlas/hooks/session-start.sh": "4277ada1b6f54bba1034edf015c622f6a3a3eb94",
         "plugins/atlas/skills/atlas/SKILL.md": "69a3df6cef90014ee2b8ea6cde4bc3c1f3862e13"
@@ -154,12 +154,12 @@
       ],
       "sources": {
         "plugins/atlas/references/claude-md-injection.md": "fb192f9f878111762ca863b12091dfe9036eeef8",
-        "plugins/atlas/references/design.md": "6e2e2489a19c3c91b97e93099ae9de70e150edf6",
+        "plugins/atlas/references/design.md": "471a0bbfdcbc9c03eed60e5f174212cdc740b7b5",
         "plugins/atlas/references/map-format.md": "0b795e86fe999259e2f6aed1ccd24449a7534dde",
         "plugins/atlas/references/mapping-protocol.md": "1703faec5b4012c471e1c615da1305b136a07ec4",
-        "plugins/atlas/references/update-protocol.md": "89ca721f833c93b20d250bd8c190c619519da1a6"
+        "plugins/atlas/references/update-protocol.md": "eefd4c2e9c51855c6a69efd1890b3180933ae008"
       },
-      "summary": "Normative canon for atlas \u2014 design rationale, map file format, full-map orchestration, CLAUDE.md delivery",
+      "summary": "Normative canon for atlas \u2014 design rationale, map file format, full-map and update orchestration, CLAUDE.md delivery",
       "verified": true
     },
     "modules/plugins-atlas-tests.md": {
@@ -169,19 +169,22 @@
         "plugins-atlas-misc"
       ],
       "sources": {
-        "plugins/atlas/tests/helpers/setup.sh": "218e426a7e05f0286a2b5b422897b3466e17f3af",
+        "plugins/atlas/tests/helpers/setup.sh": "43e023c777e86119e2569cb7062e6d8a83da8afc",
         "plugins/atlas/tests/run-tests.sh": "febae8f36c0646a382a834d4bb81fac24f7ba8fb",
-        "plugins/atlas/tests/test-commit.sh": "7d66eeedfb471de9a12b2720e7bbcf998e9900c7",
+        "plugins/atlas/tests/test-commit.sh": "e5409959bdfdd6ce369bef3f40d7ff0374b5ae22",
+        "plugins/atlas/tests/test-diffpack.sh": "a3bce143e30dbdef734d31c870c6ebbf696d6ced",
+        "plugins/atlas/tests/test-doc.sh": "a8fb82305896d7e1549bd0e213205fb5357c7012",
         "plugins/atlas/tests/test-ground.sh": "a6bddad7cdecaf512472a53f199baaa07f2b3a31",
         "plugins/atlas/tests/test-hook.sh": "5545302a4317791ae60c63e45833dc34b822636f",
         "plugins/atlas/tests/test-index.sh": "2874a1bcef0889b9e18d91f93c60b3737404f665",
         "plugins/atlas/tests/test-init.sh": "1f85b244ea31d8dae57fbb880aad83337d1938f1",
-        "plugins/atlas/tests/test-ledger.sh": "1b2fa083305e51fd580c12a0dab67425a55cb875",
+        "plugins/atlas/tests/test-ledger.sh": "abe078f0fd272c428a003fad154a15c54fea57d6",
         "plugins/atlas/tests/test-lint.sh": "68f14c678b9cd861c77f034ab4d807275508cc0b",
         "plugins/atlas/tests/test-lock.sh": "9b6c39e83aab4b0db326b19e51dd4111553d463b",
         "plugins/atlas/tests/test-partition.sh": "4671fae665fdc132eabd409016d982e10c51501e",
         "plugins/atlas/tests/test-scan.sh": "64fdfb8349fc9b8fc74817948c47ac664b123cae",
-        "plugins/atlas/tests/test-status.sh": "fdde9f2ee86018efefcd6e1794a0a90d04cf1be0"
+        "plugins/atlas/tests/test-status.sh": "fdde9f2ee86018efefcd6e1794a0a90d04cf1be0",
+        "plugins/atlas/tests/test-update-flow.sh": "7c4643183c99a2ff6ce20afa169e0e7fdd6baed7"
       },
       "summary": "Bash regression suite pinning atlas-cli JSON contracts and the session hook via throwaway /tmp git repos",
       "verified": true
@@ -631,6 +634,7 @@
         ".semver/config.yaml": "34a5c2bfa206393f2256834b5bd999e9aec3f077",
         "AGENTS.md": "04fef50d2517e57a411f7f23a09af90a44b24dba",
         "CLAUDE.md": "370157c29cb3943526846444e4b0fa46dbef6e56",
+        "HANDOFF.md": "1dec694ada883bd05084d85d7fe425b5cdfbc6cb",
         "Makefile": "b183c37836c8dbbcc10676db66113d62dad41652",
         "README.md": "5f28be43c59b3bb49b0976dc3199d42abfee9fea",
         "docs/forge-workflow.md": "829219590927e60d40bc6b2e7d19bbedba22613d"
@@ -664,9 +668,9 @@
         "docs/atlas/modules/plugins-agents-agents-ux.md": "75996ab298a96cb7a7e3e4faf8db2892caa5c44f",
         "docs/atlas/modules/plugins-agents-misc.md": "93e546126e74b366acd2e58c900bd07e2a6d4766",
         "docs/atlas/modules/plugins-agents-references.md": "1b7e2f101fe5a67313d58196adb202cfae5dd82c",
-        "docs/atlas/modules/plugins-atlas-misc.md": "01d409ac10ad2a004933dfa17bb9a41324ccf375",
-        "docs/atlas/modules/plugins-atlas-references.md": "50eae2da0fa58bc020dc8f4ac18ab884c3589047",
-        "docs/atlas/modules/plugins-atlas-tests.md": "9c5668a61e45bc6857b4eec29026a39297ba2a83",
+        "docs/atlas/modules/plugins-atlas-misc.md": "417a8429598db1d7587c9df980e6a89067d7a8b0",
+        "docs/atlas/modules/plugins-atlas-references.md": "9bcf60683ca69585b6277603f68bb82c4cdf13f1",
+        "docs/atlas/modules/plugins-atlas-tests.md": "0e0bc56b3eb6492412b8c162495b9274896f0622",
         "docs/atlas/modules/plugins-council.md": "3f13dbba9eab880139632767c967a135d1f35fbd",
         "docs/atlas/modules/plugins-deployit-assets.md": "b9542c222709d51d45b5c10eb2ef0e9a308b71e3",
         "docs/atlas/modules/plugins-deployit-bin.md": "bfbf4bda712d68baa19c3fbf77aeffebd7de0d0a",
@@ -688,7 +692,7 @@
         "docs/atlas/modules/plugins-semver-misc.md": "874e33238961a11dc026092fc94aa22d91c2a2ba",
         "docs/atlas/modules/plugins-semver-references.md": "c9e5d73a6e8e489f559fb77f1899c54360809681",
         "docs/atlas/modules/plugins-semver-tests.md": "1e5da4704bb1b156495e771d35234862141adf0e",
-        "docs/atlas/modules/root-misc.md": "3dd1ca78ede7dab154655115b660df8419be0d82",
+        "docs/atlas/modules/root-misc.md": "7a46591e6608b5a1508d4929c22a61c34cc8ee93",
         "docs/atlas/modules/tests.md": "9d72ed08c7b45fd7fc6c474366e62d2dfee2292a"
       },
       "summary": "System shape, module relationships, and cross-plugin invariants of the agentics marketplace",
@@ -701,6 +705,7 @@
     ".semver/config.yaml": "modules/root-misc.md",
     "AGENTS.md": "modules/root-misc.md",
     "CLAUDE.md": "modules/root-misc.md",
+    "HANDOFF.md": "modules/root-misc.md",
     "Makefile": "modules/root-misc.md",
     "README.md": "modules/root-misc.md",
     "docs/forge-workflow.md": "modules/root-misc.md",
@@ -759,6 +764,8 @@
     "plugins/atlas/tests/helpers/setup.sh": "modules/plugins-atlas-tests.md",
     "plugins/atlas/tests/run-tests.sh": "modules/plugins-atlas-tests.md",
     "plugins/atlas/tests/test-commit.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-diffpack.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-doc.sh": "modules/plugins-atlas-tests.md",
     "plugins/atlas/tests/test-ground.sh": "modules/plugins-atlas-tests.md",
     "plugins/atlas/tests/test-hook.sh": "modules/plugins-atlas-tests.md",
     "plugins/atlas/tests/test-index.sh": "modules/plugins-atlas-tests.md",
@@ -769,6 +776,7 @@
     "plugins/atlas/tests/test-partition.sh": "modules/plugins-atlas-tests.md",
     "plugins/atlas/tests/test-scan.sh": "modules/plugins-atlas-tests.md",
     "plugins/atlas/tests/test-status.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-update-flow.sh": "modules/plugins-atlas-tests.md",
     "plugins/council/.claude-plugin/plugin.json": "modules/plugins-council.md",
     "plugins/council/README.md": "modules/plugins-council.md",
     "plugins/council/references/archetypes.md": "modules/plugins-council.md",

@@ -13,6 +13,8 @@ sources:
     blob: 04fef50d2517e57a411f7f23a09af90a44b24dba
   - path: CLAUDE.md
     blob: 370157c29cb3943526846444e4b0fa46dbef6e56
+  - path: HANDOFF.md
+    blob: 1dec694ada883bd05084d85d7fe425b5cdfbc6cb
   - path: Makefile
     blob: b183c37836c8dbbcc10676db66113d62dad41652
   - path: README.md
@@ -21,7 +23,7 @@ sources:
     blob: 829219590927e60d40bc6b2e7d19bbedba22613d
 references_modules: [plugins-agents-misc, plugins-atlas-misc, plugins-atlas-tests, plugins-council, plugins-deployit-misc, plugins-deployit-tests-chunk-1, plugins-forge-misc, plugins-freshen, plugins-greenlight, plugins-hook-guard, plugins-rca, plugins-semver-misc, plugins-semver-tests, tests]
 generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
+baseline: 545be2bb7ff18f328277446829f1be6457ac6363
 verified: true
 ---
 
@@ -75,6 +77,7 @@ None — declarative JSON/YAML/markdown with no internal symbols that clear the 
 - .semver/config.yaml carries the semver plugin's settings (auto_bump, git_tagging, target_branch).
 - `CLAUDE.md:76` forbids editing .semver/config.yaml unless the user explicitly asks.
 - `AGENTS.md:5-27` mandates the storyhook loop for every agent: context, next, done, handoff.
+- HANDOFF.md is the atlas-plugin build handoff — contributor work state, not wiring (`HANDOFF.md:1`).
 
 ## External deps
 

@@ -1433,6 +1433,12 @@ def cmd_ground(args):
         text = read_text(os.path.join(root, relpath))
         if text is None:
             continue
+        # Markdown is prose: sentences starting with "from"/"use"/"include"
+        # match IMPORT_LINE_RE and phrases like "module docs" match
+        # DEF_LINE_RE. Skip extraction; .md files still get listed (and
+        # hashed) in `files` and still count toward fan-in.
+        if relpath.lower().endswith(".md"):
+            continue
         import_lines = []
         for lineno, line in enumerate(text.splitlines(), 1):
             if IMPORT_LINE_RE.match(line) and len(import_lines) < GROUND_MAX_IMPORT_LINES:
@@ -1907,15 +1913,25 @@ def lint_map(root, fast=False):
                 add("L3", "ERROR", doc_file,
                     "ledger source `{}` does not exist".format(entry["path"]))
 
-        # L6 — backticked path-ish mentions resolve. Paths under gitignored
-        # top-level dirs (.forge/, .rca/, …) are runtime artifacts that
-        # legitimately don't exist in the tree — skip them.
+        # L6 — backticked path-ish mentions resolve. Skipped as not being
+        # repo-root citations: paths under gitignored top-level dirs
+        # (runtime artifacts), `./`/`../`/absolute prefixes (cwd-relative
+        # command idiom and machine paths), and line-numberless paths whose
+        # first segment is not a repo directory (server-side artifacts like
+        # `index/builds.json`). A `:line` suffix always claims a repo code
+        # location, so module-relative shorthand stays flagged.
         for match in BACKTICK_RE.finditer(body):
             token = match.group(1)
             if not PATHISH_RE.fullmatch(token):
                 continue
-            relpath = token.rsplit(":", 1)[0] if re.search(r":\d+$", token) else token
-            if relpath.split("/", 1)[0] in gitignored_tops:
+            if token.startswith(("./", "../", "/")):
+                continue
+            has_line = re.search(r":\d+$", token)
+            relpath = token.rsplit(":", 1)[0] if has_line else token
+            first_seg = relpath.split("/", 1)[0]
+            if first_seg in gitignored_tops:
+                continue
+            if not has_line and not os.path.isdir(os.path.join(root, first_seg)):
                 continue
             if not os.path.exists(os.path.join(root, relpath)):
                 add("L6", "WARN", doc_file,

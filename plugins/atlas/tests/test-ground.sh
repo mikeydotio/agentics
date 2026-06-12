@@ -89,6 +89,33 @@ test_ground_ranks_symbols_with_fan_in() {
     cleanup_fixture_repo "$repo"
 }
 
+test_ground_skips_markdown_prose() {
+    local repo
+    repo=$(_ground_fixture)
+    cat > "$repo/src/auth/NOTES.md" <<'MD'
+from the start, auth notes live in this file.
+module docs describe the service; use this file for prose.
+
+```python
+def fenced_example():
+    pass
+```
+MD
+    commit_all "$repo"
+
+    run_atlas "$repo" ground src-auth
+    assert_json_contains "$OUTPUT" '[.files[].path]' "src/auth/NOTES.md" \
+        "markdown still listed (and hashed) in files" || return 1
+    assert_json_not_contains "$OUTPUT" '[.symbols[].name]' "fenced_example" \
+        "no definition candidates from markdown" || return 1
+    assert_json_not_contains "$OUTPUT" '[.symbols[].name]' "docs" \
+        "prose 'module docs' is not a symbol" || return 1
+    assert_json_field "$OUTPUT" '.imports["src/auth/NOTES.md"]' "null" \
+        "no import lines from markdown prose" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
 test_ground_unknown_module() {
     local repo
     repo=$(_ground_fixture)

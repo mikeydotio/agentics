@@ -26,7 +26,8 @@ Agentics is a Claude Code plugin marketplace (`mikeydotio/agentics`) providing p
 
 | Plugin | Skill | Purpose |
 |--------|-------|---------|
-| agents | `/agents` | Shared agent library — 27 research-backed specialist agent definitions (16 general-purpose, 3 platform-specific UX, 8 pipeline-specific) used by forge, rca, and future plugins. |
+| agents | `/agents` | Shared agent library — 29 research-backed specialist agent definitions (16 general-purpose, 3 platform-specific UX, 10 pipeline-specific) used by forge, rca, atlas, and future plugins. |
+| atlas | `/atlas` | Committed codebase maps for agentic tools: docs/atlas/ with a token-budgeted INDEX (@imported via CLAUDE.md) + per-module type/relationship docs; git-aware incremental updates via a blob-SHA ledger; staleness-tiered SessionStart hook. Uses shared agents (cartographer, map-verifier). |
 | forge | `/forge` | Unified idea-to-deployment pipeline: interrogation → research → design → planning → decompose → execute → review → validate → triage → document → deploy. Uses shared agents from the `agents` plugin. FIX/ESCALATE triage loop. Has SessionStart and Stop hooks. |
 | rca | `/rca` | Root cause analysis: symptom intake → evidence collection → hypothesis formation → verification → remediation. Uses shared agents (investigator, evidence-collector, hypothesis-challenger, software-architect). |
 | semver | `/semver` | Version lifecycle: tracking, bumping, changelog generation, sync validation. Has SessionStart and PostToolUse hooks. |

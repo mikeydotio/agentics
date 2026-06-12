@@ -13,7 +13,7 @@ sources:
     blob: 06001ae4a74cdc1564994c65103723d9544a2b58
 references_modules: [plugins-forge-skills, plugins-semver-misc]
 generator: cartographer/1
-baseline: cdb99b78f7feadd24f898adb2545c7589790c375
+baseline: b1e1f9d1dbced518c625c38bb87814de5af1a1b7
 verified: true
 ---
 

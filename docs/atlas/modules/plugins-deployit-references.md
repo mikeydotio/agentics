@@ -19,7 +19,7 @@ sources:
     blob: 3773ae52396c5b6df79ce4d8926f2412fe4eca3d
 references_modules: [plugins-deployit-assets, plugins-deployit-bin, plugins-deployit-misc, plugins-semver-misc]
 generator: cartographer/1
-baseline: cdb99b78f7feadd24f898adb2545c7589790c375
+baseline: b1e1f9d1dbced518c625c38bb87814de5af1a1b7
 verified: true
 ---
 

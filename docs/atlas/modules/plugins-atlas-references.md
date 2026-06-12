@@ -10,12 +10,12 @@ sources:
   - path: plugins/atlas/references/map-format.md
     blob: 0b795e86fe999259e2f6aed1ccd24449a7534dde
   - path: plugins/atlas/references/mapping-protocol.md
-    blob: 18f46b1694b01b35d0af543e89a58638839627b1
+    blob: 1703faec5b4012c471e1c615da1305b136a07ec4
   - path: plugins/atlas/references/update-protocol.md
     blob: 89ca721f833c93b20d250bd8c190c619519da1a6
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-misc]
 generator: cartographer/1
-baseline: b1e1f9d1dbced518c625c38bb87814de5af1a1b7
+baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
 verified: true
 ---
 

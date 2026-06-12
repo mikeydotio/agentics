@@ -15,7 +15,7 @@ sources:
     blob: 6c5cdda4751783942cd670dab20b4ca42bb065b3
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3]
 generator: cartographer/1
-baseline: b1e1f9d1dbced518c625c38bb87814de5af1a1b7
+baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
 verified: true
 ---
 

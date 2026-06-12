@@ -253,6 +253,26 @@ test_ledger_diff_scope_change() {
     cleanup_fixture_repo "$repo"
 }
 
+test_ledger_set_verified() {
+    local repo
+    repo=$(_ledger_fixture)
+    run_atlas "$repo" ledger finalize --refresh-hashes
+
+    run_atlas "$repo" ledger set-verified modules/src-auth.md true
+    assert_exit_code 0 "$EXIT_CODE" "set-verified succeeds" || return 1
+    grep -q "^verified: true$" "$repo/docs/atlas/modules/src-auth.md" \
+        || { echo "    FAIL: verified flag not written to frontmatter"; return 1; }
+    local in_ledger
+    in_ledger=$(jq -r '.docs["modules/src-auth.md"].verified' \
+        "$repo/docs/atlas/atlas-ledger.json")
+    assert_eq "true" "$in_ledger" "ledger reflects the verdict" || return 1
+
+    run_atlas "$repo" ledger set-verified modules/nope.md true
+    assert_exit_code 1 "$EXIT_CODE" "unknown doc fails" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
 test_ledger_diff_shallow_clone() {
     local repo clone
     repo=$(_ledger_fixture)

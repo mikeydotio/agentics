@@ -46,12 +46,13 @@ yourself.
 
 ## Agent prompt assembly
 
-When a protocol step spawns an agent:
-
-1. Read `plugins/agents/agents/<agent>.md` — include its full `<role>` body.
-2. Append `plugins/atlas/agent-overrides/<agent>-context.md`.
-3. Append the assignment block the protocol specifies (module, write target,
-   generator string, grounding pack, files-to-read list).
+When a protocol step spawns an agent, the prompt is: a two-sentence preamble
+naming the role, the assignment block the protocol specifies, and a
+`<files_to_read>` block whose FIRST entries are the role definition
+(`plugins/agents/agents/<agent>.md`), the atlas override
+(`plugins/atlas/agent-overrides/<agent>-context.md`), and
+`plugins/atlas/references/map-format.md` — role-by-reference keeps a
+30-agent fan-out from bloating orchestrator context. Use absolute paths.
 
 Cartographers return confirmations, not content — never read map docs into
 your own context except where a protocol step explicitly requires it.

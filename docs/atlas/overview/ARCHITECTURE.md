@@ -51,7 +51,7 @@ sources:
   - path: docs/atlas/modules/plugins-greenlight.md
     blob: 816272cb74ca60909160d3b0c1b4494672637e8b
   - path: docs/atlas/modules/plugins-hook-guard.md
-    blob: a4cbbbade395448c96da9c3680f38a092d23f48f
+    blob: 5704253d35f7d407530fd8ba79a341763dbf195f
   - path: docs/atlas/modules/plugins-rca.md
     blob: 7d05b3bc42e78748adbe8af0095ab699c292968c
   - path: docs/atlas/modules/plugins-semver-hooks.md
@@ -72,7 +72,7 @@ scopes:
   - tree: tests
     sha: f726161a1df6bcd639771ffdde7d527eaba66cdf
 generator: cartographer/1
-baseline: 545be2bb7ff18f328277446829f1be6457ac6363
+baseline: 6c8b6fd6abf561a6044b7fd6b40950bffb56c8f2
 ---
 
 # Architecture

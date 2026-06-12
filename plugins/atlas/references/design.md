@@ -174,12 +174,17 @@ modules:                 # manual partition overrides — first match wins
 ## Roadmap
 
 - [x] Phase 1 — Scaffold, design record, scan + partition
-- [ ] Phase 2 — Ledger, lock, status tiers
-- [ ] Phase 3 — Lint, INDEX rebuild, router, hook
-- [ ] Phase 4 — Agents (cartographer, map-verifier) and map format
-- [ ] Phase 5 — Full-map orchestration (SKILL.md) + CLAUDE.md injection
-- [ ] Phase 6 — Incremental update + verify flows
-- [ ] Phase 7 — Hardening, docs, release
+- [x] Phase 2 — Ledger, lock, status tiers
+- [x] Phase 3 — Lint, INDEX rebuild, router, hook
+- [x] Phase 4 — Agents (cartographer, map-verifier) and map format
+- [x] Phase 5 — Full-map orchestration + CLAUDE.md injection (dogfooded:
+      32-module map of this repo, 32/32 verifier pass, INDEX 5.6k chars)
+- [ ] Phase 6 — Incremental update + verify flows (update-protocol.md is
+      currently a stub; ledger diff/classification already built in P2)
+- [ ] Phase 7 — Hardening, docs, release (known items: _template.md
+      pipeline enum lacks `atlas`; map-format 100-char rule needs an
+      edge-line exemption; ground skips .md prose candidates; L6 residue
+      for ./-prefixed and server-side paths)
 
 ## Out of scope for v1
 

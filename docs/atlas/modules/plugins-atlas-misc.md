@@ -23,7 +23,7 @@ sources:
     blob: 69a3df6cef90014ee2b8ea6cde4bc3c1f3862e13
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-references]
 generator: cartographer/1
-baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
+baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
 verified: true
 ---
 

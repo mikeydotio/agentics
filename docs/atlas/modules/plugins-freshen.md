@@ -17,7 +17,7 @@ sources:
     blob: 2f8f3decc4a8cae565bc1833ddab55e249d81abd
 references_modules: [plugins-forge-bin, plugins-forge-hooks, plugins-hook-guard]
 generator: cartographer/1
-baseline: b9203a6997fdbc2248086c1aa9ee6f62b1e025b6
+baseline: 0ce4ca44c3cc0b4a95d86862de8dc79914ffacbf
 verified: true
 ---
 

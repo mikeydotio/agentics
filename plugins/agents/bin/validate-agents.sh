@@ -24,8 +24,9 @@ pass() {
 echo "Validating agents in $AGENTS_DIR/"
 echo "========================================"
 
-# Collect all agent names for uniqueness check
-declare -A SEEN_NAMES
+# Collect all agent names for uniqueness check.
+# Newline-separated list, not an associative array — macOS ships bash 3.2.
+SEEN_NAMES=""
 
 for file in "$AGENTS_DIR"/*.md; do
   name=$(basename "$file" .md)
@@ -43,8 +44,9 @@ for file in "$AGENTS_DIR"/*.md; do
     continue
   fi
 
-  # Extract frontmatter (between first and second ---)
-  frontmatter=$(sed -n '2,/^---$/p' "$file" | head -n -1)
+  # Extract frontmatter (between first and second ---).
+  # `sed '$d'` drops the closing marker; `head -n -1` is GNU-only.
+  frontmatter=$(sed -n '2,/^---$/p' "$file" | sed '$d')
 
   # 2. Check required fields
   for field in name description tools color tier read_only tags; do
@@ -62,10 +64,11 @@ for file in "$AGENTS_DIR"/*.md; do
   fi
 
   # 4. Check for duplicate names
-  if [[ -n "${SEEN_NAMES[$yaml_name]+x}" ]]; then
-    fail "Duplicate name: $yaml_name (also in ${SEEN_NAMES[$yaml_name]})"
+  if printf '%s' "$SEEN_NAMES" | grep -qx "$yaml_name"; then
+    fail "Duplicate name: $yaml_name"
   else
-    SEEN_NAMES[$yaml_name]="$file"
+    SEEN_NAMES="${SEEN_NAMES}${yaml_name}
+"
   fi
 
   # 5. Check read_only agents don't have Write/Edit tools

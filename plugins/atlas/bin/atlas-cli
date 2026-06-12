@@ -1,0 +1,569 @@
+#!/usr/bin/env python3
+"""atlas-cli: Deterministic operations for the atlas codebase-mapping plugin.
+
+All output is JSON to stdout. Errors are JSON with ok=false.
+Exit codes: 0=success, 1=operation failed, 2=usage error.
+
+Subcommands (phase 1):
+  scan       Enumerate mappable files (git ls-files ∩ config globs) with sizes.
+  partition  Deterministically partition mappable files into modules.
+
+Design record: plugins/atlas/references/design.md
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+
+# ─── Constants ───────────────────────────────────────────────────────────────
+
+DEFAULT_MAX_FILES = 1500          # scan ceiling — full maps beyond this are refused
+
+DEFAULT_PARTITION = {
+    "min_files": 3,               # partitions smaller than this coalesce into (misc)
+    "max_files": 15,              # per-mapper attention cap
+    "max_bytes": 120_000,         # ~30k tokens of source per mapper
+}
+
+# Always excluded, in addition to user config excludes. Atlas's own artifacts
+# first, then generated/locked/minified files that carry no mappable signal.
+DEFAULT_EXCLUDES = [
+    "docs/atlas/**",
+    ".atlas/**",
+    "**/package-lock.json",
+    "**/yarn.lock",
+    "**/pnpm-lock.yaml",
+    "**/Cargo.lock",
+    "**/Gemfile.lock",
+    "**/poetry.lock",
+    "**/uv.lock",
+    "**/composer.lock",
+    "**/go.sum",
+    "**/Package.resolved",
+    "**/*.lock",
+    "**/*.min.js",
+    "**/*.min.css",
+    "**/*.map",
+    "**/.DS_Store",
+]
+
+# Extension-based binary exclusion; the NUL sniff below catches the rest.
+BINARY_EXTENSIONS = {
+    "png", "jpg", "jpeg", "gif", "webp", "ico", "icns", "bmp", "tiff", "tif",
+    "pdf", "zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar",
+    "jar", "war", "ear", "bin", "exe", "dll", "dylib", "so", "a", "o", "obj",
+    "class", "pyc", "pyo", "wasm",
+    "woff", "woff2", "ttf", "otf", "eot",
+    "mp3", "mp4", "m4a", "m4v", "mov", "avi", "mkv", "wav", "flac", "ogg",
+    "heic", "heif", "sketch", "fig", "psd", "ai", "eps",
+    "db", "sqlite", "sqlite3", "realm", "car", "nib", "ipa", "apk",
+    "dmg", "pkg", "iso",
+}
+
+SNIFF_BYTES = 8192                # leading bytes checked for NUL (binary sniff)
+
+CONFIG_RELPATH = os.path.join("docs", "atlas", "config.yaml")
+
+
+# ─── Output helpers ──────────────────────────────────────────────────────────
+
+def emit(data):
+    print(json.dumps(data, indent=2))
+
+
+def emit_ok(**fields):
+    out = {"ok": True}
+    out.update(fields)
+    emit(out)
+    return 0
+
+
+def emit_fail(error, message, **fields):
+    out = {"ok": False, "error": error, "message": message}
+    out.update(fields)
+    emit(out)
+    return 1
+
+
+# ─── Git helpers ─────────────────────────────────────────────────────────────
+
+def run_git(args, cwd):
+    """Run a git command; returns (exit_code, stdout_bytes)."""
+    proc = subprocess.run(
+        ["git"] + args, cwd=cwd,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    return proc.returncode, proc.stdout
+
+
+def git_toplevel(project_dir):
+    """Absolute repo root for project_dir, or None when not in a git repo."""
+    code, out = run_git(["rev-parse", "--show-toplevel"], cwd=project_dir)
+    if code != 0:
+        return None
+    return out.decode("utf-8", errors="replace").strip()
+
+
+def git_listed_files(root):
+    """Tracked + untracked-but-not-ignored files, relative to root, deduped."""
+    code, out = run_git(
+        ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=root,
+    )
+    if code != 0:
+        return []
+    paths = out.decode("utf-8", errors="replace").split("\0")
+    return sorted({p for p in paths if p})
+
+
+# ─── Config (restricted YAML subset) ─────────────────────────────────────────
+#
+# Supported on purpose: top-level scalars, one level of nested map, lists of
+# scalars, and lists of {key: value} maps (for `modules:`). Comments and blank
+# lines are skipped. Anything fancier is unsupported — see design.md.
+
+def parse_scalar(s):
+    s = s.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
+        return s[1:-1]
+    if s.lower() in ("true", "false"):
+        return s.lower() == "true"
+    if re.fullmatch(r"-?\d+", s):
+        return int(s)
+    return s
+
+
+def parse_yaml_subset(text):
+    lines = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        lines.append((indent, stripped))
+
+    pos = [0]
+
+    def parse_value_block(parent_indent):
+        """Parse the block nested under a `key:` line, or None if absent."""
+        if pos[0] >= len(lines) or lines[pos[0]][0] <= parent_indent:
+            return None
+        child_indent = lines[pos[0]][0]
+        if lines[pos[0]][1].startswith("- ") or lines[pos[0]][1] == "-":
+            return parse_list(child_indent)
+        return parse_map(child_indent)
+
+    def parse_map(indent):
+        out = {}
+        while pos[0] < len(lines):
+            i, content = lines[pos[0]]
+            if i != indent or content.startswith("- "):
+                break
+            key, _, rest = content.partition(":")
+            key, rest = key.strip(), rest.strip()
+            pos[0] += 1
+            out[key] = parse_scalar(rest) if rest else parse_value_block(i)
+        return out
+
+    def parse_list(indent):
+        out = []
+        while pos[0] < len(lines):
+            i, content = lines[pos[0]]
+            if i != indent or not (content.startswith("- ") or content == "-"):
+                break
+            item = content[1:].strip()
+            pos[0] += 1
+            if ":" not in item:
+                out.append(parse_scalar(item))
+                continue
+            # Map item: "- key: value" (or "- key:" opening a nested block),
+            # with continuation keys indented past the dash.
+            key, _, rest = item.partition(":")
+            entry = {}
+            entry[key.strip()] = parse_scalar(rest.strip()) if rest.strip() \
+                else parse_value_block(i)
+            while pos[0] < len(lines):
+                ci, ccontent = lines[pos[0]]
+                if ci <= i or ccontent.startswith("- "):
+                    break
+                k2, _, r2 = ccontent.partition(":")
+                pos[0] += 1
+                entry[k2.strip()] = parse_scalar(r2.strip()) if r2.strip() \
+                    else parse_value_block(ci)
+            out.append(entry)
+        return out
+
+    if not lines:
+        return {}
+    return parse_map(lines[0][0])
+
+
+def load_config(root):
+    path = os.path.join(root, CONFIG_RELPATH)
+    if not os.path.isfile(path):
+        return {}
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        parsed = parse_yaml_subset(f.read())
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def partition_caps(config):
+    caps = dict(DEFAULT_PARTITION)
+    user = config.get("partition")
+    if isinstance(user, dict):
+        for key in caps:
+            if isinstance(user.get(key), int) and user[key] > 0:
+                caps[key] = user[key]
+    return caps
+
+
+# ─── Glob matching ───────────────────────────────────────────────────────────
+
+def glob_to_regex(pattern):
+    """Translate a glob with **, *, ? into an anchored regex on a relpath."""
+    i, n = 0, len(pattern)
+    out = []
+    while i < n:
+        c = pattern[i]
+        if c == "*":
+            if pattern[i:i + 3] == "**/":
+                out.append("(?:.*/)?")
+                i += 3
+            elif pattern[i:i + 2] == "**":
+                out.append(".*")
+                i += 2
+            else:
+                out.append("[^/]*")
+                i += 1
+        elif c == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(c))
+            i += 1
+    return re.compile("^" + "".join(out) + "$")
+
+
+class GlobSet:
+    """A list of glob patterns; bare patterns (no slash) also match basenames."""
+
+    def __init__(self, patterns):
+        self.entries = [
+            (glob_to_regex(p), "/" not in p) for p in patterns if p
+        ]
+
+    def matches(self, path):
+        base = os.path.basename(path)
+        for regex, bare in self.entries:
+            if regex.match(path):
+                return True
+            if bare and regex.match(base):
+                return True
+        return False
+
+
+# ─── scan ────────────────────────────────────────────────────────────────────
+
+def has_nul_prefix(abspath):
+    try:
+        with open(abspath, "rb") as f:
+            return b"\0" in f.read(SNIFF_BYTES)
+    except OSError:
+        return True  # unreadable files are not mappable
+
+
+def do_scan(project_dir):
+    """Returns a result dict; result["ok"] indicates success."""
+    root = git_toplevel(project_dir)
+    if root is None:
+        return {
+            "ok": False, "error": "not_a_git_repo",
+            "message": "atlas requires a git repository; "
+                       "run from inside a git work tree.",
+        }
+
+    config = load_config(root)
+    includes = GlobSet(config.get("include") or ["**"])
+    excludes = GlobSet(DEFAULT_EXCLUDES + list(config.get("exclude") or []))
+    ceiling = config.get("max_files")
+    if not isinstance(ceiling, int) or ceiling <= 0:
+        ceiling = DEFAULT_MAX_FILES
+
+    files = []
+    excluded_count = 0
+    total_bytes = 0
+    for relpath in git_listed_files(root):
+        abspath = os.path.join(root, relpath)
+        if not os.path.isfile(abspath):
+            continue  # deleted from worktree, submodule gitlink, broken link
+        if not includes.matches(relpath) or excludes.matches(relpath):
+            excluded_count += 1
+            continue
+        ext = relpath.rsplit(".", 1)[-1].lower() if "." in os.path.basename(relpath) else ""
+        if ext in BINARY_EXTENSIONS:
+            excluded_count += 1
+            continue
+        if has_nul_prefix(abspath):
+            excluded_count += 1
+            continue
+        size = os.path.getsize(abspath)
+        files.append({"path": relpath, "bytes": size})
+        total_bytes += size
+
+    if len(files) > ceiling:
+        return {
+            "ok": False, "error": "ceiling_exceeded",
+            "message": (
+                "Found {} mappable files, above the ceiling of {}. Narrow "
+                "include/exclude globs in {} or raise max_files if you really "
+                "mean it — full maps this large degrade mapper quality."
+                .format(len(files), ceiling, CONFIG_RELPATH)
+            ),
+            "total_files": len(files), "ceiling": ceiling,
+        }
+
+    return {
+        "ok": True, "root": root, "files": files,
+        "total_files": len(files), "total_bytes": total_bytes,
+        "ceiling": ceiling, "excluded_count": excluded_count,
+    }
+
+
+def cmd_scan(args):
+    result = do_scan(args.project_dir)
+    emit(result)
+    return 0 if result["ok"] else 1
+
+
+# ─── partition ───────────────────────────────────────────────────────────────
+
+def sanitize_id(seed):
+    s = seed.replace("/", "-")
+    s = re.sub(r"[^A-Za-z0-9._-]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-.")
+    return s or "root"
+
+
+def deepest_common_dir(paths):
+    dirs = [p.rsplit("/", 1)[0] if "/" in p else "" for p in paths]
+    if any(d == "" for d in dirs):
+        return ""
+    split = [d.split("/") for d in dirs]
+    prefix = []
+    for segments in zip(*split):
+        if all(seg == segments[0] for seg in segments):
+            prefix.append(segments[0])
+        else:
+            break
+    return "/".join(prefix)
+
+
+class _DirNode:
+    __slots__ = ("dirs", "files")
+
+    def __init__(self):
+        self.dirs = {}
+        self.files = []  # list of (relpath, bytes)
+
+
+def build_tree(entries):
+    root = _DirNode()
+    for entry in entries:
+        parts = entry["path"].split("/")
+        node = root
+        for segment in parts[:-1]:
+            node = node.dirs.setdefault(segment, _DirNode())
+        node.files.append((entry["path"], entry["bytes"]))
+    return root
+
+
+def collect_files(node):
+    out = list(node.files)
+    for child in node.dirs.values():
+        out.extend(collect_files(child))
+    out.sort()
+    return out
+
+
+def make_partition(label, id_seed, strategy, files):
+    return {
+        "id_seed": id_seed, "label": label, "strategy": strategy,
+        "file_entries": files,
+    }
+
+
+def split_bucket(bucket, path, caps):
+    """Split an over-cap bucket: stem clusters first, then greedy chunks."""
+    base = path or "root"
+    out = []
+    groups = {}
+    leftover = []
+    for f in bucket:
+        name = os.path.basename(f[0])
+        m = re.match(r"^([^-_]+)[-_].", name)
+        if m:
+            groups.setdefault(m.group(1).lower(), []).append(f)
+        else:
+            leftover.append(f)
+    for stem in sorted(groups):
+        g = sorted(groups[stem])
+        g_bytes = sum(b for _, b in g)
+        if caps["min_files"] <= len(g) <= caps["max_files"] and g_bytes <= caps["max_bytes"]:
+            label = "{}/{}*".format(path, stem) if path else "{}*".format(stem)
+            out.append(make_partition(label, "{}-{}".format(base, stem), "stem", g))
+        else:
+            # Under-min or over-cap stem groups fall through to chunking.
+            leftover.extend(g)
+    leftover.sort()
+    chunks = []
+    cur, cur_bytes = [], 0
+    for f in leftover:
+        if cur and (len(cur) >= caps["max_files"] or cur_bytes + f[1] > caps["max_bytes"]):
+            chunks.append(cur)
+            cur, cur_bytes = [], 0
+        cur.append(f)
+        cur_bytes += f[1]
+    if cur:
+        chunks.append(cur)
+    for idx, chunk in enumerate(chunks, 1):
+        out.append(make_partition(
+            "{} (chunk {})".format(base, idx),
+            "{}-chunk-{}".format(base, idx), "chunk", chunk,
+        ))
+    return out
+
+
+def decide(node, path, caps):
+    files_all = collect_files(node)
+    if not files_all:
+        return []
+    agg_bytes = sum(b for _, b in files_all)
+    if len(files_all) <= caps["max_files"] and agg_bytes <= caps["max_bytes"]:
+        label = deepest_common_dir([p for p, _ in files_all]) or "root"
+        return [make_partition(label, label, "dir", files_all)]
+
+    parts = []
+    small = []
+    for name in sorted(node.dirs):
+        child_path = "{}/{}".format(path, name) if path else name
+        for p in decide(node.dirs[name], child_path, caps):
+            if p["strategy"] == "dir" and len(p["file_entries"]) < caps["min_files"]:
+                small.append(p)
+            else:
+                parts.append(p)
+
+    bucket = sorted(node.files + [f for p in small for f in p["file_entries"]])
+    if bucket:
+        base = path or "root"
+        bucket_bytes = sum(b for _, b in bucket)
+        if len(bucket) <= caps["max_files"] and bucket_bytes <= caps["max_bytes"]:
+            parts.append(make_partition(
+                "{} (misc)".format(base), "{}-misc".format(base),
+                "coalesced", bucket,
+            ))
+        else:
+            parts.extend(split_bucket(bucket, path, caps))
+    return parts
+
+
+def apply_overrides(entries, config):
+    """Claim files for config `modules:` overrides; first match wins."""
+    overrides = config.get("modules")
+    claimed_parts = []
+    if not isinstance(overrides, list):
+        return claimed_parts, entries
+
+    remaining = entries
+    for override in overrides:
+        if not isinstance(override, dict):
+            continue
+        name = override.get("name")
+        globs = override.get("globs")
+        if not name or not isinstance(globs, list):
+            continue
+        globset = GlobSet([g for g in globs if isinstance(g, str)])
+        claimed = [e for e in remaining if globset.matches(e["path"])]
+        remaining = [e for e in remaining if not globset.matches(e["path"])]
+        if claimed:
+            files = sorted((e["path"], e["bytes"]) for e in claimed)
+            claimed_parts.append(make_partition(str(name), str(name), "override", files))
+    return claimed_parts, remaining
+
+
+def do_partition(project_dir):
+    scan = do_scan(project_dir)
+    if not scan["ok"]:
+        return scan
+
+    config = load_config(scan["root"])
+    caps = partition_caps(config)
+
+    override_parts, remaining = apply_overrides(scan["files"], config)
+    tree = build_tree(remaining)
+    parts = override_parts + decide(tree, "", caps)
+
+    assigned_ids = set()
+    modules = []
+    for p in parts:
+        base_id = sanitize_id(p["id_seed"])
+        candidate = base_id
+        suffix = 2
+        while candidate in assigned_ids:
+            candidate = "{}-{}".format(base_id, suffix)
+            suffix += 1
+        assigned_ids.add(candidate)
+        modules.append({
+            "id": candidate,
+            "label": p["label"],
+            "strategy": p["strategy"],
+            "files": len(p["file_entries"]),
+            "bytes": sum(b for _, b in p["file_entries"]),
+            "paths": [path for path, _ in p["file_entries"]],
+        })
+
+    modules.sort(key=lambda m: m["id"])
+    return {
+        "ok": True, "root": scan["root"], "modules": modules,
+        "module_count": len(modules), "unassigned": [],
+    }
+
+
+def cmd_partition(args):
+    result = do_partition(args.project_dir)
+    emit(result)
+    return 0 if result["ok"] else 1
+
+
+# ─── main ────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="atlas-cli",
+        description="Deterministic operations for the atlas plugin.",
+    )
+    parser.add_argument(
+        "--project-dir", default=".",
+        help="Project directory (default: current directory)",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    sub.add_parser("scan", help="Enumerate mappable files")
+    sub.add_parser("partition", help="Partition mappable files into modules")
+
+    args = parser.parse_args()
+    if args.command == "scan":
+        return cmd_scan(args)
+    if args.command == "partition":
+        return cmd_partition(args)
+
+    emit_fail("usage", "Unknown or missing subcommand. "
+              "Available: scan, partition.")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

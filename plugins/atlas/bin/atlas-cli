@@ -12,11 +12,14 @@ Design record: plugins/atlas/references/design.md
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import time
 
 
 # ─── Constants ───────────────────────────────────────────────────────────────
@@ -128,10 +131,15 @@ def git_listed_files(root):
 
 def parse_scalar(s):
     s = s.strip()
+    if s.startswith("[") and s.endswith("]"):
+        inner = s[1:-1].strip()
+        return [parse_scalar(x) for x in inner.split(",")] if inner else []
     if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
         return s[1:-1]
     if s.lower() in ("true", "false"):
         return s.lower() == "true"
+    if s.lower() in ("null", "~"):
+        return None
     if re.fullmatch(r"-?\d+", s):
         return int(s)
     return s
@@ -221,6 +229,792 @@ def partition_caps(config):
     return caps
 
 
+# ─── Frontmatter (module/overview doc ledger entries) ───────────────────────
+#
+# Doc frontmatter is the ledger's source of truth; atlas-ledger.json is a
+# derived reverse index. Serialization is canonical (fixed key order, stable
+# quoting) so regenerated docs only churn where content actually changed.
+
+FRONTMATTER_KEY_ORDER = [
+    "module", "summary", "read_when", "sources", "scopes",
+    "references_modules", "generator", "baseline", "verified",
+]
+
+BARE_SCALAR_RE = re.compile(r"[A-Za-z0-9._/-]+")
+
+
+def split_frontmatter(text):
+    """Returns (frontmatter_text, body_text) or (None, text) when absent."""
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return None, text
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() == "---":
+            return "".join(lines[1:idx]), "".join(lines[idx + 1:])
+    return None, text
+
+
+def yaml_scalar(value):
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    s = str(value)
+    if BARE_SCALAR_RE.fullmatch(s):
+        return s
+    return json.dumps(s)
+
+
+def serialize_frontmatter(fm):
+    keys = [k for k in FRONTMATTER_KEY_ORDER if k in fm]
+    keys += sorted(k for k in fm if k not in FRONTMATTER_KEY_ORDER)
+    out = ["---"]
+    for key in keys:
+        value = fm[key]
+        if key in ("sources", "scopes") and isinstance(value, list):
+            out.append("{}:".format(key))
+            for entry in value:
+                if not isinstance(entry, dict):
+                    continue
+                first = True
+                for ek in ("path", "blob", "tree", "sha"):
+                    if ek not in entry:
+                        continue
+                    prefix = "  - " if first else "    "
+                    out.append("{}{}: {}".format(prefix, ek, yaml_scalar(entry[ek])))
+                    first = False
+        elif isinstance(value, list):
+            out.append("{}: [{}]".format(
+                key, ", ".join(yaml_scalar(v) for v in value)))
+        else:
+            out.append("{}: {}".format(key, yaml_scalar(value)))
+    out.append("---")
+    return "\n".join(out) + "\n"
+
+
+# ─── Git plumbing for the ledger ─────────────────────────────────────────────
+
+def git_head(root):
+    code, out = run_git(["rev-parse", "HEAD"], cwd=root)
+    if code != 0:
+        return None
+    return out.decode("utf-8", errors="replace").strip()
+
+
+def git_ls_tree_blobs(root):
+    """{path: blob_oid} for HEAD; empty when there is no HEAD yet."""
+    code, out = run_git(["ls-tree", "-r", "-z", "HEAD"], cwd=root)
+    if code != 0:
+        return {}
+    blobs = {}
+    for entry in out.decode("utf-8", errors="replace").split("\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition("\t")
+        fields = meta.split()
+        if len(fields) == 3 and fields[1] == "blob":
+            blobs[path] = fields[2]
+    return blobs
+
+
+def git_status_paths(root):
+    """All paths git status reports as differing from HEAD (incl. untracked)."""
+    code, out = run_git(
+        ["status", "--porcelain", "-z", "--untracked-files=all"], cwd=root)
+    if code != 0:
+        return set()
+    entries = out.decode("utf-8", errors="replace").split("\0")
+    paths = set()
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        i += 1
+        if not entry or len(entry) < 4:
+            continue
+        xy, path = entry[:2], entry[3:]
+        paths.add(path)
+        if xy[0] in ("R", "C") and i < len(entries):
+            paths.add(entries[i])  # original path travels as the next record
+            i += 1
+    return paths
+
+
+def git_hash_paths(root, paths):
+    """{path: blob_oid} for working-tree bytes — the hash-what-you-read rule."""
+    paths = [p for p in paths if os.path.isfile(os.path.join(root, p))]
+    if not paths:
+        return {}
+    proc = subprocess.run(
+        ["git", "hash-object", "--stdin-paths"], cwd=root,
+        input=("\n".join(paths) + "\n").encode("utf-8", errors="replace"),
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    if proc.returncode == 0:
+        hashes = proc.stdout.decode().split()
+        if len(hashes) == len(paths):
+            return dict(zip(paths, hashes))
+    out = {}
+    for p in paths:  # batch failed (e.g. one unreadable file) — fall back
+        code, single = run_git(["hash-object", "--", p], cwd=root)
+        if code == 0:
+            out[p] = single.decode().strip()
+    return out
+
+
+def current_blob_map(root):
+    """{path: blob} for the repo as it exists NOW: HEAD blobs overridden by
+    working-tree hashes for every path git status reports as changed."""
+    blobs = git_ls_tree_blobs(root)
+    dirty = git_status_paths(root)
+    rehashed = git_hash_paths(root, sorted(dirty))
+    for path in dirty:
+        if path in rehashed:
+            blobs[path] = rehashed[path]
+        else:
+            blobs.pop(path, None)  # deleted from the worktree
+    return blobs
+
+
+def git_tree_oid(root, treepath):
+    code, out = run_git(["rev-parse", "HEAD:{}".format(treepath)], cwd=root)
+    if code != 0:
+        return None
+    return out.decode().strip()
+
+
+def git_commit_exists(root, sha):
+    code, _ = run_git(["cat-file", "-e", "{}^{{commit}}".format(sha)], cwd=root)
+    return code == 0
+
+
+def git_is_ancestor(root, ancestor, descendant):
+    code, _ = run_git(
+        ["merge-base", "--is-ancestor", ancestor, descendant], cwd=root)
+    return code == 0
+
+
+def git_commits_behind(root, baseline):
+    code, out = run_git(
+        ["rev-list", "--count", "{}..HEAD".format(baseline)], cwd=root)
+    if code != 0:
+        return None
+    try:
+        return int(out.decode().strip())
+    except ValueError:
+        return None
+
+
+# ─── Map doc discovery and validation ────────────────────────────────────────
+
+MAP_DIR = os.path.join("docs", "atlas")
+LEDGER_RELPATH = os.path.join(MAP_DIR, "atlas-ledger.json")
+INDEX_RELPATH = os.path.join(MAP_DIR, "INDEX.md")
+
+
+def doc_module_id(doc_id):
+    """modules/src-auth.md → src-auth (the id used in references_modules)."""
+    return os.path.basename(doc_id)[:-3]
+
+
+def discover_docs(root):
+    """Map docs as doc_ids relative to docs/atlas/ (modules/* then overview/*)."""
+    doc_ids = []
+    for sub in ("modules", "overview"):
+        absdir = os.path.join(root, MAP_DIR, sub)
+        if not os.path.isdir(absdir):
+            continue
+        for name in sorted(os.listdir(absdir)):
+            if name.endswith(".md"):
+                doc_ids.append("{}/{}".format(sub, name))
+    return doc_ids
+
+
+def load_doc(root, doc_id):
+    abspath = os.path.join(root, MAP_DIR, doc_id)
+    with open(abspath, "r", encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    fm_text, body = split_frontmatter(text)
+    fm = parse_yaml_subset(fm_text) if fm_text is not None else None
+    return {"doc_id": doc_id, "abspath": abspath, "fm": fm, "body": body}
+
+
+def validate_doc(doc):
+    errors = []
+    fm = doc["fm"]
+    if fm is None:
+        return ["missing frontmatter block"]
+    for key in ("module", "summary", "generator"):
+        if not isinstance(fm.get(key), str) or not fm.get(key).strip():
+            errors.append("missing or empty `{}`".format(key))
+    if doc["doc_id"].startswith("modules/") and not isinstance(fm.get("read_when"), str):
+        errors.append("missing `read_when` (required for module docs)")
+    sources = fm.get("sources")
+    if not isinstance(sources, list) or not sources:
+        errors.append("`sources` must be a non-empty list")
+    else:
+        for entry in sources:
+            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+                errors.append("every `sources` entry needs a `path`")
+                break
+    scopes = fm.get("scopes")
+    if scopes is not None and not isinstance(scopes, list):
+        errors.append("`scopes` must be a list when present")
+    refs = fm.get("references_modules")
+    if refs is not None and not isinstance(refs, list):
+        errors.append("`references_modules` must be a list when present")
+    return errors
+
+
+def load_validated_docs(root):
+    """Returns (docs, errors). errors is a list of (doc_id, [messages])."""
+    docs = []
+    errors = []
+    for doc_id in discover_docs(root):
+        doc = load_doc(root, doc_id)
+        doc_errors = validate_doc(doc)
+        if doc_errors:
+            errors.append((doc_id, doc_errors))
+        else:
+            docs.append(doc)
+    return docs, errors
+
+
+# ─── ledger ──────────────────────────────────────────────────────────────────
+
+def write_doc(doc):
+    text = serialize_frontmatter(doc["fm"]) + doc["body"]
+    with open(doc["abspath"], "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def build_ledger(root, docs):
+    head = git_head(root)
+    ledger = {
+        "version": 1,
+        "baseline": head,
+        "docs": {},
+        "paths": {},
+        "referenced_by": {},
+    }
+    for doc in docs:
+        fm = doc["fm"]
+        sources = {e["path"]: e.get("blob") for e in fm.get("sources", [])}
+        ledger["docs"][doc["doc_id"]] = {
+            "module": fm.get("module"),
+            "summary": fm.get("summary"),
+            "sources": sources,
+            "references_modules": fm.get("references_modules") or [],
+            "generator": fm.get("generator"),
+            "verified": fm.get("verified"),
+        }
+        if doc["doc_id"].startswith("modules/"):
+            for path in sources:
+                ledger["paths"][path] = doc["doc_id"]
+        for ref in fm.get("references_modules") or []:
+            ledger["referenced_by"].setdefault(str(ref), []).append(doc["doc_id"])
+    for ref in ledger["referenced_by"]:
+        ledger["referenced_by"][ref].sort()
+    return ledger
+
+
+def check_duplicate_ownership(docs):
+    """Each non-map source path is owned by exactly one module doc."""
+    owners = {}
+    duplicates = []
+    for doc in docs:
+        if not doc["doc_id"].startswith("modules/"):
+            continue
+        for entry in doc["fm"].get("sources", []):
+            path = entry["path"]
+            if path.startswith("docs/atlas/"):
+                continue
+            if path in owners and owners[path] != doc["doc_id"]:
+                duplicates.append((path, owners[path], doc["doc_id"]))
+            owners[path] = doc["doc_id"]
+    return duplicates
+
+
+def cmd_ledger_finalize(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    docs, errors = load_validated_docs(root)
+    if errors:
+        return emit_fail(
+            "invalid_frontmatter",
+            "Some map docs have invalid frontmatter; fix or regenerate them.",
+            docs={doc_id: msgs for doc_id, msgs in errors},
+        )
+
+    duplicates = check_duplicate_ownership(docs)
+    if duplicates:
+        return emit_fail(
+            "duplicate_source",
+            "Each source file must be owned by exactly one module doc.",
+            duplicates=[
+                {"path": p, "docs": [a, b]} for p, a, b in duplicates
+            ],
+        )
+
+    baseline = git_head(root)
+    sources_count = 0
+    if args.refresh_hashes:
+        # Module docs first, then overview docs — overview sources are module
+        # doc files, which must carry their final bytes before being hashed.
+        ordered = ([d for d in docs if d["doc_id"].startswith("modules/")] +
+                   [d for d in docs if not d["doc_id"].startswith("modules/")])
+        for doc in ordered:
+            fm = doc["fm"]
+            missing = [e["path"] for e in fm["sources"]
+                       if not os.path.isfile(os.path.join(root, e["path"]))]
+            if missing:
+                return emit_fail(
+                    "missing_source",
+                    "{}: source files not found: {}".format(
+                        doc["doc_id"], ", ".join(missing)),
+                )
+            hashes = git_hash_paths(root, [e["path"] for e in fm["sources"]])
+            for entry in fm["sources"]:
+                entry["blob"] = hashes.get(entry["path"])
+                sources_count += 1
+            for scope in fm.get("scopes") or []:
+                if isinstance(scope, dict) and isinstance(scope.get("tree"), str):
+                    scope["sha"] = git_tree_oid(root, scope["tree"])
+            if args.generator:
+                fm["generator"] = args.generator
+            fm["baseline"] = baseline
+            write_doc(doc)
+    else:
+        for doc in docs:
+            for entry in doc["fm"]["sources"]:
+                if not entry.get("blob"):
+                    return emit_fail(
+                        "missing_blobs",
+                        "{}: sources lack blob hashes — run "
+                        "`ledger finalize --refresh-hashes`.".format(doc["doc_id"]),
+                    )
+                sources_count += 1
+
+    ledger = build_ledger(root, docs)
+    ledger_path = os.path.join(root, LEDGER_RELPATH)
+    os.makedirs(os.path.dirname(ledger_path), exist_ok=True)
+    with open(ledger_path, "w", encoding="utf-8") as f:
+        json.dump(ledger, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+    return emit_ok(
+        docs_count=len(docs), sources_count=sources_count, baseline=baseline,
+    )
+
+
+def compute_diff(root, generator=None):
+    """Classify every map doc against the repo as it exists now."""
+    docs, errors = load_validated_docs(root)
+    if errors:
+        return {
+            "ok": False, "error": "invalid_frontmatter",
+            "message": "Some map docs have invalid frontmatter; fix or "
+                       "regenerate them before diffing.",
+            "docs": {doc_id: msgs for doc_id, msgs in errors},
+        }
+
+    current = current_blob_map(root)
+    blob_to_paths = {}
+    for path, blob in current.items():
+        blob_to_paths.setdefault(blob, []).append(path)
+    for blob in blob_to_paths:
+        blob_to_paths[blob].sort()
+
+    stale_docs = []
+    renamed_docs = []
+    orphaned_docs = []
+    fingerprint_stale = []
+    unchanged_docs = []
+    covered_paths = set()
+
+    for doc in docs:
+        fm = doc["fm"]
+        doc_id = doc["doc_id"]
+        if doc_id.startswith("modules/"):
+            covered_paths.update(e["path"] for e in fm["sources"])
+
+        edited, deleted, renames = [], [], []
+        for entry in fm["sources"]:
+            path, recorded = entry["path"], entry.get("blob")
+            cur = current.get(path)
+            if cur is None:
+                candidates = [p for p in blob_to_paths.get(recorded, []) if p != path]
+                if recorded and candidates:
+                    renames.append({"from": path, "to": candidates[0]})
+                else:
+                    deleted.append(path)
+            elif recorded is None or cur != recorded:
+                edited.append(path)
+
+        scope_changed = []
+        for scope in fm.get("scopes") or []:
+            if not isinstance(scope, dict):
+                continue
+            tree, recorded_sha = scope.get("tree"), scope.get("sha")
+            if not tree or not recorded_sha:
+                continue
+            if git_tree_oid(root, tree) != recorded_sha:
+                scope_changed.append(tree)
+
+        if fm["sources"] and len(deleted) == len(fm["sources"]):
+            orphaned_docs.append({"doc": doc_id, "deleted": deleted})
+        elif edited or deleted or scope_changed:
+            reasons = ([{"path": p, "kind": "edited"} for p in edited] +
+                       [{"path": p, "kind": "deleted"} for p in deleted] +
+                       [{"path": t, "kind": "scope_changed"} for t in scope_changed])
+            stale_docs.append({"doc": doc_id, "reasons": reasons, "renames": renames})
+        elif renames:
+            renamed_docs.append({"doc": doc_id, "renames": renames})
+        elif generator and fm.get("generator") != generator:
+            fingerprint_stale.append({"doc": doc_id, "generator": fm.get("generator")})
+        else:
+            unchanged_docs.append(doc_id)
+
+    affected_ids = {doc_module_id(d["doc"]) for d in stale_docs + orphaned_docs
+                    if d["doc"].startswith("modules/")}
+    affected_doc_ids = {d["doc"] for d in
+                        stale_docs + orphaned_docs + renamed_docs + fingerprint_stale}
+    ripple_docs = []
+    for doc in docs:
+        if doc["doc_id"] in affected_doc_ids:
+            continue
+        refs = set(str(r) for r in doc["fm"].get("references_modules") or [])
+        via = sorted(refs & affected_ids)
+        if via:
+            ripple_docs.append({"doc": doc["doc_id"], "via": via})
+            affected_doc_ids.add(doc["doc_id"])
+
+    scan = do_scan(root, enforce_ceiling=False)
+    new_files = [f["path"] for f in scan.get("files", [])
+                 if f["path"] not in covered_paths] if scan.get("ok") else []
+
+    edited_paths = {r["path"] for d in stale_docs for r in d["reasons"]
+                    if r["kind"] in ("edited", "deleted")}
+    changed_files = len(edited_paths | set(new_files))
+
+    baseline_sha = None
+    ledger_path = os.path.join(root, LEDGER_RELPATH)
+    if os.path.isfile(ledger_path):
+        try:
+            with open(ledger_path, "r", encoding="utf-8") as f:
+                baseline_sha = json.load(f).get("baseline")
+        except (OSError, ValueError):
+            baseline_sha = None
+    if not baseline_sha:
+        for doc in docs:
+            if isinstance(doc["fm"].get("baseline"), str):
+                baseline_sha = doc["fm"]["baseline"]
+                break
+
+    resolvable = bool(baseline_sha) and git_commit_exists(root, baseline_sha)
+    is_ancestor = resolvable and git_is_ancestor(root, baseline_sha, "HEAD")
+    commits_behind = git_commits_behind(root, baseline_sha) if is_ancestor else None
+
+    total_docs = len(docs)
+    affected = len(affected_doc_ids)
+    return {
+        "ok": True,
+        "stale_docs": stale_docs,
+        "renamed_docs": renamed_docs,
+        "orphaned_docs": orphaned_docs,
+        "fingerprint_stale": fingerprint_stale,
+        "ripple_docs": ripple_docs,
+        "new_files": new_files,
+        "unchanged_docs": unchanged_docs,
+        "summary": {
+            "total_docs": total_docs,
+            "module_docs": sum(1 for d in docs if d["doc_id"].startswith("modules/")),
+            "affected_docs": affected,
+            "affected_pct": round(100.0 * affected / total_docs) if total_docs else 0,
+            "changed_files": changed_files,
+        },
+        "baseline": {
+            "sha": baseline_sha,
+            "resolvable": resolvable,
+            "is_ancestor": is_ancestor,
+            "commits_behind": commits_behind,
+        },
+    }
+
+
+def cmd_ledger_diff(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    result = compute_diff(root, generator=args.generator)
+    emit(result)
+    return 0 if result["ok"] else 1
+
+
+# ─── lock ────────────────────────────────────────────────────────────────────
+
+LOCK_TTL_DEFAULT = 600  # seconds without a heartbeat before takeover
+
+
+def lock_paths(root):
+    lock_dir = os.path.join(root, ".atlas", "lock")
+    return lock_dir, os.path.join(lock_dir, "lock.json")
+
+
+def read_lock(lock_file):
+    try:
+        with open(lock_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def write_lock(lock_file, holder, acquired_at=None):
+    now = time.time()
+    with open(lock_file, "w", encoding="utf-8") as f:
+        json.dump({
+            "holder": holder,
+            "acquired_at": acquired_at if acquired_at is not None else now,
+            "heartbeat_at": now,
+        }, f, indent=2)
+        f.write("\n")
+
+
+def cmd_lock(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    lock_dir, lock_file = lock_paths(root)
+
+    if args.lock_command == "acquire":
+        os.makedirs(os.path.dirname(lock_dir), exist_ok=True)
+        try:
+            os.mkdir(lock_dir)  # atomic on POSIX — exactly one winner
+            write_lock(lock_file, args.holder)
+            return emit_ok(holder=args.holder, took_over=False)
+        except FileExistsError:
+            lock = read_lock(lock_file)
+            if lock is not None and isinstance(lock.get("heartbeat_at"), (int, float)):
+                age = time.time() - lock["heartbeat_at"]
+            else:
+                # lock.json missing or torn: the winner may not have written it
+                # yet (milliseconds), or a session crashed mid-acquire. Age the
+                # lock by its directory mtime so crashes still time out.
+                try:
+                    age = time.time() - os.stat(lock_dir).st_mtime
+                except OSError:
+                    age = 0.0
+            if age > args.ttl:
+                write_lock(lock_file, args.holder)
+                return emit_ok(holder=args.holder, took_over=True,
+                               previous_holder=(lock or {}).get("holder"))
+            return emit_fail(
+                "lock_held",
+                "Another atlas session holds the lock "
+                "(heartbeat {}s ago).".format(int(age)),
+                holder=(lock or {}).get("holder"),
+            )
+
+    if args.lock_command == "heartbeat":
+        lock = read_lock(lock_file)
+        if lock is None:
+            return emit_fail("not_held", "No atlas lock is currently held.")
+        write_lock(lock_file, lock.get("holder", "unknown"),
+                   acquired_at=lock.get("acquired_at"))
+        return emit_ok(holder=lock.get("holder"))
+
+    if args.lock_command == "release":
+        shutil.rmtree(lock_dir, ignore_errors=True)
+        return emit_ok(released=True)
+
+    return emit_fail("usage", "Unknown lock command.")
+
+
+# ─── status ──────────────────────────────────────────────────────────────────
+
+DEFAULT_THRESHOLDS = {
+    "recommend_pct": 25,   # T2: this % of docs affected
+    "untrust_pct": 50,     # T3: this % of docs affected
+    "recommend_files": 50, # T2: this many in-scope files changed
+}
+
+CONFLICT_MARKER_RE = re.compile(r"^(<{7}( |$)|>{7}( |$))", re.MULTILINE)
+
+
+def status_thresholds(config):
+    out = dict(DEFAULT_THRESHOLDS)
+    user = config.get("thresholds")
+    if isinstance(user, dict):
+        for key in out:
+            if isinstance(user.get(key), int) and user[key] > 0:
+                out[key] = user[key]
+    return out
+
+
+def find_conflict_markers(root):
+    hits = []
+    map_root = os.path.join(root, MAP_DIR)
+    for dirpath, _, filenames in os.walk(map_root):
+        for name in sorted(filenames):
+            if not name.endswith(".md"):
+                continue
+            abspath = os.path.join(dirpath, name)
+            try:
+                with open(abspath, "r", encoding="utf-8", errors="replace") as f:
+                    if CONFLICT_MARKER_RE.search(f.read()):
+                        hits.append(os.path.relpath(abspath, root))
+            except OSError:
+                continue
+    return hits
+
+
+def drift_cache_key(root):
+    head = git_head(root) or "no-head"
+    code, out = run_git(
+        ["status", "--porcelain", "-z", "--untracked-files=all"], cwd=root)
+    entries = out.decode("utf-8", errors="replace").split("\0") if code == 0 else []
+    # Atlas's own runtime dir must not invalidate the cache it lives in.
+    relevant = [e for e in entries if e and not e[3:].startswith(".atlas/")]
+    digest = hashlib.sha256(
+        (head + "\n" + "\n".join(sorted(relevant))).encode("utf-8", errors="replace")
+    ).hexdigest()
+    return digest
+
+
+def doc_display_names(entries, cap=6):
+    names = sorted(doc_module_id(e["doc"]) for e in entries)
+    if len(names) > cap:
+        return ", ".join(names[:cap]) + ", +{} more".format(len(names) - cap)
+    return ", ".join(names)
+
+
+def compute_status(root):
+    config = load_config(root)
+    thresholds = status_thresholds(config)
+
+    markers = find_conflict_markers(root)
+    if markers:
+        return {
+            "ok": True, "mapped": True, "tier": 3,
+            "message": (
+                "Atlas map untrustworthy (merge conflict markers in {}). "
+                "Disregard the imported INDEX, treat the map as absent, and "
+                "run /atlas update.".format(", ".join(markers))
+            ),
+            "affected_docs": None, "total_docs": None, "changed_files": None,
+            "baseline": None,
+        }
+
+    diff = compute_diff(root)
+    if not diff["ok"]:
+        return {
+            "ok": True, "mapped": True, "tier": 3,
+            "message": (
+                "Atlas map untrustworthy ({}). Disregard the imported INDEX, "
+                "treat the map as absent, and run /atlas update."
+                .format(diff["error"])
+            ),
+            "affected_docs": None, "total_docs": None, "changed_files": None,
+            "baseline": None,
+        }
+
+    summary = diff["summary"]
+    affected = summary["affected_docs"]
+    total = summary["total_docs"]
+    pct = summary["affected_pct"]
+    changed_files = summary["changed_files"]
+    baseline = diff["baseline"]
+    affected_entries = (diff["stale_docs"] + diff["orphaned_docs"] +
+                        diff["renamed_docs"] + diff["fingerprint_stale"] +
+                        diff["ripple_docs"])
+    overview_affected = any(
+        e["doc"].startswith("overview/") for e in affected_entries)
+
+    if pct >= thresholds["untrust_pct"]:
+        tier = 3
+    elif (pct >= thresholds["recommend_pct"] or overview_affected
+          or changed_files > thresholds["recommend_files"]
+          or (affected > 0 and not baseline["is_ancestor"])):
+        tier = 2
+    elif affected > 0:
+        tier = 1
+    else:
+        tier = 0
+
+    behind = ""
+    if baseline["is_ancestor"] and baseline["commits_behind"]:
+        behind = ", {} commits behind".format(baseline["commits_behind"])
+
+    if tier == 0:
+        message = ""
+    elif tier == 3:
+        message = (
+            "Atlas map untrustworthy ({} of {} map docs stale{}). Disregard "
+            "the imported INDEX, treat the map as absent, and run /atlas "
+            "update.".format(affected, total, behind)
+        )
+    else:
+        names = doc_display_names(affected_entries)
+        message = "Atlas: {} of {} map docs stale ({}{}).".format(
+            affected, total, names, behind)
+        if tier == 2:
+            message += " Run /atlas update before relying on those docs."
+
+    return {
+        "ok": True, "mapped": True, "tier": tier, "message": message,
+        "affected_docs": affected, "total_docs": total,
+        "changed_files": changed_files, "baseline": baseline,
+    }
+
+
+def cmd_status(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    if not os.path.isfile(os.path.join(root, INDEX_RELPATH)):
+        result = {"ok": True, "mapped": False, "tier": 0, "message": "",
+                  "cached": False}
+        if not args.for_hook:
+            result.update(affected_docs=None, total_docs=None,
+                          changed_files=None, baseline=None)
+        emit(result)
+        return 0
+
+    cache_path = os.path.join(root, ".atlas", "drift-cache.json")
+    key = drift_cache_key(root)
+    cached_result = None
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+        if cache.get("key") == key:
+            cached_result = cache.get("result")
+    except (OSError, ValueError):
+        pass
+
+    if cached_result is not None:
+        result = dict(cached_result)
+        result["cached"] = True
+    else:
+        result = compute_status(root)
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump({"key": key, "result": result}, f, indent=2)
+            f.write("\n")
+        result = dict(result)
+        result["cached"] = False
+
+    if args.for_hook:
+        result = {"ok": result["ok"], "mapped": result["mapped"],
+                  "tier": result["tier"], "message": result["message"],
+                  "cached": result["cached"]}
+    emit(result)
+    return 0
+
+
 # ─── Glob matching ───────────────────────────────────────────────────────────
 
 def glob_to_regex(pattern):
@@ -276,7 +1070,7 @@ def has_nul_prefix(abspath):
         return True  # unreadable files are not mappable
 
 
-def do_scan(project_dir):
+def do_scan(project_dir, enforce_ceiling=True):
     """Returns a result dict; result["ok"] indicates success."""
     root = git_toplevel(project_dir)
     if root is None:
@@ -314,7 +1108,7 @@ def do_scan(project_dir):
         files.append({"path": relpath, "bytes": size})
         total_bytes += size
 
-    if len(files) > ceiling:
+    if enforce_ceiling and len(files) > ceiling:
         return {
             "ok": False, "error": "ceiling_exceeded",
             "message": (
@@ -554,14 +1348,58 @@ def main():
     sub.add_parser("scan", help="Enumerate mappable files")
     sub.add_parser("partition", help="Partition mappable files into modules")
 
+    ledger = sub.add_parser("ledger", help="Blob-SHA dependency ledger")
+    ledger_sub = ledger.add_subparsers(dest="ledger_command")
+    finalize = ledger_sub.add_parser(
+        "finalize", help="Validate frontmatter and rebuild atlas-ledger.json")
+    finalize.add_argument(
+        "--refresh-hashes", action="store_true",
+        help="Recompute blob/tree hashes from the working tree and rewrite docs")
+    finalize.add_argument(
+        "--generator", default=None,
+        help="Stamp this generator fingerprint into refreshed docs")
+    diff = ledger_sub.add_parser(
+        "diff", help="Classify map docs against the repo as it exists now")
+    diff.add_argument(
+        "--generator", default=None,
+        help="Flag docs whose generator fingerprint differs from this")
+
+    lock = sub.add_parser("lock", help="Heartbeat lock for map operations")
+    lock_sub = lock.add_subparsers(dest="lock_command")
+    acquire = lock_sub.add_parser("acquire", help="Acquire the lock")
+    acquire.add_argument("--holder", default="atlas")
+    acquire.add_argument("--ttl", type=int, default=LOCK_TTL_DEFAULT,
+                         help="Seconds without heartbeat before takeover")
+    lock_sub.add_parser("heartbeat", help="Refresh the lock heartbeat")
+    lock_sub.add_parser("release", help="Release the lock")
+
+    status = sub.add_parser("status", help="Staleness tier for the current map")
+    status.add_argument("--for-hook", action="store_true",
+                        help="Trimmed output for the SessionStart hook")
+
     args = parser.parse_args()
     if args.command == "scan":
         return cmd_scan(args)
     if args.command == "partition":
         return cmd_partition(args)
+    if args.command == "ledger":
+        if args.ledger_command == "finalize":
+            return cmd_ledger_finalize(args)
+        if args.ledger_command == "diff":
+            return cmd_ledger_diff(args)
+        emit_fail("usage", "Unknown ledger command. Available: finalize, diff.")
+        return 2
+    if args.command == "lock":
+        if args.lock_command in ("acquire", "heartbeat", "release"):
+            return cmd_lock(args)
+        emit_fail("usage", "Unknown lock command. "
+                  "Available: acquire, heartbeat, release.")
+        return 2
+    if args.command == "status":
+        return cmd_status(args)
 
     emit_fail("usage", "Unknown or missing subcommand. "
-              "Available: scan, partition.")
+              "Available: scan, partition, ledger, lock, status.")
     return 2
 
 

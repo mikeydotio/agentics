@@ -71,6 +71,83 @@ cleanup_fixture_repo() {
     fi
 }
 
+# write_module_doc <repo> <doc-id> <module-path> <refs-csv> <source-path...>
+# Creates docs/atlas/modules/<doc-id>.md with frontmatter (sources without
+# blobs — `ledger finalize --refresh-hashes` fills them) and a minimal body.
+# <refs-csv> is a comma-separated references_modules list, or "" for none.
+write_module_doc() {
+    local repo="$1" doc_id="$2" module="$3" refs_csv="$4"
+    shift 4
+    local doc="$repo/docs/atlas/modules/$doc_id.md"
+    mkdir -p "$(dirname "$doc")"
+    {
+        echo "---"
+        echo "module: $module"
+        echo "summary: \"Test module $doc_id\""
+        echo "read_when: \"Touching $module\""
+        echo "sources:"
+        local src
+        for src in "$@"; do
+            echo "  - path: $src"
+        done
+        if [ -n "$refs_csv" ]; then
+            echo "references_modules: [$refs_csv]"
+        fi
+        echo "generator: cartographer/1 model=test"
+        echo "---"
+        echo ""
+        echo "# Module: $module"
+        echo ""
+        echo "## Purpose"
+        echo "Test fixture doc."
+    } > "$doc"
+}
+
+# write_overview_doc <repo> <doc-id> <scope-dir> <doc-source-relpath...>
+# Overview docs draw from module docs (path sources) and directory scopes
+# (tree-SHA invalidation).
+write_overview_doc() {
+    local repo="$1" doc_id="$2" scope_dir="$3"
+    shift 3
+    local doc="$repo/docs/atlas/overview/$doc_id.md"
+    mkdir -p "$(dirname "$doc")"
+    {
+        echo "---"
+        echo "module: overview/$doc_id"
+        echo "summary: \"Test overview $doc_id\""
+        echo "sources:"
+        local src
+        for src in "$@"; do
+            echo "  - path: $src"
+        done
+        if [ -n "$scope_dir" ]; then
+            echo "scopes:"
+            echo "  - tree: $scope_dir"
+        fi
+        echo "generator: cartographer/1 model=test"
+        echo "---"
+        echo ""
+        echo "# Architecture"
+        echo "Test fixture overview."
+    } > "$doc"
+}
+
+# backdate_lock <repo> <seconds-ago>
+# Rewrites .atlas/lock/lock.json heartbeat to N seconds in the past.
+backdate_lock() {
+    local repo="$1" ago="$2"
+    python3 - "$repo/.atlas/lock/lock.json" "$ago" <<'PY'
+import json, sys, time
+path, ago = sys.argv[1], int(sys.argv[2])
+with open(path) as f:
+    lock = json.load(f)
+lock["heartbeat_at"] = time.time() - ago
+lock["acquired_at"] = time.time() - ago
+with open(path, "w") as f:
+    json.dump(lock, f)
+PY
+}
+
 # --- Assertion Helpers ---
 
 assert_eq() {

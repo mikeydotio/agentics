@@ -754,6 +754,29 @@ def cmd_ledger_diff(args):
     return 0 if result["ok"] else 1
 
 
+def cmd_ledger_set_verified(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    abspath = os.path.join(root, MAP_DIR, args.doc_id)
+    if not os.path.isfile(abspath):
+        return emit_fail("unknown_doc", "No map doc at docs/atlas/{}".format(args.doc_id))
+    doc = load_doc(root, args.doc_id)
+    if doc["fm"] is None:
+        return emit_fail("invalid_frontmatter",
+                         "{} has no frontmatter block.".format(args.doc_id))
+    doc["fm"]["verified"] = args.value == "true"
+    write_doc(doc)
+    docs, errors = load_validated_docs(root)
+    if not errors:
+        ledger = build_ledger(root, docs)
+        ledger_path = os.path.join(root, LEDGER_RELPATH)
+        with open(ledger_path, "w", encoding="utf-8") as f:
+            json.dump(ledger, f, indent=2, sort_keys=True)
+            f.write("\n")
+    return emit_ok(doc=args.doc_id, verified=doc["fm"]["verified"])
+
+
 # ─── lock ────────────────────────────────────────────────────────────────────
 
 LOCK_TTL_DEFAULT = 600  # seconds without a heartbeat before takeover
@@ -2005,6 +2028,10 @@ def main():
     diff.add_argument(
         "--generator", default=None,
         help="Flag docs whose generator fingerprint differs from this")
+    set_verified = ledger_sub.add_parser(
+        "set-verified", help="Stamp a doc's map-verifier verdict")
+    set_verified.add_argument("doc_id", help="Doc id, e.g. modules/src-auth.md")
+    set_verified.add_argument("value", choices=["true", "false"])
 
     lock = sub.add_parser("lock", help="Heartbeat lock for map operations")
     lock_sub = lock.add_subparsers(dest="lock_command")
@@ -2049,7 +2076,10 @@ def main():
             return cmd_ledger_finalize(args)
         if args.ledger_command == "diff":
             return cmd_ledger_diff(args)
-        emit_fail("usage", "Unknown ledger command. Available: finalize, diff.")
+        if args.ledger_command == "set-verified":
+            return cmd_ledger_set_verified(args)
+        emit_fail("usage", "Unknown ledger command. "
+                  "Available: finalize, diff, set-verified.")
         return 2
     if args.command == "lock":
         if args.lock_command in ("acquire", "heartbeat", "release"):

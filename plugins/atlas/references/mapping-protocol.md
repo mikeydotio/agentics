@@ -33,20 +33,32 @@ Options: proceed / abort. On abort: `lock release`, stop.
 For each module, in waves of **at most 8 parallel `Agent()` calls per
 message** (all foreground; never `run_in_background`):
 
-Assemble the prompt in this order:
-1. The full `<role>` body of `plugins/agents/agents/cartographer.md`
-2. `plugins/atlas/agent-overrides/cartographer-context.md`
-3. The assignment block:
+Assemble the prompt in this order (role-by-reference — embedding 30 role
+bodies inline would bloat the orchestrator's own context):
+1. A two-sentence preamble: "You are a cartographer agent. The first three
+   files in `<files_to_read>` define your role, your atlas pipeline
+   constraints, and the normative output format — read them first and follow
+   them exactly."
+2. The assignment block:
    - repo root, module id, module label
    - write target: `docs/atlas/modules/<module-id>.md`
    - generator string: `cartographer/1` (bump the version when prompts change)
    - the module's source file list
-   - the grounding pack: `... ground <module-id>` output (files+blobs,
-     import lines, ranked symbol candidates) — include it verbatim as JSON
+   - the ranked symbol table from `... ground <module-id>` — top ~15 entries
+     as `name (kind, defined_at, fan_in)` lines, not the full JSON (blobs and
+     import lines stay with the CLI; the agent reads the files anyway)
    - module-id conventions for cross-module edges (derive ids the way
-     `partition` does)
-4. A `<files_to_read>` block: `plugins/atlas/references/map-format.md` plus
-   every source file of the module
+     `partition` does: second path segment, slashes→dashes)
+3. A `<files_to_read>` block, in this order:
+   `plugins/agents/agents/cartographer.md`,
+   `plugins/atlas/agent-overrides/cartographer-context.md`,
+   `plugins/atlas/references/map-format.md`,
+   then every source file of the module.
+   (Use absolute paths — agents resolve `<files_to_read>` literally.)
+
+Verifier prompts follow the same shape: preamble + assignment (doc path,
+claims to sample) + `<files_to_read>` = map-verifier.md, its override, the
+doc under verification.
 
 Mappers write docs directly and return only confirmations — never ingest doc
 content into the orchestrator. After each wave: `lock heartbeat`.

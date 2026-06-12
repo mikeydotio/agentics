@@ -1,0 +1,1098 @@
+{
+  "baseline": "cdb99b78f7feadd24f898adb2545c7589790c375",
+  "docs": {
+    "modules/plugins-agents-agents-chunk-1.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/agents/agents (chunk 1)",
+      "references_modules": [
+        "plugins-agents-agents-chunk-2",
+        "plugins-atlas-references"
+      ],
+      "sources": {
+        "plugins/agents/agents/_guardrails.md": "5213bd863520baa4ca42aef7fd1cd5828704f457",
+        "plugins/agents/agents/_template.md": "05328175c329e42eda38ea41af3f38c2f4b34a26",
+        "plugins/agents/agents/accessibility-engineer.md": "9d5eb2340b5689f35405334abbe71a8aee9801c1",
+        "plugins/agents/agents/api-designer.md": "62c63c53316c459eaae0429ce2aa6281515172fc",
+        "plugins/agents/agents/cartographer.md": "d632e074ecd39a0bd46d01ea8707ee6be9317811",
+        "plugins/agents/agents/copy-editor.md": "9b85e72f36f65cce77f9a4365e4d54c4834ca361",
+        "plugins/agents/agents/data-engineer.md": "c419e74d2af3c9b8b924475d94a1ec0c1338798e",
+        "plugins/agents/agents/devops-engineer.md": "f26d15023c8f2a8a12ee199052d9f18d34fac1fa",
+        "plugins/agents/agents/domain-researcher.md": "32a5ed047975d11391d015f6e79a7cb7b45370e1",
+        "plugins/agents/agents/evaluator.md": "04b337939a001e46f04898ca53e444b822d3cbbc",
+        "plugins/agents/agents/evidence-collector.md": "232c0bcdcd2d3d3d86f596fe2c517c1890ac9590",
+        "plugins/agents/agents/generator.md": "9d141116c64761c958a74977b14867e6729da8de",
+        "plugins/agents/agents/hypothesis-challenger.md": "49dac36dfb6c0f7a022497710e490b2d0869881e"
+      },
+      "summary": "Shared agent library A\u2013H \u2014 agent prompt contracts plus the _template and _guardrails standards",
+      "verified": true
+    },
+    "modules/plugins-agents-agents-chunk-2.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/agents/agents (chunk 2)",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1"
+      ],
+      "sources": {
+        "plugins/agents/agents/investigator.md": "3a140ee738ce520e566b8e61f683eabfca3433e6",
+        "plugins/agents/agents/lawyer.md": "5fda3e7a2e1bdc8297d9be3b223c932af798f127",
+        "plugins/agents/agents/map-verifier.md": "ac52315a17ab18080ad6ad89c57a77998e802aed",
+        "plugins/agents/agents/observability-engineer.md": "eca36942ef2fc5771d811f8a7e758867d7207bf6",
+        "plugins/agents/agents/performance-engineer.md": "846b109f5b2225e9084733564c9dfbd38df0a527",
+        "plugins/agents/agents/project-manager.md": "e969875e8b4425656e79735a9a52baeaafed37d1",
+        "plugins/agents/agents/qa-engineer.md": "cf5566ed98b94145f5a4a2a60a3e18f8a75de330",
+        "plugins/agents/agents/reviewer.md": "0271c45f317b4ff3e824559b49f0a305938dea4f",
+        "plugins/agents/agents/security-researcher.md": "ab64243cb5c0edbd1c34797b5941472a45e0732a",
+        "plugins/agents/agents/skeptic.md": "f961e8361a32ff2be468d16c71c9575ad2e84069",
+        "plugins/agents/agents/software-architect.md": "c3abdf88838589d5c78cfe5669e730737bf0195c",
+        "plugins/agents/agents/software-engineer.md": "8ebb8be26e64490f77669942f1b88c3bab9a2246",
+        "plugins/agents/agents/technical-writer.md": "fcec96880785ebb5409208d8d8d2abc35ef9f375"
+      },
+      "summary": "Shared agent library slice \u2014 specialist subagent contracts, investigator through technical-writer",
+      "verified": true
+    },
+    "modules/plugins-agents-agents-chunk-3.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/agents/agents (chunk 3)",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2"
+      ],
+      "sources": {
+        "plugins/agents/agents/triager.md": "4b91a0e95e560c1a4e48e6bee8d3ddd3ad2561d7",
+        "plugins/agents/agents/validator.md": "e85b72f785ded4cdb4b1965161c2dd2abad5047f"
+      },
+      "summary": "Forge quality-gate tail of the shared agent library \u2014 validator hardens tests, triager routes findings",
+      "verified": true
+    },
+    "modules/plugins-agents-agents-ux.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/agents/agents/ux*",
+      "references_modules": [
+        "plugins-agents-misc",
+        "plugins-agents-references",
+        "plugins-council"
+      ],
+      "sources": {
+        "plugins/agents/agents/ux-designer-cli.md": "10595e11ce270175e12322409a2b8908eae54dde",
+        "plugins/agents/agents/ux-designer-mobile.md": "5e69aab6a0ad62ccf0b8d2b06483faee6b176eb8",
+        "plugins/agents/agents/ux-designer-web.md": "47d2ee61ac977b280271bab4bb2567c765db198b"
+      },
+      "summary": "Platform-variant UX design reviewers \u2014 CLI, mobile, and web specialists with one read-only review contract",
+      "verified": true
+    },
+    "modules/plugins-agents-misc.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/agents (misc)",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-agents-agents-chunk-3",
+        "plugins-agents-agents-ux",
+        "plugins-agents-references"
+      ],
+      "sources": {
+        "plugins/agents/.claude-plugin/plugin.json": "8fa7bcc60a0b4c3dd5f7c74cb556a69f1a97a76d",
+        "plugins/agents/bin/validate-agents.sh": "ce55f55b8ac86af01f2fde7f9cad4ee9e6f7c9f6",
+        "plugins/agents/skills/agents/SKILL.md": "a124fbbf7f5ad088ee35819abd2a57d151497678"
+      },
+      "summary": "Operational shell of the agent library \u2014 plugin manifest, /agents skill, structural validator",
+      "verified": true
+    },
+    "modules/plugins-agents-references.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/agents/references",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-agents-agents-chunk-3",
+        "plugins-agents-agents-ux",
+        "plugins-forge-references",
+        "plugins-forge-skills",
+        "plugins-freshen",
+        "plugins-greenlight",
+        "plugins-rca",
+        "plugins-semver-misc"
+      ],
+      "sources": {
+        "plugins/agents/references/agent-catalog.md": "9e433b3006aa9f81c3e7ecb912c4adeca7b62d6c",
+        "plugins/agents/references/agent-design-principles.md": "5403c125a741fe7f632141b408ed8605da796133",
+        "plugins/agents/references/cross-plugin-usage.md": "ce6e63ac20b5e43778b1dee78955d334d6bb3b1b",
+        "plugins/agents/references/tool-audit.md": "b16db34d0e9301d6a9177aab1bb9a49cd664549c"
+      },
+      "summary": "Contract docs for the shared agent library \u2014 roster catalog, design quality bar, spawn protocol, tool audit",
+      "verified": true
+    },
+    "modules/plugins-atlas-misc.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/atlas (misc)",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-atlas-references"
+      ],
+      "sources": {
+        "plugins/atlas/.claude-plugin/plugin.json": "48214a1798f73c5934e857252cb034cac416d031",
+        "plugins/atlas/README.md": "b425bd2e7b2eab011326a8ac19091a0931b7729f",
+        "plugins/atlas/agent-overrides/cartographer-context.md": "958ae88df7fb648d7d0ef704546f4b22e8997a6f",
+        "plugins/atlas/agent-overrides/map-verifier-context.md": "7233cde0eb20367f4f0bd64eed2858d387df7839",
+        "plugins/atlas/bin/atlas-cli": "b166e95ef0511153f34b03c6babda59cdc60da6b",
+        "plugins/atlas/bin/atlas-router.sh": "048600f5049437b86d10ca7252fee5e57452d5ca",
+        "plugins/atlas/hooks/hooks.json": "41851681fe5ce7fdd0fc14b33dd4868d38398e6a",
+        "plugins/atlas/hooks/session-start.sh": "4277ada1b6f54bba1034edf015c622f6a3a3eb94",
+        "plugins/atlas/skills/atlas/SKILL.md": "69a3df6cef90014ee2b8ea6cde4bc3c1f3862e13"
+      },
+      "summary": "Atlas core \u2014 deterministic atlas-cli (scan/partition/ledger/INDEX/lint), /atlas skill, router, staleness hook",
+      "verified": true
+    },
+    "modules/plugins-atlas-references.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/atlas/references",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-atlas-misc"
+      ],
+      "sources": {
+        "plugins/atlas/references/claude-md-injection.md": "fb192f9f878111762ca863b12091dfe9036eeef8",
+        "plugins/atlas/references/design.md": "7a9fbdd96a615d689a6881d158e17f708e20eebf",
+        "plugins/atlas/references/map-format.md": "0b795e86fe999259e2f6aed1ccd24449a7534dde",
+        "plugins/atlas/references/mapping-protocol.md": "18f46b1694b01b35d0af543e89a58638839627b1",
+        "plugins/atlas/references/update-protocol.md": "89ca721f833c93b20d250bd8c190c619519da1a6"
+      },
+      "summary": "Normative canon for atlas \u2014 design rationale, map file format, full-map orchestration, CLAUDE.md delivery",
+      "verified": true
+    },
+    "modules/plugins-atlas-tests.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/atlas/tests",
+      "references_modules": [
+        "plugins-atlas-misc"
+      ],
+      "sources": {
+        "plugins/atlas/tests/helpers/setup.sh": "218e426a7e05f0286a2b5b422897b3466e17f3af",
+        "plugins/atlas/tests/run-tests.sh": "febae8f36c0646a382a834d4bb81fac24f7ba8fb",
+        "plugins/atlas/tests/test-commit.sh": "7d66eeedfb471de9a12b2720e7bbcf998e9900c7",
+        "plugins/atlas/tests/test-ground.sh": "a6bddad7cdecaf512472a53f199baaa07f2b3a31",
+        "plugins/atlas/tests/test-hook.sh": "5545302a4317791ae60c63e45833dc34b822636f",
+        "plugins/atlas/tests/test-index.sh": "2874a1bcef0889b9e18d91f93c60b3737404f665",
+        "plugins/atlas/tests/test-init.sh": "1f85b244ea31d8dae57fbb880aad83337d1938f1",
+        "plugins/atlas/tests/test-ledger.sh": "1b2fa083305e51fd580c12a0dab67425a55cb875",
+        "plugins/atlas/tests/test-lint.sh": "68f14c678b9cd861c77f034ab4d807275508cc0b",
+        "plugins/atlas/tests/test-lock.sh": "9b6c39e83aab4b0db326b19e51dd4111553d463b",
+        "plugins/atlas/tests/test-partition.sh": "4671fae665fdc132eabd409016d982e10c51501e",
+        "plugins/atlas/tests/test-scan.sh": "64fdfb8349fc9b8fc74817948c47ac664b123cae",
+        "plugins/atlas/tests/test-status.sh": "fdde9f2ee86018efefcd6e1794a0a90d04cf1be0"
+      },
+      "summary": "Bash regression suite pinning atlas-cli JSON contracts and the session hook via throwaway /tmp git repos",
+      "verified": true
+    },
+    "modules/plugins-council.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/council",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-agents-agents-ux",
+        "plugins-agents-references"
+      ],
+      "sources": {
+        "plugins/council/.claude-plugin/plugin.json": "95156c7eb1d88d3ec7cc6797b29c0dfc89913576",
+        "plugins/council/README.md": "6fc77ba8523cf7262b3d0a8f9f79586464cefc62",
+        "plugins/council/references/archetypes.md": "c44c68234b14a4ac1f63ad6212ba15acf1677685",
+        "plugins/council/references/council-protocol.md": "c0f8ed74139972454cb6d45d4b50ba47417c8cbb",
+        "plugins/council/references/team-composition.md": "52fd8798ee8ab7dd5549e5104351d21fffa5b70e",
+        "plugins/council/references/voting-mechanics.md": "d3542bdd4650b494776d0c000dd42833523a8255",
+        "plugins/council/skills/council-vote/SKILL.md": "43a7b337af2839fd895be747bc53d4b770be55e9",
+        "plugins/council/skills/council-vote/evals/evals.json": "1023d8902ccef3f0bbefb50eedbb9e92debe984d"
+      },
+      "summary": "3-member sub-agent voting council that settles delegated judgment calls with a full audit trail",
+      "verified": true
+    },
+    "modules/plugins-deployit-assets.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/deployit/assets",
+      "references_modules": [
+        "plugins-deployit-bin"
+      ],
+      "sources": {
+        "plugins/deployit/assets/ExportOptions.ios.plist": "5852d63680d64c09eedc16402acb77ff8ee908b8",
+        "plugins/deployit/assets/ExportOptions.macos.plist": "bb805c5092b4b96097d0f8628a3366cf10d98320",
+        "plugins/deployit/assets/ExportOptions.visionos.plist": "5852d63680d64c09eedc16402acb77ff8ee908b8",
+        "plugins/deployit/assets/app.css": "368cdb4685b143066dd49dd5b08261998eaa8850",
+        "plugins/deployit/assets/app.js": "e2c124d7e0cef334558cf2d865a7cfb5eeb48385",
+        "plugins/deployit/assets/config.example.toml": "53978c9f7177eb01bdbc255ce1eee47fdc5fcc9c",
+        "plugins/deployit/assets/icons/icon.svg": "d706e39034df2f1f5838ce57beab5623d8243146",
+        "plugins/deployit/assets/index.template.html": "e0b564edf11a7723473248d94a3397eed55acf27",
+        "plugins/deployit/assets/listing.template.html": "18a2f1a698756ca4fc323f5502f0211d4ce70d12",
+        "plugins/deployit/assets/manifest.template.plist": "10f7a574db399eef99e0474eae3e1bfb23abd317",
+        "plugins/deployit/assets/manifest.webmanifest": "8d80244cd1bf8c8ab565ddb2b1a1e17fb4468cd0",
+        "plugins/deployit/assets/product.template.html": "7fcab5e6b7e9c7d393a34d9a00392d8deca31d1b"
+      },
+      "summary": "Static payload for deployit \u2014 xcodebuild export plists, OTA install web UI templates, PWA shell, config seed",
+      "verified": true
+    },
+    "modules/plugins-deployit-bin.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/deployit/bin",
+      "references_modules": [
+        "plugins-deployit-assets",
+        "plugins-deployit-tests-chunk-2",
+        "plugins-semver-misc"
+      ],
+      "sources": {
+        "plugins/deployit/bin/deployit-backend": "eddad198093da22cd99a51e30f9ed3de94ec9a8e",
+        "plugins/deployit/bin/deployit-cli": "9f14c2bf9e45bec688d28c13e44d5d3a6a5138c1",
+        "plugins/deployit/bin/deployit-router.sh": "344168329e019299a535c6e7c327e726f0cb5d03"
+      },
+      "summary": "Deployit's executable core \u2014 bash router, build/publish CLI, OTA install-page backend",
+      "verified": true
+    },
+    "modules/plugins-deployit-misc.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/deployit (misc)",
+      "references_modules": [
+        "plugins-deployit-bin",
+        "plugins-deployit-references",
+        "plugins-deployit-tests-chunk-2"
+      ],
+      "sources": {
+        "plugins/deployit/.claude-plugin/plugin.json": "3a91c808b94584bbdad0de0e9a980992708382d5",
+        "plugins/deployit/skills/deployit/SKILL.md": "b59f2fd2e6557a951f56b986c7efd54ab3a77a29"
+      },
+      "summary": "Plugin manifest plus the /deployit orchestrator skill that routes every command through the bin router",
+      "verified": true
+    },
+    "modules/plugins-deployit-references.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/deployit/references",
+      "references_modules": [
+        "plugins-deployit-assets",
+        "plugins-deployit-bin",
+        "plugins-deployit-misc",
+        "plugins-semver-misc"
+      ],
+      "sources": {
+        "plugins/deployit/references/bootstrap.md": "24850fe5b053d9925a7af47513cfc2ac04033f93",
+        "plugins/deployit/references/ios.md": "59175850b662bbf27b81972fc0ee97cfbe31acb9",
+        "plugins/deployit/references/macos.md": "b2d5da0c1051ce2fddae6b2f1b630fc5dce9a3c3",
+        "plugins/deployit/references/semver.md": "6bfc5d8f26e34851b97f77d4236e88fe8be273d6",
+        "plugins/deployit/references/tailscale-serve.md": "92267a1597530c980bfee1916f83a818dba94abd",
+        "plugins/deployit/references/troubleshooting.md": "f34f378b62868e7e11176fa0b0d4b6e6e2f6c87c",
+        "plugins/deployit/references/visionos.md": "3773ae52396c5b6df79ce4d8926f2412fe4eca3d"
+      },
+      "summary": "Per-concern procedure docs behind /deployit \u2014 setup, platform deploys, proxy, semver bump guard, recovery",
+      "verified": true
+    },
+    "modules/plugins-deployit-tests-chunk-1.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/deployit/tests (chunk 1)",
+      "references_modules": [
+        "plugins-deployit-bin",
+        "plugins-deployit-tests-chunk-2",
+        "plugins-semver-misc"
+      ],
+      "sources": {
+        "plugins/deployit/tests/fakes/tailscale": "e791bddad3f3d31a1e584d72f71075a4a5270547",
+        "plugins/deployit/tests/run-tests.sh": "5d017ec337d7a22a0616704396c2d233e1b32278",
+        "plugins/deployit/tests/test-backend-500-on-corrupt.sh": "c1683f5c6233f47754ef702b8204def77f0f3815",
+        "plugins/deployit/tests/test-backend-healthz.sh": "4e9022321aa470e7ff69c9a316a4addd2840309d",
+        "plugins/deployit/tests/test-backend-listing-groups-by-product.sh": "7d1099c8b0a3fb980ec5084575d75afd0ea84150",
+        "plugins/deployit/tests/test-backend-listing.sh": "3e3f20dd4f53ed6b638919c290a2849015ca4f8e",
+        "plugins/deployit/tests/test-backend-per-build.sh": "40ee874e0c8b38e250605874eb95d14e1e6fa411",
+        "plugins/deployit/tests/test-backend-product-page.sh": "d530f271877a73cff7c33f494d115c73c703c8e8",
+        "plugins/deployit/tests/test-backend-refresh.sh": "8af6d863fac5ab4787f05f8773511f0dedea268a",
+        "plugins/deployit/tests/test-backend-static-assets.sh": "2a6a390c6fe8a1e708e1f90d404eee00918cef86",
+        "plugins/deployit/tests/test-backend-version-label.sh": "ad8cf9e2d6ff32f905a5261799607bca81c9ac7b",
+        "plugins/deployit/tests/test-bootstrap-dirs.sh": "fcb3b27daa351b0cba8db9cd480d2b35677662d1",
+        "plugins/deployit/tests/test-cli-bump.sh": "04836f17b13c459010bcf9394f9fb1290831ceec",
+        "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "8f43eb9f58e1c4ad048e566c70e0313ae401e004",
+        "plugins/deployit/tests/test-cli-preflight.sh": "894d8c16d5cd39f2d0f18f40f0aab8527c185e9b"
+      },
+      "summary": "Sandboxed bash tests pinning deployit's backend HTTP surface and CLI bootstrap/bump/preflight flows",
+      "verified": true
+    },
+    "modules/plugins-deployit-tests-chunk-2.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/deployit/tests (chunk 2)",
+      "references_modules": [
+        "plugins-deployit-bin",
+        "plugins-deployit-tests-chunk-1"
+      ],
+      "sources": {
+        "plugins/deployit/tests/test-cli-redeploy.sh": "5cc4141d1c5dc1700865ec366d1304c672bd9817",
+        "plugins/deployit/tests/test-cli-version.sh": "d7a1daaa409feb77dbb59b51a4c1f76b58050f79",
+        "plugins/deployit/tests/test-gc.sh": "be01b59bafa19e9c5bda91c29d3ccd6101f9ad88",
+        "plugins/deployit/tests/test-metadata-single-app.sh": "1f36ebce4b6cf9363f3e6045fb7afced5dcd2ef0",
+        "plugins/deployit/tests/test-metadata.sh": "5c49e2f4a48015c86de20068bd861f6edde9103c",
+        "plugins/deployit/tests/verify-live.sh": "678de11417e159376c10cd722f2569e53f91970b"
+      },
+      "summary": "Sandboxed CLI tests for deployit redeploy/version/gc/metadata plus verify-live.sh, the live-deployment gate",
+      "verified": true
+    },
+    "modules/plugins-forge-agent-overrides.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/forge/agent-overrides",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-agents-agents-chunk-3"
+      ],
+      "sources": {
+        "plugins/forge/agent-overrides/evaluator-context.md": "b4715b5bee3329bda946a53974d2181bc0edb1d4",
+        "plugins/forge/agent-overrides/generator-context.md": "890854c3045a23300025d08ae29648d89a3df3cb",
+        "plugins/forge/agent-overrides/reviewer-context.md": "bdb0d4c562ebcd72aa17d554874c7dd54978138c",
+        "plugins/forge/agent-overrides/triager-context.md": "dafbb15a8c519f18741996c8e385c616b2c1d7fe",
+        "plugins/forge/agent-overrides/validator-context.md": "6c5cdda4751783942cd670dab20b4ca42bb065b3"
+      },
+      "summary": "Forge-only constraint blocks appended to shared agent definitions at spawn time",
+      "verified": true
+    },
+    "modules/plugins-forge-bin.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/forge/bin",
+      "references_modules": [
+        "plugins-freshen"
+      ],
+      "sources": {
+        "plugins/forge/bin/forge-archive.bats": "f754dcb6446ba9a569f3b03cce3c2dcfce2a2b7e",
+        "plugins/forge/bin/forge-archive.sh": "c3423e09b2e3b9c60f47dca03a2b60bfece5a538",
+        "plugins/forge/bin/forge-fix-archive.bats": "53f0cc7dcb48f4f722745be6652c97eb268f81b1",
+        "plugins/forge/bin/forge-fix-archive.sh": "856351c82edf19d73a4216c55f5e505d28ef0883",
+        "plugins/forge/bin/forge-prechecks.bats": "f3f37c85c73d74a68524debf8702dd027e8f214e",
+        "plugins/forge/bin/forge-prechecks.sh": "3a13af0af4431bb1849f2894a95d8b74a58002d4",
+        "plugins/forge/bin/forge-state.sh": "9714a17958e0474b38bbe16e3bf274fe3089bf82",
+        "plugins/forge/bin/forge-state.test.bats": "52d217e63755effa17b21da964ad77ec63ec071e",
+        "plugins/forge/bin/forge-status.bats": "f867fd01545e4ee29c76113cd7771d43b11e6dd3",
+        "plugins/forge/bin/forge-status.sh": "f2b83fb7bb63b79a63465c4c0a4ece1b7213dbcd",
+        "plugins/forge/bin/forge-step-exit.bats": "b24f5876a48be789f28ce24e262ce7c8193b016c",
+        "plugins/forge/bin/forge-step-exit.sh": "3266bf2642e68d13caeb57060be61bb1fdeae442"
+      },
+      "summary": "Forge's deterministic shell layer \u2014 artifact-driven state machine, status, prechecks, step-exit, archives",
+      "verified": true
+    },
+    "modules/plugins-forge-hooks.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/forge/hooks",
+      "references_modules": [
+        "plugins-forge-skills",
+        "plugins-freshen",
+        "plugins-hook-guard"
+      ],
+      "sources": {
+        "plugins/forge/hooks/hooks.json": "f92d8253799e799123a9e1506de7aa2e1bffcc0d",
+        "plugins/forge/hooks/session-start.sh": "69f94721d7d3818330a5c3216c15be763051cb4b",
+        "plugins/forge/hooks/session-stop.sh": "fd33f5ce7ea769d4d07a3814bc85887d2281b5f5"
+      },
+      "summary": "Forge session-lifecycle hooks \u2014 inject resume context on SessionStart, checkpoint a running pipeline on Stop",
+      "verified": true
+    },
+    "modules/plugins-forge-misc.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/forge (misc)",
+      "references_modules": [
+        "root-misc"
+      ],
+      "sources": {
+        "plugins/forge/.claude-plugin/plugin.json": "332a69faf8c603a9f032ee7765befc874b534aca",
+        "plugins/forge/README.md": "1ce02e4c6294d5613a305d8487b42132d669a063"
+      },
+      "summary": "Forge's plugin manifest and README \u2014 plugin identity plus the user-facing contract for the idea-to-deployment pipeline",
+      "verified": true
+    },
+    "modules/plugins-forge-references.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/forge/references",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-agents-references",
+        "plugins-forge-bin",
+        "plugins-forge-hooks",
+        "plugins-forge-skills",
+        "plugins-freshen"
+      ],
+      "sources": {
+        "plugins/forge/references/auto-resume.md": "f08e31722891c8c40194feec34341f00c4f0ce61",
+        "plugins/forge/references/deterministic-checks.md": "4261c10f757a0f67609092542d76259c8134e24c",
+        "plugins/forge/references/execution-loop.md": "df4ece58caec141b4c0d3e49700200248e9d6610",
+        "plugins/forge/references/handoff-format.md": "6bb82e1a149da9abd95e5923561ed6a8a1b9f808",
+        "plugins/forge/references/questioning.md": "9f9b36d86b68aad50152e4f7ab637218afdc1cb1",
+        "plugins/forge/references/recovery-protocol.md": "7cd1e8561b87e990af9ae32d622cddc976b26b1f",
+        "plugins/forge/references/report-format.md": "c71f4cb3e84e1a3b4b2775d907c22befb2dcac02",
+        "plugins/forge/references/session-locking.md": "a3f87ff06ff260ab6353c60be5f80d94fb83ca56",
+        "plugins/forge/references/severity-levels.md": "f41c2141dfb7430c96eb7813c48c21010f8a709b",
+        "plugins/forge/references/step-handoff.md": "0fa2df5a74a6ad8edd339c69c970d065508212e6",
+        "plugins/forge/references/story-decomposition.md": "2aebf1da6724d05df0c737f93e309bdb4059c0f1",
+        "plugins/forge/references/storyhook-contract.md": "507554192f69294961f0bda40316ed8af6fc645b",
+        "plugins/forge/references/team-roles.md": "587d89762323b17885001c1b5471a304f8fb47e9",
+        "plugins/forge/references/verification-protocol.md": "d8bc49795bc4f87f355994db97a5b084ba2c82be"
+      },
+      "summary": "Normative protocol docs forge skills follow \u2014 execution loop, handoffs, locking, severity levels, storyhook usage",
+      "verified": true
+    },
+    "modules/plugins-forge-skills.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/forge/skills",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2",
+        "plugins-agents-agents-chunk-3",
+        "plugins-forge-bin",
+        "plugins-forge-references",
+        "plugins-freshen"
+      ],
+      "sources": {
+        "plugins/forge/skills/decompose/SKILL.md": "3249c4147869ea1f2d6db65ccf0794236280e491",
+        "plugins/forge/skills/deploy/SKILL.md": "7edc7603ad97eeb10ef3d6d832e75fb1aa4080c9",
+        "plugins/forge/skills/design/SKILL.md": "7fbb4a709f5ce22a3a1a180e9145112530614088",
+        "plugins/forge/skills/document/SKILL.md": "4047df8107d7a86c2e1d74e03dc1097a7ecb00d2",
+        "plugins/forge/skills/execute/SKILL.md": "281bcfd7a2fcf4e4fd4a145558c7bdc2416c3eec",
+        "plugins/forge/skills/forge/SKILL.md": "cc8b1715710e2d20c14e785a99fb46df714c5673",
+        "plugins/forge/skills/interrogate/SKILL.md": "f7d7b94f1cc5cf6adfa7b6f7f1f7a1156c7e1eb6",
+        "plugins/forge/skills/plan/SKILL.md": "d9cf6c05ef00ad0f90b9a7cefd6f41c789cf4e0a",
+        "plugins/forge/skills/research/SKILL.md": "b8f37ff44dbf23e6809e6388d990ac6c67b00ce2",
+        "plugins/forge/skills/review/SKILL.md": "7c9a3c691da2e92cecb2ca0543f70a1b974f9c84",
+        "plugins/forge/skills/triage/SKILL.md": "f4a3a022b00861b0d73d7ca04555bf842f188e59",
+        "plugins/forge/skills/validate/SKILL.md": "85336f6fd87b68c30526b9ef28a39da2e0c1c464"
+      },
+      "summary": "Forge skill layer \u2014 /forge state-machine router plus 11 step skills driving idea-to-deploy via .forge/ artifacts",
+      "verified": true
+    },
+    "modules/plugins-freshen.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/freshen",
+      "references_modules": [
+        "plugins-forge-bin",
+        "plugins-forge-hooks",
+        "plugins-hook-guard"
+      ],
+      "sources": {
+        "plugins/freshen/.claude-plugin/plugin.json": "030bbad689a442a32a0bc77ac38a14b1ab01e6ef",
+        "plugins/freshen/bin/freshen.sh": "99de1df3d5a354cc0834464078f31e276bdaff61",
+        "plugins/freshen/hooks/hooks.json": "685850a8d3fb5d3f11d059086fffbdecd8ea1739",
+        "plugins/freshen/hooks/on-clear.sh": "7247b0c06e0734e2a7768f41460e46c8244cc50f",
+        "plugins/freshen/hooks/on-stop.sh": "49804b1a6f98b8e1e9af3b59f13d1e50105ed627",
+        "plugins/freshen/skills/freshen/SKILL.md": "2f8f3decc4a8cae565bc1833ddab55e249d81abd"
+      },
+      "summary": "Context-clearing relay \u2014 queued signal files drive /clear + re-invocation via tmux send-keys",
+      "verified": true
+    },
+    "modules/plugins-greenlight.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/greenlight",
+      "references_modules": [],
+      "sources": {
+        "plugins/greenlight/.claude-plugin/plugin.json": "39246c09c4ec5c21d786408baba172052a1ad9a3",
+        "plugins/greenlight/README.md": "fe1fff6a447754c8f4ff1e3b567c65571a36490d",
+        "plugins/greenlight/hooks/greenlight.sh": "72653a429b3e20e77fb1d40d892faa5388aa960b",
+        "plugins/greenlight/hooks/hooks.json": "20cc2c86286ac87e52943958af770264e327a86c",
+        "plugins/greenlight/references/default-config.yaml": "e11bc45103e37cde5cf05ffa1f95aa0e5763c30e",
+        "plugins/greenlight/skills/greenlight/SKILL.md": "248805d9ec6de9e782e2b43f02d02ba0018640a4"
+      },
+      "summary": "PreToolUse safety hook \u2014 three-tier Bash triage (deterministic allow/warn, AI fallback), per-mode disable",
+      "verified": true
+    },
+    "modules/plugins-hook-guard.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/hook-guard",
+      "references_modules": [
+        "plugins-forge-hooks",
+        "plugins-freshen"
+      ],
+      "sources": {
+        "plugins/hook-guard/.claude-plugin/plugin.json": "107ca34d0b952e0377f64fcdf555e589f4a85d65",
+        "plugins/hook-guard/hooks/hooks.json": "d22a3169ebee8171c0149fd33e18c5f191b39144",
+        "plugins/hook-guard/hooks/session-start.sh": "00d27a0d31baad818f66b8ef6dc9c6dc85f7509c",
+        "plugins/hook-guard/lib/stop-guard.sh": "3cde01ee73b5e599e062fc0f11e74f1912886b13"
+      },
+      "summary": "Circuit breaker for Stop hooks \u2014 sourceable bash lib that halts rapid stop-event loops; reset on SessionStart",
+      "verified": true
+    },
+    "modules/plugins-rca.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/rca",
+      "references_modules": [
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2"
+      ],
+      "sources": {
+        "plugins/rca/.claude-plugin/plugin.json": "454504e821d1a1c2cce7377572811e62205a91ec",
+        "plugins/rca/README.md": "65f996dd8e8f6f0627b43e7f2ddab8b68dd21b3b",
+        "plugins/rca/agent-overrides/architect-rca.md": "6c5765aa64e41195c3841b0775d1847fa4359c31",
+        "plugins/rca/agent-overrides/investigator-rca.md": "85ff269974b4953c0687a67583763f5f734c334f",
+        "plugins/rca/bin/rca-status.sh": "cbadac1feae9bd9f334eb9c03240664c43d7563f",
+        "plugins/rca/references/architectural-patterns.md": "b167fb9a7ba41edd6b8c4fe215fbbaf7bfb262d3",
+        "plugins/rca/references/rca-methodology.md": "a1711e6a044250dd1297f62b7382a107086990f6",
+        "plugins/rca/references/symptom-vs-root-cause.md": "7163bcfd24f1d5fe21ce30c56cb4b943441f2ca3",
+        "plugins/rca/skills/rca/SKILL.md": "c5271dfc51b0450cc67a901b66fc599a53601e88"
+      },
+      "summary": "Root cause analysis pipeline \u2014 five phases from symptom intake to verified remediation plan",
+      "verified": true
+    },
+    "modules/plugins-semver-hooks.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/semver/hooks",
+      "references_modules": [
+        "plugins-forge-skills",
+        "plugins-semver-misc"
+      ],
+      "sources": {
+        "plugins/semver/hooks/hooks.json": "7bf0c55fd5f7a0ae3e75c0f66dde2d75a2a486bd",
+        "plugins/semver/hooks/post-push-check.sh": "6d65a1c6bc0e854ae91c7984cb2dbc97807d44fb",
+        "plugins/semver/hooks/run-user-hooks.sh": "6f444669e3df7e9ef28e4afcfad62a2d721305b2",
+        "plugins/semver/hooks/session-start.sh": "06001ae4a74cdc1564994c65103723d9544a2b58"
+      },
+      "summary": "Semver's Claude Code hook layer \u2014 session version context, git-push bump nudges, pre/post-bump hook runner",
+      "verified": true
+    },
+    "modules/plugins-semver-misc.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/semver (misc)",
+      "references_modules": [
+        "plugins-semver-hooks",
+        "plugins-semver-references"
+      ],
+      "sources": {
+        "plugins/semver/.claude-plugin/plugin.json": "d0ebc69ad4829a92f79f4bd147b3d020f656951c",
+        "plugins/semver/README.md": "355c546fe806712c5d265fe9a33fde1a59d8a1fe",
+        "plugins/semver/bin/semver-cli": "201e745459e03f4865891b44105f4727ee3998f5",
+        "plugins/semver/bin/semver-router.sh": "42c4f57e3b77cdaa6e3ef2be6f730603eb0d0e20",
+        "plugins/semver/skills/semver/SKILL.md": "d55b2177ff24c350b85121b63a30700a6267d4a2"
+      },
+      "summary": "Deterministic versioning core \u2014 JSON Python CLI, bash router, thin /semver orchestrator skill",
+      "verified": true
+    },
+    "modules/plugins-semver-references.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/semver/references",
+      "references_modules": [
+        "plugins-semver-hooks",
+        "plugins-semver-misc",
+        "root-misc"
+      ],
+      "sources": {
+        "plugins/semver/references/archive-format.md": "19e8d809d697e0eff37c2ba2859189966d5c1a85",
+        "plugins/semver/references/changelog-format.md": "9a19b979419d9c82c6498374f09f447ce28f0648",
+        "plugins/semver/references/claude-md-injection.md": "e2de01106a3e3a54eab381facc3cacb0e089d2cd",
+        "plugins/semver/references/config-schema.md": "097ecc3495c8566e0458f0f3b7e49ab220a8a7e2",
+        "plugins/semver/references/file-locking.md": "b8ac09df7a2d89649f2c7c5e46a0d6ba79353c51",
+        "plugins/semver/references/sync-validation.md": "1100011114eb836ee91e61945651835351cc0e1d",
+        "plugins/semver/references/user-hooks.md": "b8909535d97ccea22cb97d62b935a12cd57f77ad"
+      },
+      "summary": "Normative contracts for semver artifacts \u2014 config, changelog, archive, locking, validation, hooks, CLAUDE.md block",
+      "verified": true
+    },
+    "modules/plugins-semver-tests.md": {
+      "generator": "cartographer/1",
+      "module": "plugins/semver/tests",
+      "references_modules": [
+        "plugins-semver-hooks",
+        "plugins-semver-misc"
+      ],
+      "sources": {
+        "plugins/semver/tests/helpers/setup.sh": "087a4482effea86118a5f541d909d1cd5bef1045",
+        "plugins/semver/tests/run-tests.sh": "c3721e8619b1e0790cb584ac03bb6c235fcec187",
+        "plugins/semver/tests/test-bump-run.sh": "a707de3204d97de4a55df9c40e562bb3d86c8ae2",
+        "plugins/semver/tests/test-cli.sh": "f525e2512a65e5b890dc4c7d574b97d579b16d80",
+        "plugins/semver/tests/test-display-questions.sh": "a47a76f5e0313f6e7947537cd3abe2a02c7abbe7",
+        "plugins/semver/tests/test-hook-discovery.sh": "ff34bcac9a11b0716788e351c79dde766c13e0d7",
+        "plugins/semver/tests/test-hook-execution.sh": "726915a09246d27cfc474197525a169cefdc2f7f",
+        "plugins/semver/tests/test-hook-failures.sh": "6be046822fa395c49dd051c32c04ccac06344a93",
+        "plugins/semver/tests/test-hook-reentrancy.sh": "f42c68a95e4cb6652e4e9ca7c46a550b8cf41eea",
+        "plugins/semver/tests/test-integration.sh": "ec210c208c64353e050015700f2e70e51960f357",
+        "plugins/semver/tests/test-prompt-hooks.sh": "ce9972d43cf214b0de434a2bc86094b05c1ecbef",
+        "plugins/semver/tests/test-router.sh": "9981ff4600c847f5fdafc76be727dd5375d49606"
+      },
+      "summary": "Mock-free bash harness driving semver's real hook runner, CLI, and router in throwaway /tmp git repos",
+      "verified": true
+    },
+    "modules/root-misc.md": {
+      "generator": "cartographer/1",
+      "module": "root (misc)",
+      "references_modules": [
+        "plugins-agents-misc",
+        "plugins-atlas-misc",
+        "plugins-atlas-tests",
+        "plugins-council",
+        "plugins-deployit-misc",
+        "plugins-deployit-tests-chunk-1",
+        "plugins-forge-misc",
+        "plugins-freshen",
+        "plugins-greenlight",
+        "plugins-hook-guard",
+        "plugins-rca",
+        "plugins-semver-misc",
+        "plugins-semver-tests",
+        "tests"
+      ],
+      "sources": {
+        ".claude-plugin/marketplace.json": "974cf2ed0e780503f38268b18bdc85848a2105be",
+        ".gitignore": "a9bf4882e230d3761b915e566cecfb49630a25af",
+        ".semver/config.yaml": "34a5c2bfa206393f2256834b5bd999e9aec3f077",
+        "AGENTS.md": "04fef50d2517e57a411f7f23a09af90a44b24dba",
+        "CLAUDE.md": "370157c29cb3943526846444e4b0fa46dbef6e56",
+        "Makefile": "b183c37836c8dbbcc10676db66113d62dad41652",
+        "README.md": "5f28be43c59b3bb49b0976dc3199d42abfee9fea",
+        "docs/forge-workflow.md": "829219590927e60d40bc6b2e7d19bbedba22613d"
+      },
+      "summary": "Repo wiring layer \u2014 marketplace plugin registry, agent instructions, pre-push test gate, artifact conventions",
+      "verified": true
+    },
+    "modules/tests.md": {
+      "generator": "cartographer/1",
+      "module": "tests",
+      "references_modules": [
+        "root-misc"
+      ],
+      "sources": {
+        "tests/helpers.bash": "ca28a41ee9ec7cc8b278243237315d55e07e8a04",
+        "tests/init.bats": "4165667c3062581e7e3ff170335e404a87da24de",
+        "tests/run-tests.sh": "18b3f63079da9fd9dce3c88ed11500f2eadbf0c3",
+        "tests/state-machine.bats": "b48e1c7812e0bb44c8ba4f41fdcb1d901f1a0b01"
+      },
+      "summary": "Root bats suite pinning the pilot/storyhook state-machine file contracts via self-built temp-repo fixtures",
+      "verified": true
+    },
+    "overview/ARCHITECTURE.md": {
+      "generator": "cartographer/1",
+      "module": "overview/ARCHITECTURE",
+      "references_modules": [],
+      "sources": {
+        "docs/atlas/modules/plugins-agents-agents-chunk-1.md": "7660f14d138892061941645e4718e1166549e2ae",
+        "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "bd4e06d5b1bbe2bf0f997ca6429978442f043c03",
+        "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "04d73c6dfc4f0472770a9bc069cb58ff31770e2b",
+        "docs/atlas/modules/plugins-agents-agents-ux.md": "20d0f5c50ec76e17358372e0796c5919d1087a10",
+        "docs/atlas/modules/plugins-agents-misc.md": "dbac06fd7e2936fb1d08c6915e4ae2fa16721f74",
+        "docs/atlas/modules/plugins-agents-references.md": "14fcd93dd6ca38023f9fd627e6a4f83da44f029e",
+        "docs/atlas/modules/plugins-atlas-misc.md": "3f6feda3ee4c795c686cdc3daa6d39013224a806",
+        "docs/atlas/modules/plugins-atlas-references.md": "690ca7eaf33df8ddaaa089a1d2a6bc80349191e3",
+        "docs/atlas/modules/plugins-atlas-tests.md": "9c2a2fbea959c44503bdbce64a0e1c7b7a0e07bd",
+        "docs/atlas/modules/plugins-council.md": "d63d87dfe2ecc25a1368d63b32c59998123dfc27",
+        "docs/atlas/modules/plugins-deployit-assets.md": "7ee2a83d4f82157399ffb796e40388f5ae352bc8",
+        "docs/atlas/modules/plugins-deployit-bin.md": "ea1df1776368bec4144f7717efe3047284cec400",
+        "docs/atlas/modules/plugins-deployit-misc.md": "3cfc11747c26171f99fbdf6c9e96b1f239bb336d",
+        "docs/atlas/modules/plugins-deployit-references.md": "1fde5292bb1ce0ba95fc58dd6caaec0c0b1de97e",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-1.md": "3fbd504b865ddcfbcaad14e21c7df4f59fa8e3e7",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": "235419db6d820abfd0fc37cae5c77e546f62a1c8",
+        "docs/atlas/modules/plugins-forge-agent-overrides.md": "43b986b77cf04bac0010f5419aa3aceb0ac8e4aa",
+        "docs/atlas/modules/plugins-forge-bin.md": "c6823510f72cf9dff23162c687387ea2b58125fa",
+        "docs/atlas/modules/plugins-forge-hooks.md": "a231b5effc8e1a04408e80545a1e5235dc10fa8f",
+        "docs/atlas/modules/plugins-forge-misc.md": "fe6e8805aaaddfe46af33ebff2165f0aa8e7561d",
+        "docs/atlas/modules/plugins-forge-references.md": "55b59186bb3edbb765ae8173c2b1dd2c940eb8de",
+        "docs/atlas/modules/plugins-forge-skills.md": "4e99ebb9dcac5679025b2c3704dcd5f0767194a7",
+        "docs/atlas/modules/plugins-freshen.md": "183412f3940cf8c34e76f0a0a4b7cab6f67db1e9",
+        "docs/atlas/modules/plugins-greenlight.md": "3d5664baba847c5ed5d037ad77722cd79ed84e64",
+        "docs/atlas/modules/plugins-hook-guard.md": "e3af22ed35b7708182b55e5bafdf35e78b778b55",
+        "docs/atlas/modules/plugins-rca.md": "89c49df2a95019de19802da19e9779d9258d0992",
+        "docs/atlas/modules/plugins-semver-hooks.md": "eacacdd599b18ffd3d2be37f1d10263c7b64a9da",
+        "docs/atlas/modules/plugins-semver-misc.md": "caf60c9dbc5c0c107c01a6dd7af46ccaa3e09c80",
+        "docs/atlas/modules/plugins-semver-references.md": "8e7302e61947f26e352a9c110f62591d57f0b3a5",
+        "docs/atlas/modules/plugins-semver-tests.md": "e870abbfa5bc1f7b84e76ceef67a9c903fd36bca",
+        "docs/atlas/modules/root-misc.md": "4654a6c93293f17dc9d52b0a87ca7d5d39996c24",
+        "docs/atlas/modules/tests.md": "ff960fb0024aae037ef342b645238f358a612643"
+      },
+      "summary": "System shape, module relationships, and cross-plugin invariants of the agentics marketplace",
+      "verified": null
+    }
+  },
+  "paths": {
+    ".claude-plugin/marketplace.json": "modules/root-misc.md",
+    ".gitignore": "modules/root-misc.md",
+    ".semver/config.yaml": "modules/root-misc.md",
+    "AGENTS.md": "modules/root-misc.md",
+    "CLAUDE.md": "modules/root-misc.md",
+    "Makefile": "modules/root-misc.md",
+    "README.md": "modules/root-misc.md",
+    "docs/forge-workflow.md": "modules/root-misc.md",
+    "plugins/agents/.claude-plugin/plugin.json": "modules/plugins-agents-misc.md",
+    "plugins/agents/agents/_guardrails.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/_template.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/accessibility-engineer.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/api-designer.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/cartographer.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/copy-editor.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/data-engineer.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/devops-engineer.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/domain-researcher.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/evaluator.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/evidence-collector.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/generator.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/hypothesis-challenger.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/investigator.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/lawyer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/map-verifier.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/observability-engineer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/performance-engineer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/project-manager.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/qa-engineer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/reviewer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/security-researcher.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/skeptic.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/software-architect.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/software-engineer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/technical-writer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/triager.md": "modules/plugins-agents-agents-chunk-3.md",
+    "plugins/agents/agents/ux-designer-cli.md": "modules/plugins-agents-agents-ux.md",
+    "plugins/agents/agents/ux-designer-mobile.md": "modules/plugins-agents-agents-ux.md",
+    "plugins/agents/agents/ux-designer-web.md": "modules/plugins-agents-agents-ux.md",
+    "plugins/agents/agents/validator.md": "modules/plugins-agents-agents-chunk-3.md",
+    "plugins/agents/bin/validate-agents.sh": "modules/plugins-agents-misc.md",
+    "plugins/agents/references/agent-catalog.md": "modules/plugins-agents-references.md",
+    "plugins/agents/references/agent-design-principles.md": "modules/plugins-agents-references.md",
+    "plugins/agents/references/cross-plugin-usage.md": "modules/plugins-agents-references.md",
+    "plugins/agents/references/tool-audit.md": "modules/plugins-agents-references.md",
+    "plugins/agents/skills/agents/SKILL.md": "modules/plugins-agents-misc.md",
+    "plugins/atlas/.claude-plugin/plugin.json": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/README.md": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/agent-overrides/cartographer-context.md": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/agent-overrides/map-verifier-context.md": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/bin/atlas-cli": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/bin/atlas-router.sh": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/hooks/hooks.json": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/hooks/session-start.sh": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/references/claude-md-injection.md": "modules/plugins-atlas-references.md",
+    "plugins/atlas/references/design.md": "modules/plugins-atlas-references.md",
+    "plugins/atlas/references/map-format.md": "modules/plugins-atlas-references.md",
+    "plugins/atlas/references/mapping-protocol.md": "modules/plugins-atlas-references.md",
+    "plugins/atlas/references/update-protocol.md": "modules/plugins-atlas-references.md",
+    "plugins/atlas/skills/atlas/SKILL.md": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/tests/helpers/setup.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/run-tests.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-commit.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-ground.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-hook.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-index.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-init.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-ledger.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-lint.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-lock.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-partition.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-scan.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/tests/test-status.sh": "modules/plugins-atlas-tests.md",
+    "plugins/council/.claude-plugin/plugin.json": "modules/plugins-council.md",
+    "plugins/council/README.md": "modules/plugins-council.md",
+    "plugins/council/references/archetypes.md": "modules/plugins-council.md",
+    "plugins/council/references/council-protocol.md": "modules/plugins-council.md",
+    "plugins/council/references/team-composition.md": "modules/plugins-council.md",
+    "plugins/council/references/voting-mechanics.md": "modules/plugins-council.md",
+    "plugins/council/skills/council-vote/SKILL.md": "modules/plugins-council.md",
+    "plugins/council/skills/council-vote/evals/evals.json": "modules/plugins-council.md",
+    "plugins/deployit/.claude-plugin/plugin.json": "modules/plugins-deployit-misc.md",
+    "plugins/deployit/assets/ExportOptions.ios.plist": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/ExportOptions.macos.plist": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/ExportOptions.visionos.plist": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/app.css": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/app.js": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/config.example.toml": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/icons/icon.svg": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/index.template.html": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/listing.template.html": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/manifest.template.plist": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/manifest.webmanifest": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/product.template.html": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/bin/deployit-backend": "modules/plugins-deployit-bin.md",
+    "plugins/deployit/bin/deployit-cli": "modules/plugins-deployit-bin.md",
+    "plugins/deployit/bin/deployit-router.sh": "modules/plugins-deployit-bin.md",
+    "plugins/deployit/references/bootstrap.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/ios.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/macos.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/semver.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/tailscale-serve.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/troubleshooting.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/visionos.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/skills/deployit/SKILL.md": "modules/plugins-deployit-misc.md",
+    "plugins/deployit/tests/fakes/tailscale": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/run-tests.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-500-on-corrupt.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-healthz.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-listing-groups-by-product.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-listing.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-per-build.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-product-page.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-refresh.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-static-assets.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-version-label.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-bootstrap-dirs.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-cli-bump.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-cli-preflight.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-cli-redeploy.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-version.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-gc.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-metadata-single-app.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-metadata.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/verify-live.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/forge/.claude-plugin/plugin.json": "modules/plugins-forge-misc.md",
+    "plugins/forge/README.md": "modules/plugins-forge-misc.md",
+    "plugins/forge/agent-overrides/evaluator-context.md": "modules/plugins-forge-agent-overrides.md",
+    "plugins/forge/agent-overrides/generator-context.md": "modules/plugins-forge-agent-overrides.md",
+    "plugins/forge/agent-overrides/reviewer-context.md": "modules/plugins-forge-agent-overrides.md",
+    "plugins/forge/agent-overrides/triager-context.md": "modules/plugins-forge-agent-overrides.md",
+    "plugins/forge/agent-overrides/validator-context.md": "modules/plugins-forge-agent-overrides.md",
+    "plugins/forge/bin/forge-archive.bats": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-archive.sh": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-fix-archive.bats": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-fix-archive.sh": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-prechecks.bats": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-prechecks.sh": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-state.sh": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-state.test.bats": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-status.bats": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-status.sh": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-step-exit.bats": "modules/plugins-forge-bin.md",
+    "plugins/forge/bin/forge-step-exit.sh": "modules/plugins-forge-bin.md",
+    "plugins/forge/hooks/hooks.json": "modules/plugins-forge-hooks.md",
+    "plugins/forge/hooks/session-start.sh": "modules/plugins-forge-hooks.md",
+    "plugins/forge/hooks/session-stop.sh": "modules/plugins-forge-hooks.md",
+    "plugins/forge/references/auto-resume.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/deterministic-checks.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/execution-loop.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/handoff-format.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/questioning.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/recovery-protocol.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/report-format.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/session-locking.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/severity-levels.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/step-handoff.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/story-decomposition.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/storyhook-contract.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/team-roles.md": "modules/plugins-forge-references.md",
+    "plugins/forge/references/verification-protocol.md": "modules/plugins-forge-references.md",
+    "plugins/forge/skills/decompose/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/deploy/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/design/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/document/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/execute/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/forge/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/interrogate/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/plan/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/research/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/review/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/triage/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/forge/skills/validate/SKILL.md": "modules/plugins-forge-skills.md",
+    "plugins/freshen/.claude-plugin/plugin.json": "modules/plugins-freshen.md",
+    "plugins/freshen/bin/freshen.sh": "modules/plugins-freshen.md",
+    "plugins/freshen/hooks/hooks.json": "modules/plugins-freshen.md",
+    "plugins/freshen/hooks/on-clear.sh": "modules/plugins-freshen.md",
+    "plugins/freshen/hooks/on-stop.sh": "modules/plugins-freshen.md",
+    "plugins/freshen/skills/freshen/SKILL.md": "modules/plugins-freshen.md",
+    "plugins/greenlight/.claude-plugin/plugin.json": "modules/plugins-greenlight.md",
+    "plugins/greenlight/README.md": "modules/plugins-greenlight.md",
+    "plugins/greenlight/hooks/greenlight.sh": "modules/plugins-greenlight.md",
+    "plugins/greenlight/hooks/hooks.json": "modules/plugins-greenlight.md",
+    "plugins/greenlight/references/default-config.yaml": "modules/plugins-greenlight.md",
+    "plugins/greenlight/skills/greenlight/SKILL.md": "modules/plugins-greenlight.md",
+    "plugins/hook-guard/.claude-plugin/plugin.json": "modules/plugins-hook-guard.md",
+    "plugins/hook-guard/hooks/hooks.json": "modules/plugins-hook-guard.md",
+    "plugins/hook-guard/hooks/session-start.sh": "modules/plugins-hook-guard.md",
+    "plugins/hook-guard/lib/stop-guard.sh": "modules/plugins-hook-guard.md",
+    "plugins/rca/.claude-plugin/plugin.json": "modules/plugins-rca.md",
+    "plugins/rca/README.md": "modules/plugins-rca.md",
+    "plugins/rca/agent-overrides/architect-rca.md": "modules/plugins-rca.md",
+    "plugins/rca/agent-overrides/investigator-rca.md": "modules/plugins-rca.md",
+    "plugins/rca/bin/rca-status.sh": "modules/plugins-rca.md",
+    "plugins/rca/references/architectural-patterns.md": "modules/plugins-rca.md",
+    "plugins/rca/references/rca-methodology.md": "modules/plugins-rca.md",
+    "plugins/rca/references/symptom-vs-root-cause.md": "modules/plugins-rca.md",
+    "plugins/rca/skills/rca/SKILL.md": "modules/plugins-rca.md",
+    "plugins/semver/.claude-plugin/plugin.json": "modules/plugins-semver-misc.md",
+    "plugins/semver/README.md": "modules/plugins-semver-misc.md",
+    "plugins/semver/bin/semver-cli": "modules/plugins-semver-misc.md",
+    "plugins/semver/bin/semver-router.sh": "modules/plugins-semver-misc.md",
+    "plugins/semver/hooks/hooks.json": "modules/plugins-semver-hooks.md",
+    "plugins/semver/hooks/post-push-check.sh": "modules/plugins-semver-hooks.md",
+    "plugins/semver/hooks/run-user-hooks.sh": "modules/plugins-semver-hooks.md",
+    "plugins/semver/hooks/session-start.sh": "modules/plugins-semver-hooks.md",
+    "plugins/semver/references/archive-format.md": "modules/plugins-semver-references.md",
+    "plugins/semver/references/changelog-format.md": "modules/plugins-semver-references.md",
+    "plugins/semver/references/claude-md-injection.md": "modules/plugins-semver-references.md",
+    "plugins/semver/references/config-schema.md": "modules/plugins-semver-references.md",
+    "plugins/semver/references/file-locking.md": "modules/plugins-semver-references.md",
+    "plugins/semver/references/sync-validation.md": "modules/plugins-semver-references.md",
+    "plugins/semver/references/user-hooks.md": "modules/plugins-semver-references.md",
+    "plugins/semver/skills/semver/SKILL.md": "modules/plugins-semver-misc.md",
+    "plugins/semver/tests/helpers/setup.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/run-tests.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-bump-run.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-cli.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-display-questions.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-hook-discovery.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-hook-execution.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-hook-failures.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-hook-reentrancy.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-integration.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-prompt-hooks.sh": "modules/plugins-semver-tests.md",
+    "plugins/semver/tests/test-router.sh": "modules/plugins-semver-tests.md",
+    "tests/helpers.bash": "modules/tests.md",
+    "tests/init.bats": "modules/tests.md",
+    "tests/run-tests.sh": "modules/tests.md",
+    "tests/state-machine.bats": "modules/tests.md"
+  },
+  "referenced_by": {
+    "plugins-agents-agents-chunk-1": [
+      "modules/plugins-agents-agents-chunk-2.md",
+      "modules/plugins-agents-agents-chunk-3.md",
+      "modules/plugins-agents-misc.md",
+      "modules/plugins-agents-references.md",
+      "modules/plugins-atlas-misc.md",
+      "modules/plugins-atlas-references.md",
+      "modules/plugins-council.md",
+      "modules/plugins-forge-agent-overrides.md",
+      "modules/plugins-forge-references.md",
+      "modules/plugins-forge-skills.md",
+      "modules/plugins-rca.md"
+    ],
+    "plugins-agents-agents-chunk-2": [
+      "modules/plugins-agents-agents-chunk-1.md",
+      "modules/plugins-agents-agents-chunk-3.md",
+      "modules/plugins-agents-misc.md",
+      "modules/plugins-agents-references.md",
+      "modules/plugins-atlas-misc.md",
+      "modules/plugins-atlas-references.md",
+      "modules/plugins-council.md",
+      "modules/plugins-forge-agent-overrides.md",
+      "modules/plugins-forge-references.md",
+      "modules/plugins-forge-skills.md",
+      "modules/plugins-rca.md"
+    ],
+    "plugins-agents-agents-chunk-3": [
+      "modules/plugins-agents-misc.md",
+      "modules/plugins-agents-references.md",
+      "modules/plugins-forge-agent-overrides.md",
+      "modules/plugins-forge-skills.md"
+    ],
+    "plugins-agents-agents-ux": [
+      "modules/plugins-agents-misc.md",
+      "modules/plugins-agents-references.md",
+      "modules/plugins-council.md"
+    ],
+    "plugins-agents-misc": [
+      "modules/plugins-agents-agents-ux.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-agents-references": [
+      "modules/plugins-agents-agents-ux.md",
+      "modules/plugins-agents-misc.md",
+      "modules/plugins-council.md",
+      "modules/plugins-forge-references.md"
+    ],
+    "plugins-atlas-misc": [
+      "modules/plugins-atlas-references.md",
+      "modules/plugins-atlas-tests.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-atlas-references": [
+      "modules/plugins-agents-agents-chunk-1.md",
+      "modules/plugins-atlas-misc.md"
+    ],
+    "plugins-atlas-tests": [
+      "modules/root-misc.md"
+    ],
+    "plugins-council": [
+      "modules/plugins-agents-agents-ux.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-deployit-assets": [
+      "modules/plugins-deployit-bin.md",
+      "modules/plugins-deployit-references.md"
+    ],
+    "plugins-deployit-bin": [
+      "modules/plugins-deployit-assets.md",
+      "modules/plugins-deployit-misc.md",
+      "modules/plugins-deployit-references.md",
+      "modules/plugins-deployit-tests-chunk-1.md",
+      "modules/plugins-deployit-tests-chunk-2.md"
+    ],
+    "plugins-deployit-misc": [
+      "modules/plugins-deployit-references.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-deployit-references": [
+      "modules/plugins-deployit-misc.md"
+    ],
+    "plugins-deployit-tests-chunk-1": [
+      "modules/plugins-deployit-tests-chunk-2.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-deployit-tests-chunk-2": [
+      "modules/plugins-deployit-bin.md",
+      "modules/plugins-deployit-misc.md",
+      "modules/plugins-deployit-tests-chunk-1.md"
+    ],
+    "plugins-forge-bin": [
+      "modules/plugins-forge-references.md",
+      "modules/plugins-forge-skills.md",
+      "modules/plugins-freshen.md"
+    ],
+    "plugins-forge-hooks": [
+      "modules/plugins-forge-references.md",
+      "modules/plugins-freshen.md",
+      "modules/plugins-hook-guard.md"
+    ],
+    "plugins-forge-misc": [
+      "modules/root-misc.md"
+    ],
+    "plugins-forge-references": [
+      "modules/plugins-agents-references.md",
+      "modules/plugins-forge-skills.md"
+    ],
+    "plugins-forge-skills": [
+      "modules/plugins-agents-references.md",
+      "modules/plugins-forge-hooks.md",
+      "modules/plugins-forge-references.md",
+      "modules/plugins-semver-hooks.md"
+    ],
+    "plugins-freshen": [
+      "modules/plugins-agents-references.md",
+      "modules/plugins-forge-bin.md",
+      "modules/plugins-forge-hooks.md",
+      "modules/plugins-forge-references.md",
+      "modules/plugins-forge-skills.md",
+      "modules/plugins-hook-guard.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-greenlight": [
+      "modules/plugins-agents-references.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-hook-guard": [
+      "modules/plugins-forge-hooks.md",
+      "modules/plugins-freshen.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-rca": [
+      "modules/plugins-agents-references.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-semver-hooks": [
+      "modules/plugins-semver-misc.md",
+      "modules/plugins-semver-references.md",
+      "modules/plugins-semver-tests.md"
+    ],
+    "plugins-semver-misc": [
+      "modules/plugins-agents-references.md",
+      "modules/plugins-deployit-bin.md",
+      "modules/plugins-deployit-references.md",
+      "modules/plugins-deployit-tests-chunk-1.md",
+      "modules/plugins-semver-hooks.md",
+      "modules/plugins-semver-references.md",
+      "modules/plugins-semver-tests.md",
+      "modules/root-misc.md"
+    ],
+    "plugins-semver-references": [
+      "modules/plugins-semver-misc.md"
+    ],
+    "plugins-semver-tests": [
+      "modules/root-misc.md"
+    ],
+    "root-misc": [
+      "modules/plugins-forge-misc.md",
+      "modules/plugins-semver-references.md",
+      "modules/tests.md"
+    ],
+    "tests": [
+      "modules/root-misc.md"
+    ]
+  },
+  "version": 1
+}

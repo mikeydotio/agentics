@@ -21,3 +21,6 @@ Thumbs.db
 .forge/verdicts.jsonl
 # .forge/config.json, .forge/plan-mapping.json, .forge/handoffs/, and .forge/fix-cycles/ are version-controlled — do not ignore
 .forge-archives/
+
+# Atlas runtime state (ephemeral, never committed)
+.atlas/

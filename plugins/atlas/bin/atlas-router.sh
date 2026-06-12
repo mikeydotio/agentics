@@ -35,6 +35,12 @@ case "$cmd" in
     ledger)
         run_cli ledger "$@"
         ;;
+    doc)
+        run_cli doc "$@"
+        ;;
+    diffpack)
+        run_cli diffpack "$@"
+        ;;
     lock)
         run_cli lock "$@"
         ;;

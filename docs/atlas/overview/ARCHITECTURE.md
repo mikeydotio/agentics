@@ -15,11 +15,11 @@ sources:
   - path: docs/atlas/modules/plugins-agents-references.md
     blob: 1b7e2f101fe5a67313d58196adb202cfae5dd82c
   - path: docs/atlas/modules/plugins-atlas-misc.md
-    blob: 01d409ac10ad2a004933dfa17bb9a41324ccf375
+    blob: 417a8429598db1d7587c9df980e6a89067d7a8b0
   - path: docs/atlas/modules/plugins-atlas-references.md
-    blob: 50eae2da0fa58bc020dc8f4ac18ab884c3589047
+    blob: 9bcf60683ca69585b6277603f68bb82c4cdf13f1
   - path: docs/atlas/modules/plugins-atlas-tests.md
-    blob: 9c5668a61e45bc6857b4eec29026a39297ba2a83
+    blob: 0e0bc56b3eb6492412b8c162495b9274896f0622
   - path: docs/atlas/modules/plugins-council.md
     blob: 3f13dbba9eab880139632767c967a135d1f35fbd
   - path: docs/atlas/modules/plugins-deployit-assets.md
@@ -63,16 +63,16 @@ sources:
   - path: docs/atlas/modules/plugins-semver-tests.md
     blob: 1e5da4704bb1b156495e771d35234862141adf0e
   - path: docs/atlas/modules/root-misc.md
-    blob: 3dd1ca78ede7dab154655115b660df8419be0d82
+    blob: 7a46591e6608b5a1508d4929c22a61c34cc8ee93
   - path: docs/atlas/modules/tests.md
     blob: 9d72ed08c7b45fd7fc6c474366e62d2dfee2292a
 scopes:
   - tree: plugins
-    sha: 0b0b4566c1708306b78dc021c96dee0422b8536f
+    sha: 224db90f5191521372b88f72de14a57d7f6e5552
   - tree: tests
     sha: f726161a1df6bcd639771ffdde7d527eaba66cdf
 generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
+baseline: 545be2bb7ff18f328277446829f1be6457ac6363
 ---
 
 # Architecture
@@ -173,6 +173,7 @@ A forge run is the representative pipeline; each hop below crosses a module boun
 - freshen delivers /clear + re-invocation only via tmux send-keys; outside tmux it no-ops
 - Forge steps exit uniformly: write artifact + handoff, commit, queue freshen, STOP
 - Forge triage: FIX re-enters at plan (max 3 cycles, 10 yolo); ESCALATE pauses for the user
+- Atlas maps update incrementally via the blob-SHA ledger; unchanged docs never reach an LLM
 - Tests are mock-free bash harnesses driving real CLIs in throwaway /tmp git repos
 - make test aggregates the semver, deployit, atlas, and root bats suites; pre-push runs it
 <!-- /atlas:index-facts -->

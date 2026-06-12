@@ -1,5 +1,5 @@
 {
-  "baseline": "545be2bb7ff18f328277446829f1be6457ac6363",
+  "baseline": "6c8b6fd6abf561a6044b7fd6b40950bffb56c8f2",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/1",
@@ -508,7 +508,7 @@
         "plugins/hook-guard/hooks/session-start.sh": "00d27a0d31baad818f66b8ef6dc9c6dc85f7509c",
         "plugins/hook-guard/lib/stop-guard.sh": "3cde01ee73b5e599e062fc0f11e74f1912886b13"
       },
-      "summary": "Circuit breaker for Stop hooks \u2014 sourceable bash lib that halts rapid stop-event loops; reset on SessionStart",
+      "summary": "Shared Stop-hook circuit breaker \u2014 sourced stop_guard_check halts runaway hook loops; SessionStart re-arms it",
       "verified": true
     },
     "modules/plugins-rca.md": {
@@ -686,7 +686,7 @@
         "docs/atlas/modules/plugins-forge-skills.md": "b7c19956fda9d0c509cadcfa51b9825b2921e62f",
         "docs/atlas/modules/plugins-freshen.md": "6e095f4f3c63c14d97eaab2f8ed5e44d7d041923",
         "docs/atlas/modules/plugins-greenlight.md": "816272cb74ca60909160d3b0c1b4494672637e8b",
-        "docs/atlas/modules/plugins-hook-guard.md": "a4cbbbade395448c96da9c3680f38a092d23f48f",
+        "docs/atlas/modules/plugins-hook-guard.md": "5704253d35f7d407530fd8ba79a341763dbf195f",
         "docs/atlas/modules/plugins-rca.md": "7d05b3bc42e78748adbe8af0095ab699c292968c",
         "docs/atlas/modules/plugins-semver-hooks.md": "b18a49019caa60fc6c0a57fb8311cf4efde4bba1",
         "docs/atlas/modules/plugins-semver-misc.md": "874e33238961a11dc026092fc94aa22d91c2a2ba",

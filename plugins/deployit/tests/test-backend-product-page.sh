@@ -67,7 +67,7 @@ done
 
 # Known product returns 200 and lists both builds in desc order
 body=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/ios/")
-echo "$body" | grep -q "Lillist · ios" \
+echo "$body" | grep -q "Lillist · iOS" \
     || { echo "FAIL: product header missing"; echo "$body"; exit 1; }
 echo "$body" | grep -q "build 17" \
     || { echo "FAIL: build 17 missing"; echo "$body"; exit 1; }

@@ -80,6 +80,30 @@ The per-build landing page at `https://<host>.<tailnet>.ts.net/deployit/<build_i
 shows a **Download** button. Clicking it downloads the `.dmg` directly.
 Mount, drag to Applications, launch — same as any other Developer ID app.
 
+## Verifying a macOS build appears
+
+macOS builds are first-class in the web UI — they share the index, listing, and
+product pages with iOS, rendering as `<Project> · macOS · <version>` with a
+**Download** button (vs iOS's **Install**). To confirm the path end-to-end:
+
+- **Real deploy:** `/deployit deploy --platform macos`, then open the listing
+  URL (`/deployit url`) from another Mac. The new build appears at the top of
+  its product group with a Download button; the per-build landing page shows a
+  Gatekeeper hint.
+- **Without archiving** (smoke test): the backend renders straight from
+  `index/builds.json`, so seeding a synthetic `direct-download` entry and
+  `curl`ing `/deployit/`, `/deployit/p/<bundle>/macos/`, and the per-build page
+  is enough to confirm rendering. See `tests/test-backend-macos-download.sh` for
+  the exact fixture.
+
+## Auto-update (Sparkle)
+
+macOS apps can update themselves via an EdDSA-signed Sparkle appcast that
+deployit generates and serves. It is opt-in (`[macos.sparkle] enabled = true`)
+and additionally produces a `.zip` enclosure alongside the `.dmg`. Full setup —
+key generation, sharing one key across Macs, SPM, Info.plist keys, and testing —
+is in **`references/sparkle.md`**.
+
 ## Notarization failures
 
 If `notarytool submit` fails, the CLI surfaces the full Apple error log.

@@ -13,6 +13,7 @@ Stdlib only. Designed to be supervised by launchd.
 
 import argparse
 import datetime as _dt
+import email.utils as _eut
 import html
 import json
 import mimetypes
@@ -67,12 +68,24 @@ def _relative_time(iso: str) -> str:
     return f"{secs // 86400}d ago"
 
 
+def _rfc822(iso: str) -> str:
+    """Format an ISO-8601 timestamp as an RFC-822 date for an appcast <pubDate>.
+    Uses email.utils so the day/month names are always RFC-English."""
+    return _eut.format_datetime(_dt.datetime.fromisoformat(iso))
+
+
 def _install_link(build):
     inst = build["install"]
     if inst["kind"] == "itms-services":
         href = "itms-services://?action=download-manifest&url=" + inst["manifest_url"]
         return href, "Install"
     return inst["dmg_url"], "Download"
+
+
+def _platform_display(platform: str) -> str:
+    """Human-facing platform name. The index stores lowercase slugs
+    (ios/macos/visionos); the UI shows Apple's canonical casing."""
+    return {"ios": "iOS", "macos": "macOS", "visionos": "visionOS"}.get(platform, platform)
 
 
 def _version_label(build) -> str:
@@ -114,7 +127,7 @@ def _render_row(build, *, older_count: int, link_to_product: bool) -> str:
         archived_class="archived" if build.get("archived") else "",
         data_href_attr=data_attr,
         project=html.escape(build["project"]),
-        platform=html.escape(build["platform"]),
+        platform=html.escape(_platform_display(build["platform"])),
         version_label=html.escape(_version_label(build)),
         install_href=html.escape(href, quote=True),
         install_label=label,
@@ -147,6 +160,14 @@ _TRUST_NOTE_HTML = (
     '</p>'
 )
 
+_GATEKEEPER_NOTE_HTML = (
+    '<p style="color:#888;font-size:13px;">'
+    '<strong>First launch only:</strong> if macOS says the app is from an '
+    'unidentified developer, right-click (or Control-click) it in '
+    '<em>Applications</em>, choose <em>Open</em>, then confirm.'
+    '</p>'
+)
+
 
 def _read_build_meta(root: Path, build_id: str):
     meta_path = root / "serve" / build_id / "_meta.json"
@@ -160,7 +181,7 @@ def _render_build_landing(root: Path, build) -> bytes:
     tmpl = string.Template((root / "_plugin_root" / "assets" / "index.template.html").read_text())
     return tmpl.substitute(
         TITLE=html.escape(build["project"]),
-        PLATFORM=html.escape(build["platform"]),
+        PLATFORM=html.escape(_platform_display(build["platform"])),
         ORIGIN_HOST=html.escape(build["origin_host"]),
         VERSION_LABEL=html.escape(_version_label(build)),
         BUILD_NUMBER=html.escape(build["build_number"]),
@@ -168,7 +189,11 @@ def _render_build_landing(root: Path, build) -> bytes:
         TIMESTAMP=html.escape(build["timestamp"]),
         INSTALL_HREF=html.escape(href, quote=True),
         INSTALL_LABEL=label,
-        TRUST_NOTE=_TRUST_NOTE_HTML if build["platform"] in ("ios", "visionos") else "",
+        TRUST_NOTE=(
+            _TRUST_NOTE_HTML if build["platform"] in ("ios", "visionos")
+            else _GATEKEEPER_NOTE_HTML if build["platform"] == "macos"
+            else ""
+        ),
     ).encode()
 
 
@@ -211,6 +236,34 @@ def _render_listing(root: Path, local_host: str) -> bytes:
     ).encode()
 
 
+def _render_sparkle_block(bundle_id: str, platform: str, matches) -> str:
+    """The product-page Auto-update card: the appcast SUFeedURL (and SUPublicEDKey
+    when configured) for copy-paste into the app. Empty for non-macOS products or
+    macOS products with no EdDSA-signed builds."""
+    if platform != "macos":
+        return ""
+    signed = [b for b in matches if b.get("sparkle")]
+    if not signed:
+        return ""
+    newest = signed[0]
+    appcast_url = (f"{newest['origin_base_url']}/p/"
+                   f"{urllib.parse.quote(bundle_id, safe='')}/macos/appcast.xml")
+    pub = newest["sparkle"].get("public_ed_key", "")
+    pub_row = (f'<dt>SUPublicEDKey</dt><dd><code>{html.escape(pub)}</code></dd>'
+               if pub else "")
+    return (
+        '<section class="sparkle">'
+        '<h2>Auto-update (Sparkle)</h2>'
+        '<dl>'
+        f'<dt>SUFeedURL</dt><dd><code>{html.escape(appcast_url)}</code></dd>'
+        f'{pub_row}'
+        '</dl>'
+        '<p class="meta">Add these to the app’s Info.plist '
+        '(see deployit references/sparkle.md).</p>'
+        '</section>'
+    )
+
+
 def _render_product(root: Path, bundle_id: str, platform: str):
     """Return (200, html) for a product page, or (404, None) if no builds match."""
     data = _read_index(root)
@@ -220,15 +273,64 @@ def _render_product(root: Path, bundle_id: str, platform: str):
         return 404, None
     matches.sort(key=lambda b: b["timestamp"], reverse=True)
     rows = [_render_row(b, older_count=0, link_to_product=False) for b in matches]
+    sparkle_block = _render_sparkle_block(bundle_id, platform, matches)
     template_path = root / "_plugin_root" / "assets" / "product.template.html"
     tmpl = string.Template(template_path.read_text())
     body = tmpl.substitute(
         LAST_PULL=html.escape(f"last pull: {_last_pull}"),
         PROJECT=html.escape(matches[0]["project"]),
-        PLATFORM=html.escape(platform),
+        PLATFORM=html.escape(_platform_display(platform)),
         BUNDLE_ID=html.escape(bundle_id),
         TOTAL_BUILDS=str(len(matches)),
+        SPARKLE_BLOCK=sparkle_block,
         ROWS="\n".join(rows),
+    ).encode()
+    return 200, body
+
+
+_APPCAST_ITEM_TEMPLATE = string.Template("""    <item>
+      <title>$title</title>
+      <pubDate>$pubdate</pubDate>
+      <sparkle:version>$version</sparkle:version>
+      <sparkle:shortVersionString>$short_version</sparkle:shortVersionString>
+      <enclosure url="$zip_url" length="$zip_length" type="application/octet-stream" sparkle:edSignature="$ed_signature" />
+    </item>""")
+
+
+def _render_appcast(root: Path, bundle_id: str):
+    """Return (200, xml) for a macOS product's Sparkle appcast, or (404, None)
+    when the product has no EdDSA-signed builds. Lists every non-archived macOS
+    build of bundle_id that carries a `sparkle` object, newest-first."""
+    data = _read_index(root)
+    matches = [b for b in data["builds"]
+               if b.get("bundle_id") == bundle_id
+               and b.get("platform") == "macos"
+               and not b.get("archived")
+               and b.get("sparkle")]
+    if not matches:
+        return 404, None
+    matches.sort(key=lambda b: b["timestamp"], reverse=True)
+    items = []
+    for b in matches:
+        sp = b["sparkle"]
+        items.append(_APPCAST_ITEM_TEMPLATE.substitute(
+            title=html.escape(f'{b["project"]} {_version_label(b)}'),
+            pubdate=html.escape(_rfc822(b["timestamp"])),
+            version=html.escape(str(sp.get("version", ""))),
+            short_version=html.escape(str(sp.get("short_version", ""))),
+            zip_url=html.escape(sp["zip_url"], quote=True),
+            zip_length=html.escape(str(sp.get("zip_length", ""))),
+            ed_signature=html.escape(sp["ed_signature"], quote=True),
+        ))
+    newest = matches[0]
+    product_url = (f"{newest['origin_base_url']}/p/"
+                   f"{urllib.parse.quote(bundle_id, safe='')}/macos/")
+    template_path = root / "_plugin_root" / "assets" / "appcast.template.xml"
+    tmpl = string.Template(template_path.read_text())
+    body = tmpl.substitute(
+        TITLE=html.escape(f'{newest["project"]} (macOS)'),
+        LINK=html.escape(product_url, quote=True),
+        ITEMS="\n".join(items),
     ).encode()
     return 200, body
 
@@ -305,6 +407,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(404, {"ok": False, "error": "unknown_product"})
                 return
             self._send_bytes(200, "text/html; charset=utf-8", body)
+            return
+
+        appcast_m = re.match(r"^/deployit/p/([^/]+)/macos/appcast\.xml$", path)
+        if appcast_m:
+            bundle_id = urllib.parse.unquote(appcast_m.group(1))
+            status, body = _render_appcast(self.root, bundle_id)
+            if status == 404:
+                self._send_json(404, {"ok": False, "error": "unknown_product"})
+                return
+            self._send_bytes(200, "application/xml; charset=utf-8", body)
             return
 
         m = re.match(r"^/deployit/([^/]+)/(.*)$", path)

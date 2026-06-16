@@ -16,6 +16,9 @@
 | launchd keeps restarting the backend rapidly | Backend crashes on startup | Check `~/Library/Logs/deployit/backend.err.log`. Common cause: port 8729 already in use by another process. `lsof -i :8729` to identify it. |
 | macOS app blocked by Gatekeeper | Not notarized (Developer ID signed but no stapled ticket) | Right-click → Open in Finder for a one-time approval. Or enable notarization in `config.toml` and redeploy. See `references/macos.md`. |
 | notarytool submission fails | Invalid or expired App Store Connect API key | Re-download the `.p8` key from App Store Connect and re-run `xcrun notarytool store-credentials deployit-notary ...`. |
+| Sparkle update fails the signature check | Origin Macs signed with different EdDSA keys, but the app embeds one `SUPublicEDKey` | Share ONE private key across all your Macs via `private_key_path` (see `references/sparkle.md`). Re-deploy from the offending Mac. |
+| macOS deploy produced no appcast / `.zip` | `[macos.sparkle] enabled = false`, or `sign_update` / the key wasn't found (deploy logs a "skipping Sparkle" warning) | Set `enabled = true` and a valid `sign_update_path` + `private_key_path` in `config.toml`; check the deploy stderr / `backend.err.log` for the skip reason, then re-deploy. |
+| Sparkle says "you're up to date" despite a newer build | `CFBundleVersion` did not increase between builds (Sparkle compares `sparkle:version`) | Ensure the host repo bumps the build number per build; deployit reads `CFBundleVersion` from the archived `Info.plist`. |
 | visionOS deploy fails: scheme not found | Consuming repo has no visionOS target | Add a visionOS target to the Xcode project, or do not pass `--platform visionos`. |
 | Build-number regresses (e.g. build 10 after build 15) | Archive pre-action called twice (once by pre-action, once by deploy script) | Remove any explicit bump-script call from the deploy wrapper. The Archive pre-action already fires for `xcodebuild archive`. |
 

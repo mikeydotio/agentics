@@ -66,7 +66,7 @@ check_static() {
 check_static /deployit/app.css "text/css"
 check_static /deployit/app.js  "application/javascript"
 
-# 3. listing HTML has v2.15.0+ markers
+# 3. listing HTML carries the nav-bar markers (pull-to-refresh removed)
 listing=$(curl -sf "$BASE/deployit/" 2>/dev/null) \
     || { fail "GET /deployit/" "non-200 or connection failed"; listing=""; }
 if [[ -n "$listing" ]]; then
@@ -76,9 +76,23 @@ if [[ -n "$listing" ]]; then
     grep -q 'src="/deployit/app.js"' <<<"$listing" \
         && pass "listing references app.js" \
         || fail "listing references app.js" "missing <script src=...app.js>"
+    grep -q 'id="refresh"' <<<"$listing" \
+        && pass "listing has nav Refresh button" \
+        || fail "listing has #refresh" "missing nav-bar refresh button"
     grep -q 'id="ptr"' <<<"$listing" \
-        && pass "listing has #ptr indicator" \
-        || fail "listing has #ptr" "missing pull-to-refresh indicator div"
+        && fail "listing still has #ptr" "pull-to-refresh should be removed" \
+        || pass "listing has no #ptr (pull-to-refresh removed)"
+fi
+
+# 3b. served app.js is the nav-bar version (no pull-to-refresh gesture)
+appjs=$(curl -sf "$BASE/deployit/app.js" 2>/dev/null || true)
+if [[ -n "$appjs" ]]; then
+    grep -q '_internal/refresh' <<<"$appjs" \
+        && pass "app.js posts to _internal/refresh" \
+        || fail "app.js refresh handler" "served app.js missing _internal/refresh"
+    grep -q 'touchstart' <<<"$appjs" \
+        && fail "app.js still has pull-to-refresh" "touchstart present in served app.js" \
+        || pass "app.js has no pull-to-refresh (touchstart gone)"
 fi
 
 # 4. data-href + row-count vs distinct products

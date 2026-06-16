@@ -16,8 +16,12 @@
 <link rel="stylesheet" href="/deployit/app.css">
 </head>
 <body>
-<div id="ptr">Pull to refresh</div>
-<h1>deployit · builds</h1>
+<nav class="nav">
+  <h1 class="brand">deployit · builds</h1>
+  <div class="actions">
+    <button id="refresh" type="button" aria-label="Refresh builds">Refresh</button>
+  </div>
+</nav>
 <p class="meta">$LAST_PULL · $TOTAL_PRODUCTS products · $TOTAL_BUILDS builds · this view: $LOCAL_HOST</p>
 <ul>
 $ROWS

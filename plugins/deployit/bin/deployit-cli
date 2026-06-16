@@ -507,9 +507,13 @@ def _xcodebuild_archive(meta: dict, archive_path: Path, scheme):
 
 
 def _read_archive_build_number(archive_path: Path, project: str) -> str:
-    plist = archive_path / "Products" / "Applications" / f"{project}.app" / "Info.plist"
-    if not plist.is_file():
-        fail(f"built Info.plist not found at {plist}")
+    app = archive_path / "Products" / "Applications" / f"{project}.app"
+    # iOS/visionOS place Info.plist at the app-bundle root; macOS nests it under
+    # Contents/. Check both so every platform's archive resolves.
+    candidates = [app / "Info.plist", app / "Contents" / "Info.plist"]
+    plist = next((p for p in candidates if p.is_file()), None)
+    if plist is None:
+        fail(f"built Info.plist not found at {candidates[0]} or {candidates[1]}")
     res = subprocess.run(
         ["/usr/libexec/PlistBuddy", "-c", "Print :CFBundleVersion", str(plist)],
         capture_output=True, text=True, check=True,

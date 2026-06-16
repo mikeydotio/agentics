@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.19.0] - 2026-06-16
+
+### Added
+- macOS Sparkle auto-update + first-class presentation (09efaae)
+- replace pull-to-refresh with a nav bar Refresh button (46fe916)
+
+_[manual]_
+
 ## [v2.18.0] - 2026-06-12
 
 ### Added

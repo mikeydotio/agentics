@@ -15,3 +15,21 @@ repo = "https://github.com/mikeydotio/deployit-index.git"
 # Developer API key configured via `xcrun notarytool store-credentials`.
 notarize = false
 notary_profile = ""
+
+[macos.sparkle]
+# Opt-in Sparkle auto-update. When enabled, each macOS deploy also produces a
+# .zip of the .app, EdDSA-signs it, and exposes a per-product appcast feed at
+# <base_url>/p/<bundle_id>/macos/appcast.xml. The .dmg stays the manual download.
+enabled = false
+# Path to Sparkle's `sign_update` tool. Empty = search PATH and common SPM /
+# Homebrew locations (see references/sparkle.md). Env override:
+# DEPLOYIT_SPARKLE_SIGN_UPDATE.
+sign_update_path = ""
+# Path to the EdDSA private key file. Share ONE key across all your Macs (e.g.
+# via ~/Enderchest syncthing) so every origin signs with the key the app's
+# SUPublicEDKey verifies. Empty = sign_update uses its Keychain default
+# (single-Mac only).
+private_key_path = ""
+# The matching public key, surfaced on the product page and after deploy for
+# pasting into the app's Info.plist SUPublicEDKey.
+public_ed_key = ""

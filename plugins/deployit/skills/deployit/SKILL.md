@@ -109,6 +109,7 @@ appended to the original command.
 - `references/bootstrap.md` — per-machine one-time setup walkthrough
 - `references/ios.md` — iOS specifics: signing, UDID registration, Trust flow
 - `references/macos.md` — macOS Developer-ID signing + notarytool
+- `references/sparkle.md` — macOS Sparkle auto-update: appcast + EdDSA signing + app wiring
 - `references/visionos.md` — visionOS specifics (mostly ≡ iOS)
 - `references/tailscale-serve.md` — proxy config + Mac App Store variant quirks
 - `references/troubleshooting.md` — common archive/export failures + recipes

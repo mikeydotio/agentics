@@ -16,10 +16,15 @@
 <link rel="stylesheet" href="/deployit/app.css">
 </head>
 <body>
-<div id="ptr">Pull to refresh</div>
-<a class="back" href="/deployit/">← all products</a>
+<nav class="nav">
+  <a class="back" href="/deployit/">← all products</a>
+  <div class="actions">
+    <button id="refresh" type="button" aria-label="Refresh builds">Refresh</button>
+  </div>
+</nav>
 <h1>$PROJECT · $PLATFORM</h1>
 <p class="meta">$LAST_PULL · $BUNDLE_ID · $TOTAL_BUILDS builds</p>
+$SPARKLE_BLOCK
 <ul>
 $ROWS
 </ul>

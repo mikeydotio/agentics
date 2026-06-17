@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.20.0] - 2026-06-16
+
+### Added
+- pin cartographers to Sonnet 1M; branch-isolate mapping (730ebe3)
+- add `branch ensure` subcommand for isolated map runs (438505b)
+
+_[manual]_
+
 ## [v2.19.0] - 2026-06-16
 
 ### Added

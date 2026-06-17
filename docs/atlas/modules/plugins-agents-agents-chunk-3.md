@@ -8,7 +8,7 @@ sources:
   - path: plugins/agents/agents/validator.md
     blob: e85b72f785ded4cdb4b1965161c2dd2abad5047f
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2]
-generator: cartographer/1
+generator: cartographer/2
 baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
 verified: true
 ---

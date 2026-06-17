@@ -54,7 +54,7 @@ bodies inline would bloat the orchestrator's own context):
 2. The assignment block:
    - repo root, module id, module label
    - write target: `docs/atlas/modules/<module-id>.md`
-   - generator string: `cartographer/1` (bump the version when prompts change)
+   - generator string: `cartographer/2` (bump the version when prompts change)
    - the module's source file list
    - the ranked symbol table from `... ground <module-id>` — top ~15 entries
      as `name (kind, defined_at, fan_in)` lines, not the full JSON (blobs and
@@ -84,7 +84,7 @@ no-op.
 
 ## 3 — Finalize
 
-`... ledger finalize --refresh-hashes --generator "cartographer/1"`.
+`... ledger finalize --refresh-hashes --generator "cartographer/2"`.
 On `invalid_frontmatter` / `duplicate_source` / `missing_source`: re-spawn the
 offending cartographer(s) ONCE with the error message appended to their
 assignment. A second failure aborts: report, `lock release`, no final commit
@@ -102,7 +102,7 @@ prose despite instructions).
 - `pass: false` → regenerate that doc ONCE: cartographer in anchored mode
   (prior doc + the verdict's `failures` array as correction input; spawn it on
   `sonnet[1m]`), then
-  `ledger finalize --refresh-hashes --generator "cartographer/1"` and
+  `ledger finalize --refresh-hashes --generator "cartographer/2"` and
   re-verify the regenerated doc.
 - Persistent failure → leave it, record for the report.
 
@@ -121,15 +121,17 @@ map-format.md + every module doc. Provide the import-line sections from the
 grounding packs as the cross-module signal. Remind it: index-facts block is
 mandatory, 8–15 bullets, ≤100 chars each.
 
-Then `... ledger finalize --refresh-hashes --generator "cartographer/1"`
+Then `... ledger finalize --refresh-hashes --generator "cartographer/2"`
 again (hashes the overview's sources — the now-final module docs), and
 checkpoint: `... commit --message "docs(atlas): checkpoint — overview"`.
 
 ## 6 — INDEX + lint
 
 1. `... index rebuild` — on `index_over_budget`: ask the overview agent once
-   to shorten index-facts (and report which module summaries are longest);
-   rebuild again; still over → abort with the breakdown, `lock release`.
+   to shorten index-facts, and trim over-length `read_when` lines (lint L14
+   flags them; the long ones dominate the routing table); report which module
+   summaries / `read_when` lines are longest; rebuild again; still over →
+   abort with the breakdown, `lock release`.
 2. `... lint` — ERRORs → regenerate the offending docs once (cartographer on
    `sonnet[1m]`, anchored, with the lint findings), re-run finalize + index
    rebuild + lint,
@@ -164,8 +166,12 @@ branch or merges for you): the map is committed on `<branch>` (from
 that your working branch sees the map only after you merge.
 
 If `.gitattributes` does not already cover the map, append the optional
-suggestion: `docs/atlas/** linguist-generated=true` collapses map churn in PR
-diffs (README §Collapsing map diffs). Suggest only — atlas NEVER writes
+suggestion: mark the generated map paths (`docs/atlas/modules/**`,
+`docs/atlas/overview/**`, `docs/atlas/INDEX.md`, `docs/atlas/atlas-ledger.json`)
+`linguist-generated=true` to collapse map churn in PR diffs, keeping the
+hand-edited `docs/atlas/config.yaml` diff-visible (README §Collapsing map
+diffs). Also advise committing map regenerations in their own `docs(atlas):`
+commit, never mixed into a code change. Suggest only — atlas NEVER writes
 `.gitattributes` itself.
 
 ## Failure discipline

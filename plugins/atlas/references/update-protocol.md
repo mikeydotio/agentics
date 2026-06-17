@@ -31,7 +31,7 @@ rules:
 ## 1 — Corruption quarantine
 
 1. `... lint --fast` — collect L2 findings (merge conflict markers).
-2. `... ledger diff --generator "cartographer/1"` — an
+2. `... ledger diff --generator "cartographer/2"` — an
    `invalid_frontmatter` failure names unparsable docs in its `docs` map.
 3. Quarantine set = L2 docs ∪ invalid-frontmatter docs. If non-empty:
    `... doc remove <doc-id>...` — KEEP its output; each removed entry echoes
@@ -122,7 +122,7 @@ prompt assembly is normative):
    patch stays out of orchestrator context — the agent reads it from disk.
 2. Prompt = the standard preamble (see `mapping-protocol.md` §2) + assignment
    block: repo root, module id/label, write target, generator string
-   `cartographer/1`, the UPDATED source list (current minus deleted plus
+   `cartographer/2`, the UPDATED source list (current minus deleted plus
    added), and the anchored-mode line: "Anchored regeneration: edit the prior
    doc minimally — change only statements the patch affects; reproduce every
    other line exactly."
@@ -150,7 +150,7 @@ edges and remove it from `references_modules`.
 
 ## 6 — Finalize + verify changed docs
 
-1. `... ledger finalize --refresh-hashes --generator "cartographer/1"`.
+1. `... ledger finalize --refresh-hashes --generator "cartographer/2"`.
    On `invalid_frontmatter` / `duplicate_source` / `missing_source`:
    re-spawn the offending cartographer(s) ONCE with the error appended.
    A second failure aborts: report, `lock release`, no final commit.
@@ -181,10 +181,11 @@ No module doc changed → skip; the overview stays byte-identical.
 1. Init repair, only if needed: managed CLAUDE.md block or `.atlas/`
    gitignore entry missing → `... init` NOW. Mutating mapped files after the
    final finalize leaves the map stale at birth.
-2. FINAL `... ledger finalize --refresh-hashes --generator "cartographer/1"`
+2. FINAL `... ledger finalize --refresh-hashes --generator "cartographer/2"`
    — hashes the set-verified stamps and the overview's final bytes.
 3. `... index rebuild` — on `index_over_budget`: ask the overview agent once
-   to shorten index-facts, rebuild; still over → abort with the breakdown,
+   to shorten index-facts, and trim over-length `read_when` lines (lint L14
+   flags them); rebuild; still over → abort with the breakdown,
    `lock release`, no final commit.
 4. `... lint` — ERRORs → regenerate the offending docs ONCE (cartographer on
    `sonnet[1m]`, anchored, with the lint findings as correction input), then

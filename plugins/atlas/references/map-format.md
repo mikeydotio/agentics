@@ -31,7 +31,7 @@ read_when: Touching authentication, sessions, or credentials
 sources:                              # EVERY file this doc drew conclusions from
   - path: src/auth/AuthService.swift
 references_modules: [src-api, src-models]
-generator: cartographer/1 model=<model-id>
+generator: cartographer/2 model=<model-id>
 ---
 ```
 
@@ -124,6 +124,14 @@ when load-bearing. Every edge must be grounded in an import, call site, or
 declaration you actually located — cite nothing you didn't grep. Every
 right-hand module id must appear in `references_modules`.
 
+Choose the verb from evidence, not vibes — an out-of-grammar verb is a lint
+L13 error. Common mis-mappings to avoid: a type that *catches or type-casts* an
+error (`x as? FooError`, `catch FooError`) does NOT `conforms-to` it — use
+`reads`, or drop the edge; a `typealias B = A` is NOT a conformance — it
+`reads`/re-exports `A`, or omit it; a package manifest `owns` the targets it
+declares (not `builds`/`depends-on`, which aren't verbs). When no allowed verb
+is truthful, omit the edge and capture the nuance in Type notes.
+
 **Type notes** — short prose on the semantics tables can't carry: ownership
 (who creates/destroys what), lifecycle, threading/actor isolation, invariants
 ("a `Session` always has a valid `User`; enforced at `src/auth/Session.swift:42`").
@@ -176,7 +184,7 @@ sources:                              # the module DOCS, not source files
   - path: docs/atlas/modules/src-auth.md
 scopes:                               # mapped roots — tree-SHA invalidation
   - tree: src
-generator: cartographer/1 model=<model-id>
+generator: cartographer/2 model=<model-id>
 ---
 ```
 
@@ -237,5 +245,5 @@ forbidden for map files — it silently corrupts structured markdown.
 doc. Bumping the cartographer prompt version or changing models marks every
 doc fingerprint-stale on the next `ledger diff`, so prompt improvements
 propagate instead of freezing old output in place. The current prompt version
-is `1`; bump it whenever cartographer.md or this format doc changes the
-expected output.
+is `2`; bump it whenever cartographer.md, the atlas cartographer-context
+override, or this format doc changes the expected output.

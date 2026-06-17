@@ -24,14 +24,26 @@ immediately stale the overview.
 ## 1 — Confirm gate
 
 One AskUserQuestion: report file count, module count, agents to spawn
-(modules + 1 overview + verifiers), and a rough token estimate
-(`total_bytes / 3.5` input tokens per pass, ~3 passes: map, verify, overview).
+(modules + 1 overview + verifiers), a rough token estimate
+(`total_bytes / 3.5` input tokens per pass, ~3 passes: map, verify, overview),
+and that the map is built on its own `atlas/map-…` branch.
 Options: proceed / abort. On abort: `lock release`, stop.
+
+On proceed, isolate the run **before any doc is written**:
+`... branch ensure --op map` — on `ok: false` (`mid_merge` / `no_commits`),
+surface the message, `lock release`, stop. Otherwise keep the returned
+`branch`, `base_branch`, and `base_sha` for the checkpoint commits and the
+final report. Every map write from here lands on this branch, so a crash or
+re-run cannot clobber committed map work on your working branch. (Placed here,
+after the abort gate, so a declined map never leaves a stray branch behind; the
+lock is already held from step 0, so the branch is created under it.)
 
 ## 2 — Cartographer fan-out
 
 For each module, in waves of **at most 8 parallel `Agent()` calls per
-message** (all foreground; never `run_in_background`):
+message** (all foreground; never `run_in_background`). Spawn each cartographer
+on Sonnet's 1M-context model — set the `Agent()` model to `sonnet[1m]`
+(SKILL.md §Agent prompt assembly is normative):
 
 Assemble the prompt in this order (role-by-reference — embedding 30 role
 bodies inline would bloat the orchestrator's own context):
@@ -61,14 +73,22 @@ claims to sample) + `<files_to_read>` = map-verifier.md, its override, the
 doc under verification.
 
 Mappers write docs directly and return only confirmations — never ingest doc
-content into the orchestrator. After each wave: `lock heartbeat`.
+content into the orchestrator. After each wave: `lock heartbeat`, then
+checkpoint the completed docs —
+`... commit --message "docs(atlas): checkpoint — module docs wave <k>"`.
+Commit raw doc bytes; do **not** run `ledger finalize`, `index rebuild`, or
+`lint` at a checkpoint (those belong to the load-bearing tail; running them
+mid-flow is churn). Checkpoints are crash-recovery save-points on the `atlas/*`
+branch, not validated maps — a wave that wrote nothing makes `commit` a clean
+no-op.
 
 ## 3 — Finalize
 
 `... ledger finalize --refresh-hashes --generator "cartographer/1"`.
 On `invalid_frontmatter` / `duplicate_source` / `missing_source`: re-spawn the
 offending cartographer(s) ONCE with the error message appended to their
-assignment. A second failure aborts: report, `lock release`, no commit.
+assignment. A second failure aborts: report, `lock release`, no final commit
+(any checkpoints stay on the branch).
 
 ## 4 — Verify wave
 
@@ -80,16 +100,19 @@ prose despite instructions).
 
 - `pass: true` → record.
 - `pass: false` → regenerate that doc ONCE: cartographer in anchored mode
-  (prior doc + the verdict's `failures` array as correction input), then
+  (prior doc + the verdict's `failures` array as correction input; spawn it on
+  `sonnet[1m]`), then
   `ledger finalize --refresh-hashes --generator "cartographer/1"` and
   re-verify the regenerated doc.
 - Persistent failure → leave it, record for the report.
 
-Then stamp results: `... ledger set-verified <doc-id> true|false` per doc.
+Then stamp results: `... ledger set-verified <doc-id> true|false` per doc, and
+checkpoint: `... commit --message "docs(atlas): checkpoint — verified docs"`.
 
 ## 5 — Overview pass
 
-One cartographer for `docs/atlas/overview/ARCHITECTURE.md`. Its sources are
+One cartographer (spawned on `sonnet[1m]`) for
+`docs/atlas/overview/ARCHITECTURE.md`. Its sources are
 the MODULE DOCS (not source files); its `scopes` are the mapped root
 directories (from the partition labels' top-level dirs) — but NEVER a
 directory that contains `docs/atlas` itself, or every map commit would
@@ -99,18 +122,20 @@ grounding packs as the cross-module signal. Remind it: index-facts block is
 mandatory, 8–15 bullets, ≤100 chars each.
 
 Then `... ledger finalize --refresh-hashes --generator "cartographer/1"`
-again (hashes the overview's sources — the now-final module docs).
+again (hashes the overview's sources — the now-final module docs), and
+checkpoint: `... commit --message "docs(atlas): checkpoint — overview"`.
 
 ## 6 — INDEX + lint
 
 1. `... index rebuild` — on `index_over_budget`: ask the overview agent once
    to shorten index-facts (and report which module summaries are longest);
    rebuild again; still over → abort with the breakdown, `lock release`.
-2. `... lint` — ERRORs → regenerate the offending docs once (cartographer,
-   anchored, with the lint findings), re-run finalize + index rebuild + lint,
+2. `... lint` — ERRORs → regenerate the offending docs once (cartographer on
+   `sonnet[1m]`, anchored, with the lint findings), re-run finalize + index
+   rebuild + lint,
    and re-verify any regenerated doc (step 4 rules). Persistent ERRORs →
-   abort: report, `lock release`, NO commit — a map that fails lint is never
-   committed.
+   abort: report, `lock release`, no final commit — a lint-failing map is never
+   finalized (branch checkpoints are exempt).
    L5/L6/L7 WARNs are reported in the summary, not fixed automatically.
 
 ## 7 — Wire and commit
@@ -132,6 +157,12 @@ docs, INDEX chars vs budget, lint warning counts by check, token-estimate vs
 actual agent count, and the standing advice that `/atlas update` keeps the map
 fresh incrementally.
 
+Lead the summary with the branch handoff (Option A — atlas never switches your
+branch or merges for you): the map is committed on `<branch>` (from
+`<base_branch>` at `<base_sha>`); review it, then merge with
+`git switch <base_branch> && git merge --no-ff <branch>` — or open a PR. Note
+that your working branch sees the map only after you merge.
+
 If `.gitattributes` does not already cover the map, append the optional
 suggestion: `docs/atlas/** linguist-generated=true` collapses map churn in PR
 diffs (README §Collapsing map diffs). Suggest only — atlas NEVER writes
@@ -139,8 +170,18 @@ diffs (README §Collapsing map diffs). Suggest only — atlas NEVER writes
 
 ## Failure discipline
 
-- Any abort path: `lock release` first, partial docs LEFT ON DISK uncommitted
-  (the user can inspect; status will show tier 3 until fixed or removed).
-- Never `git add -A`, never commit outside `atlas-cli commit`.
+- All map work happens on the isolated `atlas/*` branch created in step 1.
+  Checkpoint commits there are crash-recovery save-points, not validated maps.
+- Any abort path: `lock release` first. Checkpointed docs remain committed on
+  the `atlas/*` branch — report the branch name and that it is **not** merged.
+  Your working branch is untouched, so a crash or re-run cannot clobber a good
+  committed map. Inspect the branch, finish it with `/atlas update`, or delete
+  it.
+- A lint-failing map is never **finalized**: the canonical final commit (step 7)
+  and the suggested merge are gated on lint passing (step 6). Checkpoints are
+  exempt — they are disposable branch state.
+- Never `git add -A`; commit only via `atlas-cli commit` (pathspec-scoped to
+  `docs/atlas/`, refuses mid-merge); switch branches only via
+  `atlas-cli branch ensure`.
 - Never fabricate map content in the orchestrator — only cartographers write
   docs.

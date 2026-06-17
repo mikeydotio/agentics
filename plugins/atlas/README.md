@@ -13,21 +13,25 @@ no plugin.
 ## Quick start
 
 ```
-/atlas map        # partition the codebase, spawn mappers, commit docs/atlas/
+/atlas map        # partition the codebase, spawn mappers, commit on a branch
 # ...hack away for a few days...
 /atlas update     # regenerate only the docs whose sources changed
 ```
 
-`map` ends with a scoped commit (`docs(atlas): ...`) containing the map and a
-managed CLAUDE.md block that `@import`s the INDEX. From then on, a SessionStart
-hook warns agents when the map drifts from the code.
+`map` and `update` run on their own `atlas/<op>-…` branch, committing at
+checkpoints as each wave of docs completes and finishing with a scoped final
+commit (`docs(atlas): ...`) — gated on lint — that contains the map plus a
+managed CLAUDE.md block which `@import`s the INDEX. Atlas leaves you on the
+branch with a suggested merge; it never switches branches or merges for you, so
+a crash or re-run can't clobber a good map on your working branch. Once merged,
+a SessionStart hook warns agents when the map drifts from the code.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/atlas map` | Full map: scan, partition, spawn cartographer agents, verify, lint, commit |
-| `/atlas update` | Incremental: regenerate only stale/affected docs; mechanical rename rewrites; orphan removal |
+| `/atlas map` | Full map: scan, partition, spawn cartographer agents, verify, lint — on an `atlas/*` branch, checkpointed per wave, final commit gated on lint |
+| `/atlas update` | Incremental: regenerate only stale/affected docs; mechanical rename rewrites; orphan removal — same branch + checkpoint flow |
 | `/atlas status` | Mapped? How stale? Current tier and which docs drifted |
 | `/atlas verify` | Read-only diagnostic: full lint + sampled claim verification, report only — no writes |
 | `/atlas init` | (Re)inject the managed CLAUDE.md block and the `.atlas/` gitignore entry |
@@ -78,8 +82,9 @@ sources:
 - **New files** → assigned deterministically to an existing doc or proposed as
   a new module.
 - **Unchanged** → the doc is never sent to an LLM, so it stays byte-identical.
-  This is the core invariant: `git show --stat` of an update commit lists only
-  docs whose inputs actually changed.
+  This is the core invariant: the update's net branch diff
+  (`git diff --stat <base>..atlas/update-…`) lists only docs whose inputs
+  actually changed.
 
 Blob SHAs are content-addressed, so invalidation survives rebases, squash
 merges, and shallow clones — there is no baseline commit to lose. Uncommitted
@@ -167,8 +172,12 @@ on its own.
 - **Token budgets are estimated** as `chars / 3.5`, not tokenized exactly.
 - **One writer at a time**: map and update take a heartbeat lock under
   `.atlas/lock/`; a crashed run's lock is taken over after ~10 minutes.
-- **Mid-merge refusal**: atlas never commits while `MERGE_HEAD` exists —
-  finish or abort the merge first.
+- **Mid-merge refusal**: atlas never commits — or creates its working branch —
+  while `MERGE_HEAD` exists; finish or abort the merge first.
+- **Branch handoff is manual**: `map`/`update` leave the finished map committed
+  on an `atlas/*` branch and print a suggested merge; atlas never switches your
+  branch or merges for you. Merge it (or open a PR) to land the map on your
+  working branch.
 
 ## FAQ
 

@@ -1,25 +1,41 @@
 ---
-module: plugins/atlas/tests (chunk 1)
-summary: Bash test harness for atlas-cli — fixture helpers, assertion primitives, and subcommand test suites
-read_when: Changing atlas-cli or hook behavior, or writing/debugging atlas plugin tests
+module: "plugins/atlas/tests (chunk 1)"
+summary: "Bash test harness for atlas-cli — fixture helpers, assertion primitives, and subcommand test suites"
+read_when: "Changing atlas-cli or hook behavior, or writing/debugging atlas plugin tests"
 sources:
   - path: plugins/atlas/tests/helpers/setup.sh
+    blob: 67dcb11d42fa2aa4316c6d95170130c6e0169ee8
   - path: plugins/atlas/tests/run-tests.sh
+    blob: febae8f36c0646a382a834d4bb81fac24f7ba8fb
   - path: plugins/atlas/tests/test-branch.sh
+    blob: 2445f98bad189f0e3461ab325f2b02324d1e0e53
   - path: plugins/atlas/tests/test-commit.sh
+    blob: e5409959bdfdd6ce369bef3f40d7ff0374b5ae22
   - path: plugins/atlas/tests/test-config.sh
+    blob: 3e6b9d603355aaf173afd3f738637f4bb78f429d
   - path: plugins/atlas/tests/test-diffpack.sh
+    blob: a3bce143e30dbdef734d31c870c6ebbf696d6ced
   - path: plugins/atlas/tests/test-doc.sh
+    blob: a8fb82305896d7e1549bd0e213205fb5357c7012
   - path: plugins/atlas/tests/test-edge-cases.sh
+    blob: 70a071fe0b9a69631fc40ce7a103cb03670d4cc9
   - path: plugins/atlas/tests/test-ground.sh
+    blob: ad33b9b1e3d65b5dc128a68c9579572be600db30
   - path: plugins/atlas/tests/test-hook.sh
+    blob: 5545302a4317791ae60c63e45833dc34b822636f
   - path: plugins/atlas/tests/test-index.sh
+    blob: 2874a1bcef0889b9e18d91f93c60b3737404f665
   - path: plugins/atlas/tests/test-init.sh
+    blob: 1f85b244ea31d8dae57fbb880aad83337d1938f1
   - path: plugins/atlas/tests/test-ledger.sh
+    blob: 64f3e8c235303750f1b3e11c73d01c90000dd0fa
   - path: plugins/atlas/tests/test-lint.sh
+    blob: 5c60931acf78c01f489503de029aad0bfc0053a0
   - path: plugins/atlas/tests/test-lock.sh
+    blob: 9b6c39e83aab4b0db326b19e51dd4111553d463b
 references_modules: [plugins-atlas-chunk-2]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/atlas/tests (chunk 1)

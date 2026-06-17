@@ -4,10 +4,14 @@ summary: "Deployit's executable core — bash router, build/publish CLI, OTA ins
 read_when: "Changing deployit subcommands, the deploy/publish flow, or backend endpoints"
 sources:
   - path: plugins/deployit/bin/deployit-backend
+    blob: 998a36c278063066f887da95ef6d9af0fc888025
   - path: plugins/deployit/bin/deployit-cli
+    blob: e5fe7efc4cc4e283479305422cccc69309ffb058
   - path: plugins/deployit/bin/deployit-router.sh
+    blob: 344168329e019299a535c6e7c327e726f0cb5d03
 references_modules: [plugins-deployit-assets, plugins-deployit-tests-chunk-2, plugins-semver-misc]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/deployit/bin
@@ -52,7 +56,6 @@ The backend serves install pages from that index; stable symlinks keep the daemo
 ## Relationships
 
 - `plugins-deployit-bin.deployit-router.sh -> plugins-deployit-bin.deployit-cli (calls)`
-- `plugins-deployit-bin._launchd_plist -> plugins-deployit-bin.deployit-backend (calls)`
 - `plugins-deployit-bin.cmd_bump -> plugins-semver-misc.semver-cli (calls)`
 - `plugins-deployit-bin.cmd_redeploy -> plugins-deployit-tests-chunk-2.verify-live.sh (calls)`
 - `plugins-deployit-bin.deployit-cli -> plugins-deployit-assets.ExportOptions.ios.plist (reads)`
@@ -70,6 +73,7 @@ The backend serves install pages from that index; stable symlinks keep the daemo
 - Tests stub side effects via `DEPLOYIT_SKIP_*` env vars (`plugins/deployit/bin/deployit-cli:190`).
 - Backend binds `127.0.0.1` only (`plugins/deployit/bin/deployit-backend:497`).
 - Serving gates: `_BUILD_ID_RE`, no subpaths/dotfiles (`plugins/deployit/bin/deployit-backend:427`).
+- `_launchd_plist` (`plugins/deployit/bin/deployit-cli:158`) generates a plist STRING embedding the backend path via stable symlinks; launchd later launches the backend process — there is no direct call between them.
 
 ## External deps
 
@@ -84,5 +88,5 @@ The backend serves install pages from that index; stable symlinks keep the daemo
 
 - Deploy archives build `-configuration Debug` (`plugins/deployit/bin/deployit-cli:497`).
 - Redeploy rewrites legacy hash-pinned plists (`plugins/deployit/bin/deployit-cli:1235`).
-- Backend won't recreate `_plugin_root` onto itself (`plugins/deployit/bin/deployit-backend:487`).
+- Backend won't recreate `_plugin_root` onto itself (`plugins/deployit/bin/deployit-backend:491`).
 - Listing GETs trigger `git pull` synchronously (`plugins/deployit/bin/deployit-backend:386`).

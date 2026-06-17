@@ -1,16 +1,23 @@
 ---
 module: plugins/freshen
-summary: Automatic context clearing — queues /clear + re-invocation between workflow phases via tmux send-keys
-read_when: Touching context clearing, .freshen signal files, or /clear re-invocation automation
+summary: "Automatic context clearing — queues /clear + re-invocation between workflow phases via tmux send-keys"
+read_when: "Touching context clearing, .freshen signal files, or /clear re-invocation automation"
 sources:
   - path: plugins/freshen/.claude-plugin/plugin.json
+    blob: 030bbad689a442a32a0bc77ac38a14b1ab01e6ef
   - path: plugins/freshen/bin/freshen.sh
+    blob: 99de1df3d5a354cc0834464078f31e276bdaff61
   - path: plugins/freshen/hooks/hooks.json
+    blob: 685850a8d3fb5d3f11d059086fffbdecd8ea1739
   - path: plugins/freshen/hooks/on-clear.sh
+    blob: 7247b0c06e0734e2a7768f41460e46c8244cc50f
   - path: plugins/freshen/hooks/on-stop.sh
+    blob: 49804b1a6f98b8e1e9af3b59f13d1e50105ed627
   - path: plugins/freshen/skills/freshen/SKILL.md
+    blob: 2f8f3decc4a8cae565bc1833ddab55e249d81abd
 references_modules: [plugins-hook-guard, plugins-forge-skills]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/freshen

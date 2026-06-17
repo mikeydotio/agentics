@@ -4,12 +4,18 @@ summary: "Deterministic versioning core — JSON Python CLI, bash router, thin /
 read_when: "Touching /semver commands, bump/changelog/validate logic, or the CLI JSON contract"
 sources:
   - path: plugins/semver/.claude-plugin/plugin.json
+    blob: d0ebc69ad4829a92f79f4bd147b3d020f656951c
   - path: plugins/semver/README.md
+    blob: 355c546fe806712c5d265fe9a33fde1a59d8a1fe
   - path: plugins/semver/bin/semver-cli
+    blob: 201e745459e03f4865891b44105f4727ee3998f5
   - path: plugins/semver/bin/semver-router.sh
+    blob: 42c4f57e3b77cdaa6e3ef2be6f730603eb0d0e20
   - path: plugins/semver/skills/semver/SKILL.md
+    blob: d55b2177ff24c350b85121b63a30700a6267d4a2
 references_modules: [plugins-semver-hooks, plugins-semver-references]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/semver (misc)

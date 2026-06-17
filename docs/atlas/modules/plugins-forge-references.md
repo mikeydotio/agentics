@@ -4,21 +4,36 @@ summary: "Normative protocol docs forge skills follow — execution loop, handof
 read_when: "Changing forge pipeline behavior — execution, handoffs, locking, severity, or storyhook"
 sources:
   - path: plugins/forge/references/auto-resume.md
+    blob: f08e31722891c8c40194feec34341f00c4f0ce61
   - path: plugins/forge/references/deterministic-checks.md
+    blob: 4261c10f757a0f67609092542d76259c8134e24c
   - path: plugins/forge/references/execution-loop.md
+    blob: df4ece58caec141b4c0d3e49700200248e9d6610
   - path: plugins/forge/references/handoff-format.md
+    blob: 6bb82e1a149da9abd95e5923561ed6a8a1b9f808
   - path: plugins/forge/references/questioning.md
+    blob: 9f9b36d86b68aad50152e4f7ab637218afdc1cb1
   - path: plugins/forge/references/recovery-protocol.md
+    blob: 7cd1e8561b87e990af9ae32d622cddc976b26b1f
   - path: plugins/forge/references/report-format.md
+    blob: c71f4cb3e84e1a3b4b2775d907c22befb2dcac02
   - path: plugins/forge/references/session-locking.md
+    blob: a3f87ff06ff260ab6353c60be5f80d94fb83ca56
   - path: plugins/forge/references/severity-levels.md
+    blob: f41c2141dfb7430c96eb7813c48c21010f8a709b
   - path: plugins/forge/references/step-handoff.md
+    blob: 0fa2df5a74a6ad8edd339c69c970d065508212e6
   - path: plugins/forge/references/story-decomposition.md
+    blob: 2aebf1da6724d05df0c737f93e309bdb4059c0f1
   - path: plugins/forge/references/storyhook-contract.md
+    blob: 507554192f69294961f0bda40316ed8af6fc645b
   - path: plugins/forge/references/team-roles.md
+    blob: 587d89762323b17885001c1b5471a304f8fb47e9
   - path: plugins/forge/references/verification-protocol.md
+    blob: d8bc49795bc4f87f355994db97a5b084ba2c82be
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-references, plugins-forge-bin, plugins-forge-hooks, plugins-forge-skills, plugins-freshen]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/forge/references

@@ -4,12 +4,18 @@ summary: "Forge-only constraint blocks appended to shared agent definitions at s
 read_when: "Changing forge subagent behavior, .forge/ artifact contracts, or spawn constraints"
 sources:
   - path: plugins/forge/agent-overrides/evaluator-context.md
+    blob: b4715b5bee3329bda946a53974d2181bc0edb1d4
   - path: plugins/forge/agent-overrides/generator-context.md
+    blob: 890854c3045a23300025d08ae29648d89a3df3cb
   - path: plugins/forge/agent-overrides/reviewer-context.md
+    blob: bdb0d4c562ebcd72aa17d554874c7dd54978138c
   - path: plugins/forge/agent-overrides/triager-context.md
+    blob: dafbb15a8c519f18741996c8e385c616b2c1d7fe
   - path: plugins/forge/agent-overrides/validator-context.md
+    blob: 6c5cdda4751783942cd670dab20b4ca42bb065b3
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/forge/agent-overrides
@@ -17,11 +23,10 @@ generator: cartographer/2
 ## Purpose
 
 The pipeline-override layer of forge's agent spawning. Each file is a constraint block the
-forge orchestrator concatenates after a shared agent definition from the agents plugin, so
-shared prompts stay pipeline-neutral while spawned agents still learn forge's contracts:
-`.forge/` artifact paths, story-state expectations, and the integrity checks run around each
-spawn. Remove these and forge's agents lose the no-commit rule, report locations, severity
-vocabulary, and FIX/ESCALATE routing.
+forge orchestrator appends to a shared agent definition at spawn time, adding the forge step's
+phase, output paths, and severity vocabulary — context the shared definitions may not carry
+(some shared defs are already forge-specific, e.g. reviewer). Remove these and forge's agents
+lose the no-commit rule, report locations, severity vocabulary, and FIX/ESCALATE routing.
 
 ## Public API
 
@@ -63,5 +68,5 @@ None — each file is a single flat constraint block; its full contract is in th
 
 ## Gotchas
 
-- Only FIX and ESCALATE verdicts get routes (`plugins/forge/agent-overrides/triager-context.md:11`)
-- H2 naming mixes Constraints and Context (`plugins/forge/agent-overrides/reviewer-context.md:1`)
+- FIX routes to a generator agent, ESCALATE routes to the user via `AskUserQuestion` (`plugins/forge/agent-overrides/triager-context.md:11`)
+- H2 naming mixes Constraints and Context across files (`plugins/forge/agent-overrides/reviewer-context.md:1`, `plugins/forge/agent-overrides/evaluator-context.md:1`, `plugins/forge/agent-overrides/generator-context.md:1`)

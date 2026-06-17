@@ -4,15 +4,24 @@ summary: "3-member sub-agent voting council that settles delegated judgment call
 read_when: "Touching /council-vote, the council protocol, voting/IRV mechanics, or panel selection"
 sources:
   - path: plugins/council/.claude-plugin/plugin.json
+    blob: 95156c7eb1d88d3ec7cc6797b29c0dfc89913576
   - path: plugins/council/README.md
+    blob: 6fc77ba8523cf7262b3d0a8f9f79586464cefc62
   - path: plugins/council/references/archetypes.md
+    blob: c44c68234b14a4ac1f63ad6212ba15acf1677685
   - path: plugins/council/references/council-protocol.md
+    blob: c0f8ed74139972454cb6d45d4b50ba47417c8cbb
   - path: plugins/council/references/team-composition.md
+    blob: 52fd8798ee8ab7dd5549e5104351d21fffa5b70e
   - path: plugins/council/references/voting-mechanics.md
+    blob: d3542bdd4650b494776d0c000dd42833523a8255
   - path: plugins/council/skills/council-vote/SKILL.md
+    blob: 43a7b337af2839fd895be747bc53d4b770be55e9
   - path: plugins/council/skills/council-vote/evals/evals.json
+    blob: 1023d8902ccef3f0bbefb50eedbb9e92debe984d
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-ux, plugins-agents-references]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/council

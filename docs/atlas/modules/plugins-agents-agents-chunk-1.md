@@ -4,20 +4,34 @@ summary: "Shared agent library A–H — agent prompt contracts plus the _templa
 read_when: "Adding or changing shared agents A–H, the agent template schema, or shared guardrails"
 sources:
   - path: plugins/agents/agents/_guardrails.md
+    blob: 5213bd863520baa4ca42aef7fd1cd5828704f457
   - path: plugins/agents/agents/_template.md
+    blob: 011662bc9353e45dc267ae89dc35c1a9ced7ec11
   - path: plugins/agents/agents/accessibility-engineer.md
+    blob: 9d5eb2340b5689f35405334abbe71a8aee9801c1
   - path: plugins/agents/agents/api-designer.md
+    blob: 62c63c53316c459eaae0429ce2aa6281515172fc
   - path: plugins/agents/agents/cartographer.md
+    blob: d632e074ecd39a0bd46d01ea8707ee6be9317811
   - path: plugins/agents/agents/copy-editor.md
+    blob: 9b85e72f36f65cce77f9a4365e4d54c4834ca361
   - path: plugins/agents/agents/data-engineer.md
+    blob: c419e74d2af3c9b8b924475d94a1ec0c1338798e
   - path: plugins/agents/agents/devops-engineer.md
+    blob: f26d15023c8f2a8a12ee199052d9f18d34fac1fa
   - path: plugins/agents/agents/domain-researcher.md
+    blob: 32a5ed047975d11391d015f6e79a7cb7b45370e1
   - path: plugins/agents/agents/evaluator.md
+    blob: 04b337939a001e46f04898ca53e444b822d3cbbc
   - path: plugins/agents/agents/evidence-collector.md
+    blob: 232c0bcdcd2d3d3d86f596fe2c517c1890ac9590
   - path: plugins/agents/agents/generator.md
+    blob: 9d141116c64761c958a74977b14867e6729da8de
   - path: plugins/agents/agents/hypothesis-challenger.md
+    blob: 49dac36dfb6c0f7a022497710e490b2d0869881e
 references_modules: [plugins-agents-agents-chunk-2, plugins-atlas-references]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/agents/agents (chunk 1)

@@ -4,20 +4,34 @@ summary: "CLI-focused tests pinning deployit redeploy, gc, metadata extraction, 
 read_when: "Changing deployit redeploy, gc, metadata extraction, or verifying a live deployment"
 sources:
   - path: plugins/deployit/tests/test-cli-archive-build-number.sh
+    blob: 300b23be4b25228e0c39a522166c692fabe8b911
   - path: plugins/deployit/tests/test-cli-bump.sh
+    blob: 04836f17b13c459010bcf9394f9fb1290831ceec
   - path: plugins/deployit/tests/test-cli-config-sparkle.sh
+    blob: 6f8ac4ff1172a8da5127f4dc3f8d64484d12fe88
   - path: plugins/deployit/tests/test-cli-deploy-autoprune.sh
+    blob: 8f43eb9f58e1c4ad048e566c70e0313ae401e004
   - path: plugins/deployit/tests/test-cli-preflight.sh
+    blob: 894d8c16d5cd39f2d0f18f40f0aab8527c185e9b
   - path: plugins/deployit/tests/test-cli-redeploy.sh
+    blob: 5cc4141d1c5dc1700865ec366d1304c672bd9817
   - path: plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh
+    blob: e5ac361f4179b34d9833f7daa4f7a641a8afd775
   - path: plugins/deployit/tests/test-cli-stage-macos-sparkle.sh
+    blob: 991934e1ae5673233ed810f458a7aa7629e0c4ca
   - path: plugins/deployit/tests/test-cli-version.sh
+    blob: d7a1daaa409feb77dbb59b51a4c1f76b58050f79
   - path: plugins/deployit/tests/test-gc.sh
+    blob: be01b59bafa19e9c5bda91c29d3ccd6101f9ad88
   - path: plugins/deployit/tests/test-metadata-single-app.sh
+    blob: 1f36ebce4b6cf9363f3e6045fb7afced5dcd2ef0
   - path: plugins/deployit/tests/test-metadata.sh
+    blob: 5c49e2f4a48015c86de20068bd861f6edde9103c
   - path: plugins/deployit/tests/verify-live.sh
+    blob: ac91a62908f8dc436f6a358bf5dbc11d2c31163b
 references_modules: [plugins-deployit-bin]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/deployit/tests (chunk 2)

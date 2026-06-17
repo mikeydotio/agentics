@@ -6,10 +6,10 @@ sources:
   - path: plugins/deployit/.claude-plugin/plugin.json
     blob: 3a91c808b94584bbdad0de0e9a980992708382d5
   - path: plugins/deployit/skills/deployit/SKILL.md
-    blob: b59f2fd2e6557a951f56b986c7efd54ab3a77a29
-references_modules: [plugins-deployit-bin, plugins-deployit-references, plugins-deployit-tests-chunk-2]
+    blob: 6f5e4ed5786f3753ad932aa63bfb154c7d09a060
+references_modules: [plugins-deployit-bin, plugins-deployit-references]
 generator: cartographer/2
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 verified: true
 ---
 
@@ -42,10 +42,10 @@ detail to the references docs.
 ## Relationships
 
 - `plugins-deployit-misc.deployit -> plugins-deployit-bin.deployit-router.sh (calls)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-tests-chunk-2.verify-live.sh (calls)`
 - `plugins-deployit-misc.deployit -> plugins-deployit-references.bootstrap.md (reads)`
 - `plugins-deployit-misc.deployit -> plugins-deployit-references.ios.md (reads)`
 - `plugins-deployit-misc.deployit -> plugins-deployit-references.macos.md (reads)`
+- `plugins-deployit-misc.deployit -> plugins-deployit-references.sparkle.md (reads)`
 - `plugins-deployit-misc.deployit -> plugins-deployit-references.semver.md (reads)`
 - `plugins-deployit-misc.deployit -> plugins-deployit-references.tailscale-serve.md (reads)`
 - `plugins-deployit-misc.deployit -> plugins-deployit-references.troubleshooting.md (reads)`
@@ -62,6 +62,7 @@ detail to the references docs.
 - Semver display never edits `MARKETING_VERSION` (plugins/deployit/skills/deployit/SKILL.md:29)
 - `CFBundleVersion` bumping is the host repo's job (plugins/deployit/skills/deployit/SKILL.md:22-24)
 - Apps-layout beats single-app when both match (plugins/deployit/skills/deployit/SKILL.md:45)
+- `redeploy` calls `deployit-router.sh`, which internally runs `tests/verify-live.sh`; the skill never calls verify-live.sh directly (plugins/deployit/skills/deployit/SKILL.md:61)
 
 ## External deps
 

@@ -4,22 +4,38 @@ summary: "Sandboxed bash tests pinning deployit's backend HTTP surface, CLI boot
 read_when: "Touching deployit backend routes/UI, CLI bootstrap/bump/preflight, or its tests"
 sources:
   - path: plugins/deployit/tests/fakes/tailscale
+    blob: e791bddad3f3d31a1e584d72f71075a4a5270547
   - path: plugins/deployit/tests/run-tests.sh
+    blob: 5d017ec337d7a22a0616704396c2d233e1b32278
   - path: plugins/deployit/tests/test-backend-500-on-corrupt.sh
+    blob: c1683f5c6233f47754ef702b8204def77f0f3815
   - path: plugins/deployit/tests/test-backend-appcast.sh
+    blob: baaf806aa614d45a5b5693a52e8fa1176a88aa72
   - path: plugins/deployit/tests/test-backend-healthz.sh
+    blob: 4e9022321aa470e7ff69c9a316a4addd2840309d
   - path: plugins/deployit/tests/test-backend-listing-groups-by-product.sh
+    blob: 766abd7a54fbd937d227694560afcda42a98ebbd
   - path: plugins/deployit/tests/test-backend-listing.sh
+    blob: 898e867d71e6737664a9ec49507fd0c4be730855
   - path: plugins/deployit/tests/test-backend-macos-download.sh
+    blob: 73868f35fb2b3a69881091d18f7219687f5b5c53
   - path: plugins/deployit/tests/test-backend-nav-no-ptr.sh
+    blob: 9123894849996cffeb4fa8de123df79bc9237c6b
   - path: plugins/deployit/tests/test-backend-per-build.sh
+    blob: 40ee874e0c8b38e250605874eb95d14e1e6fa411
   - path: plugins/deployit/tests/test-backend-product-page.sh
+    blob: 3e47ca29d7051c3bd270dafe705a11b6d7abfb15
   - path: plugins/deployit/tests/test-backend-refresh.sh
+    blob: 8af6d863fac5ab4787f05f8773511f0dedea268a
   - path: plugins/deployit/tests/test-backend-static-assets.sh
+    blob: 2a6a390c6fe8a1e708e1f90d404eee00918cef86
   - path: plugins/deployit/tests/test-backend-version-label.sh
+    blob: 8ddf7d8821bcc8c4b87dc8bcb782ecb410d07311
   - path: plugins/deployit/tests/test-bootstrap-dirs.sh
+    blob: fcb3b27daa351b0cba8db9cd480d2b35677662d1
 references_modules: [plugins-deployit-bin, plugins-deployit-tests-chunk-2]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/deployit/tests (chunk 1)

@@ -4,11 +4,16 @@ summary: "Semver's Claude Code hook layer — session version context, git-push 
 read_when: "Touching semver hooks, push-nudge or session version context, or .semver/hooks execution"
 sources:
   - path: plugins/semver/hooks/hooks.json
+    blob: 7bf0c55fd5f7a0ae3e75c0f66dde2d75a2a486bd
   - path: plugins/semver/hooks/post-push-check.sh
+    blob: 6d65a1c6bc0e854ae91c7984cb2dbc97807d44fb
   - path: plugins/semver/hooks/run-user-hooks.sh
+    blob: 6f444669e3df7e9ef28e4afcfad62a2d721305b2
   - path: plugins/semver/hooks/session-start.sh
+    blob: 06001ae4a74cdc1564994c65103723d9544a2b58
 references_modules: [plugins-forge-skills, plugins-semver-misc]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/semver/hooks

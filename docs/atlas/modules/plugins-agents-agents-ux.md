@@ -4,10 +4,14 @@ summary: "Platform-variant UX design reviewers — CLI, mobile, and web speciali
 read_when: "Choosing or editing a platform-specific UX reviewer (CLI, mobile, or web)"
 sources:
   - path: plugins/agents/agents/ux-designer-cli.md
+    blob: 10595e11ce270175e12322409a2b8908eae54dde
   - path: plugins/agents/agents/ux-designer-mobile.md
+    blob: 5e69aab6a0ad62ccf0b8d2b06483faee6b176eb8
   - path: plugins/agents/agents/ux-designer-web.md
+    blob: 47d2ee61ac977b280271bab4bb2567c765db198b
 references_modules: [plugins-agents-references, plugins-council]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/agents/agents/ux*

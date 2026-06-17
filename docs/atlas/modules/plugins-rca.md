@@ -1,19 +1,29 @@
 ---
 module: plugins/rca
-summary: Five-phase root cause analysis plugin — symptom intake through verified remediation, artifact-driven state
-read_when: Touching the /rca skill, phase artifacts (.rca/<slug>/), references, or agent overrides
+summary: "Five-phase root cause analysis plugin — symptom intake through verified remediation, artifact-driven state"
+read_when: "Touching the /rca skill, phase artifacts (.rca/<slug>/), references, or agent overrides"
 sources:
   - path: plugins/rca/.claude-plugin/plugin.json
+    blob: 454504e821d1a1c2cce7377572811e62205a91ec
   - path: plugins/rca/README.md
+    blob: 65f996dd8e8f6f0627b43e7f2ddab8b68dd21b3b
   - path: plugins/rca/agent-overrides/architect-rca.md
+    blob: 6c5765aa64e41195c3841b0775d1847fa4359c31
   - path: plugins/rca/agent-overrides/investigator-rca.md
+    blob: 85ff269974b4953c0687a67583763f5f734c334f
   - path: plugins/rca/bin/rca-status.sh
+    blob: cbadac1feae9bd9f334eb9c03240664c43d7563f
   - path: plugins/rca/references/architectural-patterns.md
+    blob: b167fb9a7ba41edd6b8c4fe215fbbaf7bfb262d3
   - path: plugins/rca/references/rca-methodology.md
+    blob: a1711e6a044250dd1297f62b7382a107086990f6
   - path: plugins/rca/references/symptom-vs-root-cause.md
+    blob: 7163bcfd24f1d5fe21ce30c56cb4b943441f2ca3
   - path: plugins/rca/skills/rca/SKILL.md
+    blob: c5271dfc51b0450cc67a901b66fc599a53601e88
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/rca

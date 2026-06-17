@@ -4,19 +4,32 @@ summary: "Mock-free bash harness driving semver's real hook runner, CLI, and rou
 read_when: "Adding or debugging semver tests, or reusing the source-and-discover bash harness"
 sources:
   - path: plugins/semver/tests/helpers/setup.sh
+    blob: 087a4482effea86118a5f541d909d1cd5bef1045
   - path: plugins/semver/tests/run-tests.sh
+    blob: c3721e8619b1e0790cb584ac03bb6c235fcec187
   - path: plugins/semver/tests/test-bump-run.sh
+    blob: a707de3204d97de4a55df9c40e562bb3d86c8ae2
   - path: plugins/semver/tests/test-cli.sh
+    blob: f525e2512a65e5b890dc4c7d574b97d579b16d80
   - path: plugins/semver/tests/test-display-questions.sh
+    blob: a47a76f5e0313f6e7947537cd3abe2a02c7abbe7
   - path: plugins/semver/tests/test-hook-discovery.sh
+    blob: ff34bcac9a11b0716788e351c79dde766c13e0d7
   - path: plugins/semver/tests/test-hook-execution.sh
+    blob: 726915a09246d27cfc474197525a169cefdc2f7f
   - path: plugins/semver/tests/test-hook-failures.sh
+    blob: 6be046822fa395c49dd051c32c04ccac06344a93
   - path: plugins/semver/tests/test-hook-reentrancy.sh
+    blob: f42c68a95e4cb6652e4e9ca7c46a550b8cf41eea
   - path: plugins/semver/tests/test-integration.sh
+    blob: ec210c208c64353e050015700f2e70e51960f357
   - path: plugins/semver/tests/test-prompt-hooks.sh
+    blob: ce9972d43cf214b0de434a2bc86094b05c1ecbef
   - path: plugins/semver/tests/test-router.sh
+    blob: 9981ff4600c847f5fdafc76be727dd5375d49606
 references_modules: [plugins-semver-hooks, plugins-semver-misc]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/semver/tests

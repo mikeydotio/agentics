@@ -4,10 +4,14 @@ summary: "Forge session-lifecycle hooks — inject resume context on SessionStar
 read_when: "Touching forge session resume, stop checkpointing, or .forge state hook behavior"
 sources:
   - path: plugins/forge/hooks/hooks.json
+    blob: f92d8253799e799123a9e1506de7aa2e1bffcc0d
   - path: plugins/forge/hooks/session-start.sh
+    blob: 69f94721d7d3818330a5c3216c15be763051cb4b
   - path: plugins/forge/hooks/session-stop.sh
+    blob: fd33f5ce7ea769d4d07a3814bc85887d2281b5f5
 references_modules: [plugins-forge-skills, plugins-freshen, plugins-hook-guard]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/forge/hooks
@@ -25,7 +29,7 @@ Without it, an interrupted run loses its place; with it, `/forge resume` continu
 | --- | --- | --- | --- |
 | `SessionStart` | hook binding | `plugins/forge/hooks/hooks.json:4` | Binds every session start (matcher `*`) to session-start.sh with a 10s timeout |
 | `Stop` | hook binding | `plugins/forge/hooks/hooks.json:16` | Binds every Stop event (matcher `*`) to session-stop.sh with a 15s timeout |
-| `session-start.sh` | bash hook script | `plugins/forge/hooks/hooks.json:10` | Prints `{additionalContext}` resume summary JSON, or nothing when forge is inactive |
+| `session-start.sh` | bash hook script | `plugins/forge/hooks/session-start.sh:71` | Prints `{additionalContext}` resume summary JSON, or nothing when forge is inactive |
 | `session-stop.sh` | bash hook script | `plugins/forge/hooks/hooks.json:22` | Checkpoints a running pipeline to paused; guarantees stderr output on every exit |
 
 ## Load-bearing internals
@@ -42,9 +46,7 @@ Without it, an interrupted run loses its place; with it, `/forge resume` continu
 
 - `plugins-forge-hooks.session-start.sh -> plugins-forge-skills.execute (reads)`
 - `plugins-forge-hooks.session-stop.sh -> plugins-forge-skills.execute (writes)`
-- `plugins-forge-hooks.session-stop.sh -> plugins-forge-skills.forge (calls)`
-- `plugins-forge-hooks.session-stop.sh -> plugins-freshen.on-clear.sh (emits)`
-- `plugins-forge-hooks.session-stop.sh -> plugins-freshen.on-stop.sh (emits)`
+- `plugins-forge-hooks.session-stop.sh -> plugins-freshen.forge.signal (writes)`
 - `plugins-forge-hooks.session-stop.sh -> plugins-hook-guard.stop_guard_check (calls)`
 
 ## Type notes
@@ -60,6 +62,8 @@ Without it, an interrupted run loses its place; with it, `/forge resume` continu
 - It flips status to paused and bumps sessions_completed (plugins/forge/hooks/session-stop.sh:103).
 - Duration derives from `.forge/lock.json` `acquired_at` (plugins/forge/hooks/session-stop.sh:52).
 - The lock is deleted once the checkpoint lands (plugins/forge/hooks/session-stop.sh:110).
+- `/forge resume` appears in session-stop.sh only as string content written into the state `.resume.command` and the `.freshen/forge.signal` file (plugins/forge/hooks/session-stop.sh:102,129); stop never invokes forge directly.
+- session-stop.sh bypasses freshen.sh and writes `.freshen/forge.signal` directly to avoid tmux validation in the hook context (plugins/forge/hooks/session-stop.sh:113); the freshen Stop hook reads this file independently.
 
 ## External deps
 

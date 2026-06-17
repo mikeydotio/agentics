@@ -4,11 +4,16 @@ summary: "Shared Stop-hook circuit breaker — sourced stop_guard_check halts ru
 read_when: "Touching Stop hooks, stop_guard_check/stop_guard_reset, or hook-loop protection"
 sources:
   - path: plugins/hook-guard/.claude-plugin/plugin.json
+    blob: 107ca34d0b952e0377f64fcdf555e589f4a85d65
   - path: plugins/hook-guard/hooks/hooks.json
+    blob: d22a3169ebee8171c0149fd33e18c5f191b39144
   - path: plugins/hook-guard/hooks/session-start.sh
+    blob: 00d27a0d31baad818f66b8ef6dc9c6dc85f7509c
   - path: plugins/hook-guard/lib/stop-guard.sh
+    blob: 3cde01ee73b5e599e062fc0f11e74f1912886b13
 references_modules: [plugins-forge-hooks, plugins-freshen]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/hook-guard

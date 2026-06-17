@@ -4,21 +4,36 @@ summary: "Shared agent library slice — specialist subagent contracts, investig
 read_when: "Touching the shared agents investigator through technical-writer (incl. map-verifier)"
 sources:
   - path: plugins/agents/agents/investigator.md
+    blob: 3a140ee738ce520e566b8e61f683eabfca3433e6
   - path: plugins/agents/agents/lawyer.md
+    blob: 5fda3e7a2e1bdc8297d9be3b223c932af798f127
   - path: plugins/agents/agents/map-repairer.md
+    blob: 564b2ad94074890dcdf5a2a60ae0bb91b237d421
   - path: plugins/agents/agents/map-verifier.md
+    blob: ac52315a17ab18080ad6ad89c57a77998e802aed
   - path: plugins/agents/agents/observability-engineer.md
+    blob: eca36942ef2fc5771d811f8a7e758867d7207bf6
   - path: plugins/agents/agents/performance-engineer.md
+    blob: 846b109f5b2225e9084733564c9dfbd38df0a527
   - path: plugins/agents/agents/project-manager.md
+    blob: e969875e8b4425656e79735a9a52baeaafed37d1
   - path: plugins/agents/agents/qa-engineer.md
+    blob: cf5566ed98b94145f5a4a2a60a3e18f8a75de330
   - path: plugins/agents/agents/reviewer.md
+    blob: 0271c45f317b4ff3e824559b49f0a305938dea4f
   - path: plugins/agents/agents/security-researcher.md
+    blob: ab64243cb5c0edbd1c34797b5941472a45e0732a
   - path: plugins/agents/agents/skeptic.md
+    blob: f961e8361a32ff2be468d16c71c9575ad2e84069
   - path: plugins/agents/agents/software-architect.md
+    blob: c3abdf88838589d5c78cfe5669e730737bf0195c
   - path: plugins/agents/agents/software-engineer.md
+    blob: 8ebb8be26e64490f77669942f1b88c3bab9a2246
   - path: plugins/agents/agents/technical-writer.md
+    blob: fcec96880785ebb5409208d8d8d2abc35ef9f375
 references_modules: [plugins-agents-agents-chunk-1, plugins-atlas-misc]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/agents/agents (chunk 2)

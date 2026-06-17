@@ -1,13 +1,17 @@
 ---
 module: plugins/atlas/agent-overrides
-summary: Atlas-specific constraint injections that narrow shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules
-read_when: Changing atlas agent behavior, spawn constraints, or repair/verify protocols
+summary: "Atlas-specific constraint injections that narrow shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules"
+read_when: "Changing atlas agent behavior, spawn constraints, or repair/verify protocols"
 sources:
   - path: plugins/atlas/agent-overrides/cartographer-context.md
+    blob: ef2975f57a95977b1c47f8c18566ccb38bb0d0ed
   - path: plugins/atlas/agent-overrides/map-repairer-context.md
+    blob: 36b934944b5b80ae623280af602c4f7bed9a241a
   - path: plugins/atlas/agent-overrides/map-verifier-context.md
+    blob: 7233cde0eb20367f4f0bd64eed2858d387df7839
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-references]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/atlas/agent-overrides
@@ -52,7 +56,7 @@ an agent spawn prompt, not executed. The cartographer-context and map-repairer-c
 carry the relationship-verb constraint (`calls, implements, conforms-to, extends, emits, owns,
 reads, writes`) because both agents write or repair Relationships edges. The map-verifier-context
 does not carry a write-target rule because verifiers never modify files
-(`plugins/atlas/agent-overrides/map-verifier-context.md:17`). The `summary` and `read_when`
+(`plugins/atlas/agent-overrides/map-verifier-context.md:18`). The `summary` and `read_when`
 budget caps (≤120 and ≤90 chars respectively) are stated only in cartographer-context, not
 map-repairer-context, because repair never re-derives frontmatter from scratch.
 
@@ -62,5 +66,5 @@ None — these are plain markdown files consumed by atlas CLI orchestration at s
 
 ## Gotchas
 
-- `map-repairer-context.md:23` forbids touching `sources` paths during repair; adding/removing a source is re-derivation, which belongs to `/atlas update` not repair.
-- `cartographer-context.md:26` sets a `read_when` aim of ≤70 chars in practice, stricter than the ≤90 char hard limit, because long module ids consume the INDEX routing row budget.
+- `map-repairer-context.md:20` forbids touching `sources` paths during repair; adding/removing a source is re-derivation, which belongs to `/atlas update` not repair.
+- `cartographer-context.md:27` sets a `read_when` aim of ≤70 chars in practice, stricter than the ≤90 char hard limit, because long module ids consume the INDEX routing row budget.

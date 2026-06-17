@@ -1,12 +1,15 @@
 ---
-module: plugins/atlas (chunk 1)
-summary: Atlas plugin identity and user-facing documentation — marketplace registration and README
-read_when: Touching atlas plugin identity, README, or user-facing command reference
+module: "plugins/atlas (chunk 1)"
+summary: "Atlas plugin identity and user-facing documentation — marketplace registration and README"
+read_when: "Touching atlas plugin identity, README, or user-facing command reference"
 sources:
   - path: plugins/atlas/.claude-plugin/plugin.json
+    blob: 48214a1798f73c5934e857252cb034cac416d031
   - path: plugins/atlas/README.md
+    blob: d229efbe05ad7e06be39004ef215089c6a66e509
 references_modules: [root-misc]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/atlas (chunk 1)

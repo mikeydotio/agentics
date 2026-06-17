@@ -1,16 +1,23 @@
 ---
-module: plugins/atlas/tests (chunk 2)
-summary: Scenario test files for partition, scan, status, update-flow, repair, and verify-cache
-read_when: Changing atlas-cli or hook behavior, or writing/debugging atlas plugin tests
+module: "plugins/atlas/tests (chunk 2)"
+summary: "Scenario test files for partition, scan, status, update-flow, repair, and verify-cache"
+read_when: "Changing atlas-cli or hook behavior, or writing/debugging atlas plugin tests"
 sources:
   - path: plugins/atlas/tests/test-partition.sh
+    blob: 4671fae665fdc132eabd409016d982e10c51501e
   - path: plugins/atlas/tests/test-repair.sh
+    blob: 4650cd406baa0f22472e1d9f5ffc972f752b6c67
   - path: plugins/atlas/tests/test-scan.sh
+    blob: 64fdfb8349fc9b8fc74817948c47ac664b123cae
   - path: plugins/atlas/tests/test-status.sh
+    blob: fdde9f2ee86018efefcd6e1794a0a90d04cf1be0
   - path: plugins/atlas/tests/test-update-flow.sh
+    blob: 7c4643183c99a2ff6ce20afa169e0e7fdd6baed7
   - path: plugins/atlas/tests/test-verify-cache.sh
-references_modules: [plugins-atlas-chunk-2, plugins-atlas-tests-chunk-1]
+    blob: 75505fe992ce5ec73dff0eb3c070eca5d0a0510b
+references_modules: [plugins-atlas-chunk-2]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/atlas/tests (chunk 2)
@@ -90,17 +97,11 @@ builders private to each file.
 - `plugins-atlas-tests-chunk-2.test-update-flow.sh -> plugins-atlas-chunk-2.atlas-cli (calls)`
 - `plugins-atlas-tests-chunk-2.test-repair.sh -> plugins-atlas-chunk-2.atlas-cli (calls)`
 - `plugins-atlas-tests-chunk-2.test-verify-cache.sh -> plugins-atlas-chunk-2.atlas-cli (calls)`
-- `plugins-atlas-tests-chunk-2.test-partition.sh -> plugins-atlas-tests-chunk-1.setup.sh (reads)`
-- `plugins-atlas-tests-chunk-2.test-scan.sh -> plugins-atlas-tests-chunk-1.setup.sh (reads)`
-- `plugins-atlas-tests-chunk-2.test-status.sh -> plugins-atlas-tests-chunk-1.setup.sh (reads)`
-- `plugins-atlas-tests-chunk-2.test-update-flow.sh -> plugins-atlas-tests-chunk-1.setup.sh (reads)`
-- `plugins-atlas-tests-chunk-2.test-repair.sh -> plugins-atlas-tests-chunk-1.setup.sh (reads)`
-- `plugins-atlas-tests-chunk-2.test-verify-cache.sh -> plugins-atlas-tests-chunk-1.setup.sh (reads)`
 
 ## Type notes
 
 - `_vc_write` uses a direct `python3 "$CLI"` pipe rather than `run_atlas` because `run_atlas`
-  has no stdin; all other calls go through `run_atlas` (plugins/atlas/tests/test-verify-cache.sh:29).
+  has no stdin; all other calls go through `run_atlas` (plugins/atlas/tests/test-verify-cache.sh:31).
 - Repair tests pin two distinct regimes: blob-stale docs (update's job) and blob-clean+lint-failing
   docs (repair's job); `test_repair_blob_clean_lint_break_is_repair_target` is the boundary marker
   (plugins/atlas/tests/test-repair.sh:123).
@@ -112,6 +113,9 @@ builders private to each file.
   (plugins/atlas/tests/test-update-flow.sh:37).
 - Verify-cache fingerprint is the same drift_cache_key that `status` uses; .atlas/ churn is
   explicitly excluded from the fingerprint (plugins/atlas/tests/test-verify-cache.sh:91).
+- The chunk-2 test files do not source `setup.sh` or `run-tests.sh` directly; fixture helpers
+  (`create_fixture_repo`, `run_atlas`, etc.) are injected at runtime by `run-tests.sh` in
+  chunk-1, which sources `helpers/setup.sh` once before executing the test functions.
 
 ## External deps
 

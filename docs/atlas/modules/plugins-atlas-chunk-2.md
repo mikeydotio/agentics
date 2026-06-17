@@ -1,15 +1,21 @@
 ---
-module: plugins/atlas (chunk 2)
-summary: atlas-cli Python binary, router shell shim, session-start hook, and SKILL.md orchestrator
-read_when: Touching atlas-cli subcommands, /atlas orchestration, the session hook, or blob ledger
+module: "plugins/atlas (chunk 2)"
+summary: "atlas-cli Python binary, router shell shim, session-start hook, and SKILL.md orchestrator"
+read_when: "Touching atlas-cli subcommands, /atlas orchestration, the session hook, or blob ledger"
 sources:
   - path: plugins/atlas/bin/atlas-cli
+    blob: 5319d85232bbf150441f26313cae23ec37fb1ab7
   - path: plugins/atlas/bin/atlas-router.sh
+    blob: 7cc697bb908645e35f61243ae97f94de8a23771e
   - path: plugins/atlas/hooks/hooks.json
+    blob: 41851681fe5ce7fdd0fc14b33dd4868d38398e6a
   - path: plugins/atlas/hooks/session-start.sh
+    blob: 4277ada1b6f54bba1034edf015c622f6a3a3eb94
   - path: plugins/atlas/skills/atlas/SKILL.md
+    blob: db3276b24a74ac636026ebf545de22482603c5ff
 references_modules: [plugins-atlas-references, plugins-atlas-agent-overrides, plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/atlas (chunk 2)

@@ -4,12 +4,18 @@ summary: "Normative canon for atlas — design rationale, map file format, full-
 read_when: "Changing atlas behavior, map format, orchestration steps, or the CLAUDE.md block"
 sources:
   - path: plugins/atlas/references/claude-md-injection.md
+    blob: fb192f9f878111762ca863b12091dfe9036eeef8
   - path: plugins/atlas/references/design.md
+    blob: 1118f1110cc0a449eade71b70e89bee7c8920669
   - path: plugins/atlas/references/map-format.md
+    blob: 180d8e724e10e9bfe42a4a9b314fb2c15eb6c9ee
   - path: plugins/atlas/references/mapping-protocol.md
+    blob: f30f8a4c53ebc6b4998ade19b59e99d545010e3e
   - path: plugins/atlas/references/update-protocol.md
+    blob: e4ea365fd75652c4dd8a1e782f2e16042c728cd4
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-chunk-2, plugins-atlas-agent-overrides]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/atlas/references

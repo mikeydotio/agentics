@@ -1,8 +1,8 @@
 {
-  "baseline": "dc00e9cd63fa7cd062a89006bbf54e8ca17cff21",
+  "baseline": "b4cedefaba8df96ee167877bf2ee9c3143ef0b08",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/agents/agents (chunk 1)",
       "references_modules": [
         "plugins-agents-agents-chunk-2",
@@ -24,17 +24,19 @@
         "plugins/agents/agents/hypothesis-challenger.md": "49dac36dfb6c0f7a022497710e490b2d0869881e"
       },
       "summary": "Shared agent library A\u2013H \u2014 agent prompt contracts plus the _template and _guardrails standards",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-agents-agents-chunk-2.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/agents/agents (chunk 2)",
       "references_modules": [
-        "plugins-agents-agents-chunk-1"
+        "plugins-agents-agents-chunk-1",
+        "plugins-atlas-misc"
       ],
       "sources": {
         "plugins/agents/agents/investigator.md": "3a140ee738ce520e566b8e61f683eabfca3433e6",
         "plugins/agents/agents/lawyer.md": "5fda3e7a2e1bdc8297d9be3b223c932af798f127",
+        "plugins/agents/agents/map-repairer.md": "564b2ad94074890dcdf5a2a60ae0bb91b237d421",
         "plugins/agents/agents/map-verifier.md": "ac52315a17ab18080ad6ad89c57a77998e802aed",
         "plugins/agents/agents/observability-engineer.md": "eca36942ef2fc5771d811f8a7e758867d7207bf6",
         "plugins/agents/agents/performance-engineer.md": "846b109f5b2225e9084733564c9dfbd38df0a527",
@@ -48,10 +50,10 @@
         "plugins/agents/agents/technical-writer.md": "fcec96880785ebb5409208d8d8d2abc35ef9f375"
       },
       "summary": "Shared agent library slice \u2014 specialist subagent contracts, investigator through technical-writer",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-agents-agents-chunk-3.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/agents/agents (chunk 3)",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
@@ -65,10 +67,9 @@
       "verified": true
     },
     "modules/plugins-agents-agents-ux.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/agents/agents/ux*",
       "references_modules": [
-        "plugins-agents-misc",
         "plugins-agents-references",
         "plugins-council"
       ],
@@ -78,10 +79,10 @@
         "plugins/agents/agents/ux-designer-web.md": "47d2ee61ac977b280271bab4bb2567c765db198b"
       },
       "summary": "Platform-variant UX design reviewers \u2014 CLI, mobile, and web specialists with one read-only review contract",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-agents-misc.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/agents (misc)",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
@@ -96,10 +97,10 @@
         "plugins/agents/skills/agents/SKILL.md": "a124fbbf7f5ad088ee35819abd2a57d151497678"
       },
       "summary": "Operational shell of the agent library \u2014 plugin manifest, /agents skill, structural validator",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-agents-references.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/agents/references",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
@@ -120,58 +121,87 @@
         "plugins/agents/references/tool-audit.md": "b16db34d0e9301d6a9177aab1bb9a49cd664549c"
       },
       "summary": "Contract docs for the shared agent library \u2014 roster catalog, design quality bar, spawn protocol, tool audit",
-      "verified": true
+      "verified": null
     },
-    "modules/plugins-atlas-misc.md": {
-      "generator": "cartographer/1",
-      "module": "plugins/atlas (misc)",
+    "modules/plugins-atlas-agent-overrides.md": {
+      "generator": "cartographer/2",
+      "module": "plugins/atlas/agent-overrides",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
         "plugins-agents-agents-chunk-2",
         "plugins-atlas-references"
       ],
       "sources": {
+        "plugins/atlas/agent-overrides/cartographer-context.md": "ef2975f57a95977b1c47f8c18566ccb38bb0d0ed",
+        "plugins/atlas/agent-overrides/map-repairer-context.md": "36b934944b5b80ae623280af602c4f7bed9a241a",
+        "plugins/atlas/agent-overrides/map-verifier-context.md": "7233cde0eb20367f4f0bd64eed2858d387df7839"
+      },
+      "summary": "Atlas-specific constraint injections that narrow shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules",
+      "verified": null
+    },
+    "modules/plugins-atlas-chunk-1.md": {
+      "generator": "cartographer/2",
+      "module": "plugins/atlas (chunk 1)",
+      "references_modules": [
+        "root-misc"
+      ],
+      "sources": {
         "plugins/atlas/.claude-plugin/plugin.json": "48214a1798f73c5934e857252cb034cac416d031",
-        "plugins/atlas/README.md": "e717a59df730b1dbdc8d01d1b3d5cf0eace677ab",
-        "plugins/atlas/agent-overrides/cartographer-context.md": "958ae88df7fb648d7d0ef704546f4b22e8997a6f",
-        "plugins/atlas/agent-overrides/map-verifier-context.md": "7233cde0eb20367f4f0bd64eed2858d387df7839",
-        "plugins/atlas/bin/atlas-cli": "e790e8b763032e7197d5d7abb26e7efde66a7dcb",
-        "plugins/atlas/bin/atlas-router.sh": "e08879da3530c0e2caf42be238e400355fe54a60",
+        "plugins/atlas/README.md": "d229efbe05ad7e06be39004ef215089c6a66e509"
+      },
+      "summary": "Atlas plugin identity and user-facing documentation \u2014 marketplace registration and README",
+      "verified": null
+    },
+    "modules/plugins-atlas-chunk-2.md": {
+      "generator": "cartographer/2",
+      "module": "plugins/atlas (chunk 2)",
+      "references_modules": [
+        "plugins-atlas-references",
+        "plugins-atlas-agent-overrides",
+        "plugins-agents-agents-chunk-1",
+        "plugins-agents-agents-chunk-2"
+      ],
+      "sources": {
+        "plugins/atlas/bin/atlas-cli": "5319d85232bbf150441f26313cae23ec37fb1ab7",
+        "plugins/atlas/bin/atlas-router.sh": "7cc697bb908645e35f61243ae97f94de8a23771e",
         "plugins/atlas/hooks/hooks.json": "41851681fe5ce7fdd0fc14b33dd4868d38398e6a",
         "plugins/atlas/hooks/session-start.sh": "4277ada1b6f54bba1034edf015c622f6a3a3eb94",
-        "plugins/atlas/skills/atlas/SKILL.md": "69a3df6cef90014ee2b8ea6cde4bc3c1f3862e13"
+        "plugins/atlas/skills/atlas/SKILL.md": "db3276b24a74ac636026ebf545de22482603c5ff"
       },
-      "summary": "Atlas core \u2014 deterministic atlas-cli (scan/partition/ledger/INDEX/lint), /atlas skill, router, staleness hook",
-      "verified": true
+      "summary": "atlas-cli Python binary, router shell shim, session-start hook, and SKILL.md orchestrator",
+      "verified": null
     },
     "modules/plugins-atlas-references.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/atlas/references",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
         "plugins-agents-agents-chunk-2",
-        "plugins-atlas-misc"
+        "plugins-atlas-chunk-2",
+        "plugins-atlas-agent-overrides"
       ],
       "sources": {
         "plugins/atlas/references/claude-md-injection.md": "fb192f9f878111762ca863b12091dfe9036eeef8",
-        "plugins/atlas/references/design.md": "ea972cd04b9d9ca0d9790e5086974e52f30fcf4a",
-        "plugins/atlas/references/map-format.md": "6c60104126e309cda0b3becefd1d79c2b2cbe27e",
-        "plugins/atlas/references/mapping-protocol.md": "2b356d94b589e7d56566d27901612bf1f7e333ea",
-        "plugins/atlas/references/update-protocol.md": "eefd4c2e9c51855c6a69efd1890b3180933ae008"
+        "plugins/atlas/references/design.md": "1118f1110cc0a449eade71b70e89bee7c8920669",
+        "plugins/atlas/references/map-format.md": "180d8e724e10e9bfe42a4a9b314fb2c15eb6c9ee",
+        "plugins/atlas/references/mapping-protocol.md": "f30f8a4c53ebc6b4998ade19b59e99d545010e3e",
+        "plugins/atlas/references/update-protocol.md": "e4ea365fd75652c4dd8a1e782f2e16042c728cd4"
       },
       "summary": "Normative canon for atlas \u2014 design rationale, map file format, full-map and update orchestration, CLAUDE.md delivery",
-      "verified": true
+      "verified": null
     },
-    "modules/plugins-atlas-tests.md": {
-      "generator": "cartographer/1",
-      "module": "plugins/atlas/tests",
+    "modules/plugins-atlas-tests-chunk-1.md": {
+      "generator": "cartographer/2",
+      "module": "plugins/atlas/tests (chunk 1)",
       "references_modules": [
-        "plugins-atlas-misc"
+        "plugins-atlas-chunk-2"
       ],
       "sources": {
-        "plugins/atlas/tests/helpers/setup.sh": "43e023c777e86119e2569cb7062e6d8a83da8afc",
+        "plugins/atlas/tests/helpers/setup.sh": "67dcb11d42fa2aa4316c6d95170130c6e0169ee8",
         "plugins/atlas/tests/run-tests.sh": "febae8f36c0646a382a834d4bb81fac24f7ba8fb",
+        "plugins/atlas/tests/test-branch.sh": "2445f98bad189f0e3461ab325f2b02324d1e0e53",
         "plugins/atlas/tests/test-commit.sh": "e5409959bdfdd6ce369bef3f40d7ff0374b5ae22",
+        "plugins/atlas/tests/test-config.sh": "3e6b9d603355aaf173afd3f738637f4bb78f429d",
         "plugins/atlas/tests/test-diffpack.sh": "a3bce143e30dbdef734d31c870c6ebbf696d6ced",
         "plugins/atlas/tests/test-doc.sh": "a8fb82305896d7e1549bd0e213205fb5357c7012",
         "plugins/atlas/tests/test-edge-cases.sh": "70a071fe0b9a69631fc40ce7a103cb03670d4cc9",
@@ -179,19 +209,33 @@
         "plugins/atlas/tests/test-hook.sh": "5545302a4317791ae60c63e45833dc34b822636f",
         "plugins/atlas/tests/test-index.sh": "2874a1bcef0889b9e18d91f93c60b3737404f665",
         "plugins/atlas/tests/test-init.sh": "1f85b244ea31d8dae57fbb880aad83337d1938f1",
-        "plugins/atlas/tests/test-ledger.sh": "abe078f0fd272c428a003fad154a15c54fea57d6",
-        "plugins/atlas/tests/test-lint.sh": "dfea42963e14496622975a31988ff8420d5e5656",
-        "plugins/atlas/tests/test-lock.sh": "9b6c39e83aab4b0db326b19e51dd4111553d463b",
+        "plugins/atlas/tests/test-ledger.sh": "64f3e8c235303750f1b3e11c73d01c90000dd0fa",
+        "plugins/atlas/tests/test-lint.sh": "5c60931acf78c01f489503de029aad0bfc0053a0",
+        "plugins/atlas/tests/test-lock.sh": "9b6c39e83aab4b0db326b19e51dd4111553d463b"
+      },
+      "summary": "Bash test harness for atlas-cli \u2014 fixture helpers, assertion primitives, and subcommand test suites",
+      "verified": null
+    },
+    "modules/plugins-atlas-tests-chunk-2.md": {
+      "generator": "cartographer/2",
+      "module": "plugins/atlas/tests (chunk 2)",
+      "references_modules": [
+        "plugins-atlas-chunk-2",
+        "plugins-atlas-tests-chunk-1"
+      ],
+      "sources": {
         "plugins/atlas/tests/test-partition.sh": "4671fae665fdc132eabd409016d982e10c51501e",
+        "plugins/atlas/tests/test-repair.sh": "4650cd406baa0f22472e1d9f5ffc972f752b6c67",
         "plugins/atlas/tests/test-scan.sh": "64fdfb8349fc9b8fc74817948c47ac664b123cae",
         "plugins/atlas/tests/test-status.sh": "fdde9f2ee86018efefcd6e1794a0a90d04cf1be0",
-        "plugins/atlas/tests/test-update-flow.sh": "7c4643183c99a2ff6ce20afa169e0e7fdd6baed7"
+        "plugins/atlas/tests/test-update-flow.sh": "7c4643183c99a2ff6ce20afa169e0e7fdd6baed7",
+        "plugins/atlas/tests/test-verify-cache.sh": "75505fe992ce5ec73dff0eb3c070eca5d0a0510b"
       },
-      "summary": "Bash regression suite pinning atlas-cli JSON contracts and the session hook via throwaway /tmp git repos",
-      "verified": true
+      "summary": "Scenario test files for partition, scan, status, update-flow, repair, and verify-cache",
+      "verified": null
     },
     "modules/plugins-council.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/council",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
@@ -210,10 +254,10 @@
         "plugins/council/skills/council-vote/evals/evals.json": "1023d8902ccef3f0bbefb50eedbb9e92debe984d"
       },
       "summary": "3-member sub-agent voting council that settles delegated judgment calls with a full audit trail",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-deployit-assets.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/deployit/assets",
       "references_modules": [
         "plugins-deployit-bin"
@@ -222,21 +266,22 @@
         "plugins/deployit/assets/ExportOptions.ios.plist": "5852d63680d64c09eedc16402acb77ff8ee908b8",
         "plugins/deployit/assets/ExportOptions.macos.plist": "bb805c5092b4b96097d0f8628a3366cf10d98320",
         "plugins/deployit/assets/ExportOptions.visionos.plist": "5852d63680d64c09eedc16402acb77ff8ee908b8",
-        "plugins/deployit/assets/app.css": "368cdb4685b143066dd49dd5b08261998eaa8850",
-        "plugins/deployit/assets/app.js": "e2c124d7e0cef334558cf2d865a7cfb5eeb48385",
-        "plugins/deployit/assets/config.example.toml": "53978c9f7177eb01bdbc255ce1eee47fdc5fcc9c",
+        "plugins/deployit/assets/app.css": "1893c1890b7c0d46c57579d26d63db1e69284d21",
+        "plugins/deployit/assets/app.js": "1e648c224aa9257c8e0ec3958377fb30021a38d1",
+        "plugins/deployit/assets/appcast.template.xml": "cafd1d470f8cea90690c9cdf5adbc56e8351d714",
+        "plugins/deployit/assets/config.example.toml": "875f5c13d3a956fa9f2353997da84dfc02a75fe0",
         "plugins/deployit/assets/icons/icon.svg": "d706e39034df2f1f5838ce57beab5623d8243146",
         "plugins/deployit/assets/index.template.html": "e0b564edf11a7723473248d94a3397eed55acf27",
-        "plugins/deployit/assets/listing.template.html": "18a2f1a698756ca4fc323f5502f0211d4ce70d12",
+        "plugins/deployit/assets/listing.template.html": "47a89ff8324958e2c7969b33a93c61b1a34a140f",
         "plugins/deployit/assets/manifest.template.plist": "10f7a574db399eef99e0474eae3e1bfb23abd317",
         "plugins/deployit/assets/manifest.webmanifest": "8d80244cd1bf8c8ab565ddb2b1a1e17fb4468cd0",
-        "plugins/deployit/assets/product.template.html": "7fcab5e6b7e9c7d393a34d9a00392d8deca31d1b"
+        "plugins/deployit/assets/product.template.html": "1262e6f64dfb9b2abe10d9736524c8cbc18c9dc2"
       },
       "summary": "Static payload for deployit \u2014 xcodebuild export plists, OTA install web UI templates, PWA shell, config seed",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-deployit-bin.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/deployit/bin",
       "references_modules": [
         "plugins-deployit-assets",
@@ -244,15 +289,15 @@
         "plugins-semver-misc"
       ],
       "sources": {
-        "plugins/deployit/bin/deployit-backend": "eddad198093da22cd99a51e30f9ed3de94ec9a8e",
-        "plugins/deployit/bin/deployit-cli": "9f14c2bf9e45bec688d28c13e44d5d3a6a5138c1",
+        "plugins/deployit/bin/deployit-backend": "998a36c278063066f887da95ef6d9af0fc888025",
+        "plugins/deployit/bin/deployit-cli": "e5fe7efc4cc4e283479305422cccc69309ffb058",
         "plugins/deployit/bin/deployit-router.sh": "344168329e019299a535c6e7c327e726f0cb5d03"
       },
       "summary": "Deployit's executable core \u2014 bash router, build/publish CLI, OTA install-page backend",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-deployit-misc.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/deployit (misc)",
       "references_modules": [
         "plugins-deployit-bin",
@@ -261,13 +306,13 @@
       ],
       "sources": {
         "plugins/deployit/.claude-plugin/plugin.json": "3a91c808b94584bbdad0de0e9a980992708382d5",
-        "plugins/deployit/skills/deployit/SKILL.md": "b59f2fd2e6557a951f56b986c7efd54ab3a77a29"
+        "plugins/deployit/skills/deployit/SKILL.md": "6f5e4ed5786f3753ad932aa63bfb154c7d09a060"
       },
       "summary": "Plugin manifest plus the /deployit orchestrator skill that routes every command through the bin router",
       "verified": true
     },
     "modules/plugins-deployit-references.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/deployit/references",
       "references_modules": [
         "plugins-deployit-assets",
@@ -278,63 +323,69 @@
       "sources": {
         "plugins/deployit/references/bootstrap.md": "24850fe5b053d9925a7af47513cfc2ac04033f93",
         "plugins/deployit/references/ios.md": "59175850b662bbf27b81972fc0ee97cfbe31acb9",
-        "plugins/deployit/references/macos.md": "b2d5da0c1051ce2fddae6b2f1b630fc5dce9a3c3",
+        "plugins/deployit/references/macos.md": "983390fef3c64bed2301a74cb34d06709c4d016a",
         "plugins/deployit/references/semver.md": "6bfc5d8f26e34851b97f77d4236e88fe8be273d6",
+        "plugins/deployit/references/sparkle.md": "03c53342a7c898cc3f381e24959f28e0a893257f",
         "plugins/deployit/references/tailscale-serve.md": "92267a1597530c980bfee1916f83a818dba94abd",
-        "plugins/deployit/references/troubleshooting.md": "f34f378b62868e7e11176fa0b0d4b6e6e2f6c87c",
+        "plugins/deployit/references/troubleshooting.md": "248dc2a7c4b900aba19b4bf61cdcca189fc37b7d",
         "plugins/deployit/references/visionos.md": "3773ae52396c5b6df79ce4d8926f2412fe4eca3d"
       },
       "summary": "Per-concern procedure docs behind /deployit \u2014 setup, platform deploys, proxy, semver bump guard, recovery",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-deployit-tests-chunk-1.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/deployit/tests (chunk 1)",
       "references_modules": [
         "plugins-deployit-bin",
-        "plugins-deployit-tests-chunk-2",
-        "plugins-semver-misc"
+        "plugins-deployit-tests-chunk-2"
       ],
       "sources": {
         "plugins/deployit/tests/fakes/tailscale": "e791bddad3f3d31a1e584d72f71075a4a5270547",
         "plugins/deployit/tests/run-tests.sh": "5d017ec337d7a22a0616704396c2d233e1b32278",
         "plugins/deployit/tests/test-backend-500-on-corrupt.sh": "c1683f5c6233f47754ef702b8204def77f0f3815",
+        "plugins/deployit/tests/test-backend-appcast.sh": "baaf806aa614d45a5b5693a52e8fa1176a88aa72",
         "plugins/deployit/tests/test-backend-healthz.sh": "4e9022321aa470e7ff69c9a316a4addd2840309d",
-        "plugins/deployit/tests/test-backend-listing-groups-by-product.sh": "7d1099c8b0a3fb980ec5084575d75afd0ea84150",
-        "plugins/deployit/tests/test-backend-listing.sh": "3e3f20dd4f53ed6b638919c290a2849015ca4f8e",
+        "plugins/deployit/tests/test-backend-listing-groups-by-product.sh": "766abd7a54fbd937d227694560afcda42a98ebbd",
+        "plugins/deployit/tests/test-backend-listing.sh": "898e867d71e6737664a9ec49507fd0c4be730855",
+        "plugins/deployit/tests/test-backend-macos-download.sh": "73868f35fb2b3a69881091d18f7219687f5b5c53",
+        "plugins/deployit/tests/test-backend-nav-no-ptr.sh": "9123894849996cffeb4fa8de123df79bc9237c6b",
         "plugins/deployit/tests/test-backend-per-build.sh": "40ee874e0c8b38e250605874eb95d14e1e6fa411",
-        "plugins/deployit/tests/test-backend-product-page.sh": "d530f271877a73cff7c33f494d115c73c703c8e8",
+        "plugins/deployit/tests/test-backend-product-page.sh": "3e47ca29d7051c3bd270dafe705a11b6d7abfb15",
         "plugins/deployit/tests/test-backend-refresh.sh": "8af6d863fac5ab4787f05f8773511f0dedea268a",
         "plugins/deployit/tests/test-backend-static-assets.sh": "2a6a390c6fe8a1e708e1f90d404eee00918cef86",
-        "plugins/deployit/tests/test-backend-version-label.sh": "ad8cf9e2d6ff32f905a5261799607bca81c9ac7b",
-        "plugins/deployit/tests/test-bootstrap-dirs.sh": "fcb3b27daa351b0cba8db9cd480d2b35677662d1",
-        "plugins/deployit/tests/test-cli-bump.sh": "04836f17b13c459010bcf9394f9fb1290831ceec",
-        "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "8f43eb9f58e1c4ad048e566c70e0313ae401e004",
-        "plugins/deployit/tests/test-cli-preflight.sh": "894d8c16d5cd39f2d0f18f40f0aab8527c185e9b"
+        "plugins/deployit/tests/test-backend-version-label.sh": "8ddf7d8821bcc8c4b87dc8bcb782ecb410d07311",
+        "plugins/deployit/tests/test-bootstrap-dirs.sh": "fcb3b27daa351b0cba8db9cd480d2b35677662d1"
       },
-      "summary": "Sandboxed bash tests pinning deployit's backend HTTP surface and CLI bootstrap/bump/preflight flows",
-      "verified": true
+      "summary": "Sandboxed bash tests pinning deployit's backend HTTP surface, CLI bootstrap, and the test runner",
+      "verified": null
     },
     "modules/plugins-deployit-tests-chunk-2.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/deployit/tests (chunk 2)",
       "references_modules": [
-        "plugins-deployit-bin",
-        "plugins-deployit-tests-chunk-1"
+        "plugins-deployit-bin"
       ],
       "sources": {
+        "plugins/deployit/tests/test-cli-archive-build-number.sh": "300b23be4b25228e0c39a522166c692fabe8b911",
+        "plugins/deployit/tests/test-cli-bump.sh": "04836f17b13c459010bcf9394f9fb1290831ceec",
+        "plugins/deployit/tests/test-cli-config-sparkle.sh": "6f8ac4ff1172a8da5127f4dc3f8d64484d12fe88",
+        "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "8f43eb9f58e1c4ad048e566c70e0313ae401e004",
+        "plugins/deployit/tests/test-cli-preflight.sh": "894d8c16d5cd39f2d0f18f40f0aab8527c185e9b",
         "plugins/deployit/tests/test-cli-redeploy.sh": "5cc4141d1c5dc1700865ec366d1304c672bd9817",
+        "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "e5ac361f4179b34d9833f7daa4f7a641a8afd775",
+        "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "991934e1ae5673233ed810f458a7aa7629e0c4ca",
         "plugins/deployit/tests/test-cli-version.sh": "d7a1daaa409feb77dbb59b51a4c1f76b58050f79",
         "plugins/deployit/tests/test-gc.sh": "be01b59bafa19e9c5bda91c29d3ccd6101f9ad88",
         "plugins/deployit/tests/test-metadata-single-app.sh": "1f36ebce4b6cf9363f3e6045fb7afced5dcd2ef0",
         "plugins/deployit/tests/test-metadata.sh": "5c49e2f4a48015c86de20068bd861f6edde9103c",
-        "plugins/deployit/tests/verify-live.sh": "678de11417e159376c10cd722f2569e53f91970b"
+        "plugins/deployit/tests/verify-live.sh": "ac91a62908f8dc436f6a358bf5dbc11d2c31163b"
       },
-      "summary": "Sandboxed CLI tests for deployit redeploy/version/gc/metadata plus verify-live.sh, the live-deployment gate",
-      "verified": true
+      "summary": "CLI-focused tests pinning deployit redeploy, gc, metadata extraction, macOS staging, and the live-deploy gate",
+      "verified": null
     },
     "modules/plugins-forge-agent-overrides.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/forge/agent-overrides",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
@@ -349,13 +400,15 @@
         "plugins/forge/agent-overrides/validator-context.md": "6c5cdda4751783942cd670dab20b4ca42bb065b3"
       },
       "summary": "Forge-only constraint blocks appended to shared agent definitions at spawn time",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-forge-bin.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/forge/bin",
       "references_modules": [
-        "plugins-freshen"
+        "plugins-freshen",
+        "plugins-forge-skills",
+        "plugins-forge-references"
       ],
       "sources": {
         "plugins/forge/bin/forge-archive.bats": "f754dcb6446ba9a569f3b03cce3c2dcfce2a2b7e",
@@ -372,10 +425,10 @@
         "plugins/forge/bin/forge-step-exit.sh": "3266bf2642e68d13caeb57060be61bb1fdeae442"
       },
       "summary": "Forge's deterministic shell layer \u2014 artifact-driven state machine, status, prechecks, step-exit, archives",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-forge-hooks.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/forge/hooks",
       "references_modules": [
         "plugins-forge-skills",
@@ -388,10 +441,10 @@
         "plugins/forge/hooks/session-stop.sh": "fd33f5ce7ea769d4d07a3814bc85887d2281b5f5"
       },
       "summary": "Forge session-lifecycle hooks \u2014 inject resume context on SessionStart, checkpoint a running pipeline on Stop",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-forge-misc.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/forge (misc)",
       "references_modules": [
         "root-misc"
@@ -401,10 +454,10 @@
         "plugins/forge/README.md": "1ce02e4c6294d5613a305d8487b42132d669a063"
       },
       "summary": "Forge's plugin manifest and README \u2014 plugin identity plus the user-facing contract for the idea-to-deployment pipeline",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-forge-references.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/forge/references",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
@@ -432,15 +485,16 @@
         "plugins/forge/references/verification-protocol.md": "d8bc49795bc4f87f355994db97a5b084ba2c82be"
       },
       "summary": "Normative protocol docs forge skills follow \u2014 execution loop, handoffs, locking, severity levels, storyhook usage",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-forge-skills.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/forge/skills",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
         "plugins-agents-agents-chunk-2",
         "plugins-agents-agents-chunk-3",
+        "plugins-forge-agent-overrides",
         "plugins-forge-bin",
         "plugins-forge-references",
         "plugins-freshen"
@@ -460,15 +514,14 @@
         "plugins/forge/skills/validate/SKILL.md": "85336f6fd87b68c30526b9ef28a39da2e0c1c464"
       },
       "summary": "Forge skill layer \u2014 /forge state-machine router plus 11 step skills driving idea-to-deploy via .forge/ artifacts",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-freshen.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/freshen",
       "references_modules": [
-        "plugins-forge-bin",
-        "plugins-forge-hooks",
-        "plugins-hook-guard"
+        "plugins-hook-guard",
+        "plugins-forge-skills"
       ],
       "sources": {
         "plugins/freshen/.claude-plugin/plugin.json": "030bbad689a442a32a0bc77ac38a14b1ab01e6ef",
@@ -478,11 +531,11 @@
         "plugins/freshen/hooks/on-stop.sh": "49804b1a6f98b8e1e9af3b59f13d1e50105ed627",
         "plugins/freshen/skills/freshen/SKILL.md": "2f8f3decc4a8cae565bc1833ddab55e249d81abd"
       },
-      "summary": "Context-clearing relay \u2014 queued signal files drive /clear + re-invocation via tmux send-keys",
-      "verified": true
+      "summary": "Automatic context clearing \u2014 queues /clear + re-invocation between workflow phases via tmux send-keys",
+      "verified": null
     },
     "modules/plugins-greenlight.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/greenlight",
       "references_modules": [],
       "sources": {
@@ -494,10 +547,10 @@
         "plugins/greenlight/skills/greenlight/SKILL.md": "248805d9ec6de9e782e2b43f02d02ba0018640a4"
       },
       "summary": "PreToolUse safety hook \u2014 three-tier Bash triage (deterministic allow/warn, AI fallback), per-mode disable",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-hook-guard.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/hook-guard",
       "references_modules": [
         "plugins-forge-hooks",
@@ -510,10 +563,10 @@
         "plugins/hook-guard/lib/stop-guard.sh": "3cde01ee73b5e599e062fc0f11e74f1912886b13"
       },
       "summary": "Shared Stop-hook circuit breaker \u2014 sourced stop_guard_check halts runaway hook loops; SessionStart re-arms it",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-rca.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/rca",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
@@ -530,11 +583,11 @@
         "plugins/rca/references/symptom-vs-root-cause.md": "7163bcfd24f1d5fe21ce30c56cb4b943441f2ca3",
         "plugins/rca/skills/rca/SKILL.md": "c5271dfc51b0450cc67a901b66fc599a53601e88"
       },
-      "summary": "Root cause analysis pipeline \u2014 five phases from symptom intake to verified remediation plan",
-      "verified": true
+      "summary": "Five-phase root cause analysis plugin \u2014 symptom intake through verified remediation, artifact-driven state",
+      "verified": null
     },
     "modules/plugins-semver-hooks.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/semver/hooks",
       "references_modules": [
         "plugins-forge-skills",
@@ -547,10 +600,10 @@
         "plugins/semver/hooks/session-start.sh": "06001ae4a74cdc1564994c65103723d9544a2b58"
       },
       "summary": "Semver's Claude Code hook layer \u2014 session version context, git-push bump nudges, pre/post-bump hook runner",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-semver-misc.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/semver (misc)",
       "references_modules": [
         "plugins-semver-hooks",
@@ -564,10 +617,10 @@
         "plugins/semver/skills/semver/SKILL.md": "d55b2177ff24c350b85121b63a30700a6267d4a2"
       },
       "summary": "Deterministic versioning core \u2014 JSON Python CLI, bash router, thin /semver orchestrator skill",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-semver-references.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/semver/references",
       "references_modules": [
         "plugins-semver-hooks",
@@ -584,10 +637,10 @@
         "plugins/semver/references/user-hooks.md": "b8909535d97ccea22cb97d62b935a12cd57f77ad"
       },
       "summary": "Normative contracts for semver artifacts \u2014 config, changelog, archive, locking, validation, hooks, CLAUDE.md block",
-      "verified": true
+      "verified": null
     },
     "modules/plugins-semver-tests.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "plugins/semver/tests",
       "references_modules": [
         "plugins-semver-hooks",
@@ -608,15 +661,15 @@
         "plugins/semver/tests/test-router.sh": "9981ff4600c847f5fdafc76be727dd5375d49606"
       },
       "summary": "Mock-free bash harness driving semver's real hook runner, CLI, and router in throwaway /tmp git repos",
-      "verified": true
+      "verified": null
     },
     "modules/root-misc.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "root (misc)",
       "references_modules": [
         "plugins-agents-misc",
-        "plugins-atlas-misc",
-        "plugins-atlas-tests",
+        "plugins-atlas-chunk-1",
+        "plugins-atlas-tests-chunk-1",
         "plugins-council",
         "plugins-deployit-misc",
         "plugins-deployit-tests-chunk-1",
@@ -640,10 +693,10 @@
         "docs/forge-workflow.md": "829219590927e60d40bc6b2e7d19bbedba22613d"
       },
       "summary": "Repo wiring layer \u2014 marketplace plugin registry, agent instructions, pre-push test gate, artifact conventions",
-      "verified": true
+      "verified": null
     },
     "modules/tests.md": {
-      "generator": "cartographer/1",
+      "generator": "cartographer/2",
       "module": "tests",
       "references_modules": [
         "root-misc"
@@ -655,47 +708,6 @@
         "tests/state-machine.bats": "b48e1c7812e0bb44c8ba4f41fdcb1d901f1a0b01"
       },
       "summary": "Root bats suite pinning the pilot/storyhook state-machine file contracts via self-built temp-repo fixtures",
-      "verified": true
-    },
-    "overview/ARCHITECTURE.md": {
-      "generator": "cartographer/1",
-      "module": "overview/ARCHITECTURE",
-      "references_modules": [],
-      "sources": {
-        "docs/atlas/modules/plugins-agents-agents-chunk-1.md": "ba9ad71828d6a1992502af03ed6a35a9c0c263b7",
-        "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "9f93adcafa6255045a843dd2c1274d235b97ac97",
-        "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "ef3742fcb7d78418c4f9cb60c3b8b24f2a0d5e74",
-        "docs/atlas/modules/plugins-agents-agents-ux.md": "75996ab298a96cb7a7e3e4faf8db2892caa5c44f",
-        "docs/atlas/modules/plugins-agents-misc.md": "93e546126e74b366acd2e58c900bd07e2a6d4766",
-        "docs/atlas/modules/plugins-agents-references.md": "1b7e2f101fe5a67313d58196adb202cfae5dd82c",
-        "docs/atlas/modules/plugins-atlas-misc.md": "77e6b96f03e9b68eceea9091489d0cae3902aff9",
-        "docs/atlas/modules/plugins-atlas-references.md": "58bafb5f843a6ab68e1f0ea5cf5c8ce68d24cb81",
-        "docs/atlas/modules/plugins-atlas-tests.md": "8bd3728b96d784d316581d2d42db26e2e18492d9",
-        "docs/atlas/modules/plugins-council.md": "3f13dbba9eab880139632767c967a135d1f35fbd",
-        "docs/atlas/modules/plugins-deployit-assets.md": "b9542c222709d51d45b5c10eb2ef0e9a308b71e3",
-        "docs/atlas/modules/plugins-deployit-bin.md": "bfbf4bda712d68baa19c3fbf77aeffebd7de0d0a",
-        "docs/atlas/modules/plugins-deployit-misc.md": "171c93fa1547f7df5b2d80dccc48992bca180fbc",
-        "docs/atlas/modules/plugins-deployit-references.md": "6715a61600d5c7174a5b3a6e3f84ca98b5111f36",
-        "docs/atlas/modules/plugins-deployit-tests-chunk-1.md": "f042ec81a2655c1f52d6bd0bb75a62e9b891b784",
-        "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": "84d8e00fc6229b1ff5aa841cc5fef722389d3508",
-        "docs/atlas/modules/plugins-forge-agent-overrides.md": "fdf0e8e6761b017fda7d899e51fb1fd50d9ef154",
-        "docs/atlas/modules/plugins-forge-bin.md": "00a8ff52bbef2942767e4a7d7c0f0f4de82951d3",
-        "docs/atlas/modules/plugins-forge-hooks.md": "8a1ae344cb407ced61494f9cb24bdee8c9414e22",
-        "docs/atlas/modules/plugins-forge-misc.md": "46bd67479a04a2237321068d2126a82ce0a1782f",
-        "docs/atlas/modules/plugins-forge-references.md": "e80666efd0846f232ada151d949c478dcc34e43e",
-        "docs/atlas/modules/plugins-forge-skills.md": "b7c19956fda9d0c509cadcfa51b9825b2921e62f",
-        "docs/atlas/modules/plugins-freshen.md": "6e095f4f3c63c14d97eaab2f8ed5e44d7d041923",
-        "docs/atlas/modules/plugins-greenlight.md": "816272cb74ca60909160d3b0c1b4494672637e8b",
-        "docs/atlas/modules/plugins-hook-guard.md": "5704253d35f7d407530fd8ba79a341763dbf195f",
-        "docs/atlas/modules/plugins-rca.md": "7d05b3bc42e78748adbe8af0095ab699c292968c",
-        "docs/atlas/modules/plugins-semver-hooks.md": "b18a49019caa60fc6c0a57fb8311cf4efde4bba1",
-        "docs/atlas/modules/plugins-semver-misc.md": "874e33238961a11dc026092fc94aa22d91c2a2ba",
-        "docs/atlas/modules/plugins-semver-references.md": "c9e5d73a6e8e489f559fb77f1899c54360809681",
-        "docs/atlas/modules/plugins-semver-tests.md": "1e5da4704bb1b156495e771d35234862141adf0e",
-        "docs/atlas/modules/root-misc.md": "d1f68b67a4a22635bdfa0f6c8befb876fbffcf5d",
-        "docs/atlas/modules/tests.md": "9d72ed08c7b45fd7fc6c474366e62d2dfee2292a"
-      },
-      "summary": "System shape, module relationships, and cross-plugin invariants of the agentics marketplace",
       "verified": null
     }
   },
@@ -724,6 +736,7 @@
     "plugins/agents/agents/hypothesis-challenger.md": "modules/plugins-agents-agents-chunk-1.md",
     "plugins/agents/agents/investigator.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/lawyer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/map-repairer.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/map-verifier.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/observability-engineer.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/performance-engineer.md": "modules/plugins-agents-agents-chunk-2.md",
@@ -746,37 +759,42 @@
     "plugins/agents/references/cross-plugin-usage.md": "modules/plugins-agents-references.md",
     "plugins/agents/references/tool-audit.md": "modules/plugins-agents-references.md",
     "plugins/agents/skills/agents/SKILL.md": "modules/plugins-agents-misc.md",
-    "plugins/atlas/.claude-plugin/plugin.json": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/README.md": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/agent-overrides/cartographer-context.md": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/agent-overrides/map-verifier-context.md": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/bin/atlas-cli": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/bin/atlas-router.sh": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/hooks/hooks.json": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/hooks/session-start.sh": "modules/plugins-atlas-misc.md",
+    "plugins/atlas/.claude-plugin/plugin.json": "modules/plugins-atlas-chunk-1.md",
+    "plugins/atlas/README.md": "modules/plugins-atlas-chunk-1.md",
+    "plugins/atlas/agent-overrides/cartographer-context.md": "modules/plugins-atlas-agent-overrides.md",
+    "plugins/atlas/agent-overrides/map-repairer-context.md": "modules/plugins-atlas-agent-overrides.md",
+    "plugins/atlas/agent-overrides/map-verifier-context.md": "modules/plugins-atlas-agent-overrides.md",
+    "plugins/atlas/bin/atlas-cli": "modules/plugins-atlas-chunk-2.md",
+    "plugins/atlas/bin/atlas-router.sh": "modules/plugins-atlas-chunk-2.md",
+    "plugins/atlas/hooks/hooks.json": "modules/plugins-atlas-chunk-2.md",
+    "plugins/atlas/hooks/session-start.sh": "modules/plugins-atlas-chunk-2.md",
     "plugins/atlas/references/claude-md-injection.md": "modules/plugins-atlas-references.md",
     "plugins/atlas/references/design.md": "modules/plugins-atlas-references.md",
     "plugins/atlas/references/map-format.md": "modules/plugins-atlas-references.md",
     "plugins/atlas/references/mapping-protocol.md": "modules/plugins-atlas-references.md",
     "plugins/atlas/references/update-protocol.md": "modules/plugins-atlas-references.md",
-    "plugins/atlas/skills/atlas/SKILL.md": "modules/plugins-atlas-misc.md",
-    "plugins/atlas/tests/helpers/setup.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/run-tests.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-commit.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-diffpack.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-doc.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-edge-cases.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-ground.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-hook.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-index.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-init.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-ledger.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-lint.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-lock.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-partition.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-scan.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-status.sh": "modules/plugins-atlas-tests.md",
-    "plugins/atlas/tests/test-update-flow.sh": "modules/plugins-atlas-tests.md",
+    "plugins/atlas/skills/atlas/SKILL.md": "modules/plugins-atlas-chunk-2.md",
+    "plugins/atlas/tests/helpers/setup.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/run-tests.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-branch.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-commit.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-config.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-diffpack.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-doc.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-edge-cases.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-ground.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-hook.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-index.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-init.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-ledger.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-lint.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-lock.sh": "modules/plugins-atlas-tests-chunk-1.md",
+    "plugins/atlas/tests/test-partition.sh": "modules/plugins-atlas-tests-chunk-2.md",
+    "plugins/atlas/tests/test-repair.sh": "modules/plugins-atlas-tests-chunk-2.md",
+    "plugins/atlas/tests/test-scan.sh": "modules/plugins-atlas-tests-chunk-2.md",
+    "plugins/atlas/tests/test-status.sh": "modules/plugins-atlas-tests-chunk-2.md",
+    "plugins/atlas/tests/test-update-flow.sh": "modules/plugins-atlas-tests-chunk-2.md",
+    "plugins/atlas/tests/test-verify-cache.sh": "modules/plugins-atlas-tests-chunk-2.md",
     "plugins/council/.claude-plugin/plugin.json": "modules/plugins-council.md",
     "plugins/council/README.md": "modules/plugins-council.md",
     "plugins/council/references/archetypes.md": "modules/plugins-council.md",
@@ -791,6 +809,7 @@
     "plugins/deployit/assets/ExportOptions.visionos.plist": "modules/plugins-deployit-assets.md",
     "plugins/deployit/assets/app.css": "modules/plugins-deployit-assets.md",
     "plugins/deployit/assets/app.js": "modules/plugins-deployit-assets.md",
+    "plugins/deployit/assets/appcast.template.xml": "modules/plugins-deployit-assets.md",
     "plugins/deployit/assets/config.example.toml": "modules/plugins-deployit-assets.md",
     "plugins/deployit/assets/icons/icon.svg": "modules/plugins-deployit-assets.md",
     "plugins/deployit/assets/index.template.html": "modules/plugins-deployit-assets.md",
@@ -805,6 +824,7 @@
     "plugins/deployit/references/ios.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/macos.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/semver.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/sparkle.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/tailscale-serve.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/troubleshooting.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/visionos.md": "modules/plugins-deployit-references.md",
@@ -812,19 +832,26 @@
     "plugins/deployit/tests/fakes/tailscale": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/run-tests.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-500-on-corrupt.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-appcast.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-healthz.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-listing-groups-by-product.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-listing.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-macos-download.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-backend-nav-no-ptr.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-per-build.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-product-page.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-refresh.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-static-assets.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-backend-version-label.sh": "modules/plugins-deployit-tests-chunk-1.md",
     "plugins/deployit/tests/test-bootstrap-dirs.sh": "modules/plugins-deployit-tests-chunk-1.md",
-    "plugins/deployit/tests/test-cli-bump.sh": "modules/plugins-deployit-tests-chunk-1.md",
-    "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "modules/plugins-deployit-tests-chunk-1.md",
-    "plugins/deployit/tests/test-cli-preflight.sh": "modules/plugins-deployit-tests-chunk-1.md",
+    "plugins/deployit/tests/test-cli-archive-build-number.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-bump.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-config-sparkle.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-preflight.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-redeploy.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-version.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-gc.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-metadata-single-app.sh": "modules/plugins-deployit-tests-chunk-2.md",
@@ -942,7 +969,8 @@
       "modules/plugins-agents-agents-chunk-3.md",
       "modules/plugins-agents-misc.md",
       "modules/plugins-agents-references.md",
-      "modules/plugins-atlas-misc.md",
+      "modules/plugins-atlas-agent-overrides.md",
+      "modules/plugins-atlas-chunk-2.md",
       "modules/plugins-atlas-references.md",
       "modules/plugins-council.md",
       "modules/plugins-forge-agent-overrides.md",
@@ -955,7 +983,8 @@
       "modules/plugins-agents-agents-chunk-3.md",
       "modules/plugins-agents-misc.md",
       "modules/plugins-agents-references.md",
-      "modules/plugins-atlas-misc.md",
+      "modules/plugins-atlas-agent-overrides.md",
+      "modules/plugins-atlas-chunk-2.md",
       "modules/plugins-atlas-references.md",
       "modules/plugins-council.md",
       "modules/plugins-forge-agent-overrides.md",
@@ -975,7 +1004,6 @@
       "modules/plugins-council.md"
     ],
     "plugins-agents-misc": [
-      "modules/plugins-agents-agents-ux.md",
       "modules/root-misc.md"
     ],
     "plugins-agents-references": [
@@ -984,16 +1012,28 @@
       "modules/plugins-council.md",
       "modules/plugins-forge-references.md"
     ],
-    "plugins-atlas-misc": [
-      "modules/plugins-atlas-references.md",
-      "modules/plugins-atlas-tests.md",
+    "plugins-atlas-agent-overrides": [
+      "modules/plugins-atlas-chunk-2.md",
+      "modules/plugins-atlas-references.md"
+    ],
+    "plugins-atlas-chunk-1": [
       "modules/root-misc.md"
+    ],
+    "plugins-atlas-chunk-2": [
+      "modules/plugins-atlas-references.md",
+      "modules/plugins-atlas-tests-chunk-1.md",
+      "modules/plugins-atlas-tests-chunk-2.md"
+    ],
+    "plugins-atlas-misc": [
+      "modules/plugins-agents-agents-chunk-2.md"
     ],
     "plugins-atlas-references": [
       "modules/plugins-agents-agents-chunk-1.md",
-      "modules/plugins-atlas-misc.md"
+      "modules/plugins-atlas-agent-overrides.md",
+      "modules/plugins-atlas-chunk-2.md"
     ],
-    "plugins-atlas-tests": [
+    "plugins-atlas-tests-chunk-1": [
+      "modules/plugins-atlas-tests-chunk-2.md",
       "modules/root-misc.md"
     ],
     "plugins-council": [
@@ -1019,7 +1059,6 @@
       "modules/plugins-deployit-misc.md"
     ],
     "plugins-deployit-tests-chunk-1": [
-      "modules/plugins-deployit-tests-chunk-2.md",
       "modules/root-misc.md"
     ],
     "plugins-deployit-tests-chunk-2": [
@@ -1027,14 +1066,15 @@
       "modules/plugins-deployit-misc.md",
       "modules/plugins-deployit-tests-chunk-1.md"
     ],
+    "plugins-forge-agent-overrides": [
+      "modules/plugins-forge-skills.md"
+    ],
     "plugins-forge-bin": [
       "modules/plugins-forge-references.md",
-      "modules/plugins-forge-skills.md",
-      "modules/plugins-freshen.md"
+      "modules/plugins-forge-skills.md"
     ],
     "plugins-forge-hooks": [
       "modules/plugins-forge-references.md",
-      "modules/plugins-freshen.md",
       "modules/plugins-hook-guard.md"
     ],
     "plugins-forge-misc": [
@@ -1042,12 +1082,15 @@
     ],
     "plugins-forge-references": [
       "modules/plugins-agents-references.md",
+      "modules/plugins-forge-bin.md",
       "modules/plugins-forge-skills.md"
     ],
     "plugins-forge-skills": [
       "modules/plugins-agents-references.md",
+      "modules/plugins-forge-bin.md",
       "modules/plugins-forge-hooks.md",
       "modules/plugins-forge-references.md",
+      "modules/plugins-freshen.md",
       "modules/plugins-semver-hooks.md"
     ],
     "plugins-freshen": [
@@ -1081,7 +1124,6 @@
       "modules/plugins-agents-references.md",
       "modules/plugins-deployit-bin.md",
       "modules/plugins-deployit-references.md",
-      "modules/plugins-deployit-tests-chunk-1.md",
       "modules/plugins-semver-hooks.md",
       "modules/plugins-semver-references.md",
       "modules/plugins-semver-tests.md",
@@ -1094,6 +1136,7 @@
       "modules/root-misc.md"
     ],
     "root-misc": [
+      "modules/plugins-atlas-chunk-1.md",
       "modules/plugins-forge-misc.md",
       "modules/plugins-semver-references.md",
       "modules/tests.md"

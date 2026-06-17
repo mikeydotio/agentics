@@ -4,13 +4,20 @@ summary: "PreToolUse safety hook — three-tier Bash triage (deterministic allow
 read_when: "Touching tool-call safety gating, greenlight.sh, its config schema, or /greenlight"
 sources:
   - path: plugins/greenlight/.claude-plugin/plugin.json
+    blob: 39246c09c4ec5c21d786408baba172052a1ad9a3
   - path: plugins/greenlight/README.md
+    blob: fe1fff6a447754c8f4ff1e3b567c65571a36490d
   - path: plugins/greenlight/hooks/greenlight.sh
+    blob: 72653a429b3e20e77fb1d40d892faa5388aa960b
   - path: plugins/greenlight/hooks/hooks.json
+    blob: 20cc2c86286ac87e52943958af770264e327a86c
   - path: plugins/greenlight/references/default-config.yaml
+    blob: e11bc45103e37cde5cf05ffa1f95aa0e5763c30e
   - path: plugins/greenlight/skills/greenlight/SKILL.md
+    blob: 248805d9ec6de9e782e2b43f02d02ba0018640a4
 references_modules: []
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/greenlight

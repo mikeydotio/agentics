@@ -4,30 +4,45 @@ summary: "Static payload for deployit — xcodebuild export plists, OTA install 
 read_when: "Changing deployit's install pages, OTA manifest, export signing options, or config seed"
 sources:
   - path: plugins/deployit/assets/ExportOptions.ios.plist
+    blob: 5852d63680d64c09eedc16402acb77ff8ee908b8
   - path: plugins/deployit/assets/ExportOptions.macos.plist
+    blob: bb805c5092b4b96097d0f8628a3366cf10d98320
   - path: plugins/deployit/assets/ExportOptions.visionos.plist
+    blob: 5852d63680d64c09eedc16402acb77ff8ee908b8
   - path: plugins/deployit/assets/app.css
+    blob: 1893c1890b7c0d46c57579d26d63db1e69284d21
   - path: plugins/deployit/assets/app.js
+    blob: 1e648c224aa9257c8e0ec3958377fb30021a38d1
   - path: plugins/deployit/assets/appcast.template.xml
+    blob: cafd1d470f8cea90690c9cdf5adbc56e8351d714
   - path: plugins/deployit/assets/config.example.toml
+    blob: 875f5c13d3a956fa9f2353997da84dfc02a75fe0
   - path: plugins/deployit/assets/icons/icon.svg
+    blob: d706e39034df2f1f5838ce57beab5623d8243146
   - path: plugins/deployit/assets/index.template.html
+    blob: e0b564edf11a7723473248d94a3397eed55acf27
   - path: plugins/deployit/assets/listing.template.html
+    blob: 47a89ff8324958e2c7969b33a93c61b1a34a140f
   - path: plugins/deployit/assets/manifest.template.plist
+    blob: 10f7a574db399eef99e0474eae3e1bfb23abd317
   - path: plugins/deployit/assets/manifest.webmanifest
+    blob: 8d80244cd1bf8c8ab565ddb2b1a1e17fb4468cd0
   - path: plugins/deployit/assets/product.template.html
+    blob: 1262e6f64dfb9b2abe10d9736524c8cbc18c9dc2
 references_modules: [plugins-deployit-bin]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/deployit/assets
 
 ## Purpose
 
-Code-free payload of deployit: per-platform xcodebuild export options, template sources for
-the OTA install web UI, the PWA shell, and the per-machine config seed. All substitution and
-serving logic lives in plugins/deployit/bin; this module holds only the contracts those
-scripts fill, so page appearance and signing policy change without code.
+Static payload of deployit: per-platform xcodebuild export options, template sources for
+the OTA install web UI, the PWA shell (including app.js client-side logic), and the
+per-machine config seed. Most substitution and serving logic lives in plugins/deployit/bin;
+this module holds the contracts those scripts fill and the browser-side behavior, so page
+appearance and signing policy change without touching the server.
 
 ## Public API
 
@@ -43,7 +58,7 @@ scripts fill, so page appearance and signing policy change without code.
 | `method` | plist key | `plugins/deployit/assets/ExportOptions.ios.plist:5` | iOS: `development`, automatic signing, no thinning |
 | `method` | plist key | `plugins/deployit/assets/ExportOptions.macos.plist:5` | macOS: `developer-id`, automatic signing, notarizable |
 | `method` | plist key | `plugins/deployit/assets/ExportOptions.visionos.plist:5` | visionOS: `development`, mirrors the iOS options |
-| `scope` | webmanifest key | `plugins/deployit/assets/manifest.webmanifest:6` | Standalone portrait PWA scoped to /deployit/ |
+| `scope` | webmanifest key | `plugins/deployit/assets/manifest.webmanifest:5` | Standalone portrait PWA scoped to /deployit/ |
 
 ## Load-bearing internals
 
@@ -52,7 +67,6 @@ scripts fill, so page appearance and signing policy change without code.
 
 ## Relationships
 
-- `plugins-deployit-assets.app.js -> plugins-deployit-bin._dispatch_post (calls)`
 - `plugins-deployit-bin._STATIC_ASSETS -> plugins-deployit-assets.app.css (reads)`
 - `plugins-deployit-bin._STATIC_ASSETS -> plugins-deployit-assets.app.js (reads)`
 - `plugins-deployit-bin._STATIC_ASSETS -> plugins-deployit-assets.icon.svg (reads)`
@@ -82,6 +96,7 @@ scripts fill, so page appearance and signing policy change without code.
 - `$BUNDLE_VERSION` receives the app's marketing version, not its build number.
 - Export plists hold no placeholders; the platform name in the filename selects the file.
 - `plugins/deployit/assets/config.example.toml:2`: seed written once; re-runs preserve edits.
+- `plugins/deployit/assets/app.js:28`: the Refresh button POSTs to `/deployit/_internal/refresh` (HTTP, no JS function call); the backend routes that path internally. No in-grammar verb applies, so this is not a Relationships edge.
 
 ## External deps
 

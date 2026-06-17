@@ -4,15 +4,24 @@ summary: "Repo wiring layer — marketplace plugin registry, agent instructions,
 read_when: "Registering/installing plugins, changing root agent instructions, or wiring make test"
 sources:
   - path: .claude-plugin/marketplace.json
+    blob: 974cf2ed0e780503f38268b18bdc85848a2105be
   - path: .gitignore
+    blob: a9bf4882e230d3761b915e566cecfb49630a25af
   - path: .semver/config.yaml
+    blob: 34a5c2bfa206393f2256834b5bd999e9aec3f077
   - path: AGENTS.md
+    blob: 04fef50d2517e57a411f7f23a09af90a44b24dba
   - path: CLAUDE.md
+    blob: 370157c29cb3943526846444e4b0fa46dbef6e56
   - path: Makefile
+    blob: b183c37836c8dbbcc10676db66113d62dad41652
   - path: README.md
+    blob: 5f28be43c59b3bb49b0976dc3199d42abfee9fea
   - path: docs/forge-workflow.md
+    blob: 829219590927e60d40bc6b2e7d19bbedba22613d
 references_modules: [plugins-agents-misc, plugins-atlas-chunk-1, plugins-atlas-tests-chunk-1, plugins-council, plugins-deployit-misc, plugins-deployit-tests-chunk-1, plugins-forge-misc, plugins-freshen, plugins-greenlight, plugins-hook-guard, plugins-rca, plugins-semver-misc, plugins-semver-tests, tests]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: root (misc)

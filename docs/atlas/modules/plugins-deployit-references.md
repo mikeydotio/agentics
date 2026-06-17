@@ -4,15 +4,24 @@ summary: "Per-concern procedure docs behind /deployit — setup, platform deploy
 read_when: "Changing deployit deploy/bootstrap/proxy/semver behavior or debugging install failures"
 sources:
   - path: plugins/deployit/references/bootstrap.md
+    blob: 24850fe5b053d9925a7af47513cfc2ac04033f93
   - path: plugins/deployit/references/ios.md
+    blob: 59175850b662bbf27b81972fc0ee97cfbe31acb9
   - path: plugins/deployit/references/macos.md
+    blob: 983390fef3c64bed2301a74cb34d06709c4d016a
   - path: plugins/deployit/references/semver.md
+    blob: 6bfc5d8f26e34851b97f77d4236e88fe8be273d6
   - path: plugins/deployit/references/sparkle.md
+    blob: 03c53342a7c898cc3f381e24959f28e0a893257f
   - path: plugins/deployit/references/tailscale-serve.md
+    blob: 92267a1597530c980bfee1916f83a818dba94abd
   - path: plugins/deployit/references/troubleshooting.md
+    blob: 248dc2a7c4b900aba19b4bf61cdcca189fc37b7d
   - path: plugins/deployit/references/visionos.md
+    blob: 3773ae52396c5b6df79ce4d8926f2412fe4eca3d
 references_modules: [plugins-deployit-assets, plugins-deployit-bin, plugins-deployit-misc, plugins-semver-misc]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/deployit/references

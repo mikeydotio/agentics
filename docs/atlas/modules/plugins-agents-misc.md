@@ -4,10 +4,14 @@ summary: "Operational shell of the agent library — plugin manifest, /agents sk
 read_when: "Adding agents, changing the agent frontmatter contract, or wiring /agents commands"
 sources:
   - path: plugins/agents/.claude-plugin/plugin.json
+    blob: 8fa7bcc60a0b4c3dd5f7c74cb556a69f1a97a76d
   - path: plugins/agents/bin/validate-agents.sh
+    blob: ce55f55b8ac86af01f2fde7f9cad4ee9e6f7c9f6
   - path: plugins/agents/skills/agents/SKILL.md
+    blob: a124fbbf7f5ad088ee35819abd2a57d151497678
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-agents-agents-ux, plugins-agents-references]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/agents (misc)

@@ -4,19 +4,32 @@ summary: "Forge skill layer — /forge state-machine router plus 11 step skills 
 read_when: "Changing forge pipeline steps, .forge/ artifacts, routing, or freshen/step-exit handoffs"
 sources:
   - path: plugins/forge/skills/decompose/SKILL.md
+    blob: 3249c4147869ea1f2d6db65ccf0794236280e491
   - path: plugins/forge/skills/deploy/SKILL.md
+    blob: 7edc7603ad97eeb10ef3d6d832e75fb1aa4080c9
   - path: plugins/forge/skills/design/SKILL.md
+    blob: 7fbb4a709f5ce22a3a1a180e9145112530614088
   - path: plugins/forge/skills/document/SKILL.md
+    blob: 4047df8107d7a86c2e1d74e03dc1097a7ecb00d2
   - path: plugins/forge/skills/execute/SKILL.md
+    blob: 281bcfd7a2fcf4e4fd4a145558c7bdc2416c3eec
   - path: plugins/forge/skills/forge/SKILL.md
+    blob: cc8b1715710e2d20c14e785a99fb46df714c5673
   - path: plugins/forge/skills/interrogate/SKILL.md
+    blob: f7d7b94f1cc5cf6adfa7b6f7f1f7a1156c7e1eb6
   - path: plugins/forge/skills/plan/SKILL.md
+    blob: d9cf6c05ef00ad0f90b9a7cefd6f41c789cf4e0a
   - path: plugins/forge/skills/research/SKILL.md
+    blob: b8f37ff44dbf23e6809e6388d990ac6c67b00ce2
   - path: plugins/forge/skills/review/SKILL.md
+    blob: 7c9a3c691da2e92cecb2ca0543f70a1b974f9c84
   - path: plugins/forge/skills/triage/SKILL.md
+    blob: f4a3a022b00861b0d73d7ca04555bf842f188e59
   - path: plugins/forge/skills/validate/SKILL.md
+    blob: 85336f6fd87b68c30526b9ef28a39da2e0c1c464
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-forge-agent-overrides, plugins-forge-bin, plugins-forge-references, plugins-freshen]
 generator: cartographer/2
+baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 ---
 
 # Module: plugins/forge/skills

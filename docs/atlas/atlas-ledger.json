@@ -1,5 +1,5 @@
 {
-  "baseline": "196666767b8fade32abd318c56691df49659c729",
+  "baseline": "ec70da73b8e2742e16e323713c8dad336693db6f",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/2",
@@ -707,6 +707,50 @@
       },
       "summary": "Root bats suite pinning the pilot/storyhook state-machine file contracts via self-built temp-repo fixtures",
       "verified": true
+    },
+    "overview/ARCHITECTURE.md": {
+      "generator": "cartographer/2",
+      "module": "overview/ARCHITECTURE",
+      "references_modules": [],
+      "sources": {
+        "docs/atlas/modules/plugins-agents-agents-chunk-1.md": "e298868c4fe44637ccec2c3e1a337895801aee07",
+        "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "62184b08d16b861ecb3e6c4d53bb27bde789fb90",
+        "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "48d1c592dd27666315114359452107365279bff4",
+        "docs/atlas/modules/plugins-agents-agents-ux.md": "8c97acba3a92a32992e353b1b8c0fe2f8375fab6",
+        "docs/atlas/modules/plugins-agents-misc.md": "775c32a25a595af8e61bcc60dcc393911ed1d1e7",
+        "docs/atlas/modules/plugins-agents-references.md": "f9c18a39dbf7a8a02777299b693961bdf0882afb",
+        "docs/atlas/modules/plugins-atlas-agent-overrides.md": "86fbc66ed7439ae6560f43baa2a1f7838ea84514",
+        "docs/atlas/modules/plugins-atlas-chunk-1.md": "e09e191df500a5ae4619e23ad3c05a7a39ed9095",
+        "docs/atlas/modules/plugins-atlas-chunk-2.md": "358f8e4fe42ef3ce8d29491e0e73f813405c4ebc",
+        "docs/atlas/modules/plugins-atlas-references.md": "7156d5e4525cd3fe07c88ba95032ec1edae6f8ce",
+        "docs/atlas/modules/plugins-atlas-tests-chunk-1.md": "44a4bad1244ad868f970d22db9cd8587f83ac890",
+        "docs/atlas/modules/plugins-atlas-tests-chunk-2.md": "d6b7d53b52628ba71253dfff7ac5934e8b8c01a4",
+        "docs/atlas/modules/plugins-council.md": "a6c39b294498fb6c95db4823c51b9f423385fe34",
+        "docs/atlas/modules/plugins-deployit-assets.md": "4106112addd43130f94a8baba889de6099e78d4e",
+        "docs/atlas/modules/plugins-deployit-bin.md": "fff7cdaa8fde7f5b0daef915ae8b26e67bb880f0",
+        "docs/atlas/modules/plugins-deployit-misc.md": "b5277bfa1592abe09be5e5263007d2c02f18098a",
+        "docs/atlas/modules/plugins-deployit-references.md": "dda42723ade6eef2e4851a654d8a6c1ffb614ce6",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-1.md": "c365e48e805d06a0ccbe9c9b636b44422cc45fd6",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": "81c9be08ee99cf145bd42892dd8d7768e6f79905",
+        "docs/atlas/modules/plugins-forge-agent-overrides.md": "d074233fad9cbc2b6cab6b5b4350d2c0371f0d21",
+        "docs/atlas/modules/plugins-forge-bin.md": "bc58d9a50483985438c764db4ed91357fdc713a8",
+        "docs/atlas/modules/plugins-forge-hooks.md": "0d8a1cab22e9b75a8a0f357d717d62b2daaf5c4d",
+        "docs/atlas/modules/plugins-forge-misc.md": "0dc9f2e34ca3a279a94af08921d0170ad2a752c2",
+        "docs/atlas/modules/plugins-forge-references.md": "f047a417dbd025fca941464e119d1ba16067cb69",
+        "docs/atlas/modules/plugins-forge-skills.md": "2de6926ff1bd8a8a13d4a0748d25e9070944a909",
+        "docs/atlas/modules/plugins-freshen.md": "a13f02ee0d472c2c31bc82997563b7ca8bae747f",
+        "docs/atlas/modules/plugins-greenlight.md": "20ca7ce7234e12e6b61d044e20462bf52c50c8e2",
+        "docs/atlas/modules/plugins-hook-guard.md": "6d051cbb35b1fdd6f8ada142f105c76266793153",
+        "docs/atlas/modules/plugins-rca.md": "505138a6a7e548cd6f6c06fb3c9b101a3d316be9",
+        "docs/atlas/modules/plugins-semver-hooks.md": "9ed8e4367399814a9a5f957926fc0ad80e2208f7",
+        "docs/atlas/modules/plugins-semver-misc.md": "669fc7ec5faa3ae3085861a05429114aa580c338",
+        "docs/atlas/modules/plugins-semver-references.md": "5648996af83b0552a7b728c05c5fc888e3894d72",
+        "docs/atlas/modules/plugins-semver-tests.md": "5e9bb91038653b2f49eec68f42c1f9ee1b12cea7",
+        "docs/atlas/modules/root-misc.md": "345130bd063c1aea7cbec4ab91160e763788bcfc",
+        "docs/atlas/modules/tests.md": "c5ef2a13077a687028c2624411884cec73d4a8a1"
+      },
+      "summary": "System architecture and cross-module relationships",
+      "verified": null
     }
   },
   "paths": {

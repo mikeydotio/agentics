@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.21.0] - 2026-06-17
+
+### Added
+- atlas lint L12/L13/L14 — dangling `references_modules`, out-of-grammar relationship edge verbs, over-length `read_when`/`summary` (67deab3)
+- atlas `cartographer/2` — relationship-verb-selection guidance + `read_when` brevity. **Bumping the generator forces a full map regeneration in every repo on the next `/atlas update`.** (57bcddc)
+- scoped `linguist-generated` gitattributes guidance + map commit-isolation convention (6d2e7bf)
+
+### Fixed
+- atlas config parser — quote-aware inline-comment stripping; a trailing `# comment` after a list item used to silently break excludes (67deab3)
+- atlas lint L7 — accept fully-qualified `Type.member` / arg-labelled symbol names (dropped 138 false positives to 21 on a real map) (67deab3)
+
+_[manual]_
+
 ## [v2.20.0] - 2026-06-16
 
 ### Added

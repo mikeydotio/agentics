@@ -4,17 +4,11 @@ summary: "Root bats suite pinning the pilot/storyhook state-machine file contrac
 read_when: "Touching tests/*.bats, the bats helpers, or pilot/storyhook state-file schemas"
 sources:
   - path: tests/helpers.bash
-    blob: ca28a41ee9ec7cc8b278243237315d55e07e8a04
   - path: tests/init.bats
-    blob: 4165667c3062581e7e3ff170335e404a87da24de
   - path: tests/run-tests.sh
-    blob: 18b3f63079da9fd9dce3c88ed11500f2eadbf0c3
   - path: tests/state-machine.bats
-    blob: b48e1c7812e0bb44c8ba4f41fdcb1d901f1a0b01
 references_modules: [root-misc]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/2
 ---
 
 # Module: tests

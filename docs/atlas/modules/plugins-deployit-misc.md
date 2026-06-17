@@ -8,7 +8,7 @@ sources:
   - path: plugins/deployit/skills/deployit/SKILL.md
     blob: b59f2fd2e6557a951f56b986c7efd54ab3a77a29
 references_modules: [plugins-deployit-bin, plugins-deployit-references, plugins-deployit-tests-chunk-2]
-generator: cartographer/1
+generator: cartographer/2
 baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
 verified: true
 ---

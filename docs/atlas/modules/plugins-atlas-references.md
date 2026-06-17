@@ -4,19 +4,12 @@ summary: "Normative canon for atlas — design rationale, map file format, full-
 read_when: "Changing atlas behavior, map format, orchestration steps, or the CLAUDE.md block"
 sources:
   - path: plugins/atlas/references/claude-md-injection.md
-    blob: fb192f9f878111762ca863b12091dfe9036eeef8
   - path: plugins/atlas/references/design.md
-    blob: ea972cd04b9d9ca0d9790e5086974e52f30fcf4a
   - path: plugins/atlas/references/map-format.md
-    blob: 6c60104126e309cda0b3becefd1d79c2b2cbe27e
   - path: plugins/atlas/references/mapping-protocol.md
-    blob: 2b356d94b589e7d56566d27901612bf1f7e333ea
   - path: plugins/atlas/references/update-protocol.md
-    blob: eefd4c2e9c51855c6a69efd1890b3180933ae008
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-misc]
-generator: cartographer/1
-baseline: dc00e9cd63fa7cd062a89006bbf54e8ca17cff21
-verified: true
+references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-chunk-2, plugins-atlas-agent-overrides]
+generator: cartographer/2
 ---
 
 # Module: plugins/atlas/references
@@ -40,7 +33,7 @@ injection contract.
 | `Atlas Map Format` | doc | `plugins/atlas/references/map-format.md:1` | Normative shape of everything atlas writes; wins over agent instinct when they disagree |
 | `CLAUDE.md Managed Block` | doc | `plugins/atlas/references/claude-md-injection.md:1` | Marker-delimited block carrying the `@docs/atlas/INDEX.md` import; inject/remove are idempotent |
 | `Full-Map Protocol` | doc | `plugins/atlas/references/mapping-protocol.md:1` | Step-ordered `/atlas map` run: agents write docs, the CLI does the deterministic work |
-| `Incremental Update Protocol` | doc | `plugins/atlas/references/update-protocol.md:1` | Step-ordered `/atlas update` run; unchanged docs never reach an LLM; includes the read-only `/atlas verify` flow |
+| `Incremental Update Protocol` | doc | `plugins/atlas/references/update-protocol.md:1` | Step-ordered `/atlas update` run; unchanged docs never reach an LLM; includes the read-only `/atlas verify` and surgical `/atlas repair` flows |
 
 ## Load-bearing internals
 
@@ -56,15 +49,17 @@ injection contract.
 
 ## Relationships
 
-- `plugins-atlas-references.claude-md-injection -> plugins-atlas-misc.atlas-cli (conforms-to)`
+- `plugins-atlas-references.claude-md-injection -> plugins-atlas-chunk-2.atlas-cli (reads)`
 - `plugins-atlas-references.mapping-protocol -> plugins-agents-agents-chunk-1.cartographer (reads)`
 - `plugins-atlas-references.mapping-protocol -> plugins-agents-agents-chunk-2.map-verifier (reads)`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-misc.atlas-router.sh (calls)`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-misc.cartographer-context (reads)`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-misc.map-verifier-context (reads)`
+- `plugins-atlas-references.mapping-protocol -> plugins-atlas-chunk-2.atlas-router.sh (calls)`
+- `plugins-atlas-references.mapping-protocol -> plugins-atlas-agent-overrides.cartographer-context (reads)`
+- `plugins-atlas-references.mapping-protocol -> plugins-atlas-agent-overrides.map-verifier-context (reads)`
 - `plugins-atlas-references.mapping-protocol -> plugins-atlas-references.map-format (reads)`
 - `plugins-atlas-references.update-protocol -> plugins-agents-agents-chunk-1.cartographer (reads)`
 - `plugins-atlas-references.update-protocol -> plugins-agents-agents-chunk-2.map-verifier (reads)`
+- `plugins-atlas-references.update-protocol -> plugins-agents-agents-chunk-2.map-repairer (reads)`
+- `plugins-atlas-references.update-protocol -> plugins-atlas-agent-overrides.map-repairer-context (reads)`
 - `plugins-atlas-references.update-protocol -> plugins-atlas-references.mapping-protocol (reads)`
 
 ## Type notes
@@ -79,6 +74,10 @@ Frontmatter ownership is split: cartographers write `module`, `summary`, `read_w
 Full-map step order is load-bearing: verification precedes the overview pass because
 `ledger set-verified` rewrites module-doc frontmatter that the overview's ledger entries hash
 (plugins/atlas/references/mapping-protocol.md:8).
+The repair flow (update-protocol.md §R0–R8) differs from update: driven by verify findings,
+not the ledger diff; uses map-repairer (targeted Edit) instead of cartographer (full
+re-derivation); `ledger finalize --except <drift-ids>` keeps drift docs flagged after body
+fixes (plugins/atlas/references/update-protocol.md:314).
 Design lineage: the no-PID heartbeat lock adopts the forge plugin's session-locking rationale
 (plugins/atlas/references/design.md:29); the marker-block pattern follows the semver plugin
 (plugins/atlas/references/claude-md-injection.md:4).

@@ -22,6 +22,7 @@ sources:
 references_modules: [plugins-agents-misc, plugins-atlas-chunk-1, plugins-atlas-tests-chunk-1, plugins-council, plugins-deployit-misc, plugins-deployit-tests-chunk-1, plugins-forge-misc, plugins-freshen, plugins-greenlight, plugins-hook-guard, plugins-rca, plugins-semver-misc, plugins-semver-tests, tests]
 generator: cartographer/2
 baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
+verified: true
 ---
 
 # Module: root (misc)

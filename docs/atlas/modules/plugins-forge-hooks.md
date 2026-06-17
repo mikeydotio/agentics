@@ -11,7 +11,8 @@ sources:
     blob: fd33f5ce7ea769d4d07a3814bc85887d2281b5f5
 references_modules: [plugins-forge-skills, plugins-freshen, plugins-hook-guard]
 generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
+baseline: 196666767b8fade32abd318c56691df49659c729
+verified: true
 ---
 
 # Module: plugins/forge/hooks
@@ -30,7 +31,7 @@ Without it, an interrupted run loses its place; with it, `/forge resume` continu
 | `SessionStart` | hook binding | `plugins/forge/hooks/hooks.json:4` | Binds every session start (matcher `*`) to session-start.sh with a 10s timeout |
 | `Stop` | hook binding | `plugins/forge/hooks/hooks.json:16` | Binds every Stop event (matcher `*`) to session-stop.sh with a 15s timeout |
 | `session-start.sh` | bash hook script | `plugins/forge/hooks/session-start.sh:71` | Prints `{additionalContext}` resume summary JSON, or nothing when forge is inactive |
-| `session-stop.sh` | bash hook script | `plugins/forge/hooks/hooks.json:22` | Checkpoints a running pipeline to paused; guarantees stderr output on every exit |
+| `session-stop.sh` | bash hook script | `plugins/forge/hooks/session-stop.sh:99` | Checkpoints a running pipeline to paused; guarantees stderr output on every exit |
 
 ## Load-bearing internals
 

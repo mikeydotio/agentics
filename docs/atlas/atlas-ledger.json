@@ -1,5 +1,5 @@
 {
-  "baseline": "b4cedefaba8df96ee167877bf2ee9c3143ef0b08",
+  "baseline": "196666767b8fade32abd318c56691df49659c729",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/2",
@@ -24,7 +24,7 @@
         "plugins/agents/agents/hypothesis-challenger.md": "49dac36dfb6c0f7a022497710e490b2d0869881e"
       },
       "summary": "Shared agent library A\u2013H \u2014 agent prompt contracts plus the _template and _guardrails standards",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-agents-agents-chunk-2.md": {
       "generator": "cartographer/2",
@@ -50,7 +50,7 @@
         "plugins/agents/agents/technical-writer.md": "fcec96880785ebb5409208d8d8d2abc35ef9f375"
       },
       "summary": "Shared agent library slice \u2014 specialist subagent contracts, investigator through technical-writer",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-agents-agents-chunk-3.md": {
       "generator": "cartographer/2",
@@ -79,7 +79,7 @@
         "plugins/agents/agents/ux-designer-web.md": "47d2ee61ac977b280271bab4bb2567c765db198b"
       },
       "summary": "Platform-variant UX design reviewers \u2014 CLI, mobile, and web specialists with one read-only review contract",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-agents-misc.md": {
       "generator": "cartographer/2",
@@ -97,7 +97,7 @@
         "plugins/agents/skills/agents/SKILL.md": "a124fbbf7f5ad088ee35819abd2a57d151497678"
       },
       "summary": "Operational shell of the agent library \u2014 plugin manifest, /agents skill, structural validator",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-agents-references.md": {
       "generator": "cartographer/2",
@@ -121,7 +121,7 @@
         "plugins/agents/references/tool-audit.md": "b16db34d0e9301d6a9177aab1bb9a49cd664549c"
       },
       "summary": "Contract docs for the shared agent library \u2014 roster catalog, design quality bar, spawn protocol, tool audit",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-atlas-agent-overrides.md": {
       "generator": "cartographer/2",
@@ -137,7 +137,7 @@
         "plugins/atlas/agent-overrides/map-verifier-context.md": "7233cde0eb20367f4f0bd64eed2858d387df7839"
       },
       "summary": "Atlas-specific constraint injections that narrow shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-atlas-chunk-1.md": {
       "generator": "cartographer/2",
@@ -150,7 +150,7 @@
         "plugins/atlas/README.md": "d229efbe05ad7e06be39004ef215089c6a66e509"
       },
       "summary": "Atlas plugin identity and user-facing documentation \u2014 marketplace registration and README",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-atlas-chunk-2.md": {
       "generator": "cartographer/2",
@@ -169,7 +169,7 @@
         "plugins/atlas/skills/atlas/SKILL.md": "db3276b24a74ac636026ebf545de22482603c5ff"
       },
       "summary": "atlas-cli Python binary, router shell shim, session-start hook, and SKILL.md orchestrator",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-atlas-references.md": {
       "generator": "cartographer/2",
@@ -188,7 +188,7 @@
         "plugins/atlas/references/update-protocol.md": "e4ea365fd75652c4dd8a1e782f2e16042c728cd4"
       },
       "summary": "Normative canon for atlas \u2014 design rationale, map file format, full-map and update orchestration, CLAUDE.md delivery",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-atlas-tests-chunk-1.md": {
       "generator": "cartographer/2",
@@ -214,14 +214,13 @@
         "plugins/atlas/tests/test-lock.sh": "9b6c39e83aab4b0db326b19e51dd4111553d463b"
       },
       "summary": "Bash test harness for atlas-cli \u2014 fixture helpers, assertion primitives, and subcommand test suites",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-atlas-tests-chunk-2.md": {
       "generator": "cartographer/2",
       "module": "plugins/atlas/tests (chunk 2)",
       "references_modules": [
-        "plugins-atlas-chunk-2",
-        "plugins-atlas-tests-chunk-1"
+        "plugins-atlas-chunk-2"
       ],
       "sources": {
         "plugins/atlas/tests/test-partition.sh": "4671fae665fdc132eabd409016d982e10c51501e",
@@ -232,7 +231,7 @@
         "plugins/atlas/tests/test-verify-cache.sh": "75505fe992ce5ec73dff0eb3c070eca5d0a0510b"
       },
       "summary": "Scenario test files for partition, scan, status, update-flow, repair, and verify-cache",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-council.md": {
       "generator": "cartographer/2",
@@ -254,7 +253,7 @@
         "plugins/council/skills/council-vote/evals/evals.json": "1023d8902ccef3f0bbefb50eedbb9e92debe984d"
       },
       "summary": "3-member sub-agent voting council that settles delegated judgment calls with a full audit trail",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-deployit-assets.md": {
       "generator": "cartographer/2",
@@ -278,7 +277,7 @@
         "plugins/deployit/assets/product.template.html": "1262e6f64dfb9b2abe10d9736524c8cbc18c9dc2"
       },
       "summary": "Static payload for deployit \u2014 xcodebuild export plists, OTA install web UI templates, PWA shell, config seed",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-deployit-bin.md": {
       "generator": "cartographer/2",
@@ -294,15 +293,14 @@
         "plugins/deployit/bin/deployit-router.sh": "344168329e019299a535c6e7c327e726f0cb5d03"
       },
       "summary": "Deployit's executable core \u2014 bash router, build/publish CLI, OTA install-page backend",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-deployit-misc.md": {
       "generator": "cartographer/2",
       "module": "plugins/deployit (misc)",
       "references_modules": [
         "plugins-deployit-bin",
-        "plugins-deployit-references",
-        "plugins-deployit-tests-chunk-2"
+        "plugins-deployit-references"
       ],
       "sources": {
         "plugins/deployit/.claude-plugin/plugin.json": "3a91c808b94584bbdad0de0e9a980992708382d5",
@@ -331,7 +329,7 @@
         "plugins/deployit/references/visionos.md": "3773ae52396c5b6df79ce4d8926f2412fe4eca3d"
       },
       "summary": "Per-concern procedure docs behind /deployit \u2014 setup, platform deploys, proxy, semver bump guard, recovery",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-deployit-tests-chunk-1.md": {
       "generator": "cartographer/2",
@@ -358,7 +356,7 @@
         "plugins/deployit/tests/test-bootstrap-dirs.sh": "fcb3b27daa351b0cba8db9cd480d2b35677662d1"
       },
       "summary": "Sandboxed bash tests pinning deployit's backend HTTP surface, CLI bootstrap, and the test runner",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-deployit-tests-chunk-2.md": {
       "generator": "cartographer/2",
@@ -382,7 +380,7 @@
         "plugins/deployit/tests/verify-live.sh": "ac91a62908f8dc436f6a358bf5dbc11d2c31163b"
       },
       "summary": "CLI-focused tests pinning deployit redeploy, gc, metadata extraction, macOS staging, and the live-deploy gate",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-forge-agent-overrides.md": {
       "generator": "cartographer/2",
@@ -400,7 +398,7 @@
         "plugins/forge/agent-overrides/validator-context.md": "6c5cdda4751783942cd670dab20b4ca42bb065b3"
       },
       "summary": "Forge-only constraint blocks appended to shared agent definitions at spawn time",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-forge-bin.md": {
       "generator": "cartographer/2",
@@ -425,7 +423,7 @@
         "plugins/forge/bin/forge-step-exit.sh": "3266bf2642e68d13caeb57060be61bb1fdeae442"
       },
       "summary": "Forge's deterministic shell layer \u2014 artifact-driven state machine, status, prechecks, step-exit, archives",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-forge-hooks.md": {
       "generator": "cartographer/2",
@@ -441,7 +439,7 @@
         "plugins/forge/hooks/session-stop.sh": "fd33f5ce7ea769d4d07a3814bc85887d2281b5f5"
       },
       "summary": "Forge session-lifecycle hooks \u2014 inject resume context on SessionStart, checkpoint a running pipeline on Stop",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-forge-misc.md": {
       "generator": "cartographer/2",
@@ -454,7 +452,7 @@
         "plugins/forge/README.md": "1ce02e4c6294d5613a305d8487b42132d669a063"
       },
       "summary": "Forge's plugin manifest and README \u2014 plugin identity plus the user-facing contract for the idea-to-deployment pipeline",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-forge-references.md": {
       "generator": "cartographer/2",
@@ -485,7 +483,7 @@
         "plugins/forge/references/verification-protocol.md": "d8bc49795bc4f87f355994db97a5b084ba2c82be"
       },
       "summary": "Normative protocol docs forge skills follow \u2014 execution loop, handoffs, locking, severity levels, storyhook usage",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-forge-skills.md": {
       "generator": "cartographer/2",
@@ -514,7 +512,7 @@
         "plugins/forge/skills/validate/SKILL.md": "85336f6fd87b68c30526b9ef28a39da2e0c1c464"
       },
       "summary": "Forge skill layer \u2014 /forge state-machine router plus 11 step skills driving idea-to-deploy via .forge/ artifacts",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-freshen.md": {
       "generator": "cartographer/2",
@@ -532,7 +530,7 @@
         "plugins/freshen/skills/freshen/SKILL.md": "2f8f3decc4a8cae565bc1833ddab55e249d81abd"
       },
       "summary": "Automatic context clearing \u2014 queues /clear + re-invocation between workflow phases via tmux send-keys",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-greenlight.md": {
       "generator": "cartographer/2",
@@ -547,7 +545,7 @@
         "plugins/greenlight/skills/greenlight/SKILL.md": "248805d9ec6de9e782e2b43f02d02ba0018640a4"
       },
       "summary": "PreToolUse safety hook \u2014 three-tier Bash triage (deterministic allow/warn, AI fallback), per-mode disable",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-hook-guard.md": {
       "generator": "cartographer/2",
@@ -563,7 +561,7 @@
         "plugins/hook-guard/lib/stop-guard.sh": "3cde01ee73b5e599e062fc0f11e74f1912886b13"
       },
       "summary": "Shared Stop-hook circuit breaker \u2014 sourced stop_guard_check halts runaway hook loops; SessionStart re-arms it",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-rca.md": {
       "generator": "cartographer/2",
@@ -584,7 +582,7 @@
         "plugins/rca/skills/rca/SKILL.md": "c5271dfc51b0450cc67a901b66fc599a53601e88"
       },
       "summary": "Five-phase root cause analysis plugin \u2014 symptom intake through verified remediation, artifact-driven state",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-semver-hooks.md": {
       "generator": "cartographer/2",
@@ -600,7 +598,7 @@
         "plugins/semver/hooks/session-start.sh": "06001ae4a74cdc1564994c65103723d9544a2b58"
       },
       "summary": "Semver's Claude Code hook layer \u2014 session version context, git-push bump nudges, pre/post-bump hook runner",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-semver-misc.md": {
       "generator": "cartographer/2",
@@ -617,7 +615,7 @@
         "plugins/semver/skills/semver/SKILL.md": "d55b2177ff24c350b85121b63a30700a6267d4a2"
       },
       "summary": "Deterministic versioning core \u2014 JSON Python CLI, bash router, thin /semver orchestrator skill",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-semver-references.md": {
       "generator": "cartographer/2",
@@ -637,7 +635,7 @@
         "plugins/semver/references/user-hooks.md": "b8909535d97ccea22cb97d62b935a12cd57f77ad"
       },
       "summary": "Normative contracts for semver artifacts \u2014 config, changelog, archive, locking, validation, hooks, CLAUDE.md block",
-      "verified": null
+      "verified": true
     },
     "modules/plugins-semver-tests.md": {
       "generator": "cartographer/2",
@@ -661,7 +659,7 @@
         "plugins/semver/tests/test-router.sh": "9981ff4600c847f5fdafc76be727dd5375d49606"
       },
       "summary": "Mock-free bash harness driving semver's real hook runner, CLI, and router in throwaway /tmp git repos",
-      "verified": null
+      "verified": true
     },
     "modules/root-misc.md": {
       "generator": "cartographer/2",
@@ -693,7 +691,7 @@
         "docs/forge-workflow.md": "829219590927e60d40bc6b2e7d19bbedba22613d"
       },
       "summary": "Repo wiring layer \u2014 marketplace plugin registry, agent instructions, pre-push test gate, artifact conventions",
-      "verified": null
+      "verified": true
     },
     "modules/tests.md": {
       "generator": "cartographer/2",
@@ -708,7 +706,7 @@
         "tests/state-machine.bats": "b48e1c7812e0bb44c8ba4f41fdcb1d901f1a0b01"
       },
       "summary": "Root bats suite pinning the pilot/storyhook state-machine file contracts via self-built temp-repo fixtures",
-      "verified": null
+      "verified": true
     }
   },
   "paths": {
@@ -1033,7 +1031,6 @@
       "modules/plugins-atlas-chunk-2.md"
     ],
     "plugins-atlas-tests-chunk-1": [
-      "modules/plugins-atlas-tests-chunk-2.md",
       "modules/root-misc.md"
     ],
     "plugins-council": [
@@ -1063,7 +1060,6 @@
     ],
     "plugins-deployit-tests-chunk-2": [
       "modules/plugins-deployit-bin.md",
-      "modules/plugins-deployit-misc.md",
       "modules/plugins-deployit-tests-chunk-1.md"
     ],
     "plugins-forge-agent-overrides": [

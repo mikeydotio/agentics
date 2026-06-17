@@ -22,6 +22,7 @@ sources:
 references_modules: [plugins-deployit-assets, plugins-deployit-bin, plugins-deployit-misc, plugins-semver-misc]
 generator: cartographer/2
 baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
+verified: true
 ---
 
 # Module: plugins/deployit/references

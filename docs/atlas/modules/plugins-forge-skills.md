@@ -30,6 +30,7 @@ sources:
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-forge-agent-overrides, plugins-forge-bin, plugins-forge-references, plugins-freshen]
 generator: cartographer/2
 baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
+verified: true
 ---
 
 # Module: plugins/forge/skills

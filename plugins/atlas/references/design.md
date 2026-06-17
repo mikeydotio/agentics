@@ -31,6 +31,8 @@ contributor needs day-to-day is here.
 | 15 | Format | Rigid identical section anchors in every module doc (the "grep API"); tables for inventories; relationship edge lists one-per-line; no Mermaid; alphabetical ordering; no volatile content in bodies |
 | 16 | Agents | Shared `cartographer` + `map-verifier` in `plugins/agents/agents/` + `plugins/atlas/agent-overrides/` |
 | 17 | SKILL model | `model: inherit` (pinned small-model skills overflow long sessions) |
+| 18 | Cartographer model | `cartographer` + overview spawns pinned to `sonnet[1m]` (Sonnet 1M-context) via the SKILL.md Agent-assembly rule — NOT a `model:` on the shared agent (would leak to forge/rca/council and is inert for atlas's by-reference spawn). `map-verifier` stays default. Generator fingerprint left `cartographer/1` (model not recorded → no forced regeneration of the existing map) |
+| 19 | Branch isolation | `/atlas map`/`update` run on an `atlas/<op>-<short-sha>` branch via `atlas-cli branch ensure` (idempotent; refuses mid-merge; handles detached/unborn HEAD), with per-wave checkpoint commits. End-of-run stays on the branch with a suggested merge (Option A — atlas never switches/merges for you). Lock + blob-SHA staleness are branch-agnostic by design |
 
 ### Why blob SHAs, not a baseline commit
 
@@ -55,6 +57,33 @@ Any two branches that both ran `/atlas update` will conflict on INDEX.md. The IN
 therefore assembled mechanically from per-doc frontmatter (`summary`, `read_when`)
 plus the `<!-- atlas:index-facts -->` block in `overview/ARCHITECTURE.md` — resolving
 a conflict means rebuilding, never hand-merging. Same for `atlas-ledger.json`.
+
+### Why cartographers run on Sonnet 1M (and the `[1m]` caveat)
+
+A cartographer ingests a whole module's source plus its role/override/format docs and
+must hold it all coherently — the 1M-context window gives big modules headroom, and
+Sonnet is the right cost tier for a 30-agent fan-out (Opus would be wasteful, and the
+verifier already provides an independent check on a different model). The pin lives on
+the `Agent()` spawn (the orchestrator delivers the role by reference, so a `model:` on
+the shared `cartographer.md` would be inert and would also bind forge/rca/council). The
+`[1m]` suffix is a Claude Code harness routing token, not an API model id; if a build
+doesn't honor it the agent still runs on Sonnet, just at the default window — intent
+preserved, nothing breaks. The generator fingerprint deliberately stays `cartographer/1`
+(model not recorded): recording it would flag every existing doc fingerprint-stale and
+force a one-time full remap, which the model change alone does not warrant — the new
+model simply applies to future cartographer work (run `/atlas map` to rebuild on it).
+
+### Why mapping runs on a branch
+
+`/atlas map`/`update` write many docs across several waves before the lint-gated final
+commit. A crash or re-run mid-flow could clobber already-completed module docs in the
+working tree. Running on a dedicated `atlas/<op>-<short-sha>` branch with per-wave
+checkpoint commits makes every completed wave recoverable from git and keeps the user's
+working branch clean until they choose to merge. Branching is safe for the ledger
+precisely because invalidation is content-addressed (blob SHAs), not ancestry-based —
+the same reason rebases and shallow clones don't faze it. Atlas stays on the branch and
+suggests a merge rather than switching/merging for you (Option A), consistent with the
+"CLI owns every git mutation, never surprise the working tree" discipline.
 
 ## Target repo layout (what atlas creates in a mapped project)
 

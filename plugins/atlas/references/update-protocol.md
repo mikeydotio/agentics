@@ -81,6 +81,15 @@ Full remap → `lock release`, switch to `mapping-protocol.md`. Abort →
 Below 50%: proceed WITHOUT a gate. The plan presentation is the
 transparency; updates must stay low-friction or the map rots.
 
+On any path that will actually write (incremental-anyway, or the below-50%
+no-gate path) — but **not** full remap (it hands off to `mapping-protocol.md`,
+which branches there) and **not** abort — isolate the run before the first
+mutation in step 4: `... branch ensure --op update`. On `ok: false`
+(`mid_merge` / `no_commits`; both already ruled out by step 0, so this is
+belt-and-suspenders), surface the message, `lock release`, stop. Otherwise keep
+`branch` / `base_branch` / `base_sha` for the checkpoints and the report.
+Idempotent — a no-op if a prior step already left you on an `atlas/*` branch.
+
 ## 4 — Mechanical phase (no LLM)
 
 1. `... doc apply-renames` — rewrites pure-renamed source paths in doc
@@ -95,7 +104,9 @@ transparency; updates must stay low-friction or the map rots.
 ## 5 — Regeneration waves
 
 Build the regen set, deduplicating docs that appear in several classes
-(one regeneration, modes combined):
+(one regeneration, modes combined). Spawn every cartographer in both waves on
+Sonnet's 1M-context model — `Agent()` model `sonnet[1m]` (SKILL.md §Agent
+prompt assembly is normative):
 
 - **Anchored** (prior doc is trustworthy): stale docs, ripple docs,
   `to_existing` assignment targets.
@@ -126,9 +137,13 @@ produces that id — proceed without the symbol table and say so in the
 assignment.
 
 **Wave order**: wave A (stale + fresh) first, in waves of ≤8 foreground
-`Agent()` calls; `lock heartbeat` after each wave. Wave B (ripple) only
-after wave A completes. Ripple assignments are anchored but get no diffpack —
-their own sources didn't change. Instead `<files_to_read>` includes the
+`Agent()` calls; after each wave `lock heartbeat`, then checkpoint —
+`... commit --message "docs(atlas): checkpoint — regen wave A"` (raw doc bytes;
+never finalize/index/lint at a checkpoint; this also sweeps up the step-4
+mechanical rename/remove mutations). Wave B (ripple) only after wave A
+completes, checkpointed the same way
+(`docs(atlas): checkpoint — regen wave B`). Ripple assignments are anchored but
+get no diffpack — their own sources didn't change. Instead `<files_to_read>` includes the
 UPDATED docs of the `via` modules, and the assignment says: update only
 statements about those modules; if a referenced module was removed, drop its
 edges and remove it from `references_modules`.
@@ -138,24 +153,26 @@ edges and remove it from `references_modules`.
 1. `... ledger finalize --refresh-hashes --generator "cartographer/1"`.
    On `invalid_frontmatter` / `duplicate_source` / `missing_source`:
    re-spawn the offending cartographer(s) ONCE with the error appended.
-   A second failure aborts: report, `lock release`, NO commit.
+   A second failure aborts: report, `lock release`, no final commit.
 2. Verify wave (≤8, foreground) over every regenerated doc AND every
    apply-renames-rewritten doc — `mapping-protocol.md` §4 rules apply:
    lenient verdict parse (last `{...}` object), `pass: false` → ONE anchored
-   regeneration with the verdict's `failures` array, finalize again,
-   re-verify. Persistent failure → record, move on.
-3. `... ledger set-verified <doc-id> true|false` per verified doc.
+   regeneration (cartographer on `sonnet[1m]`) with the verdict's `failures`
+   array, finalize again, re-verify. Persistent failure → record, move on.
+3. `... ledger set-verified <doc-id> true|false` per verified doc, then
+   checkpoint: `... commit --message "docs(atlas): checkpoint — verified docs"`.
 
 ## 7 — Overview pass
 
 If any module doc was regenerated, added, or removed: regenerate
-`overview/ARCHITECTURE.md` — one cartographer, anchored (prior overview +
-the changed/added module docs in `<files_to_read>`, plus the names of
-removed docs). Its `sources` must list ALL current module docs — a removed
+`overview/ARCHITECTURE.md` — one cartographer on `sonnet[1m]`, anchored (prior
+overview + the changed/added module docs in `<files_to_read>`, plus the names
+of removed docs). Its `sources` must list ALL current module docs — a removed
 module doc would otherwise leave a dead source path that fails the final
 finalize. `scopes` stay the mapped top-level directories and NEVER a
 directory that contains `docs/atlas` (self-referential staleness); add new
-top-level directories introduced by new modules.
+top-level directories introduced by new modules. Then checkpoint:
+`... commit --message "docs(atlas): checkpoint — overview"`.
 
 No module doc changed → skip; the overview stays byte-identical.
 
@@ -168,12 +185,13 @@ No module doc changed → skip; the overview stays byte-identical.
    — hashes the set-verified stamps and the overview's final bytes.
 3. `... index rebuild` — on `index_over_budget`: ask the overview agent once
    to shorten index-facts, rebuild; still over → abort with the breakdown,
-   `lock release`, no commit.
-4. `... lint` — ERRORs → regenerate the offending docs ONCE (anchored, with
-   the lint findings as correction input), then finalize + index rebuild +
-   lint again, re-verifying anything regenerated (step 6 rules). Persistent
-   ERRORs → abort: report, `lock release`, NO commit — a map that fails lint
-   is never committed. L5/L6/L7 WARNs go in the summary, unfixed.
+   `lock release`, no final commit.
+4. `... lint` — ERRORs → regenerate the offending docs ONCE (cartographer on
+   `sonnet[1m]`, anchored, with the lint findings as correction input), then
+   finalize + index rebuild + lint again, re-verifying anything regenerated
+   (step 6 rules). Persistent
+   ERRORs → abort: report, `lock release`, no final commit — a lint-failing map
+   is never finalized. L5/L6/L7 WARNs go in the summary, unfixed.
 
 ## 9 — Commit, release, report
 
@@ -186,6 +204,11 @@ No module doc changed → skip; the overview stays byte-identical.
    budget, the dirty-files note from step 2 if any, and the hash-gating
    statement: unchanged docs were never touched (`git show --stat` of the
    map commit proves it).
+3. Lead with the branch handoff (Option A — atlas never switches your branch or
+   merges for you): the update is committed on `<branch>` (from `<base_branch>`
+   at `<base_sha>`); merge with
+   `git switch <base_branch> && git merge --no-ff <branch>` — or open a PR. Your
+   working branch sees the update only after you merge.
 
 ## Verify flow (`/atlas verify`)
 
@@ -219,10 +242,17 @@ never hand-merging, and never `merge=union`.
 
 ## Failure discipline
 
-- Any abort path: `lock release` first; partial docs stay ON DISK
-  uncommitted (status reports the drift tier until fixed or reverted).
-- Never `git add -A`, never commit outside `atlas-cli commit`.
+- All update work happens on the isolated `atlas/*` branch created in step 3.
+  Checkpoint commits there are crash-recovery save-points, not validated maps.
+- Any abort path: `lock release` first. Checkpointed docs remain committed on
+  the `atlas/*` branch — report the branch name and that it is **not** merged.
+  Your working branch is untouched, so a crash or re-run cannot clobber a good
+  committed map. Inspect the branch, re-run `/atlas update`, or delete it.
+- A lint-failing map is never **finalized**: the canonical final commit (step 9)
+  and the suggested merge are gated on lint passing (step 8). Checkpoints are
+  exempt — disposable branch state.
+- Never `git add -A`; commit only via `atlas-cli commit`; switch branches only
+  via `atlas-cli branch ensure`.
 - Never fabricate or hand-edit map content in the orchestrator — mechanical
   mutations go through `doc apply-renames` / `doc remove`, prose through
   cartographers.
-- A map that fails lint is never committed.

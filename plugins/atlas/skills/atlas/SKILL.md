@@ -16,9 +16,9 @@ yourself.
 ## Hard Rules
 
 1. Route ALL deterministic work through the router — scan, partition, ground,
-   ledger, index, lint, status, lock, commit, init, remove. Never reimplement
-   any of it inline, and never edit INDEX.md or atlas-ledger.json by hand
-   (they are derived; rebuild them).
+   ledger, index, lint, status, lock, commit, branch, init, remove. Never
+   reimplement any of it inline, and never edit INDEX.md or atlas-ledger.json
+   by hand (they are derived; rebuild them).
 2. Only cartographer agents write map docs. You assemble their prompts from
    the shared agent definition + atlas override + assignment; you never
    compose doc content.
@@ -27,7 +27,9 @@ yourself.
 4. All agents run in the foreground. "In parallel" means multiple `Agent()`
    calls in a single message (max 8); never `run_in_background`.
 5. Never `git add -A` or commit outside `atlas-cli commit` (pathspec-scoped,
-   refuses mid-merge).
+   refuses mid-merge). `map`/`update` writes happen on an `atlas/*` branch
+   created via `atlas-cli branch ensure`; never create or switch branches by
+   hand, and leave the user on that branch at the end (atlas never merges).
 6. When the router returns `ok: false`, surface its `message`/`display` and
    stop — after releasing the lock if this flow acquired it.
 7. Locks: acquire before any flow that writes map files; release on EVERY
@@ -56,6 +58,19 @@ naming the role, the assignment block the protocol specifies, and a
 
 Cartographers return confirmations, not content — never read map docs into
 your own context except where a protocol step explicitly requires it.
+
+**Cartographer model.** Spawn every cartographer `Agent()` — the module
+mappers, the overview cartographer, and every anchored/fresh regeneration — on
+Sonnet's 1M-context model by setting the spawned agent's model to `sonnet[1m]`.
+This is the single normative statement; the protocols only echo it. It applies
+**only** to cartographer spawns from this skill: it does not modify the shared
+`cartographer.md` definition (kept model-agnostic so forge/rca/council are
+unaffected), and it does not change this skill's own `model: inherit` (a pinned
+model on a long-running orchestrator overflows its window). Map-verifier spawns
+are **not** pinned — they stay on the default model, where an independent model
+is a feature for a cross-check, not a regression. (`[1m]` selects Sonnet's
+1M-context window; if a build does not honor the suffix the agent still runs on
+Sonnet, just at the default window.)
 
 ## References
 

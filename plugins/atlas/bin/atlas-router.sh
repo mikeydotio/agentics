@@ -56,6 +56,9 @@ case "$cmd" in
     commit)
         run_cli commit "$@"
         ;;
+    branch)
+        run_cli branch "$@"
+        ;;
     init)
         run_cli init
         ;;

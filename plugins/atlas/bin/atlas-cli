@@ -1530,6 +1530,84 @@ def cmd_commit(args):
     return emit_ok(committed=True, sha=sha)
 
 
+# ─── branch (isolate map work on an atlas/* branch) ──────────────────────────
+#
+# Mapping runs on a dedicated `atlas/<op>-<short-sha>` branch so checkpoint
+# commits never touch the user's working branch and a crash/re-run cannot
+# clobber an already-good committed map. Idempotent: a flow already on an
+# atlas/* branch (resume/re-entry) gets a no-op. Refuses mid-merge for the same
+# reason `commit` does — git can't isolate a partial state mid-merge.
+
+ATLAS_BRANCH_PREFIX = "atlas/"
+
+
+def git_current_branch(root):
+    """Short branch name for HEAD, or None when detached or unborn."""
+    code, out = run_git(["symbolic-ref", "-q", "--short", "HEAD"], cwd=root)
+    if code != 0:
+        return None
+    return out.decode("utf-8", errors="replace").strip()
+
+
+def git_branch_exists(root, name):
+    code, _ = run_git(
+        ["show-ref", "--verify", "--quiet", "refs/heads/{}".format(name)],
+        cwd=root)
+    return code == 0
+
+
+def cmd_branch_ensure(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    code, _ = run_git(["rev-parse", "-q", "--verify", "MERGE_HEAD"], cwd=root)
+    if code == 0:
+        return emit_fail(
+            "mid_merge",
+            "A merge is in progress — finish or abort it before mapping so "
+            "atlas can isolate the run on its own branch.",
+        )
+
+    head_sha = git_head(root)
+    if head_sha is None:
+        return emit_fail(
+            "no_commits",
+            "The repository has no commits yet — create an initial commit "
+            "before mapping.",
+        )
+
+    current = git_current_branch(root)
+
+    # Already on an atlas branch → idempotent no-op so a resumed or re-entered
+    # flow does not stack atlas/map-… on atlas/map-….
+    if current is not None and current.startswith(ATLAS_BRANCH_PREFIX):
+        return emit_ok(branch=current, created=False, base_branch=None,
+                       base_sha=head_sha, detached=False)
+
+    # Deterministic name tied to the base commit; a numeric suffix keeps a
+    # sequential re-run (same base sha, prior branch still around) distinct
+    # instead of resuming a possibly half-finished branch.
+    detached = current is None
+    base = "{}{}-{}".format(ATLAS_BRANCH_PREFIX, args.op, head_sha[:7])
+    name = base
+    suffix = 2
+    while git_branch_exists(root, name):
+        name = "{}-{}".format(base, suffix)
+        suffix += 1
+
+    # `checkout -b` roots the new branch at the current commit (works from a
+    # detached HEAD too) and carries any dirty working-tree state along — the
+    # about-to-be-written map docs travel onto the isolated branch.
+    code, _, err = run_git_capture(["checkout", "-b", name], cwd=root)
+    if code != 0:
+        return emit_fail(
+            "branch_failed", err.decode("utf-8", errors="replace").strip())
+
+    return emit_ok(branch=name, created=True, base_branch=current,
+                   base_sha=head_sha, detached=detached)
+
+
 # ─── init / remove (CLAUDE.md managed block + gitignore wiring) ──────────────
 
 CLAUDE_MD_START = "<!-- atlas:start -->"
@@ -2426,6 +2504,14 @@ def main():
     commit.add_argument("--also", action="append", default=[],
                         help="Additional path to include (repeatable)")
 
+    branch = sub.add_parser("branch", help="Isolate map work on an atlas/* branch")
+    branch_sub = branch.add_subparsers(dest="branch_command")
+    branch_ensure = branch_sub.add_parser(
+        "ensure", help="Create/switch to the atlas working branch")
+    branch_ensure.add_argument(
+        "--op", choices=["map", "update"], default="map",
+        help="Operation naming the branch (atlas/<op>-<sha>)")
+
     sub.add_parser("init", help="Inject the CLAUDE.md block + gitignore entry")
     sub.add_parser("remove", help="Remove the CLAUDE.md block")
 
@@ -2473,6 +2559,11 @@ def main():
         return cmd_ground(args)
     if args.command == "commit":
         return cmd_commit(args)
+    if args.command == "branch":
+        if args.branch_command == "ensure":
+            return cmd_branch_ensure(args)
+        emit_fail("usage", "Unknown branch command. Available: ensure.")
+        return 2
     if args.command == "init":
         return cmd_init(args)
     if args.command == "remove":
@@ -2480,7 +2571,7 @@ def main():
 
     emit_fail("usage", "Unknown or missing subcommand. Available: scan, "
               "partition, ledger, lock, status, index, lint, ground, "
-              "commit, init, remove.")
+              "commit, branch, init, remove.")
     return 2
 
 

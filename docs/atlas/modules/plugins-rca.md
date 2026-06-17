@@ -1,97 +1,87 @@
 ---
 module: plugins/rca
-summary: "Root cause analysis pipeline — five phases from symptom intake to verified remediation plan"
-read_when: "Touching the /rca skill, phase artifacts (.rca/<slug>/), references, or agent overrides"
+summary: Five-phase root cause analysis plugin — symptom intake through verified remediation, artifact-driven state
+read_when: Touching the /rca skill, phase artifacts (.rca/<slug>/), references, or agent overrides
 sources:
   - path: plugins/rca/.claude-plugin/plugin.json
-    blob: 454504e821d1a1c2cce7377572811e62205a91ec
   - path: plugins/rca/README.md
-    blob: 65f996dd8e8f6f0627b43e7f2ddab8b68dd21b3b
   - path: plugins/rca/agent-overrides/architect-rca.md
-    blob: 6c5765aa64e41195c3841b0775d1847fa4359c31
   - path: plugins/rca/agent-overrides/investigator-rca.md
-    blob: 85ff269974b4953c0687a67583763f5f734c334f
   - path: plugins/rca/bin/rca-status.sh
-    blob: cbadac1feae9bd9f334eb9c03240664c43d7563f
   - path: plugins/rca/references/architectural-patterns.md
-    blob: b167fb9a7ba41edd6b8c4fe215fbbaf7bfb262d3
   - path: plugins/rca/references/rca-methodology.md
-    blob: a1711e6a044250dd1297f62b7382a107086990f6
   - path: plugins/rca/references/symptom-vs-root-cause.md
-    blob: 7163bcfd24f1d5fe21ce30c56cb4b943441f2ca3
   - path: plugins/rca/skills/rca/SKILL.md
-    blob: c5271dfc51b0450cc67a901b66fc599a53601e88
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/2
 ---
 
 # Module: plugins/rca
 
 ## Purpose
 
-Root cause analysis pipeline: bug report in, verified structural remediation plan out.
-The /rca skill orchestrates; shared agents investigate under RCA-specific override prompts.
-The design bet: phase artifacts in .rca/<slug>/ ARE the pipeline state and its resume points.
-Registered as plugin "rca" (plugins/rca/.claude-plugin/plugin.json:2).
+Provides the `/rca` skill: a five-phase orchestrated investigation that traces a reported bug from
+observed symptom to a verified structural root cause, then designs a remediation addressing the
+cause rather than masking it. The governing principle — "treat the disease, not the symptom" — is
+enforced mechanically: evidence precedes hypothesis, multiple competing hypotheses are required, and
+every proposed fix is stress-tested against anti-pattern checks before the user approves it. If
+this plugin vanished, the project would have no structured methodology for non-superficial bug
+diagnosis.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `rca` | skill | `plugins/rca/skills/rca/SKILL.md:2` | `/rca [symptom]`; phases 1 and 5 interactive, phases 2-4 delegated to one spawned agent |
-| `RCA Override: Investigator` | agent override | `plugins/rca/agent-overrides/investigator-rca.md:1` | Phase 2 layer on shared investigator: git forensics + architecture analysis, read-only, facts only; subsumes code-archaeologist and systems-analyst |
-| `RCA Override: Software Architect` | agent override | `plugins/rca/agent-overrides/architect-rca.md:1` | Phase 5 layer on shared software-architect: designs the structural fix, never edits source; replaces remediation-architect |
-| `rca-status.sh` | bash script | `plugins/rca/bin/rca-status.sh:2` | `rca-status.sh [rca-dir]` → JSON of investigations with status, summary, AskUserQuestion options |
+| `rca` | skill | `plugins/rca/skills/rca/SKILL.md:2` | `/rca [symptom]`; resumes from `.rca/<slug>/` artifacts or starts Phase 1 fresh |
+| `rca-status.sh` | bash script | `plugins/rca/bin/rca-status.sh:2` | `rca-status.sh [rca-dir]` → JSON `{ok, count, investigations}` with status and AskUserQuestion options |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `Architectural Root Cause Patterns` | reference doc | `plugins/rca/references/architectural-patterns.md:1` | Seven structural bug patterns with detection checklist; phase 4 matches the verified cause against them |
-| `RCA Methodology Reference` | reference doc | `plugins/rca/references/rca-methodology.md:1` | 5 Whys, Fishbone, Fault Tree, Kepner-Tregoe — the technique kit phase 3 hypothesis chains follow |
-| `Symptom vs Root Cause Heuristics` | reference doc | `plugins/rca/references/symptom-vs-root-cause.md:1` | Symptom indicators and verification tests gating phase 4 verification and phase 5 fix checks |
+| `investigator-rca.md` | agent override | `plugins/rca/agent-overrides/investigator-rca.md:1` | Extends shared investigator with dual Phase 2 focus: git forensics AND architecture analysis; enforces read-only and facts-only constraints |
+| `architect-rca.md` | agent override | `plugins/rca/agent-overrides/architect-rca.md:1` | Extends shared software-architect for Phase 5 remediation design; adds anti-pattern self-check table and write-to-`.rca/`-only constraint |
+| `rca-methodology.md` | reference | `plugins/rca/references/rca-methodology.md:1` | 5 Whys, Fishbone, Fault Tree, Kepner-Tregoe — the technique kit Phase 3 hypothesis chains must follow |
+| `symptom-vs-root-cause.md` | reference | `plugins/rca/references/symptom-vs-root-cause.md:1` | Heuristic tests distinguishing symptoms from root causes; Phase 4 verification and Phase 5 fix checks both apply them |
+| `architectural-patterns.md` | reference | `plugins/rca/references/architectural-patterns.md:1` | Seven structural bug pattern archetypes with detection checklist; Phase 4 matches verified cause against them |
 
 ## Relationships
 
-- `plugins-rca.rca -> plugins-agents-agents-chunk-2.investigator (calls)`
-- `plugins-rca.rca -> plugins-agents-agents-chunk-1.evidence-collector (calls)`
-- `plugins-rca.rca -> plugins-agents-agents-chunk-1.hypothesis-challenger (calls)`
-- `plugins-rca.rca -> plugins-agents-agents-chunk-2.software-architect (calls)`
-- `plugins-rca.investigator-rca -> plugins-agents-agents-chunk-2.investigator (extends)`
-- `plugins-rca.architect-rca -> plugins-agents-agents-chunk-2.software-architect (extends)`
-- `plugins-rca.rca -> plugins-rca.rca-status.sh (calls)`
-- `plugins-rca.rca -> plugins-rca.rca-methodology (reads)`
-- `plugins-rca.rca -> plugins-rca.symptom-vs-root-cause (reads)`
-- `plugins-rca.rca -> plugins-rca.architectural-patterns (reads)`
+- `plugins-rca.rca -> plugins-agents-agents-chunk-2.investigator (calls)` — `plugins/rca/skills/rca/SKILL.md:208` spawns `plugins/agents/agents/investigator.md` for Phase 2
+- `plugins-rca.rca -> plugins-agents-agents-chunk-1.evidence-collector (calls)` — `plugins/rca/skills/rca/SKILL.md:214` spawns `plugins/agents/agents/evidence-collector.md` for Phases 2 and 3
+- `plugins-rca.rca -> plugins-agents-agents-chunk-1.hypothesis-challenger (calls)` — `plugins/rca/skills/rca/SKILL.md:375` spawns `plugins/agents/agents/hypothesis-challenger.md` for Phase 4
+- `plugins-rca.rca -> plugins-agents-agents-chunk-2.software-architect (calls)` — `plugins/rca/skills/rca/SKILL.md:481` spawns `plugins/agents/agents/software-architect.md` for Phase 5
+- `plugins-rca.investigator-rca.md -> plugins-agents-agents-chunk-2.investigator (extends)` — `plugins/rca/agent-overrides/investigator-rca.md:1` is applied on top of the shared investigator at spawn time
+- `plugins-rca.architect-rca.md -> plugins-agents-agents-chunk-2.software-architect (extends)` — `plugins/rca/agent-overrides/architect-rca.md:1` is applied on top of the shared software-architect at spawn time
+- `plugins-rca.rca -> plugins-rca.rca-status.sh (calls)` — `plugins/rca/skills/rca/SKILL.md:31` calls the script on every invocation to detect existing investigations
 
 ## Type notes
 
-- Artifacts are the only state (plugins/rca/skills/rca/SKILL.md:589).
-- Each investigation lives in gitignored .rca/<slug>/ (plugins/rca/README.md:43).
-- Slug: 3-5 hyphenated words from the bug description (plugins/rca/skills/rca/SKILL.md:130).
-- Phases 1-3 write SYMPTOM.md, EVIDENCE.md, HYPOTHESES.md (plugins/rca/README.md:47-49).
-- Phases 4-5 write VERIFICATION.md, REMEDIATION.md (plugins/rca/README.md:50-51).
-- VERIFICATION.md is the investigation-complete signal (plugins/rca/skills/rca/SKILL.md:195).
-- Phase 2 writes INCONCLUSIVE.md when no evidence is found (plugins/rca/skills/rca/SKILL.md:222).
-- Phase 4 writes INCONCLUSIVE.md when all hypotheses fail (plugins/rca/skills/rca/SKILL.md:392).
-- REMEDIATION=reviewed, VERIFICATION=complete, else running (plugins/rca/bin/rca-status.sh:34-40).
-- Summary = first body line of SYMPTOM.md, max 120 chars (plugins/rca/bin/rca-status.sh:46).
-- Phases 1 and 5 are interactive; 2-4 run in a spawned agent (plugins/rca/skills/rca/SKILL.md:173).
-- Phases 2-4 never touch source; writes go to .rca/<slug>/ (plugins/rca/skills/rca/SKILL.md:192).
+**Artifact-as-state contract**: The five phases are checkpointed entirely by files in `.rca/<slug>/`.
+`rca-status.sh` derives phase from artifact presence: `REMEDIATION.md` → reviewed, `VERIFICATION.md`
+→ complete, neither → running (`plugins/rca/bin/rca-status.sh:34–39`). Resume on re-invocation is free.
+
+**Agent override pattern**: RCA spawns shared agents with override files applied on top.
+`investigator-rca.md` and `architect-rca.md` add phase-specific context and constraints without
+forking the shared definitions (`plugins/rca/skills/rca/SKILL.md:208–210`, `481–482`).
+
+**Phase 2 parallelism**: Investigator and evidence-collector are spawned simultaneously
+(`plugins/rca/skills/rca/SKILL.md:205`). The orchestrator synthesizes their results into
+`EVIDENCE.md` before Phase 3 begins.
+
+**Inconclusive exits**: Phase 2 and Phase 4 each have explicit exit ramps that write
+`INCONCLUSIVE.md` and halt (`plugins/rca/skills/rca/SKILL.md:222–232`, `390–405`). Halted
+investigations surface on next `/rca` invocation via `rca-status.sh`, but note: `rca-status.sh`
+has no `INCONCLUSIVE.md` branch — these show as `running` status (`plugins/rca/bin/rca-status.sh:34–40`).
 
 ## External deps
 
-- jq — assembles all rca-status.sh JSON output (plugins/rca/bin/rca-status.sh:11).
-- git — log/blame/diff/bisect forensics (plugins/rca/agent-overrides/investigator-rca.md:16).
-- tar — optional archive of finished investigations (plugins/rca/skills/rca/SKILL.md:576).
-- Claude Code AskUserQuestion tool — one question per call (plugins/rca/skills/rca/SKILL.md:19).
-- Claude Code Agent tool — runs phases 2-4 out-of-band (plugins/rca/skills/rca/SKILL.md:172).
+- `jq` — all JSON assembly in `rca-status.sh` (`plugins/rca/bin/rca-status.sh:11`)
+- `git` — log/blame/diff/bisect forensics during Phase 2 (`plugins/rca/agent-overrides/investigator-rca.md:16`)
+- `tar` — optional archive of completed investigations (`plugins/rca/skills/rca/SKILL.md:576`)
 
 ## Gotchas
 
-- rca-status.sh never checks INCONCLUSIVE.md (plugins/rca/bin/rca-status.sh:34-40).
-- Inconclusive runs show as running, contra SKILL.md (plugins/rca/skills/rca/SKILL.md:232).
-- "complete" still awaits remediation; "reviewed" means done (plugins/rca/bin/rca-status.sh:34-37).
-- README's team roles are roles, not agent files (plugins/rca/README.md:17-23).
+- `rca-status.sh` shows inconclusive investigations as `running` because it only checks for `REMEDIATION.md` and `VERIFICATION.md` (`plugins/rca/bin/rca-status.sh:34–40`).
+- Phase 5 (Remediation) is not triggered automatically after Phase 4 completes — it only runs when the user re-invokes `/rca` and selects "Review [slug]" (`plugins/rca/skills/rca/SKILL.md:43`).
+- Investigative agents in Phases 2–4 must not write outside `.rca/<slug>/`; this is enforced via the investigation prompt constraint (`plugins/rca/skills/rca/SKILL.md:192`), not a hard tool restriction.

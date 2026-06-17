@@ -4,23 +4,14 @@ summary: "Normative contracts for semver artifacts — config, changelog, archiv
 read_when: "Changing semver file formats, bump/validate/hook contracts, or the CLAUDE.md block"
 sources:
   - path: plugins/semver/references/archive-format.md
-    blob: 19e8d809d697e0eff37c2ba2859189966d5c1a85
   - path: plugins/semver/references/changelog-format.md
-    blob: 9a19b979419d9c82c6498374f09f447ce28f0648
   - path: plugins/semver/references/claude-md-injection.md
-    blob: e2de01106a3e3a54eab381facc3cacb0e089d2cd
   - path: plugins/semver/references/config-schema.md
-    blob: 097ecc3495c8566e0458f0f3b7e49ab220a8a7e2
   - path: plugins/semver/references/file-locking.md
-    blob: b8ac09df7a2d89649f2c7c5e46a0d6ba79353c51
   - path: plugins/semver/references/sync-validation.md
-    blob: 1100011114eb836ee91e61945651835351cc0e1d
   - path: plugins/semver/references/user-hooks.md
-    blob: b8909535d97ccea22cb97d62b935a12cd57f77ad
 references_modules: [plugins-semver-hooks, plugins-semver-misc, root-misc]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/2
 ---
 
 # Module: plugins/semver/references
@@ -58,12 +49,12 @@ docs for the contracts, `semver-cli` for the mechanics.
 
 ## Relationships
 
-- `plugins-semver-hooks.post-push-check.sh -> plugins-semver-references.config-schema.md (conforms-to)`
+- `plugins-semver-hooks.post-push-check.sh -> plugins-semver-references.config-schema.md (reads)`
 - `plugins-semver-hooks.run-user-hooks.sh -> plugins-semver-references.user-hooks.md (implements)`
-- `plugins-semver-hooks.session-start.sh -> plugins-semver-references.config-schema.md (conforms-to)`
+- `plugins-semver-hooks.session-start.sh -> plugins-semver-references.config-schema.md (reads)`
 - `plugins-semver-hooks.session-start.sh -> plugins-semver-references.sync-validation.md (implements)`
 - `plugins-semver-misc.README.md -> plugins-semver-references.user-hooks.md (reads)`
-- `plugins-semver-misc.SKILL.md -> plugins-semver-references.user-hooks.md (conforms-to)`
+- `plugins-semver-misc.SKILL.md -> plugins-semver-references.user-hooks.md (reads)`
 - `plugins-semver-misc.semver-cli -> plugins-semver-references.archive-format.md (implements)`
 - `plugins-semver-misc.semver-cli -> plugins-semver-references.changelog-format.md (implements)`
 - `plugins-semver-misc.semver-cli -> plugins-semver-references.claude-md-injection.md (implements)`
@@ -71,7 +62,7 @@ docs for the contracts, `semver-cli` for the mechanics.
 - `plugins-semver-misc.semver-cli -> plugins-semver-references.file-locking.md (implements)`
 - `plugins-semver-misc.semver-cli -> plugins-semver-references.sync-validation.md (implements)`
 - `plugins-semver-misc.semver-cli -> plugins-semver-references.user-hooks.md (implements)`
-- `root-misc.CLAUDE.md -> plugins-semver-references.claude-md-injection.md (conforms-to)`
+- `root-misc.CLAUDE.md -> plugins-semver-references.claude-md-injection.md (reads)`
 
 ## Type notes
 

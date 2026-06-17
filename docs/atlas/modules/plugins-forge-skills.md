@@ -4,33 +4,19 @@ summary: "Forge skill layer — /forge state-machine router plus 11 step skills 
 read_when: "Changing forge pipeline steps, .forge/ artifacts, routing, or freshen/step-exit handoffs"
 sources:
   - path: plugins/forge/skills/decompose/SKILL.md
-    blob: 3249c4147869ea1f2d6db65ccf0794236280e491
   - path: plugins/forge/skills/deploy/SKILL.md
-    blob: 7edc7603ad97eeb10ef3d6d832e75fb1aa4080c9
   - path: plugins/forge/skills/design/SKILL.md
-    blob: 7fbb4a709f5ce22a3a1a180e9145112530614088
   - path: plugins/forge/skills/document/SKILL.md
-    blob: 4047df8107d7a86c2e1d74e03dc1097a7ecb00d2
   - path: plugins/forge/skills/execute/SKILL.md
-    blob: 281bcfd7a2fcf4e4fd4a145558c7bdc2416c3eec
   - path: plugins/forge/skills/forge/SKILL.md
-    blob: cc8b1715710e2d20c14e785a99fb46df714c5673
   - path: plugins/forge/skills/interrogate/SKILL.md
-    blob: f7d7b94f1cc5cf6adfa7b6f7f1f7a1156c7e1eb6
   - path: plugins/forge/skills/plan/SKILL.md
-    blob: d9cf6c05ef00ad0f90b9a7cefd6f41c789cf4e0a
   - path: plugins/forge/skills/research/SKILL.md
-    blob: b8f37ff44dbf23e6809e6388d990ac6c67b00ce2
   - path: plugins/forge/skills/review/SKILL.md
-    blob: 7c9a3c691da2e92cecb2ca0543f70a1b974f9c84
   - path: plugins/forge/skills/triage/SKILL.md
-    blob: f4a3a022b00861b0d73d7ca04555bf842f188e59
   - path: plugins/forge/skills/validate/SKILL.md
-    blob: 85336f6fd87b68c30526b9ef28a39da2e0c1c464
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-forge-bin, plugins-forge-references, plugins-freshen]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-forge-agent-overrides, plugins-forge-bin, plugins-forge-references, plugins-freshen]
+generator: cartographer/2
 ---
 
 # Module: plugins/forge/skills
@@ -75,8 +61,8 @@ step starts in cleared context and the pipeline resumes from artifacts alone.
 - `plugins-forge-skills.forge -> plugins-freshen.freshen.sh (calls)`
 - `plugins-forge-skills.execute -> plugins-freshen.freshen.sh (calls)`
 - `plugins-forge-skills.execute -> plugins-forge-references.execution-loop.md (reads)`
-- `plugins-forge-skills.execute -> plugins-agents-agents-chunk-1.generator.md (reads)`
-- `plugins-forge-skills.execute -> plugins-agents-agents-chunk-1.evaluator.md (reads)`
+- `plugins-forge-skills.execute -> plugins-forge-agent-overrides.generator (calls)`
+- `plugins-forge-skills.execute -> plugins-forge-agent-overrides.evaluator (calls)`
 - `plugins-forge-skills.research -> plugins-agents-agents-chunk-1.domain-researcher (calls)`
 - `plugins-forge-skills.design -> plugins-agents-agents-chunk-2.software-architect (calls)`
 - `plugins-forge-skills.plan -> plugins-agents-agents-chunk-2.project-manager (calls)`
@@ -87,11 +73,13 @@ step starts in cleared context and the pipeline resumes from artifacts alone.
 
 ## Type notes
 
-- `.forge/` artifact presence is the sole routing state (plugins/forge/skills/forge/SKILL.md:152).
-- Review and validate: later finisher queues freshen (plugins/forge/skills/review/SKILL.md:94).
-- FIX items re-enter plan; at cap they become ESCALATE (plugins/forge/skills/triage/SKILL.md:70).
-- Generator never commits; evaluator cannot edit (plugins/forge/skills/execute/SKILL.md:31-32).
-- TEAM.md gates conditional agents in design and review (plugins/forge/skills/design/SKILL.md:28).
+- `.forge/` artifact presence is the sole routing state (`plugins/forge/skills/forge/SKILL.md:152`).
+- Review and validate: later finisher queues freshen (`plugins/forge/skills/review/SKILL.md:94`).
+- FIX items re-enter plan; at cap they become ESCALATE (`plugins/forge/skills/triage/SKILL.md:70`).
+- Generator never commits; evaluator cannot edit (`plugins/forge/skills/execute/SKILL.md:31`).
+- TEAM.md gates conditional agents in design and review (`plugins/forge/skills/design/SKILL.md:28`).
+- Generator and evaluator spawn as `general-purpose` subagents (`plugins/forge/skills/execute/SKILL.md:101`).
+- DEPLOY-APPROVAL.md is written only by the orchestrator's deploy-permission gate, never by a step skill (`plugins/forge/skills/forge/SKILL.md:194`).
 
 ## External deps
 
@@ -101,7 +89,6 @@ step starts in cleared context and the pipeline resumes from artifacts alone.
 
 ## Gotchas
 
-- `devils-advocate` is a role, not a shared agent file (plugins/forge/skills/design/SKILL.md:25).
-- Same applies to `senior-engineer` and `ux-designer` (plugins/forge/skills/forge/SKILL.md:304,306).
-- Role docs: plugins/forge/references/team-roles.md (plugins/forge/skills/forge/SKILL.md:19).
-- Generator/evaluator spawn as `general-purpose` (plugins/forge/skills/execute/SKILL.md:101).
+- `devils-advocate` is a role, not a shared agent file (`plugins/forge/skills/design/SKILL.md:25`).
+- Same applies to `senior-engineer` and `ux-designer` (`plugins/forge/skills/forge/SKILL.md:304`).
+- Role docs: `plugins/forge/references/team-roles.md` (`plugins/forge/skills/forge/SKILL.md:19`).

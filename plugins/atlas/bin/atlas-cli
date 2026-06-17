@@ -129,8 +129,39 @@ def git_listed_files(root):
 # scalars, and lists of {key: value} maps (for `modules:`). Comments and blank
 # lines are skipped. Anything fancier is unsupported — see design.md.
 
+def strip_inline_comment(s):
+    """Strip a trailing ` # comment` from a YAML-subset value — but never
+    inside quotes or `[...]`, and only when the `#` follows whitespace, so a
+    quoted value that legitimately contains `#` (e.g. a `read_when` of
+    "Touching the C# bridge", or a quoted glob) survives byte-for-byte. Only
+    whole-line comments were stripped before this; an inline `# …` after a
+    list item used to become part of the value and silently break globs."""
+    out, quote, depth, i = [], None, 0, 0
+    while i < len(s):
+        c = s[i]
+        if quote:
+            out.append(c)
+            if c == quote:
+                quote = None
+        elif c in ('"', "'"):
+            quote = c
+            out.append(c)
+        elif c == "[":
+            depth += 1
+            out.append(c)
+        elif c == "]":
+            depth = max(0, depth - 1)
+            out.append(c)
+        elif c == "#" and depth == 0 and (i == 0 or s[i - 1] in " \t"):
+            break
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out).rstrip()
+
+
 def parse_scalar(s):
-    s = s.strip()
+    s = strip_inline_comment(s.strip())
     if s.startswith("[") and s.endswith("]"):
         inner = s[1:-1].strip()
         return [parse_scalar(x) for x in inner.split(",")] if inner else []
@@ -1887,6 +1918,34 @@ def parse_symbol_tables(body):
     return rows
 
 
+ALLOWED_EDGE_VERBS = {"calls", "implements", "conforms-to", "extends",
+                      "emits", "owns", "reads", "writes"}
+
+# `<lhs> -> <rhs> (<verb>)` captured inside a backtick span; a trailing
+# ` — `path:line`` citation after the closing backtick is outside the match
+# and ignored. The verb group accepts any non-`)`/backtick run so an
+# out-of-grammar verb (e.g. `builds`, `depends-on`) is still captured for L13.
+RELATIONSHIP_EDGE_RE = re.compile(
+    r"`([^`]+?)\s*->\s*([^`]+?)\s*\(([^)`]+)\)`")
+
+
+def parse_relationship_edges(body):
+    """(lhs, rhs, verb) tuples from the `## Relationships` section."""
+    edges = []
+    in_section = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            in_section = stripped == "## Relationships"
+            continue
+        if not in_section or not stripped.startswith("-"):
+            continue
+        m = RELATIONSHIP_EDGE_RE.search(stripped)
+        if m:
+            edges.append((m.group(1), m.group(2), m.group(3).strip()))
+    return edges
+
+
 def lint_map(root, fast=False):
     findings = []
 
@@ -1963,6 +2022,9 @@ def lint_map(root, fast=False):
                 file_text_cache[relpath] = None
         return file_text_cache[relpath]
 
+    valid_module_ids = {doc_module_id(d["doc_id"]) for d in docs
+                        if d["doc_id"].startswith("modules/")}
+
     for doc in docs:
         doc_file = "docs/atlas/" + doc["doc_id"]
         body = doc["body"]
@@ -2029,8 +2091,15 @@ def lint_map(root, fast=False):
                     continue  # dead path already flagged by L6
                 if not re.search(WORDISH_BOUNDARY.format(re.escape(symbol)),
                                  content):
-                    add("L7", "WARN", doc_file,
-                        "symbol `{}` not found in `{}`".format(symbol, relpath))
+                    # The format blesses fully-qualified `Type.member` and
+                    # arg-labelled `func(a:b:)` symbol names; fall back to the
+                    # bare trailing identifier before declaring it missing.
+                    bare = symbol.rsplit(".", 1)[-1].split("(", 1)[0].strip()
+                    if not (bare and bare != symbol and re.search(
+                            WORDISH_BOUNDARY.format(re.escape(bare)), content)):
+                        add("L7", "WARN", doc_file,
+                            "symbol `{}` not found in `{}`".format(
+                                symbol, relpath))
 
         # L8 — intra-map links resolve
         for match in LINK_RE.finditer(body):
@@ -2052,6 +2121,40 @@ def lint_map(root, fast=False):
                 if anchor not in slugs:
                     add("L8", "WARN", doc_file,
                         "anchor `#{}` not found in `{}`".format(anchor, file_part))
+
+        # L12 — references_modules entries resolve to real module docs. A
+        # dangling id silently breaks ripple invalidation (referenced_by is
+        # keyed off these), so it is an ERROR the orchestrator regenerates.
+        if doc["doc_id"].startswith("modules/"):
+            for ref in doc["fm"].get("references_modules") or []:
+                if str(ref) not in valid_module_ids:
+                    add("L12", "ERROR", doc_file,
+                        "references_modules entry `{}` is not an existing "
+                        "module doc id".format(ref))
+
+        # L13 — relationship edge verbs are in the allowed grammar set.
+        if doc["doc_id"].startswith("modules/"):
+            for _lhs, _rhs, verb in parse_relationship_edges(body):
+                if verb not in ALLOWED_EDGE_VERBS:
+                    add("L13", "ERROR", doc_file,
+                        "relationship edge verb `{}` is not allowed (use one "
+                        "of {})".format(
+                            verb, ", ".join(sorted(ALLOWED_EDGE_VERBS))))
+
+        # L14 — INDEX-budget hygiene: over-length read_when / summary feed the
+        # budget-capped INDEX (see L9). WARN, not ERROR — a long line bloats
+        # the INDEX but never makes the map lie.
+        read_when = doc["fm"].get("read_when")
+        if (doc["doc_id"].startswith("modules/")
+                and isinstance(read_when, str) and len(read_when) > 90):
+            add("L14", "WARN", doc_file,
+                "read_when is {} chars, over the 90-char limit".format(
+                    len(read_when)))
+        summary = doc["fm"].get("summary")
+        if isinstance(summary, str) and len(summary) > 120:
+            add("L14", "WARN", doc_file,
+                "summary is {} chars, over the 120-char limit".format(
+                    len(summary)))
 
     # L5 — coverage: mappable files no module doc draws from
     scan = do_scan(root, enforce_ceiling=False)

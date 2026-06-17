@@ -215,3 +215,185 @@ test_lint_fast_skips_body_checks() {
 
     cleanup_fixture_repo "$repo"
 }
+
+# --- L12: references_modules must resolve to real module docs ---
+
+test_lint_l12_flags_dangling_reference() {
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/auth"
+    printf 'class AuthService {}\n' > "$repo/src/auth/auth.swift"
+    write_full_module_doc "$repo" "src-auth" "src/auth" "AuthService" \
+        "src/auth/auth.swift" "ghost-module"
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+
+    run_atlas "$repo" lint
+    assert_exit_code 1 "$EXIT_CODE" "dangling reference fails lint" || return 1
+    assert_json_contains "$OUTPUT" '[.errors[].check]' "L12" "L12 fired" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_lint_l12_accepts_valid_reference() {
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/auth" "$repo/src/db"
+    printf 'class AuthService {}\n' > "$repo/src/auth/auth.swift"
+    printf 'class Database {}\n' > "$repo/src/db/db.swift"
+    write_full_module_doc "$repo" "src-auth" "src/auth" "AuthService" \
+        "src/auth/auth.swift" "src-db"
+    write_full_module_doc "$repo" "src-db" "src/db" "Database" \
+        "src/db/db.swift"
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+
+    run_atlas "$repo" lint
+    assert_json_field "$OUTPUT" '[.errors[] | select(.check == "L12")] | length' "0" \
+        "valid cross-reference is not an L12 finding" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+# --- L13: relationship edge verbs must be in the allowed grammar set ---
+
+test_lint_l13_flags_bad_verb() {
+    local repo
+    repo=$(_lint_fixture)
+    local doc="$repo/docs/atlas/modules/src-auth.md"
+    python3 - "$doc" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p).read()
+open(p, "w").write(t.replace("(calls)", "(builds)"))
+PY
+
+    run_atlas "$repo" lint
+    assert_exit_code 1 "$EXIT_CODE" "out-of-grammar verb fails lint" || return 1
+    assert_json_contains "$OUTPUT" '[.errors[].check]' "L13" "L13 fired" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_lint_l13_allows_known_verb_with_trailing_citation() {
+    local repo
+    repo=$(_lint_fixture)
+    local doc="$repo/docs/atlas/modules/src-auth.md"
+    # Valid verb, then a `path:line` citation after the closing backtick: the
+    # verb is captured inside the backtick span, so the citation is ignored.
+    python3 - "$doc" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p).read().replace(
+    "-> external.none (calls)`",
+    "-> external.none (reads)` — `src/auth/auth.swift:1`")
+open(p, "w").write(t)
+PY
+
+    run_atlas "$repo" lint
+    assert_json_field "$OUTPUT" '[.errors[] | select(.check == "L13")] | length' "0" \
+        "known verb with trailing citation is not an L13 finding" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+# --- L7: qualified Type.member / arg-labelled symbols ---
+
+test_lint_l7_accepts_qualified_symbol() {
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/log"
+    printf 'class RollingLog {\n  func stream() {}\n}\n' > "$repo/src/log/log.swift"
+    write_full_module_doc "$repo" "src-log" "src/log" "RollingLog.stream" \
+        "src/log/log.swift"
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+
+    run_atlas "$repo" lint
+    assert_json_field "$OUTPUT" '[.warnings[] | select(.check == "L7")] | length' "0" \
+        "qualified Type.member resolves via the bare identifier" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_lint_l7_still_flags_truly_missing_symbol() {
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/log"
+    printf 'class Real {}\n' > "$repo/src/log/log.swift"
+    write_full_module_doc "$repo" "src-log" "src/log" "Ghost.missing" \
+        "src/log/log.swift"
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+
+    run_atlas "$repo" lint
+    assert_json_contains "$OUTPUT" '[.warnings[].check]' "L7" \
+        "genuinely missing qualified symbol still flagged" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+# --- L14: over-length read_when / summary (WARN, never gates) ---
+
+test_lint_l14_warns_overlong_read_when() {
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/auth"
+    printf 'class AuthService {}\n' > "$repo/src/auth/auth.swift"
+    write_full_module_doc "$repo" "src-auth" "src/auth" "AuthService" \
+        "src/auth/auth.swift"
+    local doc="$repo/docs/atlas/modules/src-auth.md"
+    # Force read_when over 90 chars BEFORE finalize/rebuild so the INDEX is
+    # built from the long line (keeps L10 reconciliation clean).
+    python3 - "$doc" <<'PY'
+import re, sys
+p = sys.argv[1]
+long_rw = "Touching " + "x" * 100
+t = re.sub(r'^read_when:.*$', 'read_when: "%s"' % long_rw,
+           open(p).read(), count=1, flags=re.M)
+open(p, "w").write(t)
+PY
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+
+    run_atlas "$repo" lint
+    assert_json_field "$OUTPUT" '.ok' "true" "over-length read_when is a warning" || return 1
+    assert_json_contains "$OUTPUT" '[.warnings[].check]' "L14" "L14 fired" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+# --- fast mode excludes the new body/frontmatter checks ---
+
+test_lint_fast_skips_new_checks() {
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/auth"
+    printf 'class AuthService {}\n' > "$repo/src/auth/auth.swift"
+    write_full_module_doc "$repo" "src-auth" "src/auth" "AuthService" \
+        "src/auth/auth.swift" "ghost-module"
+    local doc="$repo/docs/atlas/modules/src-auth.md"
+    python3 - "$doc" <<'PY'
+import sys
+p = sys.argv[1]
+t = open(p).read()
+open(p, "w").write(t.replace("(calls)", "(builds)"))
+PY
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+
+    run_atlas "$repo" lint --fast
+    assert_json_field "$OUTPUT" '.fast' "true" "fast mode" || return 1
+    assert_json_field "$OUTPUT" '[.errors[] | select(.check == "L12")] | length' "0" \
+        "fast skips L12" || return 1
+    assert_json_field "$OUTPUT" '[.errors[] | select(.check == "L13")] | length' "0" \
+        "fast skips L13" || return 1
+
+    cleanup_fixture_repo "$repo"
+}

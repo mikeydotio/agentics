@@ -213,7 +213,9 @@ No module doc changed → skip; the overview stays byte-identical.
 
 ## Verify flow (`/atlas verify`)
 
-A read-only diagnostic — no lock, no writes, no regeneration:
+A read-only diagnostic of the MAP — no lock, no regeneration, no doc rewrites.
+It refreshes ONE gitignored state file (`.atlas/verify.json`) so `/atlas repair`
+can reuse the findings, exactly as `status` refreshes its drift cache:
 
 1. `... lint` (full) → findings by severity.
 2. `... ledger diff` → staleness context. A stale doc failing verification
@@ -221,10 +223,147 @@ A read-only diagnostic — no lock, no writes, no regeneration:
 3. map-verifier sweep over all module docs (waves ≤8, sample 5 claims each),
    verdicts go to the REPORT ONLY. Do NOT run `set-verified` here: stamping
    rewrites module docs, which would stale the overview's hashed sources
-   from inside a flow that promised not to write. Verdict stamps belong to
-   the map and update flows.
-4. Report: lint findings, verdict table, staleness coupling, and the
-   recommended action (`/atlas update`, or `/atlas map` past the 50% line).
+   from inside a flow that promised not to rewrite docs. Verdict stamps belong
+   to the map and update flows.
+4. `... verify-cache write` — pipe the collected verdicts (the JSON array of
+   per-doc map-verifier verdicts) on stdin. The CLI recomputes lint, the diff,
+   the HEAD and the repo fingerprint itself and persists them alongside the
+   verdicts to `.atlas/verify.json`. This is the flow's only write and it
+   touches gitignored state, not the map.
+5. Report: lint findings, verdict table, staleness coupling, and the
+   recommended action (`/atlas repair` for wrong-but-fixable claims, `/atlas
+   update` for drift, or `/atlas map` past the 50% line).
+
+## Repair flow (`/atlas repair`)
+
+Verify, then surgically fix what verification flagged — WITHOUT re-deriving whole
+docs. Update is driven by the ledger diff (code changed → regenerate the whole
+doc); repair is driven by verify FINDINGS (a doc makes specific wrong claims →
+correct or delete exactly those). The fixer is the **map-repairer** agent
+(Read/Grep/Glob/Edit): it may run a targeted search to resolve one flagged claim,
+but never re-surveys a module or adds un-flagged content — that is update's job.
+
+Same load-bearing rules as update — every mutation precedes the FINAL `ledger
+finalize`; verification/`set-verified` runs before the index/overview tail — plus
+two repair-specific rules:
+
+- A drift doc (its source changed) gets its flagged claims fixed too, but its
+  recorded source blobs must NOT advance — it stays flagged for `/atlas update`,
+  which alone captures newly-added code. `ledger finalize --except <drift ids>`
+  enforces this (R5, the Ledger rule).
+- Repair never re-derives: no `diffpack`, no `ground`, no source files in agent
+  read-sets, no `doc apply-renames` / `doc remove` (renames/orphans are drift).
+
+### R0 — Preflight
+As update §0: `status` (`mapped: false` → offer `/atlas map`, stop); `MERGE_HEAD`
+check (stop mid-merge); `... lock acquire --holder atlas-repair` (every abort path
+`lock release` first).
+
+### R1 — Acquire findings (reuse or verify)
+1. `... verify-cache read`. `valid: true` → reuse `cache.lint`, `cache.diff`,
+   `cache.verdicts`; tell the user you are reusing the verification from
+   `cache.timestamp`. `valid: false` (`stale_reason` `absent` / `version` /
+   `fingerprint`) → say so and re-verify fresh.
+2. Re-verify fresh = verify's body inline (`... lint` full, `... ledger diff`,
+   map-verifier waves ≤8 sampling 5 claims, on the DEFAULT model), then
+   `... verify-cache write` (verdicts on stdin) to persist for next time.
+3. If `ledger diff` fails with `invalid_frontmatter`, the map can't be
+   classified — a corrupt doc must be regenerated, not repaired. Report "run
+   `/atlas update` (it quarantines and regenerates corrupt docs)", `lock
+   release`, stop.
+
+### R2 — Plan (fix vs defer)
+Partition the findings:
+
+| Bucket | Findings | Repair does |
+|---|---|---|
+| MECHANICAL | L9/L10 (INDEX), L4/L11 (ledger drift) | `index rebuild` / `ledger finalize` — no agent |
+| FIXER | per-doc flagged claims on any doc (clean OR drift): L6/L7/L8/L12/L13/L14, verifier `failures` | one `map-repairer` per doc |
+| DEFER | L5 coverage, L2 conflict markers, unparsable frontmatter, any fix needing a section rewrite / re-rank | report "run `/atlas update`" / "`/atlas map`" — repair does NOT fix |
+
+Mark which FIXER docs are **drift** (present in the diff's `stale_docs ∪
+renamed_docs ∪ orphaned_docs ∪ fingerprint_stale ∪ ripple_docs`): they are fixed
+AND reported for `/atlas update`. Present the plan — per doc, what is fixed and
+how, plus the DEFER list. If nothing is FIXER and no MECHANICAL fix would change
+anything (clean map, or every finding defers): report and stop — no branch,
+`lock release`.
+
+### R3 — Branch + mechanical phase (no LLM)
+Only if R2 will write a map file: `... branch ensure --op repair` (→
+`atlas/repair-<sha>`; idempotent on an existing `atlas/*` branch). Then, if L9/L10
+present, `... index rebuild`; `... lock heartbeat`. No `doc apply-renames` / `doc
+remove` — renames and orphans are drift, which repair defers.
+
+### R4 — Fixer waves
+One `map-repairer` per FIXER doc, foreground, waves ≤8, on the DEFAULT model
+(SKILL.md §Agent prompt assembly). Per-doc prompt = the standard preamble +
+assignment:
+
+- repo root; the doc path (read AND write target); whether the doc is drift.
+- the doc's findings verbatim — each lint finding (`check`, `message`) and each
+  verifier failure (`claim`, `evidence`, `severity`).
+- `<files_to_read>`: `map-repairer.md`, `map-repairer-context.md`,
+  `map-format.md`, then the doc — and NOTHING else (no diffpack, no ground, no
+  source files; the agent greps on demand).
+
+After the wave: `... lock heartbeat`, checkpoint `... commit --message
+"docs(atlas): checkpoint — repair fixes"`. Single wave — repair re-derives
+nothing, so there is no wave-A/B ripple ordering.
+
+### R5 — Finalize (the Ledger rule)
+`... ledger finalize --refresh-hashes --except <drift-doc-ids>`.
+
+- WHY `--except`: a body fix on a drift doc must not advance its recorded source
+  blobs, or finalize would mark it current and hide it from `status` / `update`
+  despite still needing full re-derivation. Excepted docs keep their stale blobs
+  (still flagged); every other doc — clean docs (a no-op re-hash) and the overview
+  (which re-hashes the now-changed module-doc bytes, body byte-identical) —
+  refreshes, so a repair that touched only clean docs settles to tier 0.
+- On `invalid_frontmatter` / `duplicate_source` / `missing_source`: re-spawn the
+  offending `map-repairer` ONCE with the error appended; second failure aborts
+  (`lock release`, no final commit).
+
+### R6 — Re-verify touched docs
+map-verifier waves (≤8) over every doc `map-repairer` edited; lenient verdict
+parse. `pass: false` → ONE more `map-repairer` pass with the new failures, then
+finalize (same `--except`) and re-verify; persistent failure → `... ledger
+set-verified <id> false`, record, move on. `... ledger set-verified <id> true`
+for the rest, then checkpoint `... commit --message "docs(atlas): checkpoint —
+repair verified"`.
+
+### R7 — Wire and finalize (mirrors update §8)
+1. Init repair only if the CLAUDE.md block or `.atlas/` gitignore entry is
+   missing → `... init`.
+2. FINAL `... ledger finalize --refresh-hashes --except <drift-doc-ids>`.
+3. `... index rebuild` — on `index_over_budget`, run ONE `map-repairer` pass on
+   `overview/ARCHITECTURE.md` with the over-budget facts framed as an L9 finding
+   to shorten them (keeps the no-explore guarantee), rebuild; still over → abort.
+4. `... lint` (full) — remaining ERRORs → ONE more `map-repairer` pass on the
+   offending docs, finalize + index rebuild + lint again; persistent ERRORs →
+   abort (`lock release`, no final commit — a lint-failing map is never
+   finalized). Deferred L5/L6/L7 WARNs go in the summary unfixed.
+
+### R8 — Commit, release, report
+1. `... commit --message "docs(atlas): repair map (<N> docs — <short cause>)"`
+   (`--also CLAUDE.md --also .gitignore` only if R7 ran init).
+2. `... lock release`, then the summary: docs repaired by finding type, the DRIFT
+   docs fixed-and-still-flagged with "run `/atlas update`", the DEFER list, INDEX
+   chars vs budget, and the no-explore statement (repair edited only flagged
+   claims; drift was deferred, not papered over).
+3. Branch handoff (Option A, as update §9.3): committed on `atlas/repair-<sha>`
+   from `<base_branch>`; merge with `git switch <base_branch> && git merge
+   --no-ff <branch>` or open a PR. Your working branch sees the repair only after
+   you merge.
+
+### Where repair differs from update
+- Driven by verify findings, not the ledger diff.
+- `map-repairer` (Read/Grep/Glob/Edit, targeted search) instead of cartographer
+  (full re-derivation). No diffpack, no ground, no source files in read-sets.
+- No `doc apply-renames` / `doc remove`; renames and orphans are drift → defer.
+- An R1 reuse-or-verify front phase and an R2 fix-vs-defer partition update lacks.
+- `ledger finalize --except` keeps drift docs flagged after a body fix.
+- No cascade overview regeneration — the overview's hashes refresh mechanically in
+  R5/R7; its prose changes only if it was itself a FIXER target.
 
 ## Conflict resolution recipe (for humans)
 

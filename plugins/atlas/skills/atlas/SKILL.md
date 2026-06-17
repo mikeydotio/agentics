@@ -1,7 +1,7 @@
 ---
 name: atlas
-description: Use when the user wants a committed markdown map of the codebase for agentic tools, or to refresh one. Generates docs/atlas/ (token-budgeted INDEX + per-module type/relationship docs) and keeps it current via git-aware incremental updates. Commands are /atlas status, /atlas map, /atlas update, /atlas verify, /atlas init, and /atlas remove.
-argument-hint: [status | map | update | verify | init | remove]
+description: Use when the user wants a committed markdown map of the codebase for agentic tools, or to refresh one. Generates docs/atlas/ (token-budgeted INDEX + per-module type/relationship docs) and keeps it current via git-aware incremental updates. Commands are /atlas status, /atlas map, /atlas update, /atlas verify, /atlas repair, /atlas init, and /atlas remove.
+argument-hint: [status | map | update | verify | repair | init | remove]
 model: inherit
 ---
 
@@ -43,6 +43,7 @@ yourself.
 | `/atlas map` | Full map. Read `references/mapping-protocol.md` and `references/map-format.md`, then follow the protocol exactly — step order is load-bearing. |
 | `/atlas update` | Incremental update. Read `references/update-protocol.md` and `references/map-format.md`, then follow the protocol exactly. |
 | `/atlas verify` | Lint + verification sweep without regeneration. Read `references/update-protocol.md` (Verify flow section). |
+| `/atlas repair` | Verify-then-fix: correct the specific claims verification flagged, WITHOUT re-exploring. Reuses a prior `/atlas verify` when still valid; defers drift to `/atlas update`. Read `references/update-protocol.md` (Repair flow section). |
 | `/atlas init` | Run `init` via the router (CLAUDE.md block + gitignore), show what changed, and remind that `/atlas map` creates the map itself. See `references/claude-md-injection.md`. |
 | `/atlas remove` | Confirm intent via AskUserQuestion, then run `remove` via the router and report. Map files are left on disk; say so. |
 
@@ -68,7 +69,9 @@ This is the single normative statement; the protocols only echo it. It applies
 unaffected), and it does not change this skill's own `model: inherit` (a pinned
 model on a long-running orchestrator overflows its window). Map-verifier spawns
 are **not** pinned — they stay on the default model, where an independent model
-is a feature for a cross-check, not a regression. (`[1m]` selects Sonnet's
+is a feature for a cross-check, not a regression. Map-repairer spawns (the repair
+flow) likewise stay on the default model and run foreground in waves ≤8: their
+work is one doc plus targeted greps, not a 1M-context survey. (`[1m]` selects Sonnet's
 1M-context window; if a build does not honor the suffix the agent still runs on
 Sonnet, just at the default window.)
 

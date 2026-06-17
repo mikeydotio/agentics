@@ -33,7 +33,8 @@ a SessionStart hook warns agents when the map drifts from the code.
 | `/atlas map` | Full map: scan, partition, spawn cartographer agents, verify, lint — on an `atlas/*` branch, checkpointed per wave, final commit gated on lint |
 | `/atlas update` | Incremental: regenerate only stale/affected docs; mechanical rename rewrites; orphan removal — same branch + checkpoint flow |
 | `/atlas status` | Mapped? How stale? Current tier and which docs drifted |
-| `/atlas verify` | Read-only diagnostic: full lint + sampled claim verification, report only — no writes |
+| `/atlas verify` | Read-only diagnostic: full lint + sampled claim verification, report only — no map writes (refreshes a gitignored verify cache for `/atlas repair`) |
+| `/atlas repair` | Verify-then-fix: correct the specific claims verify flagged (wrong line, path, verb, relationship, dead link) without re-exploring; reuses a prior `/atlas verify`; defers drift to `/atlas update` |
 | `/atlas init` | (Re)inject the managed CLAUDE.md block and the `.atlas/` gitignore entry |
 | `/atlas remove` | Strip the CLAUDE.md block; map files stay on disk until you delete them |
 
@@ -220,9 +221,20 @@ overwritten on the next rebuild and flagged by lint (L10) until then. Edit
 the module docs (or better: let the cartographers do it) and rebuild.
 
 **What does `verify` do that `update` doesn't?**
-Nothing destructive — that's the feature. It lints, reports staleness, and
-samples claims from every module doc against the code, writing a report and
-changing nothing. Use it to audit a map you didn't generate.
+Nothing destructive to the map — that's the feature. It lints, reports
+staleness, and samples claims from every module doc against the code, changing
+no map file (it does refresh one gitignored cache so `/atlas repair` can reuse
+the findings). Use it to audit a map you didn't generate.
+
+**When do I use `repair` vs `update`?**
+`update` is for drift: the code changed, so docs are regenerated wholesale from
+the new code. `repair` is for a doc that is simply *wrong* about code that has
+not changed — a hallucinated line, a bad relationship verb, an over-length
+summary, a dead link. It fixes the specific claims `verify` flagged (searching
+narrowly to get each right, deleting only what truly no longer exists) without
+re-exploring, and reuses a recent `/atlas verify`. A doc that is both drifted
+and wrong gets its flagged claims fixed by `repair` but stays flagged for
+`update`, which alone re-derives the newly-changed code.
 
 ## Requirements
 

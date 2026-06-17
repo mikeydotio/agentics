@@ -31,7 +31,7 @@ sources:
     blob: 8ebb8be26e64490f77669942f1b88c3bab9a2246
   - path: plugins/agents/agents/technical-writer.md
     blob: fcec96880785ebb5409208d8d8d2abc35ef9f375
-references_modules: [plugins-agents-agents-chunk-1, plugins-atlas-misc]
+references_modules: [plugins-agents-agents-chunk-1, plugins-atlas-references]
 generator: cartographer/2
 baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
 verified: true
@@ -87,7 +87,7 @@ map-verifier and map-repairer — composing general-tier methodology via declare
 - `plugins-agents-agents-chunk-2.map-verifier -> plugins-agents-agents-chunk-2.skeptic (extends)`
 - `plugins-agents-agents-chunk-2.map-repairer -> plugins-agents-agents-chunk-2.map-verifier (reads)`
 - `plugins-agents-agents-chunk-2.map-repairer -> plugins-agents-agents-chunk-2.software-engineer (extends)`
-- `plugins-agents-agents-chunk-2.map-repairer -> plugins-atlas-misc.map-format (reads)`
+- `plugins-agents-agents-chunk-2.map-repairer -> plugins-atlas-references.map-format (reads)`
 
 ## Type notes
 

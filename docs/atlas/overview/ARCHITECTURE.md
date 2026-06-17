@@ -5,7 +5,7 @@ sources:
   - path: docs/atlas/modules/plugins-agents-agents-chunk-1.md
     blob: e298868c4fe44637ccec2c3e1a337895801aee07
   - path: docs/atlas/modules/plugins-agents-agents-chunk-2.md
-    blob: 62184b08d16b861ecb3e6c4d53bb27bde789fb90
+    blob: efb10c7091df45ef0a619e68b9c4116eddb7e068
   - path: docs/atlas/modules/plugins-agents-agents-chunk-3.md
     blob: 48d1c592dd27666315114359452107365279bff4
   - path: docs/atlas/modules/plugins-agents-agents-ux.md
@@ -15,7 +15,7 @@ sources:
   - path: docs/atlas/modules/plugins-agents-references.md
     blob: f9c18a39dbf7a8a02777299b693961bdf0882afb
   - path: docs/atlas/modules/plugins-atlas-agent-overrides.md
-    blob: 86fbc66ed7439ae6560f43baa2a1f7838ea84514
+    blob: 69774fe403f30365f15457011e9b4e8c39d8fa5a
   - path: docs/atlas/modules/plugins-atlas-chunk-1.md
     blob: e09e191df500a5ae4619e23ad3c05a7a39ed9095
   - path: docs/atlas/modules/plugins-atlas-chunk-2.md
@@ -33,7 +33,7 @@ sources:
   - path: docs/atlas/modules/plugins-deployit-bin.md
     blob: fff7cdaa8fde7f5b0daef915ae8b26e67bb880f0
   - path: docs/atlas/modules/plugins-deployit-misc.md
-    blob: b5277bfa1592abe09be5e5263007d2c02f18098a
+    blob: 9142f71be5593b23e3154cfd3ecaa7c2f9c4ac87
   - path: docs/atlas/modules/plugins-deployit-references.md
     blob: dda42723ade6eef2e4851a654d8a6c1ffb614ce6
   - path: docs/atlas/modules/plugins-deployit-tests-chunk-1.md
@@ -78,7 +78,7 @@ scopes:
   - tree: tests
     sha: f726161a1df6bcd639771ffdde7d527eaba66cdf
 generator: cartographer/2
-baseline: ec70da73b8e2742e16e323713c8dad336693db6f
+baseline: 17e6eccdf80aa97f11750100d58763c65b532c42
 ---
 
 # Architecture

@@ -1,5 +1,5 @@
 {
-  "baseline": "ec70da73b8e2742e16e323713c8dad336693db6f",
+  "baseline": "17e6eccdf80aa97f11750100d58763c65b532c42",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/2",
@@ -31,7 +31,7 @@
       "module": "plugins/agents/agents (chunk 2)",
       "references_modules": [
         "plugins-agents-agents-chunk-1",
-        "plugins-atlas-misc"
+        "plugins-atlas-references"
       ],
       "sources": {
         "plugins/agents/agents/investigator.md": "3a140ee738ce520e566b8e61f683eabfca3433e6",
@@ -136,7 +136,7 @@
         "plugins/atlas/agent-overrides/map-repairer-context.md": "36b934944b5b80ae623280af602c4f7bed9a241a",
         "plugins/atlas/agent-overrides/map-verifier-context.md": "7233cde0eb20367f4f0bd64eed2858d387df7839"
       },
-      "summary": "Atlas-specific constraint injections that narrow shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules",
+      "summary": "Atlas-specific overlays narrowing shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules",
       "verified": true
     },
     "modules/plugins-atlas-chunk-1.md": {
@@ -714,12 +714,12 @@
       "references_modules": [],
       "sources": {
         "docs/atlas/modules/plugins-agents-agents-chunk-1.md": "e298868c4fe44637ccec2c3e1a337895801aee07",
-        "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "62184b08d16b861ecb3e6c4d53bb27bde789fb90",
+        "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "efb10c7091df45ef0a619e68b9c4116eddb7e068",
         "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "48d1c592dd27666315114359452107365279bff4",
         "docs/atlas/modules/plugins-agents-agents-ux.md": "8c97acba3a92a32992e353b1b8c0fe2f8375fab6",
         "docs/atlas/modules/plugins-agents-misc.md": "775c32a25a595af8e61bcc60dcc393911ed1d1e7",
         "docs/atlas/modules/plugins-agents-references.md": "f9c18a39dbf7a8a02777299b693961bdf0882afb",
-        "docs/atlas/modules/plugins-atlas-agent-overrides.md": "86fbc66ed7439ae6560f43baa2a1f7838ea84514",
+        "docs/atlas/modules/plugins-atlas-agent-overrides.md": "69774fe403f30365f15457011e9b4e8c39d8fa5a",
         "docs/atlas/modules/plugins-atlas-chunk-1.md": "e09e191df500a5ae4619e23ad3c05a7a39ed9095",
         "docs/atlas/modules/plugins-atlas-chunk-2.md": "358f8e4fe42ef3ce8d29491e0e73f813405c4ebc",
         "docs/atlas/modules/plugins-atlas-references.md": "7156d5e4525cd3fe07c88ba95032ec1edae6f8ce",
@@ -728,7 +728,7 @@
         "docs/atlas/modules/plugins-council.md": "a6c39b294498fb6c95db4823c51b9f423385fe34",
         "docs/atlas/modules/plugins-deployit-assets.md": "4106112addd43130f94a8baba889de6099e78d4e",
         "docs/atlas/modules/plugins-deployit-bin.md": "fff7cdaa8fde7f5b0daef915ae8b26e67bb880f0",
-        "docs/atlas/modules/plugins-deployit-misc.md": "b5277bfa1592abe09be5e5263007d2c02f18098a",
+        "docs/atlas/modules/plugins-deployit-misc.md": "9142f71be5593b23e3154cfd3ecaa7c2f9c4ac87",
         "docs/atlas/modules/plugins-deployit-references.md": "dda42723ade6eef2e4851a654d8a6c1ffb614ce6",
         "docs/atlas/modules/plugins-deployit-tests-chunk-1.md": "c365e48e805d06a0ccbe9c9b636b44422cc45fd6",
         "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": "81c9be08ee99cf145bd42892dd8d7768e6f79905",
@@ -1066,11 +1066,9 @@
       "modules/plugins-atlas-tests-chunk-1.md",
       "modules/plugins-atlas-tests-chunk-2.md"
     ],
-    "plugins-atlas-misc": [
-      "modules/plugins-agents-agents-chunk-2.md"
-    ],
     "plugins-atlas-references": [
       "modules/plugins-agents-agents-chunk-1.md",
+      "modules/plugins-agents-agents-chunk-2.md",
       "modules/plugins-atlas-agent-overrides.md",
       "modules/plugins-atlas-chunk-2.md"
     ],

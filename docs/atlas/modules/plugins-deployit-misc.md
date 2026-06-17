@@ -62,7 +62,7 @@ detail to the references docs.
 - Semver display never edits `MARKETING_VERSION` (plugins/deployit/skills/deployit/SKILL.md:29)
 - `CFBundleVersion` bumping is the host repo's job (plugins/deployit/skills/deployit/SKILL.md:22-24)
 - Apps-layout beats single-app when both match (plugins/deployit/skills/deployit/SKILL.md:45)
-- `redeploy` calls `deployit-router.sh`, which internally runs `tests/verify-live.sh`; the skill never calls verify-live.sh directly (plugins/deployit/skills/deployit/SKILL.md:61)
+- `redeploy` calls `deployit-router.sh`, which internally runs `plugins/deployit/tests/verify-live.sh`; the skill never calls verify-live.sh directly (plugins/deployit/skills/deployit/SKILL.md:61)
 
 ## External deps
 

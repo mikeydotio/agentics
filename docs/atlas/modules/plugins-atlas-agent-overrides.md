@@ -1,6 +1,6 @@
 ---
 module: plugins/atlas/agent-overrides
-summary: "Atlas-specific constraint injections that narrow shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules"
+summary: "Atlas-specific overlays narrowing shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules"
 read_when: "Changing atlas agent behavior, spawn constraints, or repair/verify protocols"
 sources:
   - path: plugins/atlas/agent-overrides/cartographer-context.md

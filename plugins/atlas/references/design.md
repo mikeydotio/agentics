@@ -33,6 +33,7 @@ contributor needs day-to-day is here.
 | 17 | SKILL model | `model: inherit` (pinned small-model skills overflow long sessions) |
 | 18 | Cartographer model | `cartographer` + overview spawns pinned to `sonnet[1m]` (Sonnet 1M-context) via the SKILL.md Agent-assembly rule — NOT a `model:` on the shared agent (would leak to forge/rca/council and is inert for atlas's by-reference spawn). `map-verifier` stays default. Generator fingerprint left `cartographer/1` (model not recorded → no forced regeneration of the existing map) |
 | 19 | Branch isolation | `/atlas map`/`update` run on an `atlas/<op>-<short-sha>` branch via `atlas-cli branch ensure` (idempotent; refuses mid-merge; handles detached/unborn HEAD), with per-wave checkpoint commits. End-of-run stays on the branch with a suggested merge (Option A — atlas never switches/merges for you). Lock + blob-SHA staleness are branch-agnostic by design |
+| 20 | Generator `cartographer/2` | Bumped from `/1` when map-format + cartographer-context gained relationship-verb-selection guidance (catch/cast/alias ≠ `conforms-to`; manifests `owns`, not `builds`) and read_when brevity — these change expected cartographer output, so every map fingerprint-stales and regenerates on next `/atlas update` (the deliberate propagation path; decision 18's "left at `/1`" applied only to the model-only change). Paired with mechanical lint L12 (dangling `references_modules`) + L13 (out-of-grammar edge verbs) + L14 (over-length `read_when`/`summary`) + an L7 fix for qualified `Type.member` symbols — all no-bump CLI changes that catch the same defects deterministically |
 
 ### Why blob SHAs, not a baseline commit
 
@@ -112,7 +113,7 @@ sources:                              # every file this doc draws conclusions fr
   - path: src/auth/AuthService.swift
     blob: 9a3f…                       # git blob SHA of the bytes as mapped
 references_modules: [src-api, src-models]   # ripple edges
-generator: cartographer/1 model=<model-id>  # fingerprint — bump invalidates
+generator: cartographer/2 model=<model-id>  # fingerprint — bump invalidates
 baseline: abc1234                     # advisory only, never used for invalidation
 verified: true                        # map-verifier verdict
 ---

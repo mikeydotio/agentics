@@ -24,7 +24,18 @@ keeps unchanged docs out of LLM hands precisely so the map's git history stays
 reviewable; don't defeat that inside a doc.
 
 **Budget**: keep module docs in the 2,500–6,000 char band. `summary` ≤120
-chars and `read_when` ≤90 chars — they are copied into the budget-capped INDEX.
+chars and `read_when` ≤90 chars (aim ≤~70 in practice — long module ids
+already consume the INDEX routing row, and over-length lines blow its budget);
+they are copied into the budget-capped INDEX.
+
+**Relationship verbs**: every `## Relationships` edge verb MUST be one of
+`calls, implements, conforms-to, extends, emits, owns, reads, writes` — lint
+L13 rejects anything else. Pick from evidence: catching/casting an error type
+or aliasing a type is NOT `conforms-to` (use `reads`, or omit the edge); a
+package manifest `owns` the targets it declares (not `builds`/`depends-on`).
+When no verb is truthful, drop the edge and note it in Type notes rather than
+inventing one. Every right-hand edge module id must be a real module id that
+also appears in `references_modules` (lint L12 rejects dangling ids).
 
 **Return contract**: your confirmation (never doc content) is parsed by the
 orchestrator — keep the `## Mapping Complete` block format exact.

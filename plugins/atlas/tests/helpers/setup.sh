@@ -93,7 +93,7 @@ write_module_doc() {
         if [ -n "$refs_csv" ]; then
             echo "references_modules: [$refs_csv]"
         fi
-        echo "generator: cartographer/1 model=test"
+        echo "generator: cartographer/2 model=test"
         echo "---"
         echo ""
         echo "# Module: $module"
@@ -124,7 +124,7 @@ write_overview_doc() {
             echo "scopes:"
             echo "  - tree: $scope_dir"
         fi
-        echo "generator: cartographer/1 model=test"
+        echo "generator: cartographer/2 model=test"
         echo "---"
         echo ""
         echo "# Architecture"
@@ -164,7 +164,7 @@ write_full_module_doc() {
         if [ -n "$refs_csv" ]; then
             echo "references_modules: [$refs_csv]"
         fi
-        echo "generator: cartographer/1 model=test"
+        echo "generator: cartographer/2 model=test"
         echo "---"
         echo ""
         echo "# Module: $module"

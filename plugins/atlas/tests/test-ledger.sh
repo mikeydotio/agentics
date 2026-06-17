@@ -52,7 +52,7 @@ test_ledger_finalize_validates_frontmatter() {
 module: src
 sources:
   - path: src/a.txt
-generator: cartographer/1 model=test
+generator: cartographer/2 model=test
 ---
 body
 DOC
@@ -225,11 +225,11 @@ test_ledger_diff_generator_fingerprint() {
     repo=$(_ledger_fixture)
     run_atlas "$repo" ledger finalize --refresh-hashes
 
-    run_atlas "$repo" ledger diff --generator "cartographer/2 model=test"
-    assert_json_field "$OUTPUT" '.fingerprint_stale | length' "2" \
-        "generator bump invalidates all docs" || return 1
-
     run_atlas "$repo" ledger diff --generator "cartographer/1 model=test"
+    assert_json_field "$OUTPUT" '.fingerprint_stale | length' "2" \
+        "generator mismatch invalidates all docs" || return 1
+
+    run_atlas "$repo" ledger diff --generator "cartographer/2 model=test"
     assert_json_field "$OUTPUT" '.fingerprint_stale | length' "0" \
         "matching generator invalidates none" || return 1
 

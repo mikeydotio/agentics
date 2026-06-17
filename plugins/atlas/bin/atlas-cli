@@ -602,11 +602,17 @@ def cmd_ledger_finalize(args):
     sources_count = 0
     docs_rewritten = 0
     if args.refresh_hashes:
+        except_docs = set(getattr(args, "except_docs", None) or [])
         # Module docs first, then overview docs — overview sources are module
         # doc files, which must carry their final bytes before being hashed.
         ordered = ([d for d in docs if d["doc_id"].startswith("modules/")] +
                    [d for d in docs if not d["doc_id"].startswith("modules/")])
         for doc in ordered:
+            # Excepted docs keep their recorded blobs and frontmatter verbatim:
+            # /atlas repair body-fixes a drift doc but must leave it flagged
+            # stale, so its source blobs must NOT advance to the working tree.
+            if doc["doc_id"] in except_docs:
+                continue
             fm = doc["fm"]
             missing = [e["path"] for e in fm["sources"]
                        if not os.path.isfile(os.path.join(root, e["path"]))]
@@ -1405,6 +1411,96 @@ def cmd_status(args):
                   "cached": result["cached"]}
     emit(result)
     return 0
+
+
+# ─── verify-cache (persist /atlas verify findings for /atlas repair) ─────────
+#
+# /atlas verify is read-only of the map; it persists its findings to a
+# gitignored .atlas/verify.json so a later /atlas repair can reuse them instead
+# of re-running the map-verifier sweep. Reuse is gated on drift_cache_key — the
+# exact repo-state fingerprint /atlas status already trusts — so a cache is only
+# reused while HEAD and the working tree are unchanged. The CLI (not the skill)
+# owns this file: it recomputes lint/diff/fingerprint itself and only ingests
+# the opaque agent verdicts from stdin, so a mistyped payload cannot poison it.
+
+VERIFY_CACHE_VERSION = 1
+
+
+def verify_cache_path(root):
+    return os.path.join(root, ".atlas", "verify.json")
+
+
+def cmd_verify_cache_write(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    # Verdicts are the only payload the CLI did not produce itself. Read them
+    # from stdin; a TTY (no pipe) or empty input means "no docs verified".
+    raw = "" if sys.stdin.isatty() else sys.stdin.read()
+    if raw.strip():
+        try:
+            verdicts = json.loads(raw)
+        except ValueError:
+            return emit_fail(
+                "bad_verdicts",
+                "verify-cache write expects a JSON array of verdicts on stdin.")
+        if not isinstance(verdicts, list):
+            return emit_fail(
+                "bad_verdicts", "verify-cache verdicts must be a JSON array.")
+    else:
+        verdicts = []
+
+    findings = lint_map(root, fast=False)
+    errors = [f for f in findings if f["severity"] == "ERROR"]
+    warnings = [f for f in findings if f["severity"] == "WARN"]
+    fingerprint = drift_cache_key(root)
+    head = git_head(root)
+
+    cache = {
+        "version": VERIFY_CACHE_VERSION,
+        "head": head,
+        "fingerprint": fingerprint,
+        "timestamp": int(time.time()),
+        "lint": {
+            "error_count": len(errors), "warning_count": len(warnings),
+            "errors": errors, "warnings": warnings,
+        },
+        "diff": compute_diff(root),
+        "verdicts": verdicts,
+    }
+
+    path = verify_cache_path(root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2, sort_keys=True)
+        f.write("\n")
+
+    return emit_ok(
+        path=os.path.relpath(path, root), fingerprint=fingerprint, head=head,
+        verdicts=len(verdicts),
+        lint_errors=len(errors), lint_warnings=len(warnings),
+    )
+
+
+def cmd_verify_cache_read(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+
+    try:
+        with open(verify_cache_path(root), "r", encoding="utf-8") as f:
+            cache = json.load(f)
+    except (OSError, ValueError):
+        return emit_ok(valid=False, stale_reason="absent", cache=None)
+
+    if not isinstance(cache, dict) or cache.get("version") != VERIFY_CACHE_VERSION:
+        return emit_ok(valid=False, stale_reason="version", cache=None)
+    if cache.get("fingerprint") != drift_cache_key(root):
+        return emit_ok(valid=False, stale_reason="fingerprint", cache=None)
+
+    return emit_ok(valid=True, stale_reason=None, cache=cache,
+                   timestamp=cache.get("timestamp"))
 
 
 # ─── ground (grounding pack for mapper agents) ──────────────────────────────
@@ -2551,6 +2647,12 @@ def main():
     finalize.add_argument(
         "--generator", default=None,
         help="Stamp this generator fingerprint into refreshed docs")
+    finalize.add_argument(
+        "--except", dest="except_docs", action="append", default=[],
+        metavar="DOC_ID",
+        help="Doc id to leave untouched when refreshing hashes (repeatable); "
+             "its recorded blobs stay as-is so it remains flagged stale. "
+             "Used by /atlas repair to keep drift docs flagged after a body fix")
     diff = ledger_sub.add_parser(
         "diff", help="Classify map docs against the repo as it exists now")
     diff.add_argument(
@@ -2612,8 +2714,19 @@ def main():
     branch_ensure = branch_sub.add_parser(
         "ensure", help="Create/switch to the atlas working branch")
     branch_ensure.add_argument(
-        "--op", choices=["map", "update"], default="map",
+        "--op", choices=["map", "update", "repair"], default="map",
         help="Operation naming the branch (atlas/<op>-<sha>)")
+
+    verify_cache = sub.add_parser(
+        "verify-cache", help="Persist/read the /atlas verify findings cache")
+    vc_sub = verify_cache.add_subparsers(dest="verify_cache_command")
+    vc_sub.add_parser(
+        "write",
+        help="Write .atlas/verify.json from stdin verdicts plus recomputed "
+             "lint/diff/fingerprint")
+    vc_sub.add_parser(
+        "read",
+        help="Read .atlas/verify.json and report whether it is still valid")
 
     sub.add_parser("init", help="Inject the CLAUDE.md block + gitignore entry")
     sub.add_parser("remove", help="Remove the CLAUDE.md block")
@@ -2667,6 +2780,14 @@ def main():
             return cmd_branch_ensure(args)
         emit_fail("usage", "Unknown branch command. Available: ensure.")
         return 2
+    if args.command == "verify-cache":
+        if args.verify_cache_command == "write":
+            return cmd_verify_cache_write(args)
+        if args.verify_cache_command == "read":
+            return cmd_verify_cache_read(args)
+        emit_fail("usage", "Unknown verify-cache command. "
+                  "Available: write, read.")
+        return 2
     if args.command == "init":
         return cmd_init(args)
     if args.command == "remove":
@@ -2674,7 +2795,7 @@ def main():
 
     emit_fail("usage", "Unknown or missing subcommand. Available: scan, "
               "partition, ledger, lock, status, index, lint, ground, "
-              "commit, branch, init, remove.")
+              "commit, branch, verify-cache, init, remove.")
     return 2
 
 

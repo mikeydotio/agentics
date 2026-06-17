@@ -9,7 +9,7 @@ CLI="python3 ${SCRIPT_DIR}/atlas-cli"
 
 usage_json() {
     cat <<'EOF'
-{"ok": false, "error": "usage", "display": "/atlas                  — Map status and staleness tier\n/atlas status            — Same, explicit\n/atlas map               — Generate a full codebase map (orchestrated)\n/atlas update            — Incremental update of stale map docs (orchestrated)\n/atlas verify            — Lint + verification sweep without regeneration\n/atlas init              — Inject the CLAUDE.md block and gitignore entry\n/atlas remove            — Remove the CLAUDE.md block"}
+{"ok": false, "error": "usage", "display": "/atlas                  — Map status and staleness tier\n/atlas status            — Same, explicit\n/atlas map               — Generate a full codebase map (orchestrated)\n/atlas update            — Incremental update of stale map docs (orchestrated)\n/atlas verify            — Lint + verification sweep without regeneration\n/atlas repair            — Fix verify findings without re-exploring (reuses a prior verify)\n/atlas init              — Inject the CLAUDE.md block and gitignore entry\n/atlas remove            — Remove the CLAUDE.md block"}
 EOF
 }
 
@@ -58,6 +58,9 @@ case "$cmd" in
         ;;
     branch)
         run_cli branch "$@"
+        ;;
+    verify-cache)
+        run_cli verify-cache "$@"
         ;;
     init)
         run_cli init

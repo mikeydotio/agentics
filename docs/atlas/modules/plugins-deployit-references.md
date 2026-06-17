@@ -4,23 +4,15 @@ summary: "Per-concern procedure docs behind /deployit — setup, platform deploy
 read_when: "Changing deployit deploy/bootstrap/proxy/semver behavior or debugging install failures"
 sources:
   - path: plugins/deployit/references/bootstrap.md
-    blob: 24850fe5b053d9925a7af47513cfc2ac04033f93
   - path: plugins/deployit/references/ios.md
-    blob: 59175850b662bbf27b81972fc0ee97cfbe31acb9
   - path: plugins/deployit/references/macos.md
-    blob: b2d5da0c1051ce2fddae6b2f1b630fc5dce9a3c3
   - path: plugins/deployit/references/semver.md
-    blob: 6bfc5d8f26e34851b97f77d4236e88fe8be273d6
+  - path: plugins/deployit/references/sparkle.md
   - path: plugins/deployit/references/tailscale-serve.md
-    blob: 92267a1597530c980bfee1916f83a818dba94abd
   - path: plugins/deployit/references/troubleshooting.md
-    blob: f34f378b62868e7e11176fa0b0d4b6e6e2f6c87c
   - path: plugins/deployit/references/visionos.md
-    blob: 3773ae52396c5b6df79ce4d8926f2412fe4eca3d
 references_modules: [plugins-deployit-assets, plugins-deployit-bin, plugins-deployit-misc, plugins-semver-misc]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/2
 ---
 
 # Module: plugins/deployit/references
@@ -39,6 +31,7 @@ They mirror behavior implemented in `plugins/deployit/bin`, so CLI/backend chang
 | `iOS Deploy Reference` | reference doc | `plugins/deployit/references/ios.md:1` | Owns iOS OTA mechanics: Development-profile `itms-services://` install, trust + UDID flows |
 | `macOS Deploy Reference` | reference doc | `plugins/deployit/references/macos.md:1` | Owns macOS deploys: Developer ID signing, Gatekeeper, notarytool setup, staple pipeline |
 | `Semver awareness` | reference doc | `plugins/deployit/references/semver.md:1` | Owns the semver-plugin contract: activity detection, web-UI version labels, deploy-time bump guard |
+| `Sparkle Auto-Update Reference (macOS)` | reference doc | `plugins/deployit/references/sparkle.md:1` | Owns EdDSA-signed Sparkle appcast: key generation, config.toml wiring, app SPM/plist setup |
 | `Tailscale Serve Reference` | reference doc | `plugins/deployit/references/tailscale-serve.md:1` | Owns the HTTPS layer: proxy rationale, `/deployit/` URL map, PWA install, reboot + teardown |
 | `Troubleshooting Reference` | reference doc | `plugins/deployit/references/troubleshooting.md:1` | Owns the symptom→cause→fix table, log locations, quick diagnostics |
 | `visionOS Deploy Reference` | reference doc | `plugins/deployit/references/visionos.md:1` | Owns visionOS deltas from iOS: archive destination, `ExportOptions.visionos.plist` export, device-only |
@@ -50,6 +43,7 @@ They mirror behavior implemented in `plugins/deployit/bin`, so CLI/backend chang
 | `8729` | TCP port | `plugins/deployit/references/tailscale-serve.md:10` | Backend port behind the proxy; a port conflict is the documented crash-loop cause |
 | `com.mikeydotio.deployit.backend` | launchd label | `plugins/deployit/references/bootstrap.md:15` | Backend agent identity; lifecycle, teardown, and diagnostics key on it |
 | `deployit-notary` | keychain profile | `plugins/deployit/references/macos.md:42` | Default notarytool profile the plugin looks for; override via `config.toml` `notary_profile` |
+| `private_key_path` | config key | `plugins/deployit/references/sparkle.md:52` | Path to shared EdDSA private key; must match across all deploy Macs or installs fail verification |
 
 ## Relationships
 
@@ -57,11 +51,13 @@ They mirror behavior implemented in `plugins/deployit/bin`, so CLI/backend chang
 - `plugins-deployit-misc.SKILL.md -> plugins-deployit-references.ios.md (reads)`
 - `plugins-deployit-misc.SKILL.md -> plugins-deployit-references.macos.md (reads)`
 - `plugins-deployit-misc.SKILL.md -> plugins-deployit-references.semver.md (reads)`
+- `plugins-deployit-misc.SKILL.md -> plugins-deployit-references.sparkle.md (reads)`
 - `plugins-deployit-misc.SKILL.md -> plugins-deployit-references.tailscale-serve.md (reads)`
 - `plugins-deployit-misc.SKILL.md -> plugins-deployit-references.troubleshooting.md (reads)`
 - `plugins-deployit-misc.SKILL.md -> plugins-deployit-references.visionos.md (reads)`
 - `plugins-deployit-references.bootstrap.md -> plugins-deployit-references.macos.md (reads)`
 - `plugins-deployit-references.macos.md -> plugins-deployit-assets.ExportOptions.macos.plist (reads)`
+- `plugins-deployit-references.macos.md -> plugins-deployit-references.sparkle.md (reads)`
 - `plugins-deployit-references.semver.md -> plugins-deployit-bin._semver_active_version (reads)`
 - `plugins-deployit-references.semver.md -> plugins-deployit-bin._version_label (reads)`
 - `plugins-deployit-references.semver.md -> plugins-deployit-misc.SKILL.md (reads)`
@@ -77,6 +73,8 @@ They mirror behavior implemented in `plugins/deployit/bin`, so CLI/backend chang
 - `semver_version` freezes into metadata at deploy time (plugins/deployit/references/semver.md:22)
 - Proxy and backend survive reboots unattended (plugins/deployit/references/tailscale-serve.md:44)
 - visionOS Simulator builds are never staged for OTA (plugins/deployit/references/visionos.md:52)
+- Sparkle `.zip` enclosure is not notarized; first auto-update may trigger Gatekeeper (plugins/deployit/references/sparkle.md:129)
+- All origin Macs must share one EdDSA private key — divergent keys break Sparkle verification (plugins/deployit/references/sparkle.md:29)
 
 ## External deps
 
@@ -86,6 +84,7 @@ They mirror behavior implemented in `plugins/deployit/bin`, so CLI/backend chang
 - gh CLI — HTTPS pushes to the shared deployit-index repo
 - hdiutil — wraps the `.app` into the served `.dmg`
 - qrencode (optional) — terminal QR code for the install URL
+- Sparkle framework — EdDSA-signed appcast auto-update for macOS; `sign_update` / `generate_keys` tools
 
 ## Gotchas
 
@@ -94,3 +93,4 @@ They mirror behavior implemented in `plugins/deployit/bin`, so CLI/backend chang
 - PWA assets come from `_STATIC_ASSETS` only (plugins/deployit/references/tailscale-serve.md:76)
 - Install links fail when origin Mac sleeps (plugins/deployit/references/tailscale-serve.md:115)
 - A failed semver bump halts the deploy entirely (plugins/deployit/references/semver.md:75)
+- Sparkle deploy succeeds even when signing fails — build silently skips appcast (plugins/deployit/references/sparkle.md:136)

@@ -4,19 +4,12 @@ summary: "Forge-only constraint blocks appended to shared agent definitions at s
 read_when: "Changing forge subagent behavior, .forge/ artifact contracts, or spawn constraints"
 sources:
   - path: plugins/forge/agent-overrides/evaluator-context.md
-    blob: b4715b5bee3329bda946a53974d2181bc0edb1d4
   - path: plugins/forge/agent-overrides/generator-context.md
-    blob: 890854c3045a23300025d08ae29648d89a3df3cb
   - path: plugins/forge/agent-overrides/reviewer-context.md
-    blob: bdb0d4c562ebcd72aa17d554874c7dd54978138c
   - path: plugins/forge/agent-overrides/triager-context.md
-    blob: dafbb15a8c519f18741996c8e385c616b2c1d7fe
   - path: plugins/forge/agent-overrides/validator-context.md
-    blob: 6c5cdda4751783942cd670dab20b4ca42bb065b3
 references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/2
 ---
 
 # Module: plugins/forge/agent-overrides

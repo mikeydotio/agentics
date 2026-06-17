@@ -4,13 +4,9 @@ summary: "Forge's plugin manifest and README — plugin identity plus the user-f
 read_when: "Changing forge's marketplace identity or updating the README pipeline overview"
 sources:
   - path: plugins/forge/.claude-plugin/plugin.json
-    blob: 332a69faf8c603a9f032ee7765befc874b534aca
   - path: plugins/forge/README.md
-    blob: 1ce02e4c6294d5613a305d8487b42132d669a063
 references_modules: [root-misc]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/2
 ---
 
 # Module: plugins/forge (misc)

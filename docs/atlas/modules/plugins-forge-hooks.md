@@ -4,15 +4,10 @@ summary: "Forge session-lifecycle hooks — inject resume context on SessionStar
 read_when: "Touching forge session resume, stop checkpointing, or .forge state hook behavior"
 sources:
   - path: plugins/forge/hooks/hooks.json
-    blob: f92d8253799e799123a9e1506de7aa2e1bffcc0d
   - path: plugins/forge/hooks/session-start.sh
-    blob: 69f94721d7d3818330a5c3216c15be763051cb4b
   - path: plugins/forge/hooks/session-stop.sh
-    blob: fd33f5ce7ea769d4d07a3814bc85887d2281b5f5
 references_modules: [plugins-forge-skills, plugins-freshen, plugins-hook-guard]
-generator: cartographer/1
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/2
 ---
 
 # Module: plugins/forge/hooks

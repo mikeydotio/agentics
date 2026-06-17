@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.22.0] - 2026-06-17
+
+### Added
+- wire the /atlas repair flow (dispatch, protocol, README) (948584a)
+- add map-repairer agent for /atlas repair (c47f2e9)
+- verify-cache, ledger finalize --except, repair branch op (6a3f1ce)
+
+_[manual]_
+
 ## [v2.21.0] - 2026-06-17
 
 ### Added

@@ -150,15 +150,28 @@ are fine; anchors, multi-line strings, and deeper nesting are not.
 
 ## Collapsing map diffs in PRs
 
-If map churn clutters your pull-request diffs, mark the map as generated:
+If map churn clutters your pull-request diffs, mark the **generated** map files
+as generated — but keep the hand-edited `config.yaml` visible in review:
 
 ```gitattributes
-docs/atlas/** linguist-generated=true
+docs/atlas/modules/**        linguist-generated=true
+docs/atlas/overview/**       linguist-generated=true
+docs/atlas/INDEX.md          linguist-generated=true
+docs/atlas/atlas-ledger.json linguist-generated=true
 ```
 
-GitHub then collapses map files in PR views and excludes them from language
-stats. Atlas will suggest this when it fits but never writes `.gitattributes`
-on its own.
+GitHub then collapses those files in PR views and excludes them from language
+stats, while `docs/atlas/config.yaml` — the one file you hand-edit, which
+controls what gets mapped — stays reviewable, so a bad exclude can't silently
+shrink coverage unnoticed. Atlas suggests this when it fits but never writes
+`.gitattributes` on its own.
+
+**Keep regenerations legible.** Commit map regenerations (`/atlas update`) in
+their own `docs(atlas): …` commit, never mixed into a code change. A collapsed
+map diff is safe to skim *only* when it isn't buried inside a noisy code PR — an
+atlas-only diff stays small enough to expand and read, which is the one human
+check on a confidently-wrong regeneration the freshness ledger can't catch
+(doc and ledger hashes move in lockstep even when the content is wrong).
 
 ## Limitations
 

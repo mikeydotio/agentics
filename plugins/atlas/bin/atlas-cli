@@ -2493,6 +2493,148 @@ def cmd_judgment_diff(args):
     )
 
 
+# ─── migrate-v1 (re-key existing v1 doc prose into the Judgment Cache) ───────
+#
+# A one-time upgrade so a v1-mapped project does not pay a full re-map. It reads
+# the committed v1 docs, matches each prose cell to a current structure symbol/
+# module by name+path, and writes it into the cache under the v2 key. Prose whose
+# symbol no longer matches (drift since the v1 map) is reported, not guessed —
+# those cells stay missing and are judged fresh by the next /atlas update.
+
+def extract_section(body, anchor):
+    """Prose under a `## <anchor>` heading, up to the next `## ` (trimmed)."""
+    out = []
+    in_sec = False
+    for line in body.splitlines():
+        if line.strip().startswith("## "):
+            in_sec = line.strip() == "## " + anchor
+            continue
+        if in_sec:
+            out.append(line)
+    return "\n".join(out).strip()
+
+
+def parse_table_rows(body, section):
+    """(col1, col3, col4) cells from a `## <section>` markdown table — i.e.
+    (symbol, location, contract/why) — skipping the header and separator."""
+    rows = []
+    in_section = False
+    table_row = 0
+    for line in body.splitlines():
+        s = line.strip()
+        if s.startswith("## "):
+            in_section = s == "## " + section
+            table_row = 0
+            continue
+        if not in_section or not s.startswith("|"):
+            continue
+        table_row += 1
+        if table_row <= 2:
+            continue
+        cells = [c.strip().strip("`") for c in s.strip("|").split("|")]
+        if len(cells) >= 4 and cells[0]:
+            rows.append((cells[0], cells[2], cells[3]))
+    return rows
+
+
+def parse_index_facts(body):
+    m = re.search(r"<!-- atlas:index-facts -->(.*?)<!-- /atlas:index-facts -->",
+                  body, re.S)
+    if not m:
+        return []
+    return [ln.strip()[2:].strip() for ln in m.group(1).splitlines()
+            if ln.strip().startswith("- ")]
+
+
+def cmd_migrate_v1(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    docs, _ = load_validated_docs(root)
+    if not docs:
+        return emit_fail("no_v1_map", "No committed map docs to migrate.")
+    index, _ = load_or_build_index(root)
+    if "symbols" not in index:
+        emit(index)
+        return 1
+
+    key_by = _key_index(compute_judgment_keys(index))
+    rev = path_to_module(index)
+    sym_by_namefile = {(s["name"], s["file"]): s for s in index["symbols"]}
+    head = git_head(root)
+    migrated = {}
+    unmapped = []
+
+    def place(kind, module, symbol, value):
+        key = key_by.get((kind, module, symbol))
+        if key is None or value is None or value == "":
+            return False
+        migrated[key] = {
+            "kind": kind, "value": value,
+            "provenance": {"generator": "migrated/v1", "created_at_commit": head},
+            "verify": {"verdict": "migrated"}}
+        return True
+
+    def match_symbol(symbol, location):
+        relpath = location.rsplit(":", 1)[0] if re.search(r":\d+$", location) \
+            else location
+        bare = symbol.rsplit(".", 1)[-1].split("(", 1)[0].strip()
+        s = sym_by_namefile.get((bare, relpath))
+        if s:
+            return s
+        for (name, f), cand in sym_by_namefile.items():  # name match, any file
+            if name == bare and (not relpath or f == relpath):
+                return cand
+        return None
+
+    for doc in docs:
+        body, fm = doc["body"], doc["fm"]
+        if doc["doc_id"].startswith("modules/"):
+            mid = doc_module_id(doc["doc_id"])
+            place("module.summary", mid, None, fm.get("summary"))
+            place("module.read_when", mid, None, fm.get("read_when"))
+            place("module.purpose", mid, None, extract_section(body, "Purpose"))
+            place("module.type_notes", mid, None,
+                  extract_section(body, "Type notes"))
+            place("module.gotchas", mid, None, extract_section(body, "Gotchas"))
+            for symbol, loc, contract in parse_table_rows(body, "Public API"):
+                s = match_symbol(symbol, loc)
+                if not (s and place("symbol.contract", rev.get(s["file"]),
+                                    s["id"], contract)):
+                    unmapped.append({"doc": doc["doc_id"], "symbol": symbol,
+                                     "kind": "symbol.contract"})
+            for symbol, loc, why in parse_table_rows(body,
+                                                     "Load-bearing internals"):
+                s = match_symbol(symbol, loc)
+                if not (s and place("symbol.load_bearing", rev.get(s["file"]),
+                                    s["id"], why)):
+                    unmapped.append({"doc": doc["doc_id"], "symbol": symbol,
+                                     "kind": "symbol.load_bearing"})
+        else:  # overview
+            place("overview.shape", "overview/ARCHITECTURE", None,
+                  extract_section(body, "System shape"))
+            place("overview.dataflow", "overview/ARCHITECTURE", None,
+                  extract_section(body, "Data flow"))
+            facts = parse_index_facts(body)
+            if facts:
+                place("overview.index_facts", "overview/ARCHITECTURE", None, facts)
+
+    data = load_judgments(root)
+    store = data.setdefault("judgments", {})
+    for key, cell in migrated.items():
+        store.setdefault(key, cell)  # never clobber a real judgment
+    write_judgments(root, data)
+
+    _, still_missing, _ = plan_judgment_misses(index, data)
+    return emit_ok(
+        migrated=len(migrated),
+        unmapped_count=len(unmapped),
+        unmapped=unmapped[:50],
+        still_missing=len(still_missing),
+        path=os.path.relpath(judgments_path(root), root),
+    )
+
+
 # ─── project (deterministic render — the JOIN) ───────────────────────────────
 #
 # project assembles the committed docs by JOINing the Structure Index (rows,
@@ -3983,6 +4125,10 @@ def main():
     project.add_argument(
         "--backend", choices=["auto", "treesitter", "regex"], default="auto")
 
+    sub.add_parser(
+        "migrate-v1",
+        help="Re-key existing v1 doc prose into the Judgment Cache (one-time)")
+
     commit = sub.add_parser("commit", help="Guarded pathspec-scoped map commit")
     commit.add_argument("--message", required=True)
     commit.add_argument("--also", action="append", default=[],
@@ -4065,6 +4211,8 @@ def main():
         return 2
     if args.command == "project":
         return cmd_project(args)
+    if args.command == "migrate-v1":
+        return cmd_migrate_v1(args)
     if args.command == "commit":
         return cmd_commit(args)
     if args.command == "branch":

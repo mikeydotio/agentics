@@ -238,6 +238,17 @@ update flow ignores those entries because quarantine recovery owns them.
       ground skips .md prose; L6 non-citation path rules; edge-line
       length exemption; `atlas` in the agent-template pipeline enum)
 
+## v2 — the Projection architecture
+
+The map is now a deterministic projection: a script extracts the structure, the
+LLM produces only content-addressed *judgment* cells, and a script renders the
+docs — so the model is invoked only for the judgment delta and a no-change
+rebuild calls no model at all. The full v2 design record (locked decisions 21–28,
+the three schemas, the orthogonal-hash judgment-key derivation, the CLI surface,
+and the rewritten protocols) lives in **`references/design-v2.md`**, which
+extends this record. The mapping/update protocols and the cartographer override
+in this plugin describe the v2 flow; this file remains the v1 base they build on.
+
 ## Out of scope for v1
 
 Submodules; import-graph-driven partitioning (clustering instability would

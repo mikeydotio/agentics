@@ -65,6 +65,9 @@ case "$cmd" in
     project)
         run_cli project "$@"
         ;;
+    migrate-v1)
+        run_cli migrate-v1 "$@"
+        ;;
     commit)
         run_cli commit "$@"
         ;;

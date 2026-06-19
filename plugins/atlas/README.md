@@ -92,6 +92,36 @@ merges, and shallow clones — there is no baseline commit to lose. Uncommitted
 changes are fine: dirty files are hashed as they exist in the working tree,
 and the update says so.
 
+## Architecture (v2 — Projection)
+
+Atlas v2 splits every map doc into two provenances and caches the expensive one,
+so the LLM is invoked only for the part it alone can produce:
+
+- **Structure** (what exists / how it connects — symbols, signatures, call
+  edges, deps) is extracted **deterministically** into a gitignored, rebuildable
+  Structure Index (`.atlas/structure/`). Hybrid backend: a tree-sitter helper
+  when available, a language-agnostic regex fallback otherwise (zero new deps).
+- **Judgment** (why it matters, what's load-bearing, gotchas, purpose) is the
+  only LLM-produced data. It lives **content-addressed** in a committed
+  `docs/atlas/judgments.json`, keyed by the structure it describes.
+- **Projection**: `atlas-cli project` renders the committed docs by *joining*
+  the two. The docs are derived (like INDEX always was); lint L16 enforces that
+  a committed doc equals its projection.
+
+Because each judgment cell is keyed by three orthogonal hashes
+(`signature_hash` / `span_hash` / `incident_edge_digest`), **a pure body edit
+re-judges nothing** — the docs re-project from cache for free, and a pull with no
+relevant change calls no model at all. A public signature tweak re-judges only
+that symbol's contract; adding a capability re-judges the module's prose. The
+deterministic CLI surface the orchestrator drives: `extract`, `judge-plan`,
+`judgment diff`/`ingest`, `project` (the LLM only fills `judge-plan`'s misses).
+
+**Upgrading a v1 map:** run `atlas-cli migrate-v1` once. It re-keys your existing
+v1 doc prose (purpose, contracts, gotchas, …) into the Judgment Cache by matching
+each cell to a current symbol, so the `cartographer/3` bump costs no full re-map.
+Prose whose symbol no longer matches is reported and judged fresh on the next
+`/atlas update`.
+
 ## Staleness tiers
 
 `atlas-cli status` distills drift into a tier; the SessionStart hook injects

@@ -1608,6 +1608,279 @@ def cmd_ground(args):
                    files=files, imports=imports, symbols=symbols)
 
 
+# ─── extract (Structure Index — the deterministic structure layer) ──────────
+#
+# The Structure Index is the deterministic half of atlas v2: a content-addressed
+# inventory of every symbol (each with three orthogonal hashes), the import
+# graph, and — once a parser backend is available — the call/type edge graph. It
+# is a pure function of the source at a commit, cached under .atlas/structure/
+# (gitignored, rebuildable). Wave 1 ships the regex backend (lifted from
+# `ground`); tree-sitter arrives in Wave 2. See references/design-v2.md.
+
+STRUCTURE_VERSION = 1
+EXTRACT_MAX_IMPORT_LINES = 100        # per file
+IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+VIS_PUBLIC_RE = re.compile(r"\b(public|open|export|pub)\b")
+VIS_PRIVATE_RE = re.compile(r"\bprivate\b")
+VIS_INTERNAL_RE = re.compile(r"\b(internal|protected|fileprivate)\b")
+
+
+def content_hash(data):
+    """Stable sha256 over text/bytes, prefixed to distinguish from git blob OIDs."""
+    if isinstance(data, str):
+        data = data.encode("utf-8", errors="replace")
+    return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def structure_index_path(root):
+    return os.path.join(root, ".atlas", "structure", "index.json")
+
+
+def normalize_signature(line):
+    return re.sub(r"\s+", " ", line.strip())
+
+
+def detect_visibility(prefix, name):
+    """Heuristic access level from a declaration's leading modifiers (regex
+    backend). Defaults to public — a top-level definition is module surface
+    unless explicitly restricted or underscore-prefixed by convention."""
+    if VIS_PUBLIC_RE.search(prefix):
+        return "public"
+    if VIS_PRIVATE_RE.search(prefix):
+        return "private"
+    if VIS_INTERNAL_RE.search(prefix):
+        return "internal"
+    if name.startswith("_"):
+        return "private"
+    return "public"
+
+
+def parse_import_target(line):
+    """Best-effort dependency token following an import-ish keyword."""
+    s = line.strip()
+    m = IMPORT_LINE_RE.match(s)
+    if not m:
+        return None
+    rest = s[m.end():].strip()
+    tok = re.match(r'["\'<(]?\s*([A-Za-z0-9_./:@-]+)', rest)
+    if not tok:
+        return None
+    return tok.group(1).rstrip(";,").strip() or None
+
+
+def assign_spans(defs, total_lines):
+    """A definition spans from its line to just before the next definition at
+    the same or shallower indentation (or EOF) — deterministic containment so a
+    body edit changes the span hash, while a sibling's edit does not."""
+    for i, d in enumerate(defs):
+        end = total_lines
+        for j in range(i + 1, len(defs)):
+            if defs[j]["indent"] <= d["indent"]:
+                end = defs[j]["start_line"] - 1
+                break
+        d["end_line"] = max(end, d["start_line"])
+
+
+def extract_regex(relpath, text):
+    """Language-agnostic regex extraction (the same signals `ground` uses).
+    Returns (symbols, import_lines, import_targets). Markdown is prose: a
+    sentence beginning 'from'/'use' matches IMPORT_LINE_RE and 'module docs'
+    matches DEF_LINE_RE, so .md files are skipped (still tokenized for fan-in)."""
+    if relpath.lower().endswith(".md"):
+        return [], [], []
+    body = text.splitlines()
+    kept = text.splitlines(keepends=True)
+    total = len(kept)
+    raw_defs = []
+    import_lines = []
+    targets = []
+    for idx, line in enumerate(body):
+        if IMPORT_LINE_RE.match(line):
+            if len(import_lines) < EXTRACT_MAX_IMPORT_LINES:
+                import_lines.append(line.strip())
+            tgt = parse_import_target(line)
+            if tgt:
+                targets.append(tgt)
+        m = DEF_LINE_RE.match(line)
+        if m:
+            raw_defs.append({
+                "name": m.group(2), "kind": m.group(1),
+                "signature": normalize_signature(line),
+                "visibility": detect_visibility(line[:m.start(1)], m.group(2)),
+                "start_line": idx + 1,
+                "indent": len(line) - len(line.lstrip()),
+            })
+    assign_spans(raw_defs, total)
+    symbols = []
+    for d in raw_defs:
+        span_text = "".join(kept[d["start_line"] - 1:d["end_line"]])
+        symbols.append({
+            "name": d["name"], "qualified_name": d["name"], "kind": d["kind"],
+            "signature": d["signature"],
+            "signature_hash": content_hash(d["signature"]),
+            "visibility": d["visibility"], "file": relpath,
+            "span": {"start_line": d["start_line"], "end_line": d["end_line"]},
+            "span_hash": content_hash(span_text),
+            "extraction": "regex",
+        })
+    return symbols, import_lines, sorted(set(targets))
+
+
+def build_edges(symbols, file_tokens, backend):
+    """Structural call/type edges. The regex backend cannot resolve a call site
+    to a definition, so it emits none — load_bearing keys then degrade to the
+    signature hash alone (no worse than v1 fan-in). tree-sitter fills this in
+    Wave 2."""
+    return []
+
+
+def incident_edge_digest(symbol_id, edges):
+    """Content address of a symbol's INCOMING resolved/ambiguous edges — the
+    'who calls me' dependency a symbol's load-bearing judgment turns on. Empty
+    set hashes to a stable constant (so regex-backend symbols share it)."""
+    incoming = sorted(
+        "{}\t{}".format(e["from"], e["kind"]) for e in edges
+        if e.get("to") == symbol_id
+        and e.get("confidence") in ("resolved", "ambiguous"))
+    return content_hash("\n".join(incoming))
+
+
+def compute_inputs_digest(root, file_list):
+    """sha256 over (path, blob) for every mappable file as it exists now — the
+    cache-validity fingerprint. Invalidates precisely when any mapped byte
+    changes (working-tree edits included, via current_blob_map)."""
+    blobs = current_blob_map(root)
+    pairs = sorted("{} {}".format(p, blobs.get(p, "")) for p in file_list)
+    return content_hash("\n".join(pairs))
+
+
+def path_to_module(index):
+    rev = {}
+    for mid, paths in index.get("modules", {}).items():
+        for p in paths:
+            rev[p] = mid
+    return rev
+
+
+def do_extract(root, backend="auto"):
+    """Build the Structure Index fresh. Returns the index dict, or a do_scan
+    error dict (no 'symbols' key) on failure."""
+    scan = do_scan(root, enforce_ceiling=False)
+    if not scan.get("ok"):
+        return scan
+    file_list = [f["path"] for f in scan["files"]]
+
+    part = do_partition(root)
+    modules_map = {}
+    if part.get("ok"):
+        for m in part["modules"]:
+            modules_map[m["id"]] = list(m["paths"])
+
+    file_tokens = {}
+    all_symbols = []
+    imports = {}
+    external = set()
+    for relpath in file_list:
+        text = read_text(os.path.join(root, relpath))
+        if text is None:
+            continue
+        file_tokens[relpath] = set(IDENT_RE.findall(text))
+        syms, import_lines, targets = extract_regex(relpath, text)
+        if import_lines:
+            imports[relpath] = import_lines
+        external.update(targets)
+        all_symbols.extend(syms)
+
+    # Deterministic, line-move-stable ids: path::qualified-name, with an
+    # occurrence suffix only on a genuine in-file name collision.
+    all_symbols.sort(
+        key=lambda s: (s["file"], s["span"]["start_line"], s["qualified_name"]))
+    seen = {}
+    for s in all_symbols:
+        base = "{}::{}".format(s["file"], s["qualified_name"])
+        n = seen.get(base, 0) + 1
+        seen[base] = n
+        s["id"] = base if n == 1 else "{}#{}".format(base, n)
+
+    edges = build_edges(all_symbols, file_tokens, "regex")
+    for s in all_symbols:
+        s["fan_in"] = sum(1 for f, toks in file_tokens.items()
+                          if f != s["file"] and s["name"] in toks)
+        s["incident_edge_digest"] = incident_edge_digest(s["id"], edges)
+
+    all_symbols.sort(key=lambda s: s["id"])
+    return {
+        "version": STRUCTURE_VERSION,
+        "commit": git_head(root),
+        "dirty_digest": compute_inputs_digest(root, file_list),
+        "backend": {"*": "regex"},
+        "symbols": all_symbols,
+        "edges": edges,
+        "imports": imports,
+        "external_deps": sorted(external),
+        "modules": modules_map,
+    }
+
+
+def write_structure_index(root, index):
+    path = structure_index_path(root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(index, indent=2, sort_keys=True) + "\n")
+
+
+def load_or_build_index(root, backend="auto", force=False):
+    """Return (index, cached). Reuses .atlas/structure/index.json when its commit
+    and inputs digest still match the working tree."""
+    path = structure_index_path(root)
+    if not force and os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                cached = json.load(f)
+        except (OSError, ValueError):
+            cached = None
+        if cached and cached.get("version") == STRUCTURE_VERSION:
+            scan = do_scan(root, enforce_ceiling=False)
+            if scan.get("ok"):
+                file_list = [f["path"] for f in scan["files"]]
+                if (cached.get("commit") == git_head(root)
+                        and cached.get("dirty_digest")
+                        == compute_inputs_digest(root, file_list)):
+                    return cached, True
+    index = do_extract(root, backend)
+    if "symbols" not in index:
+        return index, False
+    write_structure_index(root, index)
+    return index, False
+
+
+def cmd_extract(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    index, cached = load_or_build_index(
+        root, backend=args.backend, force=args.force)
+    if "symbols" not in index:
+        emit(index)
+        return 1
+    fields = {
+        "cached": cached,
+        "backend": index["backend"],
+        "commit": index["commit"],
+        "symbol_count": len(index["symbols"]),
+        "edge_count": len(index["edges"]),
+        "import_file_count": len(index["imports"]),
+        "external_dep_count": len(index["external_deps"]),
+        "module_count": len(index["modules"]),
+        "path": os.path.relpath(structure_index_path(root), root),
+    }
+    if args.module_id:
+        rev = path_to_module(index)
+        fields["symbols"] = [s for s in index["symbols"]
+                             if rev.get(s["file"]) == args.module_id]
+    return emit_ok(**fields)
+
+
 # ─── commit (guarded, pathspec-scoped) ───────────────────────────────────────
 
 def run_git_capture(args, cwd):
@@ -2704,6 +2977,15 @@ def main():
     ground = sub.add_parser("ground", help="Grounding pack for a mapper agent")
     ground.add_argument("module_id", help="Module id from `partition`")
 
+    extract = sub.add_parser(
+        "extract", help="Build/refresh the deterministic Structure Index")
+    extract.add_argument("--module", dest="module_id", default=None,
+                         help="Restrict reported symbols to one module id")
+    extract.add_argument("--backend", choices=["auto", "treesitter", "regex"],
+                         default="auto", help="Extraction backend (default: auto)")
+    extract.add_argument("--force", action="store_true",
+                         help="Rebuild even when the cached index is still valid")
+
     commit = sub.add_parser("commit", help="Guarded pathspec-scoped map commit")
     commit.add_argument("--message", required=True)
     commit.add_argument("--also", action="append", default=[],
@@ -2773,6 +3055,8 @@ def main():
         return cmd_lint(args)
     if args.command == "ground":
         return cmd_ground(args)
+    if args.command == "extract":
+        return cmd_extract(args)
     if args.command == "commit":
         return cmd_commit(args)
     if args.command == "branch":
@@ -2794,7 +3078,7 @@ def main():
         return cmd_remove(args)
 
     emit_fail("usage", "Unknown or missing subcommand. Available: scan, "
-              "partition, ledger, lock, status, index, lint, ground, "
+              "partition, ledger, lock, status, index, lint, ground, extract, "
               "commit, branch, verify-cache, init, remove.")
     return 2
 

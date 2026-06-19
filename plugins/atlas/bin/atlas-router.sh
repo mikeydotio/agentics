@@ -53,6 +53,9 @@ case "$cmd" in
     ground)
         run_cli ground "$@"
         ;;
+    extract)
+        run_cli extract "$@"
+        ;;
     commit)
         run_cli commit "$@"
         ;;

@@ -265,7 +265,7 @@ and the trigger inputs below. The anchor decides *which* cell; the trigger decid
 |---|---|---|---|
 | `symbol.contract` | `signature_hash` + `visibility` | the interface changes | body edits |
 | `symbol.load_bearing` (bool + why) | `signature_hash` + `incident_edge_digest` (resolved callers only) | interface OR resolved-caller-set changes | body edits, ambiguous-caller churn |
-| `module.purpose` / `.gotchas` / `.summary` / `.read_when` | `public_surface_digest` | the public shape changes | private-body edits, symbol reorder |
+| `module.purpose` / `.type_notes` / `.gotchas` / `.summary` / `.read_when` | `public_surface_digest` | the public shape changes | private-body edits, symbol reorder |
 | `edge.semantic` (`owns/emits/reads/writes`; also the disambiguation of an `ambiguous` structural edge) | `from_span_hash` + `to_symbol_id` + `kind` | the calling code changes | unrelated edits |
 | `overview.shape` / `.dataflow` / `.index_facts` | `Σ module public_surface_digests` + inter-module edge digest | a module surface or cross-module edge changes | intra-module body edits |
 

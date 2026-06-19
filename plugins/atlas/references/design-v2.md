@@ -257,7 +257,9 @@ value — so re-verification, like re-judgment, collapses to the delta.
 ### Judgment taxonomy & keying — **the correctness crux**
 
 The extractor emits three orthogonal hashes per symbol; each judgment kind keys on the one that
-captures exactly its dependency. Keys are `H(kind, <inputs>)` over sorted inputs.
+captures exactly its dependency. A key is `<kind>/<24-hex>` digesting the kind, an **identity anchor**
+(the symbol id or module id — so two symbols with an identical signature never share one judgment),
+and the trigger inputs below. The anchor decides *which* cell; the trigger decides *when it misses*.
 
 | `kind` | Keyed on | Regenerates when… | Stable across… |
 |---|---|---|---|

@@ -56,6 +56,12 @@ case "$cmd" in
     extract)
         run_cli extract "$@"
         ;;
+    judge-plan)
+        run_cli judge-plan "$@"
+        ;;
+    judgment)
+        run_cli judgment "$@"
+        ;;
     commit)
         run_cli commit "$@"
         ;;

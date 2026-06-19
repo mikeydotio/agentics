@@ -2130,6 +2130,243 @@ def cmd_extract(args):
     return emit_ok(**fields)
 
 
+# ─── Judgment Cache (the LLM-produced, content-addressed prose layer) ────────
+#
+# Every judgment cell is keyed by WHAT IT DESCRIBES, not when it was written, so
+# an unchanged thing reuses its cached prose verbatim across rebuilds and the LLM
+# is invoked only for the delta. A key is `<kind>/<24-hex>` where the hash digests
+# the kind, the cell's IDENTITY anchor (symbol id / module id), and exactly the
+# structural input that should trigger re-judgment (decision 26):
+#   symbol.contract       id + signature_hash + visibility      (NOT body → body edits are free)
+#   symbol.load_bearing   id + signature_hash + incident_edge_digest (resolved callers)
+#   module.{purpose,gotchas,summary,read_when}  module id + public_surface_digest
+#   overview.{shape,dataflow,index_facts}       global surface + cross-module edge digest
+# The identity anchor keeps two symbols with an identical signature from sharing
+# one judgment; the trigger input makes the key miss exactly when the prose could
+# go stale. See references/design-v2.md "The judgment-key derivation".
+
+JUDGMENT_VERSION = 1
+MODULE_JUDGMENT_KINDS = ("purpose", "gotchas", "summary", "read_when")
+OVERVIEW_JUDGMENT_KINDS = ("shape", "dataflow", "index_facts")
+
+
+def judgments_path(root):
+    return os.path.join(root, "docs", "atlas", "judgments.json")
+
+
+def judgment_key(kind, *inputs):
+    """`<kind>/<24-hex>` — kind-prefixed (greppable, cross-kind unique) digest of
+    the kind plus its identity/trigger inputs. 24 hex = 96 bits, collision-safe."""
+    canon = "\n".join([kind] + [str(i) for i in inputs])
+    return "{}/{}".format(
+        kind, hashlib.sha256(canon.encode("utf-8")).hexdigest()[:24])
+
+
+def module_symbols(index):
+    """{module_id: [symbol, …]} — symbols grouped by their file's module."""
+    rev = path_to_module(index)
+    out = {mid: [] for mid in index.get("modules", {})}
+    for s in index["symbols"]:
+        mid = rev.get(s["file"])
+        if mid is not None:
+            out.setdefault(mid, []).append(s)
+    return out
+
+
+def module_edge_kinds(index, module_id, member_ids):
+    """Sorted set of structural edge kinds incident to a module (either end)."""
+    kinds = set()
+    for e in index["edges"]:
+        if e["from"] in member_ids or (e.get("to") in member_ids):
+            kinds.add(e["kind"])
+    return sorted(kinds)
+
+
+def public_surface_digest(index, module_id, members):
+    """Order-independent digest of a module's PUBLIC shape: {signature_hash,
+    visibility} of its public symbols plus the kinds of edges touching it.
+    Excludes private bodies and symbol order by construction."""
+    member_ids = {s["id"] for s in members}
+    surface = sorted("{}|{}".format(s["signature_hash"], s["visibility"])
+                     for s in members if s["visibility"] == "public")
+    kinds = module_edge_kinds(index, module_id, member_ids)
+    return content_hash(json.dumps({"surface": surface, "edges": kinds},
+                                   sort_keys=True))
+
+
+def overview_digest(index, surfaces):
+    """Global digest: every module's public_surface_digest plus the set of
+    resolved cross-module edges. Stable under intra-module body edits."""
+    rev = path_to_module(index)
+    cross = sorted(set(
+        "{}->{}:{}".format(rev.get(e["from"].split("::")[0]) or "",
+                           rev.get((e.get("to") or "::").split("::")[0]) or "",
+                           e["kind"])
+        for e in index["edges"]
+        if e["confidence"] == "resolved" and e.get("to")
+        and rev.get(e["from"].split("::")[0])
+        != rev.get(e["to"].split("::")[0])))
+    return content_hash(json.dumps(
+        {"surfaces": [surfaces[m] for m in sorted(surfaces)], "cross": cross},
+        sort_keys=True))
+
+
+def is_load_bearing_candidate(sym):
+    """Internal (non-public) symbols that other files reach for are the
+    load-bearing-internals candidates the LLM judges (bool + why). Public
+    symbols get a contract cell instead; trivial unreferenced privates neither."""
+    return sym["visibility"] != "public" and sym.get("fan_in", 0) >= 1
+
+
+def compute_judgment_keys(index):
+    """The full set of judgment cells the current structure requires, each with
+    its key and identity anchor. Deterministic — the planning side of the cache."""
+    cells = []
+    surfaces = {}
+    mods = module_symbols(index)
+    for mid in sorted(mods):
+        members = mods[mid]
+        surfaces[mid] = public_surface_digest(index, mid, members)
+        for k in MODULE_JUDGMENT_KINDS:
+            cells.append({
+                "key": judgment_key("module." + k, mid, surfaces[mid]),
+                "kind": "module." + k, "module": mid, "symbol": None})
+        for s in sorted(members, key=lambda x: x["id"]):
+            if s["visibility"] == "public":
+                cells.append({
+                    "key": judgment_key("symbol.contract", s["id"],
+                                        s["signature_hash"], s["visibility"]),
+                    "kind": "symbol.contract", "module": mid, "symbol": s["id"]})
+            if is_load_bearing_candidate(s):
+                cells.append({
+                    "key": judgment_key("symbol.load_bearing", s["id"],
+                                        s["signature_hash"],
+                                        s["incident_edge_digest"]),
+                    "kind": "symbol.load_bearing", "module": mid,
+                    "symbol": s["id"]})
+    if index["symbols"]:
+        odigest = overview_digest(index, surfaces)
+        for k in OVERVIEW_JUDGMENT_KINDS:
+            cells.append({
+                "key": judgment_key("overview." + k, odigest),
+                "kind": "overview." + k, "module": "overview/ARCHITECTURE",
+                "symbol": None})
+    # Stable order; de-dup by key (identical anchors can't legitimately recur).
+    seen = set()
+    unique = []
+    for c in sorted(cells, key=lambda c: (c["kind"], c["module"],
+                                          c["symbol"] or "", c["key"])):
+        if c["key"] not in seen:
+            seen.add(c["key"])
+            unique.append(c)
+    return unique
+
+
+def load_judgments(root):
+    path = judgments_path(root)
+    if os.path.isfile(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and isinstance(data.get("judgments"), dict):
+                return data
+        except (OSError, ValueError):
+            pass
+    return {"version": JUDGMENT_VERSION, "judgments": {}}
+
+
+def write_judgments(root, data):
+    path = judgments_path(root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+
+def plan_judgment_misses(index, judgments):
+    """Split the required cells into present (cached) and missing (must be
+    judged by the LLM). The cache miss set IS the delta the model must fill."""
+    have = judgments.get("judgments", {})
+    cells = compute_judgment_keys(index)
+    missing = [c for c in cells if c["key"] not in have]
+    present = [c["key"] for c in cells if c["key"] in have]
+    return cells, missing, present
+
+
+def cmd_judge_plan(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    index, _ = load_or_build_index(root, backend=args.backend)
+    if "symbols" not in index:
+        emit(index)
+        return 1
+    judgments = load_judgments(root)
+    cells, missing, present = plan_judgment_misses(index, judgments)
+    by_module = {}
+    for c in cells:
+        slot = by_module.setdefault(c["module"], {"expected": 0, "missing": 0})
+        slot["expected"] += 1
+        if c["key"] not in judgments.get("judgments", {}):
+            slot["missing"] += 1
+    return emit_ok(
+        total_expected=len(cells),
+        missing_count=len(missing),
+        present_count=len(present),
+        missing_keys=missing,
+        by_module=by_module,
+    )
+
+
+def cmd_judgment_ingest(args):
+    """Merge LLM-produced cells (a JSON array on stdin) into judgments.json. The
+    CLI owns the file: it stamps created_at_commit and a default unverified
+    verdict, then writes canonically. Same opaque-stdin discipline as
+    verify-cache write."""
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    raw = sys.stdin.read()
+    try:
+        cells = json.loads(raw) if raw.strip() else []
+    except ValueError as exc:
+        return emit_fail("bad_payload", "Cells must be a JSON array: {}".format(exc))
+    if not isinstance(cells, list):
+        return emit_fail("bad_payload", "Expected a JSON array of cells.")
+
+    data = load_judgments(root)
+    store = data.setdefault("judgments", {})
+    head = git_head(root)
+    ingested = 0
+    rejected = []
+    for cell in cells:
+        if not isinstance(cell, dict):
+            rejected.append({"reason": "not_an_object", "cell": cell})
+            continue
+        key = cell.get("key")
+        kind = cell.get("kind")
+        value = cell.get("value")
+        if not key or "/" not in str(key) or not kind or value is None:
+            rejected.append({"reason": "missing_fields", "key": key})
+            continue
+        if not str(key).startswith(str(kind) + "/"):
+            rejected.append({"reason": "key_kind_mismatch", "key": key})
+            continue
+        provenance = cell.get("provenance") or {}
+        if not isinstance(provenance, dict):
+            provenance = {}
+        provenance.setdefault("created_at_commit", head)
+        verify = cell.get("verify") or {"verdict": "unverified"}
+        if not isinstance(verify, dict):
+            verify = {"verdict": "unverified"}
+        store[key] = {"kind": kind, "value": value,
+                      "provenance": provenance, "verify": verify}
+        ingested += 1
+    write_judgments(root, data)
+    return emit_ok(ingested=ingested, rejected=rejected,
+                   total=len(store),
+                   path=os.path.relpath(judgments_path(root), root))
+
+
 # ─── commit (guarded, pathspec-scoped) ───────────────────────────────────────
 
 def run_git_capture(args, cwd):
@@ -3235,6 +3472,17 @@ def main():
     extract.add_argument("--force", action="store_true",
                          help="Rebuild even when the cached index is still valid")
 
+    judge_plan = sub.add_parser(
+        "judge-plan",
+        help="List the judgment cells the structure needs (missing vs cached)")
+    judge_plan.add_argument(
+        "--backend", choices=["auto", "treesitter", "regex"], default="auto")
+
+    judgment = sub.add_parser("judgment", help="Judgment Cache operations")
+    judgment_sub = judgment.add_subparsers(dest="judgment_command")
+    judgment_sub.add_parser(
+        "ingest", help="Merge LLM-produced cells (JSON array on stdin)")
+
     commit = sub.add_parser("commit", help="Guarded pathspec-scoped map commit")
     commit.add_argument("--message", required=True)
     commit.add_argument("--also", action="append", default=[],
@@ -3306,6 +3554,13 @@ def main():
         return cmd_ground(args)
     if args.command == "extract":
         return cmd_extract(args)
+    if args.command == "judge-plan":
+        return cmd_judge_plan(args)
+    if args.command == "judgment":
+        if args.judgment_command == "ingest":
+            return cmd_judgment_ingest(args)
+        emit_fail("usage", "Unknown judgment command. Available: ingest.")
+        return 2
     if args.command == "commit":
         return cmd_commit(args)
     if args.command == "branch":
@@ -3328,7 +3583,7 @@ def main():
 
     emit_fail("usage", "Unknown or missing subcommand. Available: scan, "
               "partition, ledger, lock, status, index, lint, ground, extract, "
-              "commit, branch, verify-cache, init, remove.")
+              "judge-plan, judgment, commit, branch, verify-cache, init, remove.")
     return 2
 
 

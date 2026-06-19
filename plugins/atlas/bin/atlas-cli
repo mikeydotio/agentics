@@ -1313,6 +1313,24 @@ def compute_status(root):
             actual = f.read()
         if build_index_text(root, docs) != actual:
             integrity = "INDEX out of sync with doc frontmatter"
+    # v2: a committed doc that diverges from its deterministic projection (a
+    # stale render or a hand-edit) makes the map untrustworthy — tier 3.
+    if not integrity and os.path.isfile(judgments_path(root)):
+        idx, _ = load_or_build_index(root)
+        if "symbols" in idx:
+            judg = load_judgments(root)
+            key_by = _key_index(compute_judgment_keys(idx))
+            by_doc_id = {d["doc_id"]: d for d in docs}
+            for mid in idx.get("modules", {}):
+                doc = by_doc_id.get("modules/{}.md".format(mid))
+                if doc is None:
+                    continue
+                text, _, _ = render_module_doc(root, idx, judg, key_by, mid)
+                _, rbody = split_frontmatter(text)
+                if (PENDING_PROSE in doc["body"]
+                        or doc["body"].rstrip("\n") != rbody.rstrip("\n")):
+                    integrity = "projected docs diverge from the structure index"
+                    break
     if integrity:
         return {
             "ok": True, "mapped": True, "tier": 3,
@@ -3267,9 +3285,50 @@ def lint_map(root, fast=False):
     valid_module_ids = {doc_module_id(d["doc_id"]) for d in docs
                         if d["doc_id"].startswith("modules/")}
 
+    # v2 mode (a Judgment Cache exists): the Structure Index is ground truth for
+    # symbol existence (L7 join) and the committed docs are a deterministic
+    # projection (L15 no placeholders, L16 no divergence).
+    v2_index = None
+    v2_judgments = None
+    v2_renders = {}
+    if os.path.isfile(judgments_path(root)):
+        idx, _ = load_or_build_index(root)
+        if "symbols" in idx:
+            v2_index = idx
+            v2_judgments = load_judgments(root)
+            key_by = _key_index(compute_judgment_keys(v2_index))
+            for mid in v2_index.get("modules", {}):
+                text, _, _ = render_module_doc(
+                    root, v2_index, v2_judgments, key_by, mid)
+                _, rbody = split_frontmatter(text)
+                v2_renders["modules/{}.md".format(mid)] = rbody
+            if v2_index["symbols"]:
+                text, _, _ = render_overview_doc(
+                    root, v2_index, v2_judgments, key_by)
+                _, rbody = split_frontmatter(text)
+                v2_renders["overview/ARCHITECTURE.md"] = rbody
+    v2_symbols_by_file = {}
+    if v2_index is not None:
+        for s in v2_index["symbols"]:
+            v2_symbols_by_file.setdefault(s["file"], set()).add(s["name"])
+
     for doc in docs:
         doc_file = "docs/atlas/" + doc["doc_id"]
         body = doc["body"]
+
+        # L15 — a committed projected doc must carry no unfilled judgment
+        # placeholders (the map shipped with a pending cell). v2 mode only.
+        if v2_index is not None and PENDING_PROSE in body:
+            add("L15", "ERROR", doc_file,
+                "doc has unfilled judgment placeholders — run /atlas update")
+
+        # L16 — a committed doc must equal its deterministic projection (body).
+        # Finalize manages frontmatter (blobs/baseline), so compare bodies.
+        if v2_index is not None and doc["doc_id"] in v2_renders:
+            if body.rstrip("\n") != v2_renders[doc["doc_id"]].rstrip("\n"):
+                add("L16", "ERROR", doc_file,
+                    "doc diverges from its projection — run `project` "
+                    "(never hand-edit a derived doc)")
 
         # L1 — skeleton conformance (module docs)
         if doc["doc_id"].startswith("modules/"):
@@ -3319,10 +3378,21 @@ def lint_map(root, fast=False):
                 add("L6", "WARN", doc_file,
                     "backticked path `{}` not found in repo".format(token))
 
-        # L7 — symbol existence (grep the claimed location). A symbol that IS
-        # the file's basename (scripts, hook files) is satisfied by the file
-        # existing — scripts rarely contain their own names.
-        if doc["doc_id"].startswith("modules/"):
+        # L7 — symbol existence. In v2 mode this is a JOIN against the Structure
+        # Index (the symbol must be indexed at the cited file — stronger than a
+        # grep, which a string match anywhere in the file would satisfy);
+        # otherwise it falls back to grepping the claimed location.
+        if doc["doc_id"].startswith("modules/") and v2_index is not None:
+            for symbol, location in parse_symbol_tables(body):
+                relpath = location.rsplit(":", 1)[0] \
+                    if re.search(r":\d+$", location) else location
+                bare = symbol.rsplit(".", 1)[-1].split("(", 1)[0].strip()
+                names = v2_symbols_by_file.get(relpath, set())
+                if names and bare not in names and symbol not in names:
+                    add("L7", "WARN", doc_file,
+                        "symbol `{}` is not an indexed definition in `{}`".format(
+                            symbol, relpath))
+        elif doc["doc_id"].startswith("modules/"):
             for symbol, location in parse_symbol_tables(body):
                 relpath = location.rsplit(":", 1)[0] \
                     if re.search(r":\d+$", location) else location

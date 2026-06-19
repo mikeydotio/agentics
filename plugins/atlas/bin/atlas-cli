@@ -528,15 +528,22 @@ def write_doc(doc):
         f.write(text)
 
 
-def build_ledger(root, docs):
+def build_ledger(root, docs, structure=None, judgment_keys=None):
+    """Build the derived reverse index. With a `structure` block and/or per-doc
+    `judgment_keys` (v2 mode), the ledger is stamped version 2 and carries those
+    blocks; without them it is the unchanged v1 ledger."""
     head = git_head(root)
     ledger = {
-        "version": 1,
+        "version": 2 if (structure is not None or judgment_keys is not None) else 1,
         "baseline": head,
         "docs": {},
         "paths": {},
         "referenced_by": {},
     }
+    if structure is not None:
+        ledger["structure"] = structure
+    if judgment_keys is not None:
+        ledger["judgment_keys"] = judgment_keys
     for doc in docs:
         fm = doc["fm"]
         sources = {e["path"]: e.get("blob") for e in fm.get("sources", [])}
@@ -656,7 +663,18 @@ def cmd_ledger_finalize(args):
                     )
                 sources_count += 1
 
-    ledger = build_ledger(root, docs)
+    # v2 mode (a Judgment Cache exists): record the structure fingerprint and
+    # per-doc judgment-key dependency alongside the v1 reverse index.
+    structure = None
+    judgment_keys = None
+    if os.path.isfile(judgments_path(root)):
+        index, _ = load_or_build_index(root)
+        if "symbols" in index:
+            structure = structure_ledger_block(index)
+            judgment_keys = judgment_keys_by_doc(root, index, load_judgments(root))
+
+    ledger = build_ledger(root, docs, structure=structure,
+                          judgment_keys=judgment_keys)
     ledger_path = os.path.join(root, LEDGER_RELPATH)
     os.makedirs(os.path.dirname(ledger_path), exist_ok=True)
     with open(ledger_path, "w", encoding="utf-8") as f:
@@ -666,6 +684,7 @@ def cmd_ledger_finalize(args):
     return emit_ok(
         docs_count=len(docs), sources_count=sources_count,
         docs_rewritten=docs_rewritten, baseline=baseline,
+        ledger_version=ledger["version"],
     )
 
 
@@ -2186,11 +2205,15 @@ def module_edge_kinds(index, module_id, member_ids):
 
 
 def public_surface_digest(index, module_id, members):
-    """Order-independent digest of a module's PUBLIC shape: {signature_hash,
-    visibility} of its public symbols plus the kinds of edges touching it.
-    Excludes private bodies and symbol order by construction."""
+    """Order-independent digest of a module's PUBLIC CAPABILITY SET: the
+    (name, kind, visibility) of its public symbols plus the kinds of edges
+    touching it. Keyed on names — NOT signature hashes — so module-level
+    judgments (purpose/summary/…) re-judge when the set of capabilities changes
+    (a public symbol added/removed/renamed) but stay cached when an existing
+    signature is merely tweaked (that re-judges only that symbol's contract).
+    Excludes private symbols, bodies, and order by construction."""
     member_ids = {s["id"] for s in members}
-    surface = sorted("{}|{}".format(s["signature_hash"], s["visibility"])
+    surface = sorted("{}|{}|{}".format(s["name"], s["kind"], s["visibility"])
                      for s in members if s["visibility"] == "public")
     kinds = module_edge_kinds(index, module_id, member_ids)
     return content_hash(json.dumps({"surface": surface, "edges": kinds},
@@ -2368,6 +2391,56 @@ def cmd_judgment_ingest(args):
     return emit_ok(ingested=ingested, rejected=rejected,
                    total=len(store),
                    path=os.path.relpath(judgments_path(root), root))
+
+
+def judgment_key_delta(index, judgments):
+    """Classify the structure's required judgment cells against the cache:
+    `missing` (required, not cached → the LLM delta) and `orphaned` (cached but
+    no longer required → prunable). The miss set drives /atlas update."""
+    cells = compute_judgment_keys(index)
+    have = judgments.get("judgments", {})
+    required = {c["key"] for c in cells}
+    missing = [c for c in cells if c["key"] not in have]
+    orphaned = sorted(set(have) - required)
+    by_kind = {}
+    for c in missing:
+        by_kind[c["kind"]] = by_kind.get(c["kind"], 0) + 1
+    return cells, missing, orphaned, by_kind
+
+
+def cmd_judgment_diff(args):
+    """The v2 staleness engine. Reports the judgment delta (cells the LLM must
+    fill) and the docs whose freshly-rendered bytes differ from what's committed
+    (pure re-projection). `clean` is the zero-LLM proof: no source-relevant
+    change means missing == [] and stale_docs == []."""
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    index, _ = load_or_build_index(root, backend=args.backend)
+    if "symbols" not in index:
+        emit(index)
+        return 1
+    judgments = load_judgments(root)
+    _, missing, orphaned, by_kind = judgment_key_delta(index, judgments)
+
+    docs, _, _ = join_structure_and_judgments(root, index, judgments)
+    stale_docs = []
+    for relpath, text in sorted(docs.items()):
+        abspath = os.path.join(root, relpath)
+        prior = read_text(abspath) if os.path.isfile(abspath) else None
+        if prior != text:
+            stale_docs.append(relpath)
+
+    return emit_ok(
+        clean=not missing and not stale_docs,
+        missing_count=len(missing),
+        missing_keys=missing,
+        by_kind=by_kind,
+        orphaned_count=len(orphaned),
+        orphaned_keys=orphaned,
+        stale_doc_count=len(stale_docs),
+        stale_docs=stale_docs,
+    )
 
 
 # ─── project (deterministic render — the JOIN) ───────────────────────────────
@@ -2612,6 +2685,45 @@ def join_structure_and_judgments(root, index, judgments):
         consumed += c
         missing += m
     return docs, consumed, missing
+
+
+def judgment_keys_by_doc(root, index, judgments):
+    """{doc_relpath: [judgment keys it consumes]} — the per-doc dependency the
+    v2 ledger records and `judgment diff` uses to map a key delta to the docs
+    that must re-project. Derived from the same render path as project (DRY)."""
+    key_by = _key_index(compute_judgment_keys(index))
+    out = {}
+    for module_id in sorted(index.get("modules", {})):
+        _, consumed, _ = render_module_doc(
+            root, index, judgments, key_by, module_id)
+        out["docs/atlas/modules/{}.md".format(module_id)] = sorted(set(consumed))
+    if index["symbols"]:
+        _, consumed, _ = render_overview_doc(root, index, judgments, key_by)
+        out["docs/atlas/overview/ARCHITECTURE.md"] = sorted(set(consumed))
+    return out
+
+
+def structure_ledger_block(index):
+    """The v2 ledger's structure fingerprint: a content digest of the whole
+    index plus per-path symbol hashes, so a future diff can localize change
+    without re-reading every file."""
+    per_path = {}
+    for s in index["symbols"]:
+        per_path.setdefault(s["file"], []).append({
+            "id": s["id"], "signature_hash": s["signature_hash"],
+            "span_hash": s["span_hash"],
+            "incident_edge_digest": s["incident_edge_digest"]})
+    digest_src = {
+        "symbols": [[s["id"], s["signature_hash"], s["span_hash"],
+                     s["incident_edge_digest"]] for s in index["symbols"]],
+        "edges": [[e["from"], e.get("to"), e["kind"], e["confidence"]]
+                  for e in index["edges"]],
+    }
+    return {
+        "index_commit": index["commit"],
+        "index_digest": content_hash(json.dumps(digest_src, sort_keys=True)),
+        "symbols": per_path,
+    }
 
 
 def cmd_project(args):
@@ -3757,6 +3869,10 @@ def main():
     judgment_sub = judgment.add_subparsers(dest="judgment_command")
     judgment_sub.add_parser(
         "ingest", help="Merge LLM-produced cells (JSON array on stdin)")
+    jdiff = judgment_sub.add_parser(
+        "diff", help="Classify the judgment delta (missing/orphaned/stale docs)")
+    jdiff.add_argument("--backend", choices=["auto", "treesitter", "regex"],
+                       default="auto")
 
     project = sub.add_parser(
         "project", help="Render committed docs by joining structure + judgments")
@@ -3839,7 +3955,9 @@ def main():
     if args.command == "judgment":
         if args.judgment_command == "ingest":
             return cmd_judgment_ingest(args)
-        emit_fail("usage", "Unknown judgment command. Available: ingest.")
+        if args.judgment_command == "diff":
+            return cmd_judgment_diff(args)
+        emit_fail("usage", "Unknown judgment command. Available: ingest, diff.")
         return 2
     if args.command == "project":
         return cmd_project(args)

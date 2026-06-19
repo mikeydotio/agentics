@@ -1973,9 +1973,11 @@ def do_extract(root, backend="auto"):
 
     part = do_partition(root)
     modules_map = {}
+    module_labels = {}
     if part.get("ok"):
         for m in part["modules"]:
             modules_map[m["id"]] = list(m["paths"])
+            module_labels[m["id"]] = m["label"]
 
     helper = None
     helper_files = {}
@@ -2062,6 +2064,7 @@ def do_extract(root, backend="auto"):
         "imports": imports,
         "external_deps": sorted(external),
         "modules": modules_map,
+        "module_labels": module_labels,
     }
 
 
@@ -2146,7 +2149,7 @@ def cmd_extract(args):
 # go stale. See references/design-v2.md "The judgment-key derivation".
 
 JUDGMENT_VERSION = 1
-MODULE_JUDGMENT_KINDS = ("purpose", "gotchas", "summary", "read_when")
+MODULE_JUDGMENT_KINDS = ("purpose", "type_notes", "gotchas", "summary", "read_when")
 OVERVIEW_JUDGMENT_KINDS = ("shape", "dataflow", "index_facts")
 
 
@@ -2365,6 +2368,278 @@ def cmd_judgment_ingest(args):
     return emit_ok(ingested=ingested, rejected=rejected,
                    total=len(store),
                    path=os.path.relpath(judgments_path(root), root))
+
+
+# ─── project (deterministic render — the JOIN) ───────────────────────────────
+#
+# project assembles the committed docs by JOINing the Structure Index (rows,
+# edges, deps — what exists) with the Judgment Cache (prose cells — why it
+# matters). It writes no judgment of its own: a missing cell renders a visible
+# placeholder (which lint L15 flags and judge-plan counts), so a doc is always
+# structurally valid and re-projecting after ingest fills the blanks. Output is
+# deterministic — same index + same cache → byte-identical docs.
+
+GENERATOR_V2 = "cartographer/3"
+PENDING_PROSE = "_(pending judgment)_"
+PROJECT_MAX_EDGES = 60
+OVERVIEW_SUMMARY = "System architecture and cross-module relationships"
+
+
+def _key_index(cells):
+    """{(kind, module, symbol): key} from compute_judgment_keys — the single
+    source of truth for key derivation, shared by planning and projection."""
+    return {(c["kind"], c["module"], c["symbol"]): c["key"] for c in cells}
+
+
+def symbol_location(sym):
+    return "{}:{}".format(sym["file"], sym["span"]["start_line"])
+
+
+def module_external_deps(root, index, paths):
+    """Sorted import targets for a module's files that are NOT internal repo
+    paths (a target whose first segment is a repo directory is internal)."""
+    deps = set()
+    for p in paths:
+        for line in index["imports"].get(p, []):
+            tgt = parse_import_target(line)
+            if not tgt:
+                continue
+            first = tgt.replace(".", "/").split("/", 1)[0]
+            if first and os.path.isdir(os.path.join(root, first)):
+                continue
+            deps.add(tgt)
+    return sorted(deps)
+
+
+def render_relationships(index, module_id, member_ids):
+    """Resolved cross-module `calls`/structural edges as v1 edge lines, plus the
+    set of referenced module ids (for references_modules)."""
+    rev = path_to_module(index)
+    name_by_id = {s["id"]: s["name"] for s in index["symbols"]}
+    lines = set()
+    refs = set()
+    for e in index["edges"]:
+        if e["confidence"] != "resolved" or not e.get("to"):
+            continue
+        if e["from"] not in member_ids:
+            continue
+        to_mod = rev.get(e["to"].split("::")[0])
+        if to_mod is None or to_mod == module_id:
+            continue  # cross-module only (intra-module calls are too noisy)
+        fn = name_by_id.get(e["from"])
+        tn = name_by_id.get(e["to"])
+        if not fn or not tn:
+            continue
+        lines.add("- `{}.{} -> {}.{} ({})`".format(
+            module_id, fn, to_mod, tn, e["kind"]))
+        refs.add(to_mod)
+    return sorted(lines)[:PROJECT_MAX_EDGES], sorted(refs)
+
+
+def render_module_doc(root, index, judgments, key_by, module_id):
+    """Render one module doc. Returns (text, consumed_keys, missing_keys)."""
+    store = judgments.get("judgments", {})
+    consumed, missing = [], []
+
+    def cell(kind, symbol=None):
+        key = key_by.get((kind, module_id, symbol))
+        if key is None:
+            return None
+        consumed.append(key)
+        entry = store.get(key)
+        if entry is None:
+            missing.append(key)
+            return None
+        return entry.get("value")
+
+    mods = module_symbols(index)
+    members = sorted(mods.get(module_id, []), key=lambda s: (s["name"], s["id"]))
+    member_ids = {s["id"] for s in members}
+    label = index.get("module_labels", {}).get(module_id, module_id)
+
+    summary = cell("module.summary") or "Pending summary for {}".format(label)
+    read_when = cell("module.read_when") or "Pending routing for {}".format(label)
+    purpose = cell("module.purpose") or PENDING_PROSE
+    type_notes = cell("module.type_notes") or PENDING_PROSE
+    gotchas = cell("module.gotchas")
+
+    rel_lines, refs = render_relationships(index, module_id, member_ids)
+    paths = sorted(index["modules"].get(module_id, []))
+
+    fm = {
+        "module": label,
+        "summary": summary,
+        "read_when": read_when,
+        "sources": [{"path": p} for p in paths],
+    }
+    if refs:
+        fm["references_modules"] = refs
+    fm["generator"] = GENERATOR_V2
+
+    out = [serialize_frontmatter(fm).rstrip("\n"), ""]
+    out += ["# Module: {}".format(label), ""]
+    out += ["## Purpose", "", purpose, ""]
+
+    out += ["## Public API", ""]
+    out += ["| Symbol | Kind | Location | Contract |", "| --- | --- | --- | --- |"]
+    for s in members:
+        if s["visibility"] != "public":
+            continue
+        contract = cell("symbol.contract", s["id"]) or PENDING_PROSE
+        out.append("| `{}` | {} | `{}` | {} |".format(
+            s["name"], s["kind"], symbol_location(s), contract))
+    out.append("")
+
+    out += ["## Load-bearing internals", ""]
+    out += ["| Symbol | Kind | Location | Why it matters |",
+            "| --- | --- | --- | --- |"]
+    for s in members:
+        if not is_load_bearing_candidate(s):
+            continue
+        why = cell("symbol.load_bearing", s["id"])
+        if isinstance(why, dict):
+            if why.get("load_bearing") is False:
+                continue
+            why = why.get("why") or PENDING_PROSE
+        why = why or PENDING_PROSE
+        out.append("| `{}` | {} | `{}` | {} |".format(
+            s["name"], s["kind"], symbol_location(s), why))
+    out.append("")
+
+    out += ["## Relationships", ""]
+    out += rel_lines
+    if rel_lines:
+        out.append("")
+    out += ["## Type notes", "", type_notes, ""]
+
+    out += ["## External deps", ""]
+    for dep in module_external_deps(root, index, paths):
+        out.append("- {} — imported".format(dep))
+    out.append("")
+
+    if gotchas and gotchas != PENDING_PROSE:
+        out += ["## Gotchas", "", gotchas, ""]
+
+    text = "\n".join(out).rstrip("\n") + "\n"
+    return text, consumed, missing
+
+
+def render_overview_doc(root, index, judgments, key_by):
+    """Render overview/ARCHITECTURE.md from module-granularity structure +
+    overview judgment cells. Returns (text, consumed_keys, missing_keys)."""
+    store = judgments.get("judgments", {})
+    consumed, missing = [], []
+    oid = "overview/ARCHITECTURE"
+
+    def cell(kind):
+        key = key_by.get((kind, oid, None))
+        if key is None:
+            return None
+        consumed.append(key)
+        entry = store.get(key)
+        if entry is None:
+            missing.append(key)
+            return None
+        return entry.get("value")
+
+    rev = path_to_module(index)
+    module_ids = sorted(index.get("modules", {}))
+    scopes = sorted({p.split("/", 1)[0] for paths in index["modules"].values()
+                     for p in paths if "/" in p})
+
+    # Module-granularity resolved cross edges.
+    medges = set()
+    for e in index["edges"]:
+        if e["confidence"] != "resolved" or not e.get("to"):
+            continue
+        fm_ = rev.get(e["from"].split("::")[0])
+        tm = rev.get(e["to"].split("::")[0])
+        if fm_ and tm and fm_ != tm:
+            medges.add("- `{} -> {} ({})`".format(fm_, tm, e["kind"]))
+
+    shape = cell("overview.shape") or PENDING_PROSE
+    dataflow = cell("overview.dataflow") or PENDING_PROSE
+    facts = cell("overview.index_facts")
+
+    fm = {
+        "module": oid,
+        "summary": OVERVIEW_SUMMARY,
+        "sources": [{"path": "docs/atlas/modules/{}.md".format(m)}
+                    for m in module_ids],
+    }
+    if scopes:
+        fm["scopes"] = [{"tree": s} for s in scopes]
+    fm["generator"] = GENERATOR_V2
+
+    out = [serialize_frontmatter(fm).rstrip("\n"), ""]
+    out += ["# Architecture", ""]
+    out += ["## System shape", "", shape, ""]
+    out += ["## Module relationships", ""]
+    out += sorted(medges)
+    if medges:
+        out.append("")
+    out += ["## Data flow", "", dataflow, ""]
+
+    out += ["<!-- atlas:index-facts -->"]
+    if isinstance(facts, list):
+        bullets = [str(b) for b in facts]
+    elif isinstance(facts, str):
+        bullets = [l.lstrip("- ").strip() for l in facts.splitlines() if l.strip()]
+    else:
+        bullets = ["(pending judgment)"]
+    for b in bullets:
+        out.append("- {}".format(b))
+    out += ["<!-- /atlas:index-facts -->"]
+
+    text = "\n".join(out).rstrip("\n") + "\n"
+    return text, consumed, missing
+
+
+def join_structure_and_judgments(root, index, judgments):
+    """Render every committed doc. Returns (docs, consumed, missing) where docs
+    maps repo-relative path → text."""
+    key_by = _key_index(compute_judgment_keys(index))
+    docs = {}
+    consumed, missing = [], []
+    for module_id in sorted(index.get("modules", {})):
+        text, c, m = render_module_doc(root, index, judgments, key_by, module_id)
+        docs["docs/atlas/modules/{}.md".format(module_id)] = text
+        consumed += c
+        missing += m
+    if index["symbols"]:
+        text, c, m = render_overview_doc(root, index, judgments, key_by)
+        docs["docs/atlas/overview/ARCHITECTURE.md"] = text
+        consumed += c
+        missing += m
+    return docs, consumed, missing
+
+
+def cmd_project(args):
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    index, _ = load_or_build_index(root, backend=args.backend)
+    if "symbols" not in index:
+        emit(index)
+        return 1
+    judgments = load_judgments(root)
+    docs, consumed, missing = join_structure_and_judgments(root, index, judgments)
+
+    written = []
+    changed = 0
+    for relpath, text in sorted(docs.items()):
+        abspath = os.path.join(root, relpath)
+        prior = read_text(abspath) if os.path.isfile(abspath) else None
+        if prior != text:
+            os.makedirs(os.path.dirname(abspath), exist_ok=True)
+            with open(abspath, "w", encoding="utf-8") as f:
+                f.write(text)
+            changed += 1
+        written.append(relpath)
+    return emit_ok(written=written, doc_count=len(written), changed=changed,
+                   consumed_keys=len(consumed),
+                   missing_keys=sorted(set(missing)),
+                   placeholder_count=len(set(missing)))
 
 
 # ─── commit (guarded, pathspec-scoped) ───────────────────────────────────────
@@ -3483,6 +3758,11 @@ def main():
     judgment_sub.add_parser(
         "ingest", help="Merge LLM-produced cells (JSON array on stdin)")
 
+    project = sub.add_parser(
+        "project", help="Render committed docs by joining structure + judgments")
+    project.add_argument(
+        "--backend", choices=["auto", "treesitter", "regex"], default="auto")
+
     commit = sub.add_parser("commit", help="Guarded pathspec-scoped map commit")
     commit.add_argument("--message", required=True)
     commit.add_argument("--also", action="append", default=[],
@@ -3561,6 +3841,8 @@ def main():
             return cmd_judgment_ingest(args)
         emit_fail("usage", "Unknown judgment command. Available: ingest.")
         return 2
+    if args.command == "project":
+        return cmd_project(args)
     if args.command == "commit":
         return cmd_commit(args)
     if args.command == "branch":
@@ -3583,7 +3865,8 @@ def main():
 
     emit_fail("usage", "Unknown or missing subcommand. Available: scan, "
               "partition, ledger, lock, status, index, lint, ground, extract, "
-              "judge-plan, judgment, commit, branch, verify-cache, init, remove.")
+              "judge-plan, judgment, project, commit, branch, verify-cache, "
+              "init, remove.")
     return 2
 
 

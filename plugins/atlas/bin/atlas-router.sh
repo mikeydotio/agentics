@@ -62,6 +62,9 @@ case "$cmd" in
     judgment)
         run_cli judgment "$@"
         ;;
+    project)
+        run_cli project "$@"
+        ;;
     commit)
         run_cli commit "$@"
         ;;

@@ -55,7 +55,7 @@ Complete roster of agents available in the shared library at `plugins/agents/age
 
 | Name | Tools | R/O | Description |
 |------|-------|-----|-------------|
-| [cartographer](../agents/cartographer.md) | Read, Write, Grep, Glob | no | Maps one module into an insight-dense doc: grounded relationships, ranked load-bearing symbols, routing metadata. Draws from Architect + Investigator + Technical Writer. |
+| [cartographer](../agents/cartographer.md) | Read, Write, Grep, Glob | no | Maps one module into an insight-dense analysis: grounded relationships, ranked load-bearing symbols, routing metadata; output medium (doc, cells, summary) set by the consumer context. Draws from Architect + Investigator + Technical Writer. |
 | [map-verifier](../agents/map-verifier.md) | Read, Grep, Glob | yes | Adversarial claim sampling against actual code (symbols, edge direction, deps, invariants) with machine-readable verdicts. Draws from Hypothesis Challenger + Skeptic + Evaluator. |
 
 ## Team Composition by Project Type

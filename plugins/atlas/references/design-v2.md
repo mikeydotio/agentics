@@ -265,12 +265,15 @@ and the trigger inputs below. The anchor decides *which* cell; the trigger decid
 |---|---|---|---|
 | `symbol.contract` | `signature_hash` + `visibility` | the interface changes | body edits |
 | `symbol.load_bearing` (bool + why) | `signature_hash` + `incident_edge_digest` (resolved callers only) | interface OR resolved-caller-set changes | body edits, ambiguous-caller churn |
-| `module.purpose` / `.type_notes` / `.gotchas` / `.summary` / `.read_when` | `public_surface_digest` | the public shape changes | private-body edits, symbol reorder |
+| `module.purpose` / `.type_notes` / `.gotchas` / `.summary` / `.read_when` | `public_surface_digest` | a public capability is added/removed/renamed | private-body edits, symbol reorder, signature tweaks |
 | `edge.semantic` (`owns/emits/reads/writes`; also the disambiguation of an `ambiguous` structural edge) | `from_span_hash` + `to_symbol_id` + `kind` | the calling code changes | unrelated edits |
 | `overview.shape` / `.dataflow` / `.index_facts` | `Σ module public_surface_digests` + inter-module edge digest | a module surface or cross-module edge changes | intra-module body edits |
 
-where `public_surface_digest = H(unordered set of {signature_hash, visibility} for public symbols
-∪ unordered set of module-incident structural edge kinds)`.
+where `public_surface_digest = H(unordered set of {name, kind, visibility} for public symbols
+∪ unordered set of module-incident structural edge kinds)`. It keys on the public **capability set**
+(names/kinds), NOT signature hashes: adding/removing/renaming a public symbol re-judges the module
+prose, but merely tweaking an existing signature re-judges only that symbol's `symbol.contract` —
+keeping the update delta tight (one cell, not the whole module + overview cascade).
 
 **Why this exact keying (the failure modes it avoids).** A naive `H(span bytes)` key is wrong in
 *both* directions:

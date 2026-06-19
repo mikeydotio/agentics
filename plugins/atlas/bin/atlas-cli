@@ -1726,22 +1726,119 @@ def extract_regex(relpath, text):
     return symbols, import_lines, sorted(set(targets))
 
 
-def build_edges(symbols, file_tokens, backend):
-    """Structural call/type edges. The regex backend cannot resolve a call site
-    to a definition, so it emits none — load_bearing keys then degrade to the
-    signature hash alone (no worse than v1 fan-in). tree-sitter fills this in
-    Wave 2."""
-    return []
+# A call site: `callee(` optionally prefixed by `receiver.`. Keywords that take
+# parentheses but are not calls are filtered against CALL_KEYWORDS below.
+CALL_SITE_RE = re.compile(
+    r"(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s*\(")
+
+CALL_KEYWORDS = frozenset((
+    "if", "for", "while", "switch", "catch", "return", "with", "elif",
+    "func", "def", "class", "struct", "enum", "protocol", "interface",
+    "fn", "function", "type", "extension", "actor", "trait", "impl",
+    "and", "or", "not", "in", "is", "await", "yield", "throw", "throws",
+    "print", "sizeof", "typeof", "super", "self", "init",
+))
+
+
+def enclosing_symbol(symbols_in_file, line):
+    """The innermost symbol whose span contains `line` — a call's `from`. Among
+    nested spans the one with the latest start_line wins (deepest container)."""
+    best = None
+    for s in symbols_in_file:
+        if s["span"]["start_line"] <= line <= s["span"]["end_line"]:
+            if best is None or s["span"]["start_line"] > best["span"]["start_line"]:
+                best = s
+    return best
+
+
+def extract_call_sites_regex(relpath, text, symbols_in_file):
+    """Name-based call sites for the regex backend: `{from, callee, line}` with
+    no resolution target (resolve_edges resolves by name). Skips definition
+    lines (a `def foo(` is not a call to foo) and parenthesised keywords."""
+    if relpath.lower().endswith(".md"):
+        return []
+    sites = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if DEF_LINE_RE.match(line):
+            continue
+        for m in CALL_SITE_RE.finditer(line):
+            callee = m.group(2)
+            if callee in CALL_KEYWORDS:
+                continue
+            frm = enclosing_symbol(symbols_in_file, lineno)
+            if frm is None:
+                continue
+            sites.append({"from": frm["id"], "callee": callee, "line": lineno,
+                          "file": relpath})
+    return sites
+
+
+def resolve_edges(symbols, call_sites):
+    """Resolve call sites to structural `calls` edges with a confidence tier:
+      resolved  — a tree-sitter-provided target, OR a unique corpus-wide name
+      ambiguous — the name matches >1 indexed definition; all kept in candidates
+      unresolved— 0 indexed definitions (external/builtin) → dropped, not noise
+    A name-based unique match is `resolved` (it is unambiguous, not a guess);
+    receiver types only matter to collapse an ambiguous set, which the
+    tree-sitter helper does upstream by emitting `to_loc`. Output is sorted and
+    deduped; parallel call sites merge their evidence."""
+    name_to_ids = {}
+    loc_to_id = {}
+    for s in symbols:
+        name_to_ids.setdefault(s["name"], []).append(s["id"])
+        loc_to_id[(s["file"], s["span"]["start_line"])] = s["id"]
+
+    merged = {}
+    for cs in call_sites:
+        frm = cs.get("from")
+        if not frm:
+            continue
+        to = None
+        confidence = None
+        candidates = None
+        loc = cs.get("to_loc")
+        if loc and (loc.get("file"), loc.get("start_line")) in loc_to_id:
+            to = loc_to_id[(loc["file"], loc["start_line"])]
+            confidence = "resolved"
+        else:
+            cands = sorted(set(name_to_ids.get(cs.get("callee"), [])))
+            if not cands:
+                continue                      # unresolved — dropped
+            if len(cands) == 1:
+                to, confidence = cands[0], "resolved"
+            else:
+                confidence, candidates = "ambiguous", cands
+        if to == frm:
+            continue                          # ignore trivial self-recursion
+        key = (frm, to or "", confidence, tuple(candidates or ()))
+        ev = {"file": cs.get("file"), "line": cs.get("line")}
+        if key in merged:
+            if ev not in merged[key]["evidence"]:
+                merged[key]["evidence"].append(ev)
+        else:
+            edge = {"from": frm, "to": to, "kind": "calls",
+                    "confidence": confidence, "candidates": candidates,
+                    "evidence": [ev]}
+            merged[key] = edge
+    edges = list(merged.values())
+    for e in edges:
+        e["evidence"].sort(key=lambda x: (x.get("file") or "", x.get("line") or 0))
+    edges.sort(key=lambda e: (e["from"], e["to"] or "", e["confidence"],
+                              tuple(e["candidates"] or ())))
+    return edges
 
 
 def incident_edge_digest(symbol_id, edges):
-    """Content address of a symbol's INCOMING resolved/ambiguous edges — the
-    'who calls me' dependency a symbol's load-bearing judgment turns on. Empty
-    set hashes to a stable constant (so regex-backend symbols share it)."""
+    """Content address of a symbol's INCOMING *resolved* edges — the 'who calls
+    me' dependency a symbol's load-bearing judgment turns on. Resolved-only by
+    design: ambiguous incoming edges (common names like `run`/`get` defined in
+    many files) would thrash the digest on every unrelated same-named def, so
+    they are excluded. An empty set hashes to a stable constant, so a symbol
+    with no resolved callers (and every regex-only symbol with none) shares it
+    — load_bearing then keys on signature_hash alone, no worse than v1 fan-in."""
     incoming = sorted(
-        "{}\t{}".format(e["from"], e["kind"]) for e in edges
-        if e.get("to") == symbol_id
-        and e.get("confidence") in ("resolved", "ambiguous"))
+        e["from"] for e in edges
+        if e.get("to") == symbol_id and e.get("confidence") == "resolved")
     return content_hash("\n".join(incoming))
 
 
@@ -1762,9 +1859,113 @@ def path_to_module(index):
     return rev
 
 
+# ─── tree-sitter helper backend (precision call-site resolution) ─────────────
+#
+# atlas does not bundle tree-sitter. When a structure-extraction helper is
+# available — a thin tree-sitter-backed binary emitting the JSON contract below
+# — `extract` uses it for precise, scope-resolved call sites; otherwise every
+# file falls back to the regex backend. The helper is probed once via
+# $ATLAS_TS_HELPER (explicit) or a `tree-sitter` / `atlas-ts-helper` on PATH.
+#
+# Contract: the helper reads a NUL-free newline-delimited list of repo-relative
+# paths on stdin and emits, on stdout:
+#   {"version":1,"files":{"<path>":{
+#       "symbols":[{"name","kind","start_line","end_line","signature","visibility"}],
+#       "calls":[{"callee","line","to":{"file","start_line"}?}]}}}
+# `to` is present only when the parser resolved the call's scope — that is what
+# promotes an otherwise corpus-ambiguous name to a `resolved` edge.
+
+TS_HELPER_VERSION = 1
+
+
+def ts_helper_path():
+    explicit = os.environ.get("ATLAS_TS_HELPER")
+    if explicit:
+        return explicit if (os.path.isfile(explicit)
+                            and os.access(explicit, os.X_OK)) else None
+    return shutil.which("atlas-ts-helper") or shutil.which("tree-sitter")
+
+
+def run_ts_helper(root, paths, helper):
+    """Invoke the helper for `paths`; return {relpath: {symbols, calls}} or None
+    on any failure (the caller then falls back to regex — never a hard error)."""
+    try:
+        proc = subprocess.run(
+            [helper, "extract", "--root", root], cwd=root,
+            input=("\n".join(paths) + "\n").encode("utf-8", errors="replace"),
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    try:
+        payload = json.loads(proc.stdout.decode("utf-8", errors="replace"))
+    except ValueError:
+        return None
+    if not isinstance(payload, dict) or payload.get("version") != TS_HELPER_VERSION:
+        return None
+    files = payload.get("files")
+    return files if isinstance(files, dict) else None
+
+
+def symbols_from_helper(relpath, text, entry):
+    """Convert one helper file entry's symbols into Structure Index symbol
+    records. span_hash is computed from the actual file bytes (not the helper)
+    so it stays a faithful content address regardless of backend."""
+    kept = text.splitlines(keepends=True)
+    out = []
+    for sym in entry.get("symbols") or []:
+        name = sym.get("name")
+        if not name:
+            continue
+        start = int(sym.get("start_line") or 1)
+        end = int(sym.get("end_line") or start)
+        start = max(1, start)
+        end = max(start, end)
+        signature = normalize_signature(
+            sym.get("signature") or "{} {}".format(sym.get("kind") or "", name))
+        span_text = "".join(kept[start - 1:end])
+        out.append({
+            "name": name, "qualified_name": sym.get("qualified_name") or name,
+            "kind": sym.get("kind") or "symbol", "signature": signature,
+            "signature_hash": content_hash(signature),
+            "visibility": sym.get("visibility") or "public", "file": relpath,
+            "span": {"start_line": start, "end_line": end},
+            "span_hash": content_hash(span_text),
+            "extraction": "tree-sitter",
+        })
+    return out
+
+
+def call_sites_from_helper(relpath, symbols_in_file, entry):
+    sites = []
+    for c in entry.get("calls") or []:
+        callee = c.get("callee")
+        if not callee:
+            continue
+        frm = enclosing_symbol(symbols_in_file, int(c.get("line") or 0))
+        if frm is None:
+            continue
+        site = {"from": frm["id"], "callee": callee,
+                "line": c.get("line"), "file": relpath}
+        loc = c.get("to")
+        if isinstance(loc, dict) and loc.get("file"):
+            site["to_loc"] = {"file": loc["file"],
+                              "start_line": int(loc.get("start_line") or 0)}
+        sites.append(site)
+    return sites
+
+
+def lang_of(relpath):
+    return relpath.rsplit(".", 1)[-1].lower() if "." in os.path.basename(relpath) else ""
+
+
 def do_extract(root, backend="auto"):
     """Build the Structure Index fresh. Returns the index dict, or a do_scan
-    error dict (no 'symbols' key) on failure."""
+    error dict (no 'symbols' key) on failure. Backend selection:
+      auto       — tree-sitter helper per file when available, else regex
+      treesitter — same as auto, but stamps degraded=true if the helper is absent
+      regex      — force the built-in regex backend"""
     scan = do_scan(root, enforce_ceiling=False)
     if not scan.get("ok"):
         return scan
@@ -1776,19 +1977,47 @@ def do_extract(root, backend="auto"):
         for m in part["modules"]:
             modules_map[m["id"]] = list(m["paths"])
 
+    helper = None
+    helper_files = {}
+    want_ts = backend in ("auto", "treesitter")
+    if want_ts:
+        helper = ts_helper_path()
+        if helper:
+            helper_files = run_ts_helper(root, file_list, helper) or {}
+    degraded = backend == "treesitter" and not helper_files
+
+    texts = {}
     file_tokens = {}
     all_symbols = []
+    call_sites = []
     imports = {}
     external = set()
+    backend_used = {}
+    pending_calls = []   # (relpath, helper_entry-or-None) resolved after ids exist
+
     for relpath in file_list:
         text = read_text(os.path.join(root, relpath))
         if text is None:
             continue
+        texts[relpath] = text
         file_tokens[relpath] = set(IDENT_RE.findall(text))
-        syms, import_lines, targets = extract_regex(relpath, text)
+        # imports/external deps come from the regex scan in every backend —
+        # cheap, language-agnostic, and not something the helper need carry.
+        _, import_lines, targets = extract_regex(relpath, text)
         if import_lines:
             imports[relpath] = import_lines
         external.update(targets)
+
+        entry = helper_files.get(relpath)
+        if entry is not None:
+            syms = symbols_from_helper(relpath, text, entry)
+            backend_used[lang_of(relpath) or "*"] = "tree-sitter"
+            pending_calls.append((relpath, entry))
+        else:
+            syms, _, _ = extract_regex(relpath, text)
+            if not relpath.lower().endswith(".md"):
+                backend_used.setdefault(lang_of(relpath) or "*", "regex")
+            pending_calls.append((relpath, None))
         all_symbols.extend(syms)
 
     # Deterministic, line-move-stable ids: path::qualified-name, with an
@@ -1802,18 +2031,32 @@ def do_extract(root, backend="auto"):
         seen[base] = n
         s["id"] = base if n == 1 else "{}#{}".format(base, n)
 
-    edges = build_edges(all_symbols, file_tokens, "regex")
+    by_file = {}
+    for s in all_symbols:
+        by_file.setdefault(s["file"], []).append(s)
+    for relpath, entry in pending_calls:
+        in_file = by_file.get(relpath, [])
+        if entry is not None:
+            call_sites.extend(call_sites_from_helper(relpath, in_file, entry))
+        else:
+            call_sites.extend(
+                extract_call_sites_regex(relpath, texts[relpath], in_file))
+
+    edges = resolve_edges(all_symbols, call_sites)
     for s in all_symbols:
         s["fan_in"] = sum(1 for f, toks in file_tokens.items()
                           if f != s["file"] and s["name"] in toks)
         s["incident_edge_digest"] = incident_edge_digest(s["id"], edges)
 
     all_symbols.sort(key=lambda s: s["id"])
+    if not backend_used:
+        backend_used = {"*": "regex"}
     return {
         "version": STRUCTURE_VERSION,
         "commit": git_head(root),
         "dirty_digest": compute_inputs_digest(root, file_list),
-        "backend": {"*": "regex"},
+        "backend": backend_used,
+        "degraded": degraded,
         "symbols": all_symbols,
         "edges": edges,
         "imports": imports,
@@ -1831,9 +2074,10 @@ def write_structure_index(root, index):
 
 def load_or_build_index(root, backend="auto", force=False):
     """Return (index, cached). Reuses .atlas/structure/index.json when its commit
-    and inputs digest still match the working tree."""
+    and inputs digest still match the working tree. An explicit (non-auto)
+    backend always rebuilds, so backend selection is deterministic."""
     path = structure_index_path(root)
-    if not force and os.path.isfile(path):
+    if not force and backend == "auto" and os.path.isfile(path):
         try:
             with open(path, encoding="utf-8") as f:
                 cached = json.load(f)
@@ -1866,9 +2110,14 @@ def cmd_extract(args):
     fields = {
         "cached": cached,
         "backend": index["backend"],
+        "degraded": index.get("degraded", False),
         "commit": index["commit"],
         "symbol_count": len(index["symbols"]),
         "edge_count": len(index["edges"]),
+        "resolved_edge_count": sum(
+            1 for e in index["edges"] if e["confidence"] == "resolved"),
+        "ambiguous_edge_count": sum(
+            1 for e in index["edges"] if e["confidence"] == "ambiguous"),
         "import_file_count": len(index["imports"]),
         "external_dep_count": len(index["external_deps"]),
         "module_count": len(index["modules"]),

@@ -54,7 +54,9 @@ test_extract_writes_index_and_reports_summary() {
     assert_exit_code 0 "$EXIT_CODE" "extract exits 0" || return 1
     assert_json_field "$OUTPUT" '.ok' "true" "ok" || return 1
     assert_json_field "$OUTPUT" '.cached' "false" "fresh build is not cached" || return 1
-    assert_json_field "$OUTPUT" '.backend["*"]' "regex" "regex backend" || return 1
+    # Backend is stamped per-language; .py falls back to regex (no helper here).
+    assert_json_field "$OUTPUT" '.backend.py' "regex" "python regex backend" || return 1
+    assert_json_field "$OUTPUT" '.degraded' "false" "auto backend is not degraded" || return 1
     assert_json_field "$OUTPUT" '.module_count' "2" "two modules" || return 1
     assert_file_exists "$repo/.atlas/structure/index.json" "index written" || return 1
 

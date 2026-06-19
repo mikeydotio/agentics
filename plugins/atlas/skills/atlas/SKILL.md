@@ -5,23 +5,28 @@ argument-hint: [status | map | update | verify | repair | init | remove]
 model: inherit
 ---
 
-# Atlas: Codebase Mapping Orchestrator
+# Atlas: Codebase Mapping Orchestrator (v2 — Projection)
 
-You orchestrate codebase mapping by delegating deterministic work to the CLI
-and all map-writing to cartographer agents. You never write map content
-yourself.
+You orchestrate codebase mapping by delegating deterministic work to the CLI and
+the only LLM step — *judgment* — to cartographer annotator agents. In v2 the map
+is a deterministic projection: `extract` produces the structure, annotators emit
+content-addressed *judgment cells*, and `project` renders the committed docs. You
+never write a doc or a cell yourself.
 
 **Router:** `bash ${CLAUDE_PLUGIN_ROOT}/bin/atlas-router.sh <ARGUMENTS>`
 
 ## Hard Rules
 
-1. Route ALL deterministic work through the router — scan, partition, ground,
-   ledger, index, lint, status, lock, commit, branch, init, remove. Never
-   reimplement any of it inline, and never edit INDEX.md or atlas-ledger.json
-   by hand (they are derived; rebuild them).
-2. Only cartographer agents write map docs. You assemble their prompts from
-   the shared agent definition + atlas override + assignment; you never
-   compose doc content.
+1. Route ALL deterministic work through the router — scan, partition, extract,
+   judge-plan, judgment (diff/ingest), project, ledger, index, lint, status,
+   lock, commit, branch, init, remove. Never reimplement any of it inline, and
+   never edit INDEX.md, atlas-ledger.json, the projected docs, or judgments.json
+   by hand (all derived/CLI-owned; rebuild or re-ingest them).
+2. `project` (the CLI) writes the map docs; cartographer **annotators** write the
+   judgment cells that feed it. You assemble annotator prompts from the shared
+   agent definition + atlas override + assignment (structure rows + the
+   `missing_keys` to fill); you never compose doc content or cell content, and you
+   pipe annotator output to `judgment ingest`.
 3. Every user question is exactly one `AskUserQuestion` call with one
    question.
 4. All agents run in the foreground. "In parallel" means multiple `Agent()`
@@ -57,8 +62,11 @@ naming the role, the assignment block the protocol specifies, and a
 `plugins/atlas/references/map-format.md` — role-by-reference keeps a
 30-agent fan-out from bloating orchestrator context. Use absolute paths.
 
-Cartographers return confirmations, not content — never read map docs into
-your own context except where a protocol step explicitly requires it.
+Cartographer annotators return a JSON array of judgment cells (never doc bytes
+or markdown) — collect each wave's arrays and pipe them to `judgment ingest`.
+The atlas override for the annotator role is
+`plugins/atlas/agent-overrides/cartographer-context.md`; the v2 annotator does
+not read `map-format.md` (it writes cells, not docs).
 
 **Cartographer model.** Spawn every cartographer `Agent()` — the module
 mappers, the overview cartographer, and every anchored/fresh regeneration — on
@@ -77,8 +85,10 @@ Sonnet, just at the default window.)
 
 ## References
 
-- `references/mapping-protocol.md` — full-map orchestration
-- `references/update-protocol.md` — incremental update + verify flows
-- `references/map-format.md` — normative file formats (agents read this too)
+- `references/mapping-protocol.md` — full-map orchestration (v2 Projection)
+- `references/update-protocol.md` — incremental update + verify/repair (v2)
+- `references/design-v2.md` — v2 Projection architecture (structure/judgment/
+  projection, the judgment-key derivation) — read this first for v2
+- `references/map-format.md` — normative doc format that `project` renders
 - `references/claude-md-injection.md` — managed block mechanics
-- `references/design.md` — decision record and architecture rationale
+- `references/design.md` — v1 decision record (still the base; v2 extends it)

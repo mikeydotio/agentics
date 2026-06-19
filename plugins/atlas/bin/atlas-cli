@@ -333,6 +333,38 @@ def serialize_frontmatter(fm):
     return "\n".join(out) + "\n"
 
 
+# Frontmatter keys that `ledger finalize` adds to a projected doc in place
+# (content addresses + advisory baseline + verdict). project does not write them
+# and must not treat them as a change, so staleness comparisons normalize them
+# away — a doc is "current" when its projection matches modulo these keys.
+FINALIZE_FM_KEYS = ("baseline", "verified")
+
+
+def strip_finalize_fm(fm):
+    fm = json.loads(json.dumps(fm))  # deep copy; never mutate the caller's dict
+    for k in FINALIZE_FM_KEYS:
+        fm.pop(k, None)
+    for entry in fm.get("sources") or []:
+        if isinstance(entry, dict):
+            entry.pop("blob", None)
+    for entry in fm.get("scopes") or []:
+        if isinstance(entry, dict):
+            entry.pop("sha", None)
+    return fm
+
+
+def canonical_doc_text(text):
+    """A doc's bytes with finalize-managed frontmatter normalized away, so a
+    freshly-projected doc and its finalized committed form compare equal."""
+    fm_text, body = split_frontmatter(text)
+    if fm_text is None:
+        return text
+    fm = parse_yaml_subset(fm_text)
+    if not fm:
+        return text
+    return serialize_frontmatter(strip_finalize_fm(fm)) + body
+
+
 # ─── Git plumbing for the ledger ─────────────────────────────────────────────
 
 def git_head(root):
@@ -2446,7 +2478,7 @@ def cmd_judgment_diff(args):
     for relpath, text in sorted(docs.items()):
         abspath = os.path.join(root, relpath)
         prior = read_text(abspath) if os.path.isfile(abspath) else None
-        if prior != text:
+        if prior is None or canonical_doc_text(prior) != text:
             stale_docs.append(relpath)
 
     return emit_ok(
@@ -2760,7 +2792,9 @@ def cmd_project(args):
     for relpath, text in sorted(docs.items()):
         abspath = os.path.join(root, relpath)
         prior = read_text(abspath) if os.path.isfile(abspath) else None
-        if prior != text:
+        # Compare modulo finalize-managed keys: a doc whose projection is
+        # unchanged keeps its committed bytes (and its ledger blobs) intact.
+        if prior is None or canonical_doc_text(prior) != text:
             os.makedirs(os.path.dirname(abspath), exist_ok=True)
             with open(abspath, "w", encoding="utf-8") as f:
                 f.write(text)

@@ -25,7 +25,8 @@ index rebuild, with `init` before finalize when a managed file is a mapped sourc
      (this is the zero-LLM fast path; do not spawn anything).
    - `missing_keys` → cells the LLM must (re)judge — grouped by `module`.
    - `orphaned_keys` → cached cells no longer required (a symbol was removed);
-     they are harmless and pruned at finalize.
+     harmless to serve, dropped by `judgment prune` in the deterministic tail
+     (step 5) so `judgments.json` never grows monotonically.
    - `stale_docs` → docs whose projection changed even if no cell did (e.g. a
      body edit shifted a `path:line` citation) — pure re-projection, no LLM.
 
@@ -59,13 +60,17 @@ set of docs that actually moved.
 
 ## 5 — Wire, finalize, index, lint (the deterministic tail)
 
-1. `... init` (idempotent; before finalize if a managed file is mapped).
-2. `... ledger finalize --refresh-hashes --generator "cartographer/3"` — refreshes
+1. `... judgment prune` — drop the `orphaned_keys` step 1 reported (cells the
+   structure no longer requires). A no-op when nothing is orphaned, and
+   reversible via git; it keeps `judgments.json` from accreting dead cells across
+   updates. Projection consumed only required cells, so this never changes a doc.
+2. `... init` (idempotent; before finalize if a managed file is mapped).
+3. `... ledger finalize --refresh-hashes --generator "cartographer/3"` — refreshes
    blobs for changed sources, prunes orphaned ledger entries, rewrites the v2
    structure + judgment_keys blocks. Unchanged docs stay byte-identical
    (hash-gated).
-3. `... index rebuild` — from the finalized frontmatter.
-4. `... lint` — the gate (L1/L7-join/L12/L13/L15/L16). ERRORs → fix the cause and
+4. `... index rebuild` — from the finalized frontmatter.
+5. `... lint` — the gate (L1/L7-join/L12/L13/L15/L16). ERRORs → fix the cause and
    re-run the tail; a lint-failing update is never committed.
 
 ## 6 — Commit, release, report

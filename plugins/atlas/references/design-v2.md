@@ -356,6 +356,7 @@ scope**; the confidence model exists precisely to avoid needing one.
 | `extract [--module ID] [--backend auto\|treesitter\|regex]` | `cmd_extract`, `do_extract`, `extract_treesitter`, `extract_regex`, `compute_span_hash`, `build_edges`, `resolve_edges`, `load_or_build_index`, `structure_index_path` | v2-1/2 |
 | `judge-plan` | `cmd_judge_plan`, `compute_judgment_keys`, `plan_judgment_misses` | v2-3 |
 | `judgment diff` | `cmd_judgment_diff`, `judgment_key_delta` | v2-5 |
+| `judgment prune` | `cmd_judgment_prune` (drops `diff`'s `orphaned_keys`) | v2-5 |
 | `judgment ingest` (stdin payload) | `cmd_judgment_ingest` | v2-3 |
 | `judgment verify-set` | `cmd_judgment_verify_set` | v2-6 |
 | `project` | `cmd_project`, `render_module_doc`, `render_overview_doc`, `join_structure_and_judgments` | v2-4 |

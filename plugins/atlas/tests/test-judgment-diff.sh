@@ -138,6 +138,46 @@ PY
     cleanup_fixture_repo "$repo"
 }
 
+test_prune_drops_orphaned_cells() {
+    local repo; repo=$(_diff_fixture)
+    _fully_map "$repo"
+    local total_before
+    total_before=$(jq '.judgments | length' "$repo/docs/atlas/judgments.json")
+    # Delete `use` from other.py → its cached cell(s) are no longer required.
+    cat > "$repo/src/other.py" <<'PY'
+from src.svc import _boot
+PY
+    commit_all "$repo" rm
+    run_atlas "$repo" judgment diff
+    local orphans
+    orphans=$(echo "$OUTPUT" | jq -r '.orphaned_count')
+    [ "$orphans" -ge 1 ] || { echo "    FAIL: setup expected >=1 orphaned cell"; return 1; }
+    # prune removes exactly the orphans the diff reported.
+    run_atlas "$repo" judgment prune
+    assert_exit_code 0 "$EXIT_CODE" "prune exits 0" || return 1
+    assert_json_field "$OUTPUT" '.pruned_count' "$orphans" "prune drops exactly the orphans" || return 1
+    # The cache shrank by exactly the orphan count — required cells survive.
+    local total_after
+    total_after=$(jq '.judgments | length' "$repo/docs/atlas/judgments.json")
+    assert_eq "$((total_before - orphans))" "$total_after" "cache shrinks by the orphan count" || return 1
+    # diff now sees zero orphans, and a second prune is a no-op (idempotent).
+    run_atlas "$repo" judgment diff
+    assert_json_field "$OUTPUT" '.orphaned_count' "0" "no orphans remain after prune" || return 1
+    run_atlas "$repo" judgment prune
+    assert_json_field "$OUTPUT" '.pruned_count' "0" "second prune is a no-op" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+test_prune_noop_when_nothing_orphaned() {
+    local repo; repo=$(_diff_fixture)
+    _fully_map "$repo"
+    # A fully-mapped repo with no source change has nothing to prune.
+    run_atlas "$repo" judgment prune
+    assert_exit_code 0 "$EXIT_CODE" "prune exits 0 on a clean cache" || return 1
+    assert_json_field "$OUTPUT" '.pruned_count' "0" "nothing to prune when current" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
 # ── Ledger v2 ───────────────────────────────────────────────────────────────
 test_ledger_finalize_v2_blocks() {
     local repo; repo=$(_diff_fixture)

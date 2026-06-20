@@ -26,7 +26,7 @@ index rebuild, with `init` before finalize when a managed file is a mapped sourc
    - `missing_keys` → cells the LLM must (re)judge — grouped by `module`.
    - `orphaned_keys` → cached cells no longer required (a symbol was removed);
      harmless to serve, dropped by `judgment prune` in the deterministic tail
-     (step 5) so `judgments.json` never grows monotonically.
+     (step 6) so `judgments.json` never grows monotonically.
    - `stale_docs` → docs whose projection changed even if no cell did (e.g. a
      body edit shifted a `path:line` citation) — pure re-projection, no LLM.
 
@@ -58,7 +58,28 @@ byte-identical (it compares modulo finalize-managed frontmatter). Confirm
 re-annotate that module once and re-project. The reported `changed` count is the
 set of docs that actually moved.
 
-## 5 — Wire, finalize, index, lint (the deterministic tail)
+## 5 — Verify the changed prose (map-verifier on the high-consequence delta)
+
+Structure is verified deterministically by `... lint` (step 6). The judgment prose
+that changed this update gets the same bounded, delta-only sweep as a fresh map —
+here the in-scope set is just the cells re-judged in step 3:
+
+1. `... judgment verify-set --plan` → the in-scope, not-yet-verified targets
+   (`symbol.contract`, `symbol.load_bearing`, `module.gotchas` with verdict
+   `unverified`). A no-delta pull plans **nothing** ⇒ no agents — the zero-LLM
+   fast path survives through verification.
+2. Spawn `map-verifier` over the targets, **≤8 parallel `Agent()` per message**
+   (foreground); each returns `{key, verdict, failures[]}`. `lock heartbeat`
+   between waves.
+3. Pipe verdicts to `... judgment verify-set` (stdin) — it stamps `verify.verdict`
+   by key (a pure sink; never edits a cell).
+4. For every `fail`: re-spawn that cell's annotator once with the verifier's
+   `failures[]` as correction input, `... judgment ingest` the replacement (its
+   verdict resets to `unverified`), `... project`, then re-verify just those keys.
+   A second `fail` is left `verify.verdict: fail` and surfaced — never loop. JUDGE
+   stays the sole cell producer.
+
+## 6 — Wire, finalize, index, lint (the deterministic tail)
 
 1. `... judgment prune` — drop the `orphaned_keys` step 1 reported (cells the
    structure no longer requires). A no-op when nothing is orphaned, and
@@ -73,7 +94,7 @@ set of docs that actually moved.
 5. `... lint` — the gate (L1/L7-join/L12/L13/L15/L16). ERRORs → fix the cause and
    re-run the tail; a lint-failing update is never committed.
 
-## 6 — Commit, release, report
+## 7 — Commit, release, report
 
 1. `... commit --message "docs(atlas): update (<K> docs, <M> cells re-judged)"`
    (plus `--also CLAUDE.md --also .gitignore` if init changed them).

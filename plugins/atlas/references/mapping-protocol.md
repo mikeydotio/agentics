@@ -76,15 +76,33 @@ be 0. A non-zero count means an annotator skipped a key — re-spawn that module
 annotator once with the still-missing keys (from a fresh `judge-plan`), ingest,
 re-project.
 
-## 6 — Verify
+## 6 — Verify the prose delta (map-verifier on the high-consequence cells)
 
-Structural claims need NO agent — they are verified deterministically against the
-Structure Index by `... lint` in step 8 (L1 skeleton, L7 join, L15 no
-placeholders, L16 doc==projection). Only the *judgment* prose may warrant a
-bounded check: optionally spawn `map-verifier` over a sample of the new cells'
-docs; for any refuted cell, re-spawn its module's annotator once with the
-correction, re-ingest, re-project. This is polish, not a gate — the deterministic
-lint is the gate.
+Structural claims need NO agent — `... lint` (step 8) verifies them against the
+Structure Index for free (L1 skeleton, L7 join, L15 no placeholders, L16
+doc==projection). The *judgment prose* a parser can't check gets a bounded,
+delta-only sweep of the kinds a downstream agent obeys to its peril:
+
+1. `... judgment verify-set --plan` → the in-scope, not-yet-verified targets
+   (`symbol.contract`, `symbol.load_bearing`, `module.gotchas`; a cached `pass`
+   under an unchanged key is skipped). On a fresh map this is every such cell.
+2. Spawn `map-verifier` over the targets in waves of **≤8 parallel `Agent()`
+   calls per message** (foreground); each adversarially refutes its cell's claim
+   against the cited source and returns a verdict `{key, verdict, failures[]}`.
+   `lock heartbeat` between waves.
+3. Collect each wave's verdicts and pipe them to `... judgment verify-set`
+   (stdin) — it stamps `verify.verdict` by key. verify-set is a pure verdict
+   sink; it never edits a cell.
+4. For every `fail`: re-spawn that cell's module **annotator** once with the
+   verifier's `failures[]` as correction input, `... judgment ingest` the
+   replacement (its verdict resets to `unverified`), `... project`, then re-run
+   verify-set on just those keys. A second `fail` is left `verify.verdict: fail`
+   and surfaced in the report — never loop. The annotator stays the sole cell
+   producer; JUDGE is the only thing that writes a value.
+
+This is automatic, not optional — a wrong `contract`/`load_bearing`/`gotcha`
+misleads every future agent. Cost stays delta-bounded: ≤8/wave, and an unchanged
+cell (cached `pass`) is never re-verified.
 
 ## 7 — Wire
 

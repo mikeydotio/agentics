@@ -178,6 +178,94 @@ test_prune_noop_when_nothing_orphaned() {
     cleanup_fixture_repo "$repo"
 }
 
+# ── verify-set (judgment-cell verification) ─────────────────────────────────
+test_verify_plan_lists_only_high_risk_unverified() {
+    local repo; repo=$(_diff_fixture)
+    _fully_map "$repo"
+    run_atlas "$repo" judgment verify-set --plan
+    assert_exit_code 0 "$EXIT_CODE" "verify-set --plan exits 0" || return 1
+    [ "$(echo "$OUTPUT" | jq -r '.target_count')" -ge 1 ] \
+        || { echo "    FAIL: expected >=1 in-scope target"; return 1; }
+    # Only the falsifiable, high-consequence kinds — never soft prose or overview.
+    local k
+    for k in $(echo "$OUTPUT" | jq -r '.targets[].kind' | sort -u); do
+        case "$k" in
+            symbol.contract|symbol.load_bearing|module.gotchas) : ;;
+            *) echo "    FAIL: out-of-scope kind planned: $k"; return 1 ;;
+        esac
+    done
+    # Symbol targets carry a source location for the verifier to check against.
+    echo "$OUTPUT" | jq -e '.targets[] | select(.symbol != null) | .file' >/dev/null 2>&1 \
+        || { echo "    FAIL: a symbol target is missing its source file"; return 1; }
+    cleanup_fixture_repo "$repo"
+}
+
+test_verify_ingest_pass_stamps_by_key_and_collapses() {
+    local repo; repo=$(_diff_fixture)
+    _fully_map "$repo"
+    run_atlas "$repo" judgment verify-set --plan
+    local key
+    key=$(echo "$OUTPUT" | jq -r '.targets[0].key')
+    [ -n "$key" ] && [ "$key" != "null" ] || { echo "    FAIL: no target key"; return 1; }
+    local out
+    out=$(cd "$repo" && printf '[{"key":"%s","verdict":"pass"}]' "$key" \
+        | python3 "$CLI" judgment verify-set 2>/dev/null)
+    assert_json_field "$out" '.stamped' "1" "one verdict stamped" || return 1
+    assert_json_field "$out" '.passed' "1" "as a pass" || return 1
+    # The verdict is recorded under that exact judgment key.
+    local v
+    v=$(jq -r --arg k "$key" '.judgments[$k].verify.verdict' "$repo/docs/atlas/judgments.json")
+    assert_eq "pass" "$v" "verify.verdict stamped on the cell by key" || return 1
+    # Delta collapse: a cached pass is skipped on the next plan (no re-verify).
+    run_atlas "$repo" judgment verify-set --plan
+    local still
+    still=$(echo "$OUTPUT" | jq -r --arg k "$key" '[.targets[].key] | index($k)')
+    assert_eq "null" "$still" "a cached pass is skipped on the next plan" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+test_verify_ingest_fail_is_surfaced_with_failures() {
+    local repo; repo=$(_diff_fixture)
+    _fully_map "$repo"
+    run_atlas "$repo" judgment verify-set --plan
+    local key
+    key=$(echo "$OUTPUT" | jq -r '.targets[0].key')
+    local out
+    out=$(cd "$repo" && printf '[{"key":"%s","verdict":"fail","failures":["claims X but code does Y"]}]' "$key" \
+        | python3 "$CLI" judgment verify-set 2>/dev/null)
+    assert_json_field "$out" '.failed' "1" "fail recorded" || return 1
+    assert_eq "$key" "$(echo "$out" | jq -r '.fail_keys[0]')" \
+        "fail key surfaced for the protocol's directed re-judge" || return 1
+    # The verifier's failures[] are preserved on the cell to direct the re-judge.
+    local det
+    det=$(jq -r --arg k "$key" '.judgments[$k].verify.failures[0]' "$repo/docs/atlas/judgments.json")
+    assert_eq "claims X but code does Y" "$det" "verifier failures[] preserved on the cell" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+test_verify_plan_empty_when_all_in_scope_pass() {
+    local repo; repo=$(_diff_fixture)
+    _fully_map "$repo"
+    # Stamp every in-scope target as pass, then re-plan: nothing left (delta empty).
+    run_atlas "$repo" judgment verify-set --plan
+    echo "$OUTPUT" | jq -c '[.targets[] | {key, verdict:"pass"}]' \
+        | (cd "$repo" && python3 "$CLI" judgment verify-set >/dev/null 2>&1)
+    run_atlas "$repo" judgment verify-set --plan
+    assert_json_field "$OUTPUT" '.target_count' "0" "no targets once all in-scope cells pass" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+test_verify_ingest_rejects_unknown_key() {
+    local repo; repo=$(_diff_fixture)
+    _fully_map "$repo"
+    local out
+    out=$(cd "$repo" && printf '[{"key":"symbol.contract/deadbeefdeadbeefdeadbeef","verdict":"pass"}]' \
+        | python3 "$CLI" judgment verify-set 2>/dev/null)
+    assert_json_field "$out" '.stamped' "0" "an unknown key is not stamped" || return 1
+    assert_json_field "$out" '.rejected[0].reason' "unknown_key" "and is surfaced as rejected" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
 # ── Ledger v2 ───────────────────────────────────────────────────────────────
 test_ledger_finalize_v2_blocks() {
     local repo; repo=$(_diff_fixture)

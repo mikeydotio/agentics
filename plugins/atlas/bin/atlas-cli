@@ -2220,6 +2220,14 @@ def cmd_extract(args):
 JUDGMENT_VERSION = 1
 MODULE_JUDGMENT_KINDS = ("purpose", "type_notes", "gotchas", "summary", "read_when")
 OVERVIEW_JUDGMENT_KINDS = ("shape", "dataflow", "index_facts")
+# The falsifiable, act-to-your-peril prose kinds the map-verifier samples — the
+# claims a downstream agent obeys to its peril (council decision: verify the
+# high-consequence prose delta, not soft routing prose; structure is already
+# lint-verified). When edge.semantic cells are produced (item #6), add it here.
+VERIFY_KINDS = ("symbol.contract", "symbol.load_bearing", "module.gotchas")
+# Verdicts meaning "not yet verified under this key" — the verify delta. A cached
+# pass/fail is skipped (verification collapses to the delta exactly like judgment).
+VERIFY_PENDING_VERDICTS = ("unverified", "migrated")
 
 
 def judgments_path(root):
@@ -2521,6 +2529,108 @@ def cmd_judgment_prune(args):
         total=len(store),
         path=os.path.relpath(judgments_path(root), root),
     )
+
+
+def verify_targets(index, judgments):
+    """The in-scope, not-yet-verified cells the map-verifier should sample: cells
+    of a high-consequence falsifiable kind (VERIFY_KINDS) that the structure
+    currently requires AND that are cached with a pending verdict (unverified or
+    migrated). A cached pass/fail under an unchanged key is skipped — verification
+    collapses to the delta exactly like judgment. Each target carries the claim
+    (value) and the source the verifier checks it against."""
+    store = judgments.get("judgments", {})
+    sym_by_id = {s["id"]: s for s in index.get("symbols", [])}
+    modules = index.get("modules", {})
+    targets = []
+    for cell in compute_judgment_keys(index):
+        if cell["kind"] not in VERIFY_KINDS:
+            continue
+        entry = store.get(cell["key"])
+        if entry is None:
+            continue  # required but unjudged — a JUDGE miss, not a verify target
+        verdict = (entry.get("verify") or {}).get("verdict", "unverified")
+        if verdict not in VERIFY_PENDING_VERDICTS:
+            continue  # already pass/fail under this key
+        target = {"key": cell["key"], "kind": cell["kind"],
+                  "value": entry.get("value"), "module": cell["module"]}
+        if cell["symbol"]:
+            target["symbol"] = cell["symbol"]
+            s = sym_by_id.get(cell["symbol"])
+            if s:
+                target["file"] = s["file"]
+                target["line"] = s["span"]["start_line"]
+        else:
+            target["files"] = modules.get(cell["module"], [])
+        targets.append(target)
+    return targets
+
+
+def cmd_judgment_verify_set(args):
+    """Verify the high-consequence prose delta — the verify analogue of
+    judge-plan -> judgment ingest. Two modes:
+      --plan  : report the in-scope, not-yet-verified cells (kind in VERIFY_KINDS,
+                verdict unverified/migrated) for the orchestrator to sample with
+                map-verifier, each with the source to check it against.
+      (stdin) : stamp an opaque JSON array of verdicts [{key, verdict, failures?}]
+                onto store[key].verify by key. A pure verdict SINK — it never
+                authors a cell's value; a `fail` is surfaced for the protocol to
+                re-judge through JUDGE (the sole cell producer), not here."""
+    root = git_toplevel(args.project_dir)
+    if root is None:
+        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
+    judgments = load_judgments(root)
+    if args.plan:
+        index, _ = load_or_build_index(root, backend=args.backend)
+        if "symbols" not in index:
+            emit(index)
+            return 1
+        targets = verify_targets(index, judgments)
+        by_kind = {}
+        for t in targets:
+            by_kind[t["kind"]] = by_kind.get(t["kind"], 0) + 1
+        return emit_ok(target_count=len(targets), targets=targets,
+                       by_kind=by_kind, kinds=list(VERIFY_KINDS))
+
+    # Ingest mode: opaque verdicts on stdin, stamped by key (à la verify-cache).
+    raw = "" if sys.stdin.isatty() else sys.stdin.read()
+    try:
+        verdicts = json.loads(raw) if raw.strip() else []
+    except ValueError as exc:
+        return emit_fail(
+            "bad_verdicts",
+            "verify-set expects a JSON array of verdicts on stdin: {}".format(exc))
+    if not isinstance(verdicts, list):
+        return emit_fail("bad_verdicts", "verdicts must be a JSON array.")
+    store = judgments.get("judgments", {})
+    head = git_head(root)
+    stamped = 0
+    passed = []
+    failed = []
+    rejected = []
+    for v in verdicts:
+        if not isinstance(v, dict):
+            rejected.append({"reason": "not_an_object", "verdict": v})
+            continue
+        key = v.get("key")
+        verdict = v.get("verdict")
+        if key not in store:
+            rejected.append({"reason": "unknown_key", "key": key})
+            continue
+        if verdict not in ("pass", "fail"):
+            rejected.append({"reason": "bad_verdict", "key": key})
+            continue
+        rec = {"verdict": verdict, "verifier": "map-verifier", "at_commit": head}
+        failures = v.get("failures")
+        if verdict == "fail" and failures:
+            rec["failures"] = failures
+        store[key]["verify"] = rec
+        stamped += 1
+        (passed if verdict == "pass" else failed).append(key)
+    if stamped:
+        write_judgments(root, judgments)
+    return emit_ok(stamped=stamped, passed=len(passed), failed=len(failed),
+                   fail_keys=failed, rejected=rejected,
+                   path=os.path.relpath(judgments_path(root), root))
 
 
 # ─── migrate-v1 (re-key existing v1 doc prose into the Judgment Cache) ───────
@@ -4154,6 +4264,14 @@ def main():
         help="Drop cached cells the structure no longer needs (diff's orphaned_keys)")
     jprune.add_argument("--backend", choices=["auto", "treesitter", "regex"],
                         default="auto")
+    jverify = judgment_sub.add_parser(
+        "verify-set",
+        help="Verify the high-consequence prose delta (--plan lists targets; stdin verdicts stamp)")
+    jverify.add_argument(
+        "--plan", action="store_true",
+        help="List in-scope unverified cells for map-verifier (else ingest verdicts on stdin)")
+    jverify.add_argument("--backend", choices=["auto", "treesitter", "regex"],
+                         default="auto")
 
     project = sub.add_parser(
         "project", help="Render committed docs by joining structure + judgments")
@@ -4244,7 +4362,10 @@ def main():
             return cmd_judgment_diff(args)
         if args.judgment_command == "prune":
             return cmd_judgment_prune(args)
-        emit_fail("usage", "Unknown judgment command. Available: ingest, diff, prune.")
+        if args.judgment_command == "verify-set":
+            return cmd_judgment_verify_set(args)
+        emit_fail("usage",
+                  "Unknown judgment command. Available: ingest, diff, prune, verify-set.")
         return 2
     if args.command == "project":
         return cmd_project(args)

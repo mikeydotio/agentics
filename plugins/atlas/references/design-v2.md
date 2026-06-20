@@ -55,6 +55,7 @@ v2 attacks both by splitting every doc into two provenances and caching the expe
 | 26 | Judgment keys | Content-addressed by **three orthogonal per-symbol hashes** — `signature_hash`, `span_hash`, `incident_edge_digest` — so each judgment kind invalidates on exactly the change that affects it (see "The judgment-key derivation"). A pure body edit is a zero-LLM re-projection. |
 | 27 | Generator fingerprint | Bump to `cartographer/3` (the cartographer's output contract changes from markdown doc → JSON cells). Every v1 doc fingerprint-stales; `migrate-v1` re-keys existing prose so the bump costs no re-mapping. |
 | 28 | Merge surface | The flat, content-addressed `judgments.json` is the merge surface: disjoint keys merge cleanly; a same-key re-judgment is a *real* semantic conflict surfaced to a human. Docs are regenerated-on-conflict (extends v1 decision 12 to `modules/*.md`). |
+| 29 | Prose verification | **verify-set — delta-only, kind-scoped.** Structure is lint-verified for free; the judgment *prose* of the act-to-your-peril kinds (`symbol.contract`, `symbol.load_bearing`, `module.gotchas`) is adversarially sampled by `map-verifier` — automatically on map + update — with the verdict cached under the **same key** as the value, so an unchanged cell is never re-verified. A `fail` is re-judged once through the annotator with the verifier's `failures[]` as input, then re-verified; `verify-set` only ever stamps verdicts (JUDGE stays the sole cell producer). Soft prose (`purpose`/`summary`/`read_when`/`type_notes`/`overview.*`) is trusted — L16 pins its structural basis. Decided by a 3-member council, unanimous after a ranked runoff. |
 
 ### Why a projection (not a smarter cartographer)
 
@@ -63,6 +64,22 @@ mechanically knowable. Asking the model to also emit structure means re-deriving
 facts the repo already states unambiguously. Splitting provenance lets each half be produced by the
 right tool and — critically — lets the expensive half be **cached by what it describes**, so it is
 reused verbatim across every rebuild where that thing didn't change.
+
+### Why verify the prose delta (and only the prose, only the delta)
+
+Structure is now ground-truth: `lint` joins every doc claim to the Structure Index (L7) and to a
+fresh projection (L16), so symbols, signatures, edges, and locations are deterministically checked
+for free. That leaves exactly one hallucination surface — the *judgment prose* a parser cannot
+write. v1's tenet holds: a confidently wrong `gotcha`/`contract`/`load_bearing` misleads every
+future agent worse than no map. v1 paid ~48% of a map to guard it, but that cost was an artifact of
+re-verifying the **whole** doc **every** run; v2's content-addressed verdict cache severs cost from
+coverage. So v2 verifies the prose — but only the kinds a downstream agent acts on to its peril, and
+only the **delta** (a cached `pass` under an unchanged key is skipped, so a no-change rebuild
+verifies nothing). Soft routing prose (`purpose`/`summary`/`read_when`/`type_notes`/`overview.*`) is
+trusted: it is rarely independently refutable and L16 already pins the structure it leans on. The
+verdict is a first-class cell field (`verify.verdict ∈ {pass,fail,migrated,unverified}`); an
+un-sampled or overflow cell is honestly `unverified`, never silently `pass`. (Decided by a
+unanimous 3-member council weighing the quality bar against v2's cost thesis.)
 
 ### Why hybrid extraction, not full tree-sitter or pure regex
 

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Tests for `atlas-cli extract` — the deterministic Structure Index (Wave 1,
-# regex backend). The load-bearing properties: correct spans, the three
-# orthogonal per-symbol hashes behave independently, symbol-set parity with
-# `ground`, caching, and byte-for-byte determinism.
+# Tests for `atlas-cli extract` — the deterministic Structure Index (regex
+# backend). The load-bearing properties: correct spans, the three orthogonal
+# per-symbol hashes behave independently, caching, and byte-for-byte determinism.
 
-# A two-module fixture mirroring test-ground.sh so symbol-set parity is checkable.
+# A two-module fixture with a resolved cross-module reference.
 _extract_fixture() {
     local repo
     repo=$(create_fixture_repo)
@@ -217,23 +216,6 @@ PY
     [ "$before" != "$after" ] || {
         echo "    FAIL: signature_hash should change when the declaration changes"
         return 1; }
-    cleanup_fixture_repo "$repo"
-}
-
-test_extract_symbol_set_parity_with_ground() {
-    local repo
-    repo=$(_extract_fixture)
-
-    # The set of definition names extract finds for src-auth must match ground's.
-    run_atlas "$repo" ground src-auth
-    local ground_names
-    ground_names=$(echo "$OUTPUT" | jq -S '[.symbols[].name] | unique')
-    run_atlas "$repo" extract --module src-auth
-    local extract_names
-    extract_names=$(echo "$OUTPUT" | jq -S '[.symbols[].name] | unique')
-
-    assert_eq "$ground_names" "$extract_names" \
-        "extract finds the same symbol names as ground for src-auth" || return 1
     cleanup_fixture_repo "$repo"
 }
 

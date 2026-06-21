@@ -50,9 +50,6 @@ case "$cmd" in
     index)
         run_cli index "$@"
         ;;
-    ground)
-        run_cli ground "$@"
-        ;;
     extract)
         run_cli extract "$@"
         ;;

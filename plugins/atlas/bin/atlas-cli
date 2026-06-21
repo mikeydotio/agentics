@@ -8,7 +8,7 @@ Subcommands (phase 1):
   scan       Enumerate mappable files (git ls-files ∩ config globs) with sizes.
   partition  Deterministically partition mappable files into modules.
 
-Design record: plugins/atlas/references/design.md
+Design record: plugins/atlas/references/design-v2.md
 """
 
 import argparse
@@ -130,7 +130,7 @@ def git_listed_files(root):
 #
 # Supported on purpose: top-level scalars, one level of nested map, lists of
 # scalars, and lists of {key: value} maps (for `modules:`). Comments and blank
-# lines are skipped. Anything fancier is unsupported — see design.md.
+# lines are skipped. Anything fancier is unsupported — see design-v2.md.
 
 def strip_inline_comment(s):
     """Strip a trailing ` # comment` from a YAML-subset value — but never
@@ -564,12 +564,14 @@ def write_doc(doc):
 
 
 def build_ledger(root, docs, structure=None, judgment_keys=None):
-    """Build the derived reverse index. With a `structure` block and/or per-doc
-    `judgment_keys` (v2 mode), the ledger is stamped version 2 and carries those
-    blocks; without them it is the unchanged v1 ledger."""
+    """Build the derived reverse index — the v2 ledger: the doc/paths/
+    referenced_by reverse index plus a `structure` fingerprint and per-doc
+    `judgment_keys`. (v2.1 retired v1's structure-less ledger; v2 is the only
+    shape now. The blocks are still optional — they are omitted only for the
+    degenerate symbol-less repo, which has nothing to fingerprint.)"""
     head = git_head(root)
     ledger = {
-        "version": 2 if (structure is not None or judgment_keys is not None) else 1,
+        "version": 2,
         "baseline": head,
         "docs": {},
         "paths": {},
@@ -698,15 +700,15 @@ def cmd_ledger_finalize(args):
                     )
                 sources_count += 1
 
-    # v2 mode (a Judgment Cache exists): record the structure fingerprint and
-    # per-doc judgment-key dependency alongside the v1 reverse index.
+    # Always record the structure fingerprint and per-doc judgment-key
+    # dependency — v2 is the only ledger shape (v1 retired in v2.1). An empty
+    # Judgment Cache is fine; the keys are still derived from the structure.
     structure = None
     judgment_keys = None
-    if os.path.isfile(judgments_path(root)):
-        index, _ = load_or_build_index(root)
-        if "symbols" in index:
-            structure = structure_ledger_block(index)
-            judgment_keys = judgment_keys_by_doc(root, index, load_judgments(root))
+    index, _ = load_or_build_index(root)
+    if "symbols" in index:
+        structure = structure_ledger_block(index)
+        judgment_keys = judgment_keys_by_doc(root, index, load_judgments(root))
 
     ledger = build_ledger(root, docs, structure=structure,
                           judgment_keys=judgment_keys)
@@ -1575,11 +1577,11 @@ def cmd_verify_cache_read(args):
                    timestamp=cache.get("timestamp"))
 
 
-# ─── ground (grounding pack for mapper agents) ──────────────────────────────
+# ─── regex extraction primitives (the structure floor) ─────────────────────
 #
-# Deterministic signals that keep LLM mappers grounded: the module's files with
-# working-tree blob hashes, import-ish lines, and definition candidates ranked
-# by external fan-in (aider-derived heuristics, grep-portable).
+# The language-agnostic definition/import line patterns the `extract` regex
+# backend runs on every file (and `lint` L7's fallback). Grep-portable, zero
+# deps — the always-present floor under the optional tree-sitter ceiling.
 
 DEF_LINE_RE = re.compile(
     r"^\s*(?:public\s+|private\s+|internal\s+|open\s+|final\s+|abstract\s+"
@@ -1594,10 +1596,6 @@ IMPORT_LINE_RE = re.compile(
     r"^\s*(import|from|require|use|using|include|#include|@import|source)"
     r"(?=\s|[\"'<(]|$)")
 
-GROUND_MAX_IMPORT_LINES = 20   # per file
-GROUND_MAX_SYMBOLS = 40
-GROUND_MAX_FILE_BYTES = 200_000  # skip giants when computing fan-in
-
 
 def read_text(abspath):
     try:
@@ -1607,90 +1605,14 @@ def read_text(abspath):
         return None
 
 
-def cmd_ground(args):
-    root = git_toplevel(args.project_dir)
-    if root is None:
-        return emit_fail("not_a_git_repo", "atlas requires a git repository.")
-
-    part = do_partition(root)
-    if not part["ok"]:
-        emit(part)
-        return 1
-    module = next((m for m in part["modules"] if m["id"] == args.module_id), None)
-    if module is None:
-        return emit_fail(
-            "unknown_module",
-            "No module '{}' in the current partition. Known: {}".format(
-                args.module_id, ", ".join(m["id"] for m in part["modules"])),
-        )
-
-    hashes = git_hash_paths(root, module["paths"])
-    files = [{"path": p, "bytes": b, "blob": hashes.get(p)}
-             for p, b in ((f, os.path.getsize(os.path.join(root, f)))
-                          for f in module["paths"])]
-
-    imports = {}
-    candidates = {}  # name -> (kind, "path:line")
-    for relpath in module["paths"]:
-        text = read_text(os.path.join(root, relpath))
-        if text is None:
-            continue
-        # Markdown is prose: sentences starting with "from"/"use"/"include"
-        # match IMPORT_LINE_RE and phrases like "module docs" match
-        # DEF_LINE_RE. Skip extraction; .md files still get listed (and
-        # hashed) in `files` and still count toward fan-in.
-        if relpath.lower().endswith(".md"):
-            continue
-        import_lines = []
-        for lineno, line in enumerate(text.splitlines(), 1):
-            if IMPORT_LINE_RE.match(line) and len(import_lines) < GROUND_MAX_IMPORT_LINES:
-                import_lines.append(line.strip())
-            m = DEF_LINE_RE.match(line)
-            if m and m.group(2) not in candidates:
-                candidates[m.group(2)] = (m.group(1), "{}:{}".format(relpath, lineno))
-        if import_lines:
-            imports[relpath] = import_lines
-
-    # Fan-in: how many files OUTSIDE this module reference each candidate.
-    scan = do_scan(root, enforce_ceiling=False)
-    module_paths = set(module["paths"])
-    outside_texts = []
-    if scan.get("ok"):
-        for f in scan["files"]:
-            if f["path"] in module_paths or f["bytes"] > GROUND_MAX_FILE_BYTES:
-                continue
-            text = read_text(os.path.join(root, f["path"]))
-            if text is not None:
-                outside_texts.append(text)
-
-    symbols = []
-    for name in sorted(candidates):
-        kind, defined_at = candidates[name]
-        pattern = re.compile(WORDISH_BOUNDARY.format(re.escape(name)))
-        fan_in = sum(1 for text in outside_texts if pattern.search(text))
-        # aider-derived scoring: sqrt-dampened fan-in (0.1 keep-alive for
-        # unreferenced definitions), 10x for descriptive names.
-        score = (fan_in ** 0.5) if fan_in > 0 else 0.1
-        if len(name) >= 8:
-            score *= 10
-        symbols.append({"name": name, "kind": kind, "defined_at": defined_at,
-                        "fan_in": fan_in, "score": round(score, 2)})
-    symbols.sort(key=lambda s: (-s["score"], s["name"]))
-    symbols = symbols[:GROUND_MAX_SYMBOLS]
-
-    return emit_ok(module={"id": module["id"], "label": module["label"],
-                           "strategy": module["strategy"]},
-                   files=files, imports=imports, symbols=symbols)
-
-
 # ─── extract (Structure Index — the deterministic structure layer) ──────────
 #
 # The Structure Index is the deterministic half of atlas v2: a content-addressed
 # inventory of every symbol (each with three orthogonal hashes), the import
 # graph, and — once a parser backend is available — the call/type edge graph. It
 # is a pure function of the source at a commit, cached under .atlas/structure/
-# (gitignored, rebuildable). Wave 1 ships the regex backend (lifted from
-# `ground`); tree-sitter arrives in Wave 2. See references/design-v2.md.
+# (gitignored, rebuildable). The regex backend is the always-present floor; the
+# optional tree-sitter helper is the precision ceiling. See design-v2.md.
 
 STRUCTURE_VERSION = 1
 EXTRACT_MAX_IMPORT_LINES = 100        # per file
@@ -1759,7 +1681,8 @@ def assign_spans(defs, total_lines):
 
 
 def extract_regex(relpath, text):
-    """Language-agnostic regex extraction (the same signals `ground` uses).
+    """Language-agnostic regex extraction — the always-present structure floor
+    (`DEF_LINE_RE` / `IMPORT_LINE_RE` / fan-in).
     Returns (symbols, import_lines, import_targets). Markdown is prose: a
     sentence beginning 'from'/'use' matches IMPORT_LINE_RE and 'module docs'
     matches DEF_LINE_RE, so .md files are skipped (still tokenized for fan-in)."""
@@ -4321,9 +4244,6 @@ def main():
     lint.add_argument("--fast", action="store_true",
                       help="Cheap subset only (markers, drift, INDEX checks)")
 
-    ground = sub.add_parser("ground", help="Grounding pack for a mapper agent")
-    ground.add_argument("module_id", help="Module id from `partition`")
-
     extract = sub.add_parser(
         "extract", help="Build/refresh the deterministic Structure Index")
     extract.add_argument("--module", dest="module_id", default=None,
@@ -4437,8 +4357,6 @@ def main():
         return 2
     if args.command == "lint":
         return cmd_lint(args)
-    if args.command == "ground":
-        return cmd_ground(args)
     if args.command == "extract":
         return cmd_extract(args)
     if args.command == "judge-plan":
@@ -4480,7 +4398,7 @@ def main():
         return cmd_remove(args)
 
     emit_fail("usage", "Unknown or missing subcommand. Available: scan, "
-              "partition, ledger, lock, status, index, lint, ground, extract, "
+              "partition, ledger, lock, status, index, lint, extract, "
               "judge-plan, judgment, project, commit, branch, verify-cache, "
               "init, remove.")
     return 2

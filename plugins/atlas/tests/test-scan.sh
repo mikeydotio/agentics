@@ -44,8 +44,31 @@ test_scan_respects_gitignore() {
     run_atlas "$repo" scan
     assert_json_not_contains "$OUTPUT" '[.files[].path]' "secret.txt" \
         "gitignored file excluded" || return 1
-    assert_json_contains "$OUTPUT" '[.files[].path]' ".gitignore" \
-        ".gitignore itself is a mappable text file" || return 1
+    assert_json_not_contains "$OUTPUT" '[.files[].path]' ".gitignore" \
+        ".gitignore is VCS config, not mappable code" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+test_scan_excludes_noncode_and_manifests() {
+    # Dogfood F2/F3: a code map's sources should be code — not the SwiftPM
+    # manifest, the atlas-managed CLAUDE.md, or VCS config.
+    local repo
+    repo=$(create_fixture_repo)
+    seed_file "$repo" "Sources/App/main.swift"
+    seed_file "$repo" "Package.swift"
+    seed_file "$repo" "CLAUDE.md"
+    seed_file "$repo" ".gitignore"
+    commit_all "$repo"
+
+    run_atlas "$repo" scan
+    assert_json_field "$OUTPUT" '.total_files' "1" "only the Swift source survives" || return 1
+    assert_json_not_contains "$OUTPUT" '[.files[].path]' "Package.swift" \
+        "SwiftPM manifest excluded" || return 1
+    assert_json_not_contains "$OUTPUT" '[.files[].path]' "CLAUDE.md" \
+        "atlas-managed CLAUDE.md excluded" || return 1
+    assert_json_not_contains "$OUTPUT" '[.files[].path]' ".gitignore" \
+        "VCS config excluded" || return 1
 
     cleanup_fixture_repo "$repo"
 }

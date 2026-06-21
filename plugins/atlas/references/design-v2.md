@@ -56,6 +56,7 @@ v2 attacks both by splitting every doc into two provenances and caching the expe
 | 27 | Generator fingerprint | Bump to `cartographer/3` (the cartographer's output contract changes from markdown doc → JSON cells). Every v1 doc fingerprint-stales; `migrate-v1` re-keys existing prose so the bump costs no re-mapping. |
 | 28 | Merge surface | The flat, content-addressed `judgments.json` is the merge surface: disjoint keys merge cleanly; a same-key re-judgment is a *real* semantic conflict surfaced to a human. Docs are regenerated-on-conflict (extends v1 decision 12 to `modules/*.md`). |
 | 29 | Prose verification | **verify-set — delta-only, kind-scoped.** Structure is lint-verified for free; the judgment *prose* of the act-to-your-peril kinds (`symbol.contract`, `symbol.load_bearing`, `module.gotchas`) is adversarially sampled by `map-verifier` — automatically on map + update — with the verdict cached under the **same key** as the value, so an unchanged cell is never re-verified. A `fail` is re-judged once through the annotator with the verifier's `failures[]` as input, then re-verified; `verify-set` only ever stamps verdicts (JUDGE stays the sole cell producer). Soft prose (`purpose`/`summary`/`read_when`/`type_notes`/`overview.*`) is trusted — L16 pins its structural basis. Decided by a 3-member council, unanimous after a ranked runoff. |
+| 30 | `edge.semantic` richness (v2.1) | The reserved `edge.semantic` cell kind is realized: one cell per **resolved cross-module structural edge**, keyed `H(from_span_hash + to_symbol_id)`, anchored to the calling symbol's module. The annotator judges whether a semantic verb (`owns`/`emits`/`reads`/`writes`) holds beyond the bare `calls`; the projector renders that verb in `## Relationships` (else the structural verb), and it rides the verify-set machinery as a falsifiable kind. The parser never emits semantic verbs, so cells piggyback on resolved edges, not a "semantic edge" iteration. Generator bumps to `cartographer/4` (cell contract + projection format changed — the decision-20 propagation path). |
 
 ### Why a projection (not a smarter cartographer)
 
@@ -259,7 +260,7 @@ Determinism contract: identical input commit → byte-identical index. All array
       "value": "Owns session lifecycle; all login flows enter here",
       "provenance": {
         "model": "claude-sonnet-4-6",
-        "generator": "cartographer/3",
+        "generator": "cartographer/4",
         "created_at_commit": "abc1234"
       },
       "verify": { "verdict": "pass", "verifier": "map-verifier", "at_commit": "abc1234" }
@@ -422,7 +423,8 @@ everything else.
 The cartographer's contract flips from "author the doc" to "annotate the structure": its input is
 structure rows + a list of judgment keys to fill; its output is a **JSON array of cells, never
 markdown** (the projector writes the file). `agent-overrides/cartographer-context.md` is rewritten
-accordingly; generator → `cartographer/3`.
+accordingly; generator → `cartographer/3` (v2.0), then `cartographer/4` once `edge.semantic`
+cells join the contract (decision 30).
 
 ### `/atlas update` (`references/update-protocol.md`)
 

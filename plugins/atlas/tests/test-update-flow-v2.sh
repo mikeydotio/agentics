@@ -61,7 +61,7 @@ _full_map() {
 _reproject() {
     local repo="$1"
     run_atlas "$repo" project >/dev/null
-    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/3" >/dev/null
+    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4" >/dev/null
     run_atlas "$repo" index rebuild >/dev/null
 }
 
@@ -108,7 +108,7 @@ PY
         echo "    FAIL: update judged $n of $total_cells — not a delta"; return 1; }
 
     run_atlas "$repo" project >/dev/null
-    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/3" >/dev/null
+    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4" >/dev/null
     run_atlas "$repo" judgment diff
     assert_json_field "$OUTPUT" '.clean' "true" "clean again after updating the delta" || return 1
     cleanup_fixture_repo "$repo"

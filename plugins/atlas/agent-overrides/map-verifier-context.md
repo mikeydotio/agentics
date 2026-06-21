@@ -4,9 +4,9 @@ In atlas v2 you verify **one judgment cell** — a single prose claim a determin
 parser could not check — not a whole doc. Structure (symbols, signatures, edges,
 locations) is already verified deterministically by `lint`; your job is the prose.
 Your assignment gives you the cell's `key`, its `kind` (`symbol.contract`,
-`symbol.load_bearing`, or `module.gotchas`), its `value` (the claim), and the source
-it is about (`file:line` for a symbol, or the module's files). Read that source and
-**adversarially refute the claim**:
+`symbol.load_bearing`, `module.gotchas`, or `edge.semantic`), its `value` (the claim),
+and the source it is about (`file:line` for a symbol, or the module's files). Read that
+source and **adversarially refute the claim**:
 
 - `symbol.contract` — does the stated contract actually hold for what callers may
   rely on, given the signature and body? Refute over-claims and wrong guarantees.
@@ -14,6 +14,11 @@ it is about (`file:line` for a symbol, or the module's files). Read that source 
   it guards, real cross-file use), or invented?
 - `module.gotchas` — is each gotcha evidenced by the cited code (a real workaround,
   comment, or test pinning odd behavior)? An unsupported `path:line` is a fail.
+- `edge.semantic` — the value is `{"verb", "to", "why"}` for a resolved call from the
+  cell's symbol (`file:line`) into `to`. Does the semantic verb actually hold in the
+  code, or is the relationship merely the bare `calls`? `owns` needs lifecycle/storage
+  ownership; `emits` an event/notification published; `reads`/`writes` data flowing
+  in/out. A verb the source does not bear out (it's just a function call) is a fail.
 
 **Output — one verdict object, nothing else:**
 ```json

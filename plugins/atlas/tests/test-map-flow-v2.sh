@@ -74,7 +74,7 @@ test_full_map_flow_produces_clean_map() {
 
     # 5. ledger finalize (stamps final frontmatter) then 6. index rebuild
     # (reads it) — order is load-bearing.
-    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/3"
+    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4"
     assert_json_field "$OUTPUT" '.ledger_version' "2" "ledger is v2" || return 1
     run_atlas "$repo" index rebuild
     assert_json_field "$OUTPUT" '.ok' "true" "index rebuild ok" || return 1

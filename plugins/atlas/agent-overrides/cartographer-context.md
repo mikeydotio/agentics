@@ -20,7 +20,7 @@ write — emitted as **content-addressed cells**. You never write a `.md` file.
 [
   {"key": "<exact key from judge-plan>", "kind": "<its kind>",
    "value": <prose string, or the structured value noted below>,
-   "provenance": {"model": "<your model id>", "generator": "cartographer/3"}}
+   "provenance": {"model": "<your model id>", "generator": "cartographer/4"}}
 ]
 ```
 Emit one object per key you were asked to fill. Use the `key` **verbatim** — it
@@ -51,6 +51,17 @@ write or edit any file; do not output markdown or commentary around the JSON.
 - `overview.index_facts` — a JSON array of 8–15 strings, each ≤100 chars, one
   fact per line; they are extracted verbatim into the always-loaded INDEX and
   count against its 7,000-char budget, so be ruthless.
+- `edge.semantic` — the parser found a resolved call from `symbol` into `to` (a
+  symbol in another module, both named in the key's assignment). Judge whether a
+  *semantic* verb beyond the bare `calls` also holds, as a small JSON object:
+  `{"verb": "owns"|"emits"|"reads"|"writes", "to": "<the `to` symbol id>",
+  "why": "<≤140 chars, grounded>"}`. Emit `{"verb": null}` when the call is
+  purely structural (no ownership/event/data relationship) — the projector then
+  renders the plain `(calls)` edge and nothing is verified. Choose the verb from
+  evidence you read, never vibes (a manifest `owns` its targets; a store that
+  loads state `reads`; a publisher `emits`); when no allowed verb is truthful,
+  use `null`. The projector renders `(verb)` in `## Relationships`; an
+  out-of-grammar verb is ignored (falls back to `calls`).
 
 **Relationship verbs**: the projector renders structural edges (`calls`,
 `extends`, …) for you. When you supply a *semantic* relationship in prose, the

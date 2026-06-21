@@ -12,7 +12,7 @@ _v2_map() {
         | python3 "$CLI" judgment ingest >/dev/null)
     run_atlas "$repo" project >/dev/null
     run_atlas "$repo" index rebuild >/dev/null
-    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/3" >/dev/null
+    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4" >/dev/null
 }
 
 _lint_fixture() {

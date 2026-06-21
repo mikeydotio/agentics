@@ -286,13 +286,16 @@ test_ledger_finalize_v2_blocks() {
     cleanup_fixture_repo "$repo"
 }
 
-test_ledger_v1_unchanged_without_judgments() {
+test_ledger_is_v2_even_without_judgments() {
     local repo; repo=$(_diff_fixture)
-    # No judgments.json → finalize stays v1 (back-compat).
+    # v1 is retired (v2.1) — finalize stamps v2 even with no Judgment Cache,
+    # deriving the structure block straight from the index.
     write_full_module_doc "$repo" "src" "src" "Service" "src/svc.py"
     run_atlas "$repo" ledger finalize --refresh-hashes
     local ledger="$repo/docs/atlas/atlas-ledger.json"
-    assert_json_field "$(cat "$ledger")" '.version' "1" "no cache → v1 ledger" || return 1
+    assert_json_field "$(cat "$ledger")" '.version' "2" "no cache → still v2 (v1 retired)" || return 1
+    assert_json_field "$(cat "$ledger")" '.structure.index_digest | type' "string" \
+        "structure block is present without a Judgment Cache" || return 1
     cleanup_fixture_repo "$repo"
 }
 

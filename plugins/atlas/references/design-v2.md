@@ -1,9 +1,9 @@
 # Atlas v2 Design Record — the Projection architecture
 
-**Status: PROPOSED (Wave 0 approval gate).** This document is the type-system proposal and
-design record for atlas v2. It supersedes nothing until approved; v1 (`design.md`) remains
-authoritative for the shipped plugin. Per the spec-first methodology, **no v2 code is written
-until this record and its UML are approved.**
+**Status: ADOPTED — shipped (v2.0 + the v2.1 enhancements).** This is the authoritative design
+record for atlas. The former `design.md` (the v1 record) is folded into the **"v1 base"** section
+at the end of this document — v1 decisions 1–20 are the foundation v2 extends; the v2 decisions
+(21–30) below supersede the parts that changed.
 
 v2 keeps every v1 invariant that earns its place — committed markdown maps, the blob-SHA ledger,
 deterministic partitioning, branch isolation, the always-loaded INDEX budget, T0–T3 staleness —
@@ -43,12 +43,12 @@ v2 attacks both by splitting every doc into two provenances and caching the expe
 
 ---
 
-## Locked design decisions (v2) — extends `design.md` decisions 1–20
+## Locked design decisions (v2) — extends the v1 base decisions 1–20 (folded in below)
 
 | # | Decision | Choice |
 |---|----------|--------|
 | 21 | Doc provenance | **Projection.** Committed docs are DERIVED by `project` joining the Structure Index with the Judgment Cache. The cartographer no longer writes markdown; it emits judgment cells. |
-| 22 | Structure extraction | **Hybrid.** An external tree-sitter-backed helper (`subprocess`, mirrors `run_git`; probed via `$ATLAS_TS_HELPER` or `PATH`) emitting atlas's structure-JSON contract where available; the `cmd_ground` regex (`DEF_LINE_RE`/`IMPORT_LINE_RE`/fan-in) is the always-present fallback. Both feed one `resolve_edges` engine. Plugin is fully functional with **zero new deps**; the helper only raises edge precision (scope-resolved `to` targets). |
+| 22 | Structure extraction | **Hybrid.** An external tree-sitter-backed helper (`subprocess`, mirrors `run_git`; probed via `$ATLAS_TS_HELPER` or `PATH`) emitting atlas's structure-JSON contract where available; the `extract_regex` floor (`DEF_LINE_RE`/`IMPORT_LINE_RE`/fan-in) is the always-present fallback. Both feed one `resolve_edges` engine. Plugin is fully functional with **zero new deps**; the helper only raises edge precision (scope-resolved `to` targets). |
 | 23 | Source untouched | Judgments live in a committed sidecar (`judgments.json`), **never** in source comments. The "atlas never mutates your source tree" invariant (v1 decision 11 discipline) is preserved absolutely. |
 | 24 | Edge confidence | Every structural edge carries `resolved` \| `ambiguous` \| `unresolved`. A *unique* corpus-wide name (or a parser-supplied `to` target) is `resolved` — unambiguous, not a guess; a name with **multiple** candidates is never collapsed to one without parser evidence (kept `ambiguous`, all candidates listed); a name defined nowhere is `unresolved` and dropped. The LLM disambiguates only `ambiguous` edges feeding a doc being (re)projected. |
 | 25 | Source of truth | The **Judgment Cache** (committed) is canonical for prose; the **Structure Index** (regenerable) is canonical for structure; docs + INDEX + ledger are all derived. Extends v1 "INDEX is derived" to the whole map. |
@@ -366,7 +366,7 @@ scope**; the confidence model exists precisely to avoid needing one.
 
 ---
 
-## CLI surface — extends the `design.md` subcommand table
+## CLI surface — extends the v1 base subcommand table (folded in below)
 
 ### New subcommands
 
@@ -381,17 +381,16 @@ scope**; the confidence model exists precisely to avoid needing one.
 | `project` | `cmd_project`, `render_module_doc`, `render_overview_doc`, `join_structure_and_judgments` | v2-4 |
 | `migrate-v1` | `cmd_migrate_v1` | v2-8 |
 
-`extract_regex` **lifts the existing `cmd_ground` body verbatim** (`DEF_LINE_RE`, `IMPORT_LINE_RE`,
-fan-in) as the fallback backend — no behavior is reinvented. `judgment ingest` takes an opaque JSON
-payload on stdin exactly as `cmd_verify_cache_write` (`bin/atlas-cli:1433`) does; the CLI recomputes
-everything else.
+`extract_regex` is the always-present fallback backend (`DEF_LINE_RE`, `IMPORT_LINE_RE`, fan-in) —
+the same regex signals the retired v1 `ground` command used (v2.1 removed `ground`; this is now the
+one extraction path). `judgment ingest` takes an opaque JSON payload on stdin exactly as
+`cmd_verify_cache_write` does; the CLI recomputes everything else.
 
 ### Modified subcommands (reuse, don't rewrite)
 
 | Subcommand | Function (v1 line) | Change |
 |---|---|---|
-| `ground` | `cmd_ground` (1535) | Demoted to a thin shim over `do_extract` projecting the old `{files, imports, symbols}` shape so `test-ground.sh` stays green. Retired in Wave 7. |
-| `ledger finalize` | `build_ledger` (531) / `cmd_ledger_finalize` (578) | Add `structure` + `judgment_keys` blocks, sorted-key & churn-free (unchanged structure → byte-identical ledger, preserving the `--refresh-hashes` property). |
+| `ledger finalize` | `build_ledger` / `cmd_ledger_finalize` | Always stamp `version: 2` with the `structure` + `judgment_keys` blocks, sorted-key & churn-free (unchanged structure → byte-identical ledger, preserving the `--refresh-hashes` property). v2.1 retired the v1 (structure-less) ledger — v2 is the only shape. |
 | `ledger diff` | `compute_diff` (758) | Add a `version:2` path reporting `judgment_delta`; keep file-blob classification for dirty-tree honesty. |
 | `lint` | `lint_map` (2045) | **L7 becomes a join** against the Structure Index (was a `WORDISH_BOUNDARY` grep, 2188). Add **L15** (no dangling judgment keys) and **L16** (`doc == fresh project render`, the projection analogue of L10's INDEX reconciliation, 2082). L1–L6, L8–L14 survive. |
 | `index rebuild` | `cmd_index_rebuild` (1919) | The projector writes the `<!-- atlas:index-facts -->` block from the `overview.index_facts` cell; `build_index_text` (1867) is otherwise untouched. |
@@ -471,16 +470,19 @@ Cells whose symbol no longer matches (drift since the v1 map) are surfaced as `j
 
 ## Roadmap (v2 waves)
 
-- [ ] **Wave 0** — This design record + UML (component dataflow + class/schema). **Approval gate.**
-- [ ] **Wave 1** — `extract_regex` Structure Index core (regex only, zero new deps). `test-extract.sh`.
-- [ ] **Wave 2** — tree-sitter backend behind a binary probe + tested regex fallback.
-- [ ] **Wave 3** — Judgment Cache, the orthogonal-hash keys, `judge-plan`, `judgment ingest`. The four
+- [x] **Wave 0** — This design record + UML (component dataflow + class/schema).
+- [x] **Wave 1** — `extract_regex` Structure Index core (regex only, zero new deps). `test-extract.sh`.
+- [x] **Wave 2** — tree-sitter backend behind a binary probe + tested regex fallback (the helper itself
+      shipped in v2.1 — `plugins/atlas/helpers/ts-helper/`).
+- [x] **Wave 3** — Judgment Cache, the orthogonal-hash keys, `judge-plan`, `judgment ingest`. The four
       keying-invariant tests are the load-bearing correctness proof.
-- [ ] **Wave 4** — `project` deterministic render (passes v1 lint L1 byte-for-byte; idempotent).
-- [ ] **Wave 5** — Ledger v2 + `judgment diff`; the zero-LLM-on-no-change proof; double-extract determinism.
-- [ ] **Wave 6** — lint v2 (L7-join, L15, L16) + status wiring.
-- [ ] **Wave 7** — protocol rewrites + cartographer-as-annotator + e2e; retire the `ground` shim.
-- [ ] **Wave 8** — `migrate-v1` + degradation hardening + README/design.md; `make test` before push.
+- [x] **Wave 4** — `project` deterministic render (passes v1 lint L1 byte-for-byte; idempotent).
+- [x] **Wave 5** — Ledger v2 + `judgment diff`; the zero-LLM-on-no-change proof; double-extract determinism.
+- [x] **Wave 6** — lint v2 (L7-join, L15, L16) + status wiring.
+- [x] **Wave 7** — protocol rewrites + cartographer-as-annotator + e2e.
+- [x] **Wave 8** — `migrate-v1` + degradation hardening + README; `make test` before push.
+- [x] **v2.1** — tree-sitter Swift helper; `edge.semantic` relationship richness; retire v1 (`ground` +
+      the structure-less ledger). `design.md` folded into the v1 base section below.
 
 Each wave is independently shippable, green before the next, tested by mock-free bash harnesses
 (`tests/test-*.sh`) driving the real CLI in throwaway `/tmp` git repos — the v1 pattern.
@@ -491,3 +493,193 @@ Cross-module type resolution / a real semantic resolver (the confidence model re
 LSP backends (heavy, stateful); import-graph-driven partitioning (still destabilizes doc identity);
 per-symbol inline source comments (rejected — breaks source-untouched, can't hold non-local content,
 degrades staleness detection); custom git merge driver; exact tokenizer integration.
+
+---
+
+# v1 base — the inherited foundation
+
+*Folded in from the former `references/design.md`.* These are the v1 invariants atlas still rests
+on; the v2 decisions (21–30) above extend them. Two decisions are **superseded**: **#2** (the LLM
+wrote the whole doc → now it annotates structure with judgment cells, decision 21) and **#10**
+(verify every regenerated doc → delta-only `verify-set`, decision 29). The cartographer-fingerprint
+history (#18 `/1`, #20 `/2`) is kept for provenance — v2 advanced it to `/3` (cells) then `/4`
+(`edge.semantic`).
+
+## Locked design decisions (v1)
+
+| # | Decision | Choice |
+|---|----------|--------|
+| 1 | Name / command / plugin dir | **atlas** / `/atlas` / `plugins/atlas/` |
+| 2 | ~~Engine~~ *(superseded by 21)* | v1: LLM mapper agents (foreground fan-out) wrote whole docs, grounded by deterministic signals. v2: the cartographer annotates the Structure Index with judgment cells; a deterministic projector writes the docs. |
+| 3 | Language support | Agnostic; depth scales with how typed the language is. |
+| 4 | Map home | Committed: `docs/atlas/` (INDEX, modules/, overview/, config, derived ledger). Runtime: `.atlas/` fully gitignored (lock, drift cache, structure index). |
+| 5 | Always-loaded budget | INDEX only; target ~1.5k tokens, hard ceiling 2k — lint-enforced as ≤7,000 chars (warn 6,000), chars/3.5 heuristic. |
+| 6 | Delivery | Managed CLAUDE.md block (`<!-- atlas:start/end -->`) containing `@docs/atlas/INDEX.md` import + SessionStart hook adding dynamic staleness info. |
+| 7 | Staleness | Tiered: T0 silent / T1 informational + per-doc `[STALE]` tags / T2 recommend `/atlas update` / T3 suppress trust ("disregard the imported map"). |
+| 8 | Incremental engine | Blob-SHA dependency ledger in per-doc frontmatter (source of truth) + derived committed reverse index (`atlas-ledger.json`); ripple via `references_modules` reverse edges; hash-gated regeneration. |
+| 9 | Content scope | Public API surface + load-bearing internals (ranked); relationship insights; **code structure only** — workflow/commands stay in CLAUDE.md. |
+| 10 | ~~Verification~~ *(superseded by 29)* | v1: mechanical lint always + a bounded LLM verify pass on **every** regenerated doc. v2: structure is lint-verified for free; the prose delta of the act-to-your-peril kinds is sampled by `verify-set`, verdict cached by key. |
+| 11 | Committing | Auto-commit `docs(atlas): …`, pathspec-only staging (`git add -- docs/atlas/`); refuse mid-merge; never `-A`. |
+| 12 | Conflicts | Regenerate-on-conflict; INDEX + reverse index mechanically rebuildable; never `merge=union`. |
+| 13 | Concurrency | mkdir-atomic heartbeat lock in `.atlas/lock/`, 10-min staleness takeover, no PIDs. |
+| 14 | Scale guardrails | Mappable-file ceiling (default 1,500) with refusal + guidance; 3–15 files / ≤120KB per partition; fan-out ≤8; confirm gate before full map. |
+| 15 | Format | Rigid identical section anchors in every module doc (the "grep API"); tables for inventories; relationship edge lists one-per-line; no Mermaid; alphabetical ordering; no volatile content in bodies. |
+| 16 | Agents | Shared `cartographer` + `map-verifier` in `plugins/agents/agents/` + `plugins/atlas/agent-overrides/`. |
+| 17 | SKILL model | `model: inherit` (pinned small-model skills overflow long sessions). |
+| 18 | Cartographer model | `cartographer` + overview spawns pinned to `sonnet[1m]` via the SKILL.md Agent-assembly rule — NOT a `model:` on the shared agent (would leak to forge/rca/council and is inert for atlas's by-reference spawn). `map-verifier` stays default. (Fingerprint left `cartographer/1` at the time — model not recorded.) |
+| 19 | Branch isolation | `/atlas map`/`update` run on an `atlas/<op>-<short-sha>` branch via `atlas-cli branch ensure` (idempotent; refuses mid-merge; handles detached/unborn HEAD), with per-wave checkpoint commits. End-of-run stays on the branch with a suggested merge (atlas never switches/merges for you). Lock + blob-SHA staleness are branch-agnostic by design. |
+| 20 | Generator `cartographer/2` | Bumped from `/1` when map-format + cartographer-context gained relationship-verb-selection guidance and read_when brevity — these change expected cartographer output, so every map fingerprint-stales and regenerates on next `/atlas update` (the deliberate propagation path). Paired with lint L12/L13/L14 + an L7 fix — no-bump CLI changes that catch the same defects deterministically. (v2 advanced this to `/3` then `/4`.) |
+
+### Why blob SHAs, not a baseline commit
+
+`git rev-list --count BASE..HEAD` is ancestry-dependent — it produces garbage after a rebase or
+squash merge, and the BASE object may not exist at all in shallow clones. Per-source-file **blob
+SHAs** (`git ls-tree -r HEAD`, `git hash-object` for dirty files) are content-addressed:
+invalidation survives rebases, detects pure renames with zero heuristics (same blob OID at a new
+path), and works in depth-1 clones. The baseline commit is recorded but **advisory only**.
+
+### Why hash-gated regeneration
+
+LLM output is nondeterministic even at temperature 0. A doc whose recorded `(path, blob)` inputs are
+unchanged must **never** be sent to an LLM — that is the only thing keeping unchanged docs byte-stable
+across updates. (v2 sharpens this to *symbol* granularity via content-addressed judgment keys: a pure
+body edit re-projects with zero model calls.)
+
+### Why the INDEX is derived
+
+Any two branches that both ran `/atlas update` will conflict on INDEX.md. The INDEX is therefore
+assembled mechanically from per-doc frontmatter (`summary`, `read_when`) plus the
+`<!-- atlas:index-facts -->` block in `overview/ARCHITECTURE.md` — resolving a conflict means
+rebuilding, never hand-merging. Same for `atlas-ledger.json`.
+
+### Why mapping runs on a branch
+
+`/atlas map`/`update` write many docs across several waves before the lint-gated final commit. A
+crash or re-run mid-flow could clobber already-completed module docs. Running on a dedicated
+`atlas/<op>-<short-sha>` branch with per-wave checkpoint commits makes every completed wave
+recoverable from git and keeps the user's working branch clean until they choose to merge. Branching
+is safe for the ledger precisely because invalidation is content-addressed (blob SHAs), not
+ancestry-based. The cartographer still runs on `sonnet[1m]` (decision 18) as an annotator.
+
+## Target repo layout (what atlas creates in a mapped project)
+
+```
+docs/atlas/
+├── INDEX.md                 # always-loaded via @import; DERIVED — rebuildable
+├── config.yaml              # globs, ceilings, tier thresholds, module overrides
+├── judgments.json           # COMMITTED Judgment Cache (v2; content-addressed prose)
+├── atlas-ledger.json        # DERIVED reverse index + v2 structure/judgment_keys blocks
+├── modules/<module-id>.md   # per-module docs; frontmatter = ledger source of truth
+└── overview/ARCHITECTURE.md # cross-cutting; contains <!-- atlas:index-facts -->
+.atlas/                      # gitignored entirely
+├── lock/                    # mkdir-atomic heartbeat lock (lock.json inside)
+├── structure/index.json     # v2 Structure Index (regenerable)
+└── drift-cache.json         # status cache keyed by HEAD + dirty-state hash
+```
+
+## Module doc frontmatter schema (ledger source of truth)
+
+```yaml
+---
+module: src/auth                      # partition identity (path or descriptor)
+summary: Session + credential management for all entry points   # → INDEX inventory
+read_when: Touching authentication, sessions, or credentials    # → INDEX routing
+sources:                              # every file this doc draws conclusions from
+  - path: src/auth/AuthService.swift
+    blob: 9a3f…                       # git blob SHA of the bytes as mapped
+references_modules: [src-api, src-models]   # ripple edges
+generator: cartographer/4             # fingerprint — bump invalidates
+baseline: abc1234                     # advisory only, never used for invalidation
+verified: true                        # map-verifier verdict
+---
+```
+
+## Module doc body — rigid anchors (identical in every doc)
+
+```
+# Module: <path>
+## Purpose                    2–3 sentences of insight, not paraphrase
+## Public API                 table: symbol | kind | path:line | contract; alphabetical
+## Load-bearing internals     same table + why-it-matters; ranked selection
+## Relationships              edge list: `auth.AuthService -> api.Client (calls)`
+## Type notes                 ownership, lifecycle, invariants — prose
+## External deps              name + one-line role
+## Gotchas                    only if grounded in code evidence; omit if none
+```
+
+This uniformity is deliberate: `grep -A20 "## Relationships" docs/atlas/modules/*.md` is a supported
+query primitive. (`map-format.md` is the authoritative renderer spec.)
+
+## Staleness tiers (computed by `atlas-cli status`)
+
+| Tier | Trigger (any) | Hook behavior |
+|------|---------------|---------------|
+| T0 | 0 docs affected | Silent |
+| T1 | <25% of docs affected, overview/INDEX sources untouched | One-line notice naming stale modules |
+| T2 | ≥25% docs, or overview stale, or >50 in-scope files changed, or baseline unresolvable with drift | Notice + "run /atlas update" |
+| T3 | ≥50% docs, or lint ERROR, or conflict markers in map | "Map untrustworthy — disregard the imported INDEX; treat as absent" |
+
+Thresholds are config-overridable. A wrong map presented confidently is worse than no map — T3
+suppression is load-bearing, not polish.
+
+## atlas-cli base subcommands (bin/atlas-cli, python3 stdlib only)
+
+All output is JSON to stdout: `{"ok": true, …}` or `{"ok": false, "error": "<code>", …}`. Exit
+codes: 0 success, 1 operation failed, 2 usage error. These are the v1 base commands the v2 "CLI
+surface" table above extends (the v1 `ground` command was retired in v2.1 — `extract` is the one
+structure path).
+
+| Subcommand | Role |
+|---|---|
+| `scan` | mappable files (git ls-files ∩ globs), sizes, ceiling check |
+| `partition` | deterministic module partitioning |
+| `ledger finalize` / `ledger diff` | blob ledger build + invalidation classification |
+| `lock acquire\|heartbeat\|release` | concurrency lock |
+| `status [--for-hook]` | tier computation, drift cache |
+| `lint [--fast]` | integrity checks |
+| `index rebuild` | mechanical INDEX assembly + budget enforcement |
+| `commit` | guarded pathspec-scoped map commit |
+| `doc remove` | path-guarded doc deletion; echoes module + sources for regen |
+| `diffpack` | per-doc anchored-regen patch file under `.atlas/diffs/` |
+
+`ledger finalize --refresh-hashes` is churn-free: a doc is rewritten only when its frontmatter values
+or bytes actually changed, and the advisory `baseline` moves only with such a change — unchanged docs
+stay byte-identical, the hash-gating property `/atlas update` proves with `git show --stat`.
+
+### config.yaml (restricted YAML subset)
+
+The CLI parses a deliberate YAML subset: top-level scalars, one level of nested map, lists of
+scalars, and `modules:` as a list of `{name, globs}` maps. Comments and blank lines are skipped.
+
+```yaml
+max_files: 1500          # scan ceiling
+partition:
+  min_files: 3
+  max_files: 15
+  max_bytes: 120000
+include: ["**"]
+exclude:                 # appended to built-in excludes (lockfiles, binaries, docs/atlas, .atlas)
+  - "vendor/**"
+modules:                 # manual partition overrides — first match wins
+  - name: auth
+    globs: ["src/auth/**"]
+```
+
+### Partitioning algorithm (deterministic — module identity drives doc identity)
+
+1. Config `modules:` overrides claim files first (config order, first match wins).
+2. Build a directory tree of remaining files. A subtree that fits the caps (≤max_files, ≤max_bytes)
+   becomes one partition, labeled by the deepest common directory of its files.
+3. Oversized subtrees recurse. After recursion, sibling `dir` partitions smaller than min_files
+   coalesce with the parent's direct files into a `<parent> (misc)` bucket.
+4. Buckets over caps split: filename-stem clustering first (stem = basename before the first `-`/`_`;
+   groups ≥min_files become `<dir>/<stem>*` partitions), then greedy alphabetical chunks.
+5. Module ids sanitize paths (`/`→`-`, non-alphanumerics collapsed); collisions get a numeric suffix;
+   output sorted by id.
+
+### New-file assignment (`ledger diff`)
+
+Unmapped files get deterministic destinations, strongest signal first: (1) a module doc already
+owning sources in the file's directory (majority, tie → lexicographic doc id); (2) the partition
+claiming the file — by module-id match against an existing doc, then by majority owner of the
+partition's other files; (3) a new-module proposal named by the claiming partition.

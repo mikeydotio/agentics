@@ -65,10 +65,10 @@ test_single_file_repo_full_map_flow() {
     local mod_id
     mod_id=$(echo "$OUTPUT" | jq -r '.modules[0].id')
 
-    run_atlas "$repo" ground "$mod_id"
-    assert_exit_code 0 "$EXIT_CODE" "ground works on a one-file module" || return 1
+    run_atlas "$repo" extract --module "$mod_id"
+    assert_exit_code 0 "$EXIT_CODE" "extract works on a one-file module" || return 1
     assert_json_contains "$OUTPUT" '[.symbols[].name]' "OnlyOne" \
-        "symbol candidate found" || return 1
+        "symbol found" || return 1
 
     write_full_module_doc "$repo" "$mod_id" "src" "OnlyOne" "src/only.swift"
     commit_all "$repo"
@@ -232,7 +232,7 @@ test_nongit_refusal_everywhere() {
     local dir
     dir=$(mktemp -d /tmp/atlas-tests-nongit-XXXXXX)
     local -a cmds=(
-        "status" "lint" "partition" "ground mod" "ledger diff"
+        "status" "lint" "partition" "extract" "ledger diff"
         "ledger finalize" "index rebuild" "commit --message m"
         "doc remove x" "diffpack x" "lock acquire --holder t"
     )

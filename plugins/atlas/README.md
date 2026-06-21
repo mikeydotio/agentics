@@ -272,5 +272,6 @@ and wrong gets its flagged claims fixed by `repair` but stays flagged for
 - **python3** — the deterministic CLI is stdlib-only python3
 - **jq** — required by the SessionStart hook
 
-See `references/design.md` for the decision record and
-`references/map-format.md` for the normative file format.
+See `references/design-v2.md` for the decision record (the v2 Projection
+architecture plus the folded-in v1 base) and `references/map-format.md` for the
+normative file format.

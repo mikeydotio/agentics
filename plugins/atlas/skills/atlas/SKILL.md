@@ -91,4 +91,4 @@ Sonnet, just at the default window.)
   projection, the judgment-key derivation) — read this first for v2
 - `references/map-format.md` — normative doc format that `project` renders
 - `references/claude-md-injection.md` — managed block mechanics
-- `references/design.md` — v1 decision record (still the base; v2 extends it)
+- `references/design-v2.md` — the design record (v2 Projection architecture + the folded-in v1 base)

@@ -63,6 +63,37 @@ test_extract_writes_index_and_reports_summary() {
     cleanup_fixture_repo "$repo"
 }
 
+test_extract_label_is_not_an_import_dep() {
+    # Dogfood F1: a parameter label like Swift's `source:` / `from:` must NOT be
+    # read as an import — and must never yield a punctuation-only external dep.
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/Sources/App"
+    cat > "$repo/Sources/App/Svc.swift" <<'SWIFT'
+import Foundation
+
+public struct Svc {
+    public func run(source: Int, from: String) -> Int {
+        source + from.count
+    }
+}
+SWIFT
+    local i
+    for i in 1 2 3 4 5; do seed_file "$repo" "Sources/App/pad$i.txt"; done
+    commit_all "$repo"
+
+    run_atlas "$repo" extract --backend regex
+    assert_exit_code 0 "$EXIT_CODE" "extract exits 0" || return 1
+    local deps
+    deps=$(jq -c '.external_deps' "$repo/.atlas/structure/index.json")
+    echo "$deps" | jq -e 'index("Foundation") != null' >/dev/null \
+        || { echo "    FAIL: real 'import Foundation' missing from deps: $deps"; return 1; }
+    if echo "$deps" | jq -e 'any(.[]; test("^[^A-Za-z0-9_@]"))' >/dev/null; then
+        echo "    FAIL: a punctuation-leading dep (e.g. ':') slipped in: $deps"; return 1
+    fi
+    cleanup_fixture_repo "$repo"
+}
+
 test_extract_symbol_has_three_orthogonal_hashes() {
     local repo
     repo=$(_extract_fixture)

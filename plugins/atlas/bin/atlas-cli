@@ -37,6 +37,8 @@ DEFAULT_PARTITION = {
 DEFAULT_EXCLUDES = [
     "docs/atlas/**",
     ".atlas/**",
+    "**/CLAUDE.md",          # atlas injects a managed block — instructions, not source
+    "**/.gitignore",         # VCS config, no mappable code
     "**/package-lock.json",
     "**/yarn.lock",
     "**/pnpm-lock.yaml",
@@ -47,6 +49,7 @@ DEFAULT_EXCLUDES = [
     "**/composer.lock",
     "**/go.sum",
     "**/Package.resolved",
+    "**/Package.swift",      # SwiftPM manifest — declares the package, no module structure
     "**/*.lock",
     "**/*.min.js",
     "**/*.min.css",
@@ -1585,8 +1588,11 @@ DEF_LINE_RE = re.compile(
     r"|extension|actor|trait|impl|module|defmodule|object)"
     r"\s+([A-Za-z_][A-Za-z0-9_]*)")
 
+# The keyword must be followed by whitespace, a quote/bracket, or EOL — so a
+# parameter label like Swift's `source:` or `from:` is NOT read as an import.
 IMPORT_LINE_RE = re.compile(
-    r"^\s*(import|from|require|use|using|include|#include|@import|source)\b")
+    r"^\s*(import|from|require|use|using|include|#include|@import|source)"
+    r"(?=\s|[\"'<(]|$)")
 
 GROUND_MAX_IMPORT_LINES = 20   # per file
 GROUND_MAX_SYMBOLS = 40
@@ -1731,7 +1737,9 @@ def parse_import_target(line):
     if not m:
         return None
     rest = s[m.end():].strip()
-    tok = re.match(r'["\'<(]?\s*([A-Za-z0-9_./:@-]+)', rest)
+    # Token must START with a name char (letter/digit/_/@) — never punctuation,
+    # so a stray `:`/`.` after a mis-detected keyword is not returned as a dep.
+    tok = re.match(r'["\'<(]?\s*([A-Za-z0-9_@][A-Za-z0-9_./:@-]*)', rest)
     if not tok:
         return None
     return tok.group(1).rstrip(";,").strip() or None

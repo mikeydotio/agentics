@@ -111,7 +111,7 @@ finalize so the root doc hashes the post-init bytes.
 
 ## 8 — Finalize, index, lint (the deterministic tail)
 
-1. `... ledger finalize --refresh-hashes --generator "cartographer/3"` — stamps
+1. `... ledger finalize --refresh-hashes --generator "cartographer/4"` — stamps
    blob hashes + baseline into the projected docs and writes the v2 ledger
    (structure fingerprint + per-doc judgment_keys).
 2. `... index rebuild` — assembles INDEX.md from the finalized frontmatter +
@@ -124,7 +124,7 @@ finalize so the root doc hashes the post-init bytes.
 ## 9 — Commit, release, report
 
 1. `... commit --message "docs(atlas): full codebase map (<M> modules,
-   cartographer/3)" --also CLAUDE.md --also .gitignore`.
+   cartographer/4)" --also CLAUDE.md --also .gitignore`.
 2. `... lock release`.
 3. Summary: module count, cells judged, INDEX chars vs budget, lint warnings,
    and the branch handoff (Option A — atlas never merges for you): the map is on

@@ -86,7 +86,7 @@ here the in-scope set is just the cells re-judged in step 3:
    reversible via git; it keeps `judgments.json` from accreting dead cells across
    updates. Projection consumed only required cells, so this never changes a doc.
 2. `... init` (idempotent; before finalize if a managed file is mapped).
-3. `... ledger finalize --refresh-hashes --generator "cartographer/3"` — refreshes
+3. `... ledger finalize --refresh-hashes --generator "cartographer/4"` — refreshes
    blobs for changed sources, prunes orphaned ledger entries, rewrites the v2
    structure + judgment_keys blocks. Unchanged docs stay byte-identical
    (hash-gated).

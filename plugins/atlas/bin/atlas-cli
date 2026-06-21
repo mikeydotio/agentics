@@ -2231,8 +2231,11 @@ OVERVIEW_JUDGMENT_KINDS = ("shape", "dataflow", "index_facts")
 # The falsifiable, act-to-your-peril prose kinds the map-verifier samples — the
 # claims a downstream agent obeys to its peril (council decision: verify the
 # high-consequence prose delta, not soft routing prose; structure is already
-# lint-verified). When edge.semantic cells are produced (item #6), add it here.
-VERIFY_KINDS = ("symbol.contract", "symbol.load_bearing", "module.gotchas")
+# lint-verified). edge.semantic is here too: a judged verb (owns/emits/reads/
+# writes) is an act-to-your-peril relationship claim, so the verifier samples it
+# (null-verb cells make no claim and are excluded by verify_targets).
+VERIFY_KINDS = ("symbol.contract", "symbol.load_bearing", "module.gotchas",
+                "edge.semantic")
 # Verdicts meaning "not yet verified under this key" — the verify delta. A cached
 # pass/fail is skipped (verification collapses to the delta exactly like judgment).
 VERIFY_PENDING_VERDICTS = ("unverified", "migrated")
@@ -2310,6 +2313,44 @@ def is_load_bearing_candidate(sym):
     return sym["visibility"] != "public" and sym.get("fan_in", 0) >= 1
 
 
+def resolved_cross_module_edges(index):
+    """The resolved structural edges that cross a module boundary, returned as
+    (edge, from_sym, from_module, to_module) tuples in deterministic order.
+
+    These are the ONLY edges an `edge.semantic` cell annotates: the taxonomy
+    anchors a semantic verb to a resolved structural edge (design-v2 determinism
+    boundary), so the parser proposes the `A -> B` call and the LLM judges
+    whether a richer verb (owns/emits/reads/writes) also holds. The parser never
+    emits semantic verbs, so this — not "iterating semantic edges" — is how the
+    planner and the projector agree on which cells exist. Shared by both so they
+    can never drift."""
+    rev = path_to_module(index)
+    sym_by_id = {s["id"]: s for s in index["symbols"]}
+    out = []
+    for e in index["edges"]:
+        if e["confidence"] != "resolved" or not e.get("to"):
+            continue
+        from_sym = sym_by_id.get(e["from"])
+        to_sym = sym_by_id.get(e.get("to"))
+        if from_sym is None or to_sym is None:
+            continue
+        fmod = rev.get(from_sym["file"])
+        tmod = rev.get(to_sym["file"])
+        if fmod is None or tmod is None or fmod == tmod:
+            continue
+        out.append((e, from_sym, fmod, tmod))
+    out.sort(key=lambda t: (t[0]["from"], t[0]["to"] or ""))
+    return out
+
+
+def edge_semantic_key(from_sym, to_id):
+    """Content address of an `edge.semantic` cell: keyed on the calling symbol's
+    `span_hash` + the resolved target id, so it re-judges when the calling code
+    changes or the target moves, and is stable across unrelated edits. The verb
+    is the annotator's OUTPUT (value-addressed), never a key input."""
+    return judgment_key("edge.semantic", from_sym["span_hash"], to_id)
+
+
 def compute_judgment_keys(index):
     """The full set of judgment cells the current structure requires, each with
     its key and identity anchor. Deterministic — the planning side of the cache."""
@@ -2343,6 +2384,15 @@ def compute_judgment_keys(index):
                 "key": judgment_key("overview." + k, odigest),
                 "kind": "overview." + k, "module": "overview/ARCHITECTURE",
                 "symbol": None})
+    # One edge.semantic cell per resolved cross-module edge — anchored to the
+    # calling (from) symbol's module so its annotator, reading that module's
+    # source, judges whether a semantic verb also holds. `to` rides along so
+    # judge-plan can name the target for the annotator.
+    for e, from_sym, fmod, _tmod in resolved_cross_module_edges(index):
+        cells.append({
+            "key": edge_semantic_key(from_sym, e["to"]),
+            "kind": "edge.semantic", "module": fmod,
+            "symbol": from_sym["id"], "to": e["to"]})
     # Stable order; de-dup by key (identical anchors can't legitimately recur).
     seen = set()
     unique = []
@@ -2559,14 +2609,21 @@ def verify_targets(index, judgments):
         verdict = (entry.get("verify") or {}).get("verdict", "unverified")
         if verdict not in VERIFY_PENDING_VERDICTS:
             continue  # already pass/fail under this key
+        value = entry.get("value")
+        if cell["kind"] == "edge.semantic" and not (
+                isinstance(value, dict)
+                and value.get("verb") in SEMANTIC_EDGE_VERBS):
+            continue  # a null/absent verb is "no relationship" — nothing to refute
         target = {"key": cell["key"], "kind": cell["kind"],
-                  "value": entry.get("value"), "module": cell["module"]}
+                  "value": value, "module": cell["module"]}
         if cell["symbol"]:
             target["symbol"] = cell["symbol"]
             s = sym_by_id.get(cell["symbol"])
             if s:
                 target["file"] = s["file"]
                 target["line"] = s["span"]["start_line"]
+            if cell.get("to"):
+                target["to"] = cell["to"]  # the relationship's resolved target
         else:
             target["files"] = modules.get(cell["module"], [])
         targets.append(target)
@@ -2792,7 +2849,7 @@ def cmd_migrate_v1(args):
 # structurally valid and re-projecting after ingest fills the blanks. Output is
 # deterministic — same index + same cache → byte-identical docs.
 
-GENERATOR_V2 = "cartographer/3"
+GENERATOR_V2 = "cartographer/4"
 PENDING_PROSE = "_(pending judgment)_"
 PROJECT_MAX_EDGES = 60
 OVERVIEW_SUMMARY = "System architecture and cross-module relationships"
@@ -2800,8 +2857,12 @@ OVERVIEW_SUMMARY = "System architecture and cross-module relationships"
 
 def _key_index(cells):
     """{(kind, module, symbol): key} from compute_judgment_keys — the single
-    source of truth for key derivation, shared by planning and projection."""
-    return {(c["kind"], c["module"], c["symbol"]): c["key"] for c in cells}
+    source of truth for the single-valued (module/symbol/overview) cells, shared
+    by planning and projection. edge.semantic is excluded: it is multi-valued per
+    (kind, module, symbol) — one cell per outgoing cross-module edge — so the
+    projector keys it directly via edge_semantic_key, not through this map."""
+    return {(c["kind"], c["module"], c["symbol"]): c["key"]
+            for c in cells if c["kind"] != "edge.semantic"}
 
 
 def symbol_location(sym):
@@ -2824,29 +2885,41 @@ def module_external_deps(root, index, paths):
     return sorted(deps)
 
 
-def render_relationships(index, module_id, member_ids):
-    """Resolved cross-module `calls`/structural edges as v1 edge lines, plus the
-    set of referenced module ids (for references_modules)."""
-    rev = path_to_module(index)
+def render_relationships(index, judgments, module_id):
+    """Resolved cross-module structural edges rendered as v1 edge lines. When an
+    `edge.semantic` cell has judged a richer verb (owns/emits/reads/writes) for
+    an edge, that verb REPLACES the bare structural one (`calls`/…) — the v1
+    relationship richness; an unjudged or explicitly null-verb edge keeps its
+    structural verb, so projection is stable before the cell is judged and after
+    one says "purely structural". Returns
+    (lines, referenced_modules, consumed_keys, missing_keys): the semantic keys
+    join the doc's judgment_keys and the JUDGE delta exactly like cell prose."""
+    store = judgments.get("judgments", {})
     name_by_id = {s["id"]: s["name"] for s in index["symbols"]}
     lines = set()
     refs = set()
-    for e in index["edges"]:
-        if e["confidence"] != "resolved" or not e.get("to"):
-            continue
-        if e["from"] not in member_ids:
-            continue
-        to_mod = rev.get(e["to"].split("::")[0])
-        if to_mod is None or to_mod == module_id:
-            continue  # cross-module only (intra-module calls are too noisy)
+    consumed, missing = [], []
+    for e, from_sym, _fmod, to_mod in resolved_cross_module_edges(index):
+        if _fmod != module_id:
+            continue  # only this module's outgoing edges (cross-module only)
         fn = name_by_id.get(e["from"])
         tn = name_by_id.get(e["to"])
         if not fn or not tn:
             continue
+        key = edge_semantic_key(from_sym, e["to"])
+        consumed.append(key)
+        verb = e["kind"]
+        entry = store.get(key)
+        if entry is None:
+            missing.append(key)
+        else:
+            value = entry.get("value")
+            if isinstance(value, dict) and value.get("verb") in SEMANTIC_EDGE_VERBS:
+                verb = value["verb"]
         lines.add("- `{}.{} -> {}.{} ({})`".format(
-            module_id, fn, to_mod, tn, e["kind"]))
+            module_id, fn, to_mod, tn, verb))
         refs.add(to_mod)
-    return sorted(lines)[:PROJECT_MAX_EDGES], sorted(refs)
+    return sorted(lines)[:PROJECT_MAX_EDGES], sorted(refs), consumed, missing
 
 
 def render_module_doc(root, index, judgments, key_by, module_id):
@@ -2867,7 +2940,6 @@ def render_module_doc(root, index, judgments, key_by, module_id):
 
     mods = module_symbols(index)
     members = sorted(mods.get(module_id, []), key=lambda s: (s["name"], s["id"]))
-    member_ids = {s["id"] for s in members}
     label = index.get("module_labels", {}).get(module_id, module_id)
 
     summary = cell("module.summary") or "Pending summary for {}".format(label)
@@ -2876,7 +2948,10 @@ def render_module_doc(root, index, judgments, key_by, module_id):
     type_notes = cell("module.type_notes") or PENDING_PROSE
     gotchas = cell("module.gotchas")
 
-    rel_lines, refs = render_relationships(index, module_id, member_ids)
+    rel_lines, refs, rel_consumed, rel_missing = render_relationships(
+        index, judgments, module_id)
+    consumed += rel_consumed
+    missing += rel_missing
     paths = sorted(index["modules"].get(module_id, []))
 
     fm = {
@@ -3502,8 +3577,13 @@ def parse_symbol_tables(body):
     return rows
 
 
-ALLOWED_EDGE_VERBS = {"calls", "implements", "conforms-to", "extends",
-                      "emits", "owns", "reads", "writes"}
+# Structural verbs a parser can propose (decision 24) vs semantic verbs that
+# always require judgment (decision: determinism boundary). An `edge.semantic`
+# cell's value carries one of the SEMANTIC verbs; ALLOWED_EDGE_VERBS is their
+# union — the grammar lint L13 validates rendered relationship lines against.
+STRUCTURAL_EDGE_VERBS = {"calls", "implements", "conforms-to", "extends"}
+SEMANTIC_EDGE_VERBS = {"owns", "emits", "reads", "writes"}
+ALLOWED_EDGE_VERBS = STRUCTURAL_EDGE_VERBS | SEMANTIC_EDGE_VERBS
 
 # `<lhs> -> <rhs> (<verb>)` captured inside a backtick span; a trailing
 # ` — `path:line`` citation after the closing backtick is outside the match

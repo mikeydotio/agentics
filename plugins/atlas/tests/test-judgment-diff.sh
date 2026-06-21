@@ -271,7 +271,7 @@ test_ledger_finalize_v2_blocks() {
     local repo; repo=$(_diff_fixture)
     _fully_map "$repo"
     # With a Judgment Cache present, finalize stamps version 2 + the blocks.
-    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/3"
+    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4"
     assert_exit_code 0 "$EXIT_CODE" "finalize exits 0" || return 1
     local ledger="$repo/docs/atlas/atlas-ledger.json"
     assert_json_field "$(cat "$ledger")" '.version' "2" "ledger is v2" || return 1
@@ -299,7 +299,7 @@ test_ledger_v1_unchanged_without_judgments() {
 test_structure_digest_stable_across_body_edit() {
     local repo; repo=$(_diff_fixture)
     _fully_map "$repo"
-    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/3"
+    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4"
     local d1
     d1=$(jq -r '.structure.symbols["src/svc.py"][] | select(.id|endswith("::Service")) | .signature_hash' \
         "$repo/docs/atlas/atlas-ledger.json")
@@ -313,10 +313,99 @@ def _boot(x):
 PY
     commit_all "$repo" body
     _fully_map "$repo"
-    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/3"
+    run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4"
     local d2
     d2=$(jq -r '.structure.symbols["src/svc.py"][] | select(.id|endswith("::Service")) | .signature_hash' \
         "$repo/docs/atlas/atlas-ledger.json")
     assert_eq "$d1" "$d2" "Service signature_hash stable across a body edit" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+# ── edge.semantic key delta (item #6) ───────────────────────────────────────
+# A two-module fixture so there is a genuine resolved CROSS-module edge:
+# src-web.handle -> src-store.save (the flat _diff_fixture is a single module,
+# whose calls are intra-module and carry no edge.semantic cell).
+_edge_diff_fixture() {
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/store" "$repo/src/web"
+    cat > "$repo/src/store/db.py" <<'PY'
+def save(record):
+    return record
+PY
+    cat > "$repo/src/web/handler.py" <<'PY'
+from src.store.db import save
+
+def handle(req):
+    return save(req)
+PY
+    local i
+    for i in 1 2 3 4 5 6 7; do
+        seed_file "$repo" "src/store/pad$i.txt"
+        seed_file "$repo" "src/web/pad$i.txt"
+    done
+    commit_all "$repo"
+    echo "$repo"
+}
+
+test_edge_semantic_planned_then_clean_after_fill() {
+    local repo; repo=$(_edge_diff_fixture)
+    run_atlas "$repo" judgment diff
+    local planned
+    planned=$(echo "$OUTPUT" | jq '[.missing_keys[] | select(.kind=="edge.semantic")] | length')
+    assert_eq "1" "$planned" "the cross-module edge plans one edge.semantic cell" || return 1
+    # Filling every cell (edge.semantic included) reaches clean — zero LLM next pull.
+    _fully_map "$repo"
+    run_atlas "$repo" judgment diff
+    assert_json_field "$OUTPUT" '.clean' "true" "fully judged incl edge.semantic → clean" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+test_edge_semantic_rekeys_when_caller_body_changes() {
+    local repo; repo=$(_edge_diff_fixture)
+    run_atlas "$repo" judge-plan
+    local k1
+    k1=$(echo "$OUTPUT" | jq -r '.missing_keys[] | select(.kind=="edge.semantic") | .key')
+    _fully_map "$repo"
+    # Change ONLY the caller's body — the call still resolves to save, but
+    # handle's span_hash moves, so the cell must re-key (taxonomy: regenerates
+    # when the calling code changes) and the old key orphans.
+    cat > "$repo/src/web/handler.py" <<'PY'
+from src.store.db import save
+
+def handle(req):
+    checked = req
+    return save(checked)
+PY
+    commit_all "$repo" caller-body
+    run_atlas "$repo" judgment diff
+    local k2
+    k2=$(echo "$OUTPUT" | jq -r '.missing_keys[] | select(.kind=="edge.semantic") | .key')
+    { [ -n "$k2" ] && [ "$k2" != "$k1" ]; } \
+        || { echo "    FAIL: a caller body change must re-key edge.semantic ($k1 -> $k2)"; return 1; }
+    assert_json_contains "$OUTPUT" '.orphaned_keys' "$k1" "the old edge.semantic key orphans" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+test_edge_semantic_orphaned_when_call_removed() {
+    local repo; repo=$(_edge_diff_fixture)
+    run_atlas "$repo" judge-plan
+    local k1
+    k1=$(echo "$OUTPUT" | jq -r '.missing_keys[] | select(.kind=="edge.semantic") | .key')
+    _fully_map "$repo"
+    # Drop the cross-module call entirely → the edge and its cell are gone.
+    cat > "$repo/src/web/handler.py" <<'PY'
+def handle(req):
+    return req
+PY
+    commit_all "$repo" no-call
+    run_atlas "$repo" judgment diff
+    local nmiss
+    nmiss=$(echo "$OUTPUT" | jq '[.missing_keys[] | select(.kind=="edge.semantic")] | length')
+    assert_eq "0" "$nmiss" "no edge.semantic required once the call is removed" || return 1
+    assert_json_contains "$OUTPUT" '.orphaned_keys' "$k1" "the removed edge's cell is orphaned" || return 1
+    # …and prune drops it (keeps judgments.json from accreting dead cells).
+    run_atlas "$repo" judgment prune
+    assert_json_contains "$OUTPUT" '.pruned_keys' "$k1" "prune removes the orphaned edge.semantic cell" || return 1
     cleanup_fixture_repo "$repo"
 }

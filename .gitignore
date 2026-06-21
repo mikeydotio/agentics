@@ -15,6 +15,9 @@ Thumbs.db
 # RCA investigation artifacts (ephemeral, per-investigation)
 .rca/
 
+# Council-vote deliberation artifacts (ephemeral, per-decision)
+.council/
+
 # Forge plugin runtime artifacts (gitignored)
 .forge/state.json
 .forge/lock.json

@@ -98,8 +98,9 @@ The tree-sitter path does real scope resolution and emits a `to` target per call
 `resolve_edges` trusts directly — that is what collapses an otherwise corpus-ambiguous name to a
 `resolved` edge.
 
-atlas bundles no tree-sitter. The parser ceiling is an **external structure-extraction helper** — a
-thin tree-sitter-backed binary emitting atlas's structure-JSON contract (symbols + scope-resolved
+atlas bundles no tree-sitter. The parser ceiling is an **external structure-extraction helper** —
+shipped at `plugins/atlas/helpers/ts-helper/` (a pinned-grammar Python installable, parsing Swift) —
+a thin tree-sitter-backed binary emitting atlas's structure-JSON contract (symbols + scope-resolved
 call sites). The extractor probes once via `$ATLAS_TS_HELPER` (explicit path) or an `atlas-ts-helper`
 / `tree-sitter` on `PATH`; on absence — or any helper failure — every file falls back to
 `extract_regex`, stamping `backend: {<lang>: "regex"}`. An *explicit* `--backend treesitter` with no

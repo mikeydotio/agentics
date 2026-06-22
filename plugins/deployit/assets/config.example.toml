@@ -33,3 +33,25 @@ private_key_path = ""
 # The matching public key, surfaced on the product page and after deploy for
 # pasting into the app's Info.plist SUPublicEDKey.
 public_ed_key = ""
+
+[github]
+# Publish a GitHub release (the Developer-ID-signed .app, archived as a .zip) on
+# every macOS deploy, alongside the tailnet download page. The release is the
+# final, recoverable deploy step — a publish failure never rolls back the
+# already-served build. The deployit agent authors the release notes.
+#
+# Requires the GitHub CLI authenticated (`gh auth login`); the target repo is the
+# app checkout's own `origin` remote. On by default — set false to disable, or
+# pass `/deployit deploy --no-release` for a one-off skip.
+release = true
+# Mark releases as pre-releases.
+prerelease = false
+# Also upload the .dmg as a second release asset (the .zip is always attached).
+attach_dmg = false
+# Replace an existing release's asset + notes instead of failing on a tag clash.
+# Equivalent to `/deployit deploy --clobber-release`.
+clobber = false
+# Notarization reuses [macos] notarize / notary_profile above: when configured,
+# the .app is notarized + stapled before zipping so the download opens cleanly.
+# Without it the released .app is Gatekeeper-quarantined (right-click → Open on
+# first launch).

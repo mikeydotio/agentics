@@ -47,17 +47,18 @@ Agentics is a Claude Code plugin marketplace (`mikeydotio/agentics`) providing p
 
 ## Plugin Version Sync
 
-Every plugin shares the single repo `VERSION`. The post-bump hook
+The whole marketplace shares the single repo `VERSION`. The post-bump hook
 `.semver/hooks/post-bump/01-sync-plugin-versions.sh` stamps the bare version into
-each `plugins/*/.claude-plugin/plugin.json` `version` field on every `/semver bump`,
+the top-level `.claude-plugin/marketplace.json` and each
+`plugins/*/.claude-plugin/plugin.json` `version` field on every `/semver bump`,
 folding the change into the release commit and moving the (unpushed) tag onto it.
 This is one-way (`VERSION` → manifests) and deliberately over-eager: unchanged
 plugins are restamped too, so a bump can never miss one.
 
-- **Do not hand-edit** the `version` field in a `plugin.json` — it is derived.
+- **Do not hand-edit** the `version` field in any manifest — it is derived.
 - To seed a brand-new plugin or repair drift between bumps, run the hook standalone:
   `bash .semver/hooks/post-bump/01-sync-plugin-versions.sh` (files only, no git ops).
-- `tests/plugin-versions.bats` fails `make test` if any manifest drifts from `VERSION`.
+- `tests/plugin-versions.sh` (in `make test`) fails if any manifest drifts from `VERSION`.
 
 <!-- semver:start -->
 ## Semantic Versioning

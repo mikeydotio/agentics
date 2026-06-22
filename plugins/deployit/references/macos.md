@@ -104,6 +104,16 @@ and additionally produces a `.zip` enclosure alongside the `.dmg`. Full setup �
 key generation, sharing one key across Macs, SPM, Info.plist keys, and testing —
 is in **`references/sparkle.md`**.
 
+## GitHub release
+
+Every macOS deploy also publishes a GitHub release of the Developer-ID-signed app
+(zipped) to the app's own repo, alongside the tailnet download page. The notes are
+agent-authored; the version/tag comes from semver or `CFBundleShortVersionString`.
+For a download that opens without the Gatekeeper prompt, enable notarization above
+(the `.app` is notarized + stapled before zipping). Full details — version rules,
+recovery semantics, `--clobber-release`, and running the publisher by hand — are in
+**`references/github-release.md`**.
+
 ## Notarization failures
 
 If `notarytool submit` fails, the CLI surfaces the full Apple error log.

@@ -17,18 +17,40 @@ h1 { font-size: 22px; margin: 0 0 16px; }
 .back { display: inline-block; color: var(--muted); text-decoration: none; font-size: 14px; margin-bottom: 8px; }
 .back:hover { color: var(--fg); }
 ul { list-style: none; padding: 0; margin: 0; }
-li { border-bottom: 1px solid var(--border); padding: 14px 0; min-height: 44px; }
+li { border-bottom: 1px solid var(--border); padding: 14px 0; min-height: 44px; position: relative; overflow: hidden; }
 li[data-href] { cursor: pointer; }
-li[data-href]:active { background: var(--row-active); }
+li[data-href]:active .swipe-content { box-shadow: inset 0 0 0 999px var(--row-active); }
+/* Swipe-to-delete: the visible content sits above an absolutely-positioned
+   Delete button and translates left (right-to-left swipe) to reveal it. The
+   button is always in the DOM (keyboard/VoiceOver reachable) but covered by the
+   opaque content at rest. */
+.swipe-content {
+  position: relative; z-index: 1; background: var(--bg);
+  transition: transform .2s ease; touch-action: pan-y; will-change: transform;
+}
+.swipe-delete {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 88px; z-index: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; background: #dc2626; color: #fff;
+  font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.swipe-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Keyboard focus on the otherwise-hidden Delete button slides the row open so
+   the destructive action is visible without needing the swipe gesture. */
+li:has(.swipe-delete:focus-visible) .swipe-content { transform: translateX(-88px); }
+@media (prefers-reduced-motion: reduce) { .swipe-content { transition: none; } }
 .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .title { font-weight: 600; }
+.titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.name { font-size: 18px; font-weight: 700; line-height: 1.25; }
+.meta-line { color: var(--muted); font-size: 13px; }
 .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .older { color: var(--muted); font-size: 13px; }
 a.install {
   display: inline-block; background: var(--accent); color: #fff;
-  padding: 10px 16px; border-radius: 8px; text-decoration: none;
+  padding: 8px 14px; border-radius: 8px; text-decoration: none;
   font-size: 14px; font-weight: 600; white-space: nowrap;
-  min-height: 24px; line-height: 1.2;
+  min-height: 20px; line-height: 1.2;
 }
 .archived { opacity: 0.5; }
 .nav {

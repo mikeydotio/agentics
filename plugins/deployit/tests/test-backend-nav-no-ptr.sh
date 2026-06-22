@@ -94,4 +94,18 @@ echo "$appcss" | grep -q 'button#refresh' \
 echo "$appcss" | grep -q 'min-height: 44px' \
     || { echo "FAIL: refresh button missing 44px touch target"; exit 1; }
 
+# --- Swipe-to-delete: served app.js + app.css carry the new markers ---
+echo "$appjs" | grep -q 'pointerdown' \
+    || { echo "FAIL: app.js missing pointerdown swipe handler"; exit 1; }
+echo "$appjs" | grep -q 'data-delete' \
+    || { echo "FAIL: app.js missing data-delete handling"; exit 1; }
+echo "$appjs" | grep -q 'method: "DELETE"' \
+    || { echo "FAIL: app.js missing DELETE fetch"; exit 1; }
+echo "$appjs" | grep -q 'confirm(' \
+    || { echo "FAIL: app.js missing delete confirmation"; exit 1; }
+echo "$appcss" | grep -q '.swipe-delete' \
+    || { echo "FAIL: app.css missing .swipe-delete style"; exit 1; }
+echo "$appcss" | grep -q '.swipe-content' \
+    || { echo "FAIL: app.css missing .swipe-content style"; exit 1; }
+
 echo "PASS"

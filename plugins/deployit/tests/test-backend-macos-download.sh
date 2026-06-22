@@ -49,7 +49,9 @@ done
 
 # --- Listing: Download button + canonical macOS casing + .dmg href ---
 listing=$(curl -sf "http://127.0.0.1:$PORT/deployit/")
-echo "$listing" | grep -q "Lillist · macOS · build 5" \
+echo "$listing" | grep -q 'class="name">Lillist' \
+    || { echo "FAIL: macOS product name not rendered"; echo "$listing"; exit 1; }
+echo "$listing" | grep -q "macOS · build 5" \
     || { echo "FAIL: macOS row not rendered with canonical casing"; echo "$listing"; exit 1; }
 echo "$listing" | grep -q ">Download</a>" \
     || { echo "FAIL: macOS row missing Download button"; echo "$listing"; exit 1; }

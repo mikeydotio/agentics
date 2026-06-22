@@ -1,7 +1,7 @@
 ---
 name: deployit
 description: Use when the user wants to deploy an iOS / macOS / visionOS app to their tailnet for OTA install on their own devices. Commands are `/deployit bootstrap` (one-time per Mac), `/deployit deploy [--platform ios|macos|visionos] [--scheme NAME]`, `/deployit list`, `/deployit url`, `/deployit status`, `/deployit gc`, and `/deployit redeploy [--source PATH]` (refresh daemon + verify after PWA changes). When the project uses the semver plugin, deploy reports the semver version in the web UI and bumps it when it has not changed since the last build. Replaces hand-rolled `Tools/Deploy/deploy-ios.sh`-style scripts.
-argument-hint: <bootstrap | deploy [--platform P] [--scheme S] | list | url | status | gc | redeploy [--source PATH]>
+argument-hint: <bootstrap | deploy [--platform P] [--scheme S] | list | url | status | gc | rm [--build ID | --product BUNDLE_ID --platform P] | redeploy [--source PATH]>
 ---
 
 # deployit Orchestrator
@@ -55,6 +55,11 @@ user at a Tailscale-served URL.
   confirm with them before suggesting a scheme override.
 - **list / status / url** are read-only; no confirmations needed.
 - **gc** requires `--keep N` or `--older-than D` — never run unqualified.
+- **rm** deletes a local build or product — its index entry plus the on-disk
+  `serve/<id>/` files — and is the writer behind the web UI's swipe-to-delete.
+  Destructive: require an explicit `--build ID` or `--product BUNDLE_ID
+  --platform P`, never unqualified. It only removes builds this machine owns
+  (`origin_base_url == base_url`); foreign builds are managed on their origin Mac.
 - **redeploy** updates the daemon's stable `_plugin_root` and
   `bin/deployit-backend` symlinks, rewrites a legacy hash-pinned plist if
   detected, kickstarts launchd, and runs `tests/verify-live.sh` against the

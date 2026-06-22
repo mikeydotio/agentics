@@ -68,9 +68,9 @@ done
 
 # --- Listing rows ---
 listing=$(curl -sf "http://127.0.0.1:$PORT/deployit/")
-echo "$listing" | grep -q "Lillist · iOS · v2.16.1 (build 20)" \
+echo "$listing" | grep -q "iOS · v2.16.1 (build 20)" \
     || { echo "FAIL: semver row label wrong"; echo "$listing"; exit 1; }
-echo "$listing" | grep -q "Other · iOS · build 7" \
+echo "$listing" | grep -q "iOS · build 7" \
     || { echo "FAIL: non-semver row label wrong"; echo "$listing"; exit 1; }
 echo "$listing" | grep -q "0.1.0" \
     && { echo "FAIL: marketing_version 0.1.0 leaked into semver row"; echo "$listing"; exit 1; }

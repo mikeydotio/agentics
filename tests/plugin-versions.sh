@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/plugin-versions.sh — marketplace-wide plugin.json version sync.
+# tests/plugin-versions.sh — marketplace-wide manifest version sync.
 #
 # Self-contained plain-bash harness (NO bats dependency) so it runs under
 # `make test` on every machine — bats is not installed here and this project does
@@ -8,10 +8,10 @@
 # subshell, print "=== name ===" / "  PASS|FAIL  fn", exit with the failure count.
 #
 # Covers two concerns:
-#   1. Drift invariant on the REAL repo — every plugins/*/.claude-plugin/plugin.json
-#      `version` equals the bare VERSION. This is the enforceable half of the
-#      "a bump can never miss a plugin" promise; it fails the pre-push gate the
-#      moment a manifest drifts.
+#   1. Drift invariant on the REAL repo — the top-level marketplace.json and every
+#      plugins/*/.claude-plugin/plugin.json carry a `version` equal to the bare
+#      VERSION. This is the enforceable half of the "a bump can never miss a
+#      manifest" promise; it fails the pre-push gate the moment a manifest drifts.
 #   2. Behaviour of .semver/hooks/post-bump/01-sync-plugin-versions.sh in both its
 #      standalone (files-only) and post-bump (amend + retag) modes, exercised in a
 #      throwaway fixture so the trickiest path — folding into the release commit —
@@ -26,17 +26,28 @@ fail() { echo "$1" >&2; return 1; }
 
 bare_version() { tr -d '[:space:]' < "$REPO_ROOT/VERSION" | sed 's/^v//'; }
 
-# Create a throwaway fixture repo (two plugins, VERSION v9.9.9, the hook copied in
-# at its canonical path) and echo its directory. The hook resolves the repo root
-# relative to itself, so copying it to <fix>/.semver/hooks/post-bump/ makes <fix>
-# its target.
+# Every version-bearing manifest in the real repo: marketplace.json + each plugin.json.
+all_manifests() {
+    [ -f "$REPO_ROOT/.claude-plugin/marketplace.json" ] && echo "$REPO_ROOT/.claude-plugin/marketplace.json"
+    local f
+    for f in "$REPO_ROOT"/plugins/*/.claude-plugin/plugin.json; do
+        [ -f "$f" ] && echo "$f"
+    done
+}
+
+# Create a throwaway fixture repo (a marketplace.json + two plugins, VERSION v9.9.9,
+# the hook copied in at its canonical path) and echo its directory. The hook resolves
+# the repo root relative to itself, so copying it to <fix>/.semver/hooks/post-bump/
+# makes <fix> its target.
 make_fixture() {
     local fix
     fix="$(mktemp -d)"
-    mkdir -p "$fix/.semver/hooks/post-bump"
+    mkdir -p "$fix/.semver/hooks/post-bump" "$fix/.claude-plugin"
     cp "$SYNC_SCRIPT" "$fix/.semver/hooks/post-bump/01-sync-plugin-versions.sh"
     chmod +x "$fix/.semver/hooks/post-bump/01-sync-plugin-versions.sh"
     printf 'v9.9.9\n' > "$fix/VERSION"
+    printf '{\n  "$schema": "https://example/marketplace.schema.json",\n  "name": "fixturemarket",\n  "description": "fixture marketplace",\n  "owner": { "name": "x" },\n  "plugins": [ { "name": "alpha", "source": "./plugins/alpha" } ]\n}\n' \
+        > "$fix/.claude-plugin/marketplace.json"
     mkdir -p "$fix/plugins/alpha/.claude-plugin" "$fix/plugins/beta/.claude-plugin"
     printf '{\n  "name": "alpha",\n  "description": "A plugin",\n  "author": { "name": "x" }\n}\n' \
         > "$fix/plugins/alpha/.claude-plugin/plugin.json"
@@ -66,19 +77,25 @@ test_sync_hook_is_executable() {
 
 test_every_manifest_declares_nonempty_version() {
     local f v
-    for f in "$REPO_ROOT"/plugins/*/.claude-plugin/plugin.json; do
+    while IFS= read -r f; do
         v="$(jq -r '.version // ""' "$f")"
         [ -n "$v" ] || fail "missing version in $f"
-    done
+    done < <(all_manifests)
 }
 
 test_every_manifest_matches_bare_version() {
     local want f got
     want="$(bare_version)"
-    for f in "$REPO_ROOT"/plugins/*/.claude-plugin/plugin.json; do
+    while IFS= read -r f; do
         got="$(jq -r '.version // ""' "$f")"
         [ "$got" = "$want" ] || fail "$f has version '$got', expected '$want'"
-    done
+    done < <(all_manifests)
+}
+
+test_marketplace_manifest_is_covered() {
+    # Guard against the drift loop silently skipping the marketplace manifest.
+    all_manifests | grep -q '/.claude-plugin/marketplace.json$' \
+        || fail "marketplace.json not in the synced manifest set"
 }
 
 # --- Standalone mode (fixture) ---------------------------------------------
@@ -86,8 +103,23 @@ test_every_manifest_matches_bare_version() {
 test_standalone_stamps_bare_version_into_all_manifests() {
     local fix; fix="$(make_fixture)"; trap "rm -rf '$fix'" EXIT
     bash "$(fixture_script "$fix")" >/dev/null
+    [ "$(jq -r .version "$fix/.claude-plugin/marketplace.json")" = "9.9.9" ] || fail "marketplace not synced"
     [ "$(jq -r .version "$fix/plugins/alpha/.claude-plugin/plugin.json")" = "9.9.9" ] || fail "alpha not synced"
     [ "$(jq -r .version "$fix/plugins/beta/.claude-plugin/plugin.json")" = "9.9.9" ] || fail "beta not synced"
+}
+
+test_standalone_syncs_marketplace_and_preserves_structure() {
+    local fix; fix="$(make_fixture)"; trap "rm -rf '$fix'" EXIT
+    bash "$(fixture_script "$fix")" >/dev/null
+    local mf="$fix/.claude-plugin/marketplace.json"
+    [ "$(jq -r .version "$mf")" = "9.9.9" ] || fail "marketplace version not set"
+    # version sits immediately after name; $schema, owner and the plugins array survive.
+    [ "$(jq -r 'keys_unsorted | join(",")' "$mf")" = "\$schema,name,version,description,owner,plugins" ] \
+        || fail "unexpected marketplace key order: $(jq -rc keys_unsorted "$mf")"
+    [ "$(jq -r '.["$schema"]' "$mf")" != "null" ] || fail "\$schema dropped"
+    [ "$(jq -r '.owner.name' "$mf")" = "x" ] || fail "owner dropped"
+    [ "$(jq -r '.plugins | length' "$mf")" = "1" ] || fail "plugins array not preserved"
+    [ "$(jq -r '.plugins[0].source' "$mf")" = "./plugins/alpha" ] || fail "plugins entry mangled"
 }
 
 test_standalone_preserves_other_fields_and_key_order() {
@@ -132,10 +164,12 @@ test_postbump_folds_manifests_into_release_commit_and_moves_tag() {
     [ -z "$(git -C "$fix" status --porcelain)" ] || fail "working tree left dirty (change not folded in)"
     [ "$before" != "$after" ] || fail "release commit was not amended"
     [ "$(git -C "$fix" rev-parse v9.9.9)" = "$after" ] || fail "tag not moved onto amended commit"
-    # Verify the synced manifest is the version actually committed at HEAD (robust:
+    # Verify the synced manifests are the versions actually committed at HEAD (robust:
     # reads committed content rather than parsing diff --stat, which wraps paths).
     [ "$(git -C "$fix" show "HEAD:plugins/alpha/.claude-plugin/plugin.json" | jq -r .version)" = "9.9.9" ] \
-        || fail "synced manifest is not committed into the release commit"
+        || fail "synced plugin manifest is not committed into the release commit"
+    [ "$(git -C "$fix" show "HEAD:.claude-plugin/marketplace.json" | jq -r .version)" = "9.9.9" ] \
+        || fail "synced marketplace manifest is not committed into the release commit"
 }
 
 test_postbump_does_not_stage_unrelated_working_tree_changes() {

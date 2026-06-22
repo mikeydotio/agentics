@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Fake `gh` for deployit tests. Records each invocation to $FAKE_GH_LOG (when set)
+# and emits canned output. Behaviour knobs (env):
+#   FAKE_GH_LOG=path          append each invocation's args (one line) here
+#   FAKE_GH_AUTH_FAIL=1       `gh auth status` exits non-zero
+#   FAKE_GH_RELEASE_EXISTS=1  `gh release view <tag>` succeeds (release exists)
+#   FAKE_GH_PREV_TAG=v1.2.3   tag emitted by `gh release view --json tagName`
+#   FAKE_GH_ISSUES_JSON=...   JSON emitted by `gh issue list --json ...`
+[ -n "${FAKE_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$FAKE_GH_LOG"
+
+case "${1:-} ${2:-}" in
+  "auth status")
+    if [ -n "${FAKE_GH_AUTH_FAIL:-}" ]; then echo "not logged in" >&2; exit 1; fi
+    echo "Logged in to github.com"; exit 0 ;;
+  "release view")
+    # `release view --repo R --json tagName -q .tagName` -> previous tag.
+    if printf '%s ' "$@" | grep -q -- '--json tagName'; then
+      printf '%s\n' "${FAKE_GH_PREV_TAG:-}"
+      [ -n "${FAKE_GH_PREV_TAG:-}" ] && exit 0 || exit 1
+    fi
+    # `release view <tag> ... --json url -q .url` -> the release URL.
+    if printf '%s ' "$@" | grep -q -- '--json url'; then
+      echo "https://github.com/fake/repo/releases/tag/${3:-}"; exit 0
+    fi
+    # `release view <tag> -R repo` -> existence probe.
+    [ -n "${FAKE_GH_RELEASE_EXISTS:-}" ] && exit 0 || { echo "release not found" >&2; exit 1; } ;;
+  "release create")
+    echo "https://github.com/fake/repo/releases/tag/${3:-}"; exit 0 ;;
+  "release upload"|"release edit")
+    exit 0 ;;
+  "issue list")
+    printf '%s' "${FAKE_GH_ISSUES_JSON:-[]}"; exit 0 ;;
+  *)
+    echo "fake-gh: $*" >&2; exit 0 ;;
+esac

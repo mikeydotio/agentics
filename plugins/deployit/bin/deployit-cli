@@ -66,6 +66,17 @@ def _tailscale_bin() -> str:
     return os.environ.get("DEPLOYIT_TAILSCALE_BIN", "tailscale")
 
 
+def _gh_bin() -> str:
+    return os.environ.get("DEPLOYIT_GH_BIN", "gh")
+
+
+def _parse_owner_repo(remote_url: str):
+    """owner/repo from a GitHub remote (git@github.com:owner/repo.git or
+    https://github.com/owner/repo(.git)). None if unparseable."""
+    m = _re.search(r'[:/]([^/:]+)/([^/]+?)(?:\.git)?/?$', remote_url.strip())
+    return f"{m.group(1)}/{m.group(2)}" if m else None
+
+
 def _derive_base_url() -> str:
     """Build the listing base URL from `tailscale status --json`."""
     try:
@@ -467,6 +478,13 @@ def _read_config(state: Path) -> dict:
             m = _re.search(rf'{key}\s*=\s*"([^"]*)"', text)
             return m.group(1) if m else ""
 
+        # [github] — release defaults on (false only when explicitly set within
+        # the section); the flag keys are scoped to the table like sparkle's.
+        gh_release = not bool(_re.search(r'\[github\][^\[]*?\brelease\s*=\s*false', text))
+        gh_prerelease = bool(_re.search(r'\[github\][^\[]*?\bprerelease\s*=\s*true', text))
+        gh_attach = bool(_re.search(r'\[github\][^\[]*?\battach_dmg\s*=\s*true', text))
+        gh_clobber = bool(_re.search(r'\[github\][^\[]*?\bclobber\s*=\s*true', text))
+
         return {
             "server": {"port": int(port_m.group(1)), "base_url": base_m.group(1)},
             "macos":  {"notarize": notarize,
@@ -477,6 +495,8 @@ def _read_config(state: Path) -> dict:
                            "private_key_path": _sp("private_key_path"),
                            "public_ed_key": _sp("public_ed_key"),
                        }},
+            "github": {"release": gh_release, "prerelease": gh_prerelease,
+                       "attach_dmg": gh_attach, "clobber": gh_clobber},
         }
 
 
@@ -654,6 +674,43 @@ def _sparkle_sign(plugin_root: Path, zip_path: Path, sparkle_cfg: dict):
     return m.group(1)
 
 
+def _ditto_zip_app(app_path: Path, zip_path: Path):
+    """Archive a .app with ditto, preserving the bundle symlinks and resource
+    forks a plain `zip` would corrupt; --keepParent keeps the .app directory
+    itself inside the archive. Shared by the Sparkle enclosure and the GitHub
+    release asset (both want the same canonical signed-app zip)."""
+    res = subprocess.run(
+        ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
+         str(app_path), str(zip_path)],
+        capture_output=True, text=True)
+    if res.returncode != 0:
+        fail(f"ditto zip failed: {res.stderr.strip() or res.stdout.strip()}")
+
+
+def _notarize_staple_app(app_path: Path, notary_profile: str):
+    """Notarize and staple a .app so a GitHub-release download opens past
+    Gatekeeper without the right-click dance. notarytool takes a zip, so we
+    submit a throwaway zip of the bundle, then staple the ticket onto the .app
+    itself (the release zip is taken from the stapled bundle afterwards)."""
+    if not notary_profile:
+        fail("notarize requested but macos.notary_profile is empty in config.toml")
+    tmp_zip = app_path.with_suffix(".notarize.zip")
+    _ditto_zip_app(app_path, tmp_zip)
+    try:
+        notary = subprocess.run([
+            "xcrun", "notarytool", "submit", str(tmp_zip),
+            "--keychain-profile", notary_profile, "--wait",
+        ], capture_output=True, text=True)
+        if notary.returncode != 0:
+            fail(f"notarytool submit (app) failed: {notary.stderr.strip() or notary.stdout.strip()}")
+    finally:
+        tmp_zip.unlink(missing_ok=True)
+    staple = subprocess.run(["xcrun", "stapler", "staple", str(app_path)],
+                            capture_output=True, text=True)
+    if staple.returncode != 0:
+        fail(f"stapler staple (app) failed: {staple.stderr.strip() or staple.stdout.strip()}")
+
+
 def _stage_sparkle_zip(plugin_root: Path, dst: Path, build_id: str,
                        app_path: Path, meta_full: dict, sparkle_cfg: dict):
     """Zip the exported .app and EdDSA-sign it for Sparkle. Returns the sparkle
@@ -662,14 +719,7 @@ def _stage_sparkle_zip(plugin_root: Path, dst: Path, build_id: str,
     while the .app still exists (before _stage_macos removes it)."""
     zip_name = f"{meta_full['project']}.zip"
     zip_path = dst / zip_name
-    # ditto preserves the bundle symlinks and resource forks a plain `zip` would
-    # corrupt; --keepParent keeps the .app directory itself inside the archive.
-    res = subprocess.run(
-        ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
-         str(app_path), str(zip_path)],
-        capture_output=True, text=True)
-    if res.returncode != 0:
-        fail(f"ditto zip for Sparkle failed: {res.stderr.strip() or res.stdout.strip()}")
+    _ditto_zip_app(app_path, zip_path)
     signature = _sparkle_sign(plugin_root, zip_path, sparkle_cfg)
     if signature is None:
         zip_path.unlink(missing_ok=True)
@@ -689,10 +739,14 @@ def _stage_sparkle_zip(plugin_root: Path, dst: Path, build_id: str,
 
 def _stage_macos(state: Path, plugin_root: Path, build_id: str,
                  app_src: Path, meta_full: dict, notarize: bool,
-                 notary_profile: str, sparkle_cfg: dict = None):
+                 notary_profile: str, sparkle_cfg: dict = None,
+                 release: bool = False):
     """Wrap the exported .app in a .dmg, optionally notarize + staple, and (when
     [macos.sparkle] is enabled) also produce an EdDSA-signed .zip for Sparkle
-    auto-update. Writes _meta.json. Returns (dmg_name, dmg_url)."""
+    auto-update. When `release` is set, also stage a `<Project>.zip` of the
+    signed bundle as the GitHub-release asset (notarizing+stapling the .app
+    first when notarization is configured). Writes _meta.json. Returns
+    (dmg_name, dmg_url)."""
     sparkle_cfg = sparkle_cfg or {}
     dst = state / "serve" / build_id
     if dst.exists():
@@ -704,6 +758,13 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
 
     staging_app = dst / app_src.name
     _shutil.move(str(app_src), staging_app)
+
+    # For a GitHub release the .app itself must carry a notarization ticket (a
+    # zip download extracts the bundle directly, so Gatekeeper checks the
+    # bundle's own ticket — not the .dmg's). Staple before any zipping/dmg so
+    # every downstream artifact inherits it.
+    if release and notarize:
+        _notarize_staple_app(staging_app, notary_profile)
 
     res = subprocess.run([
         "hdiutil", "create",
@@ -721,6 +782,15 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     if sparkle_cfg.get("enabled"):
         sparkle_meta = _stage_sparkle_zip(plugin_root, dst, build_id, staging_app,
                                           meta_full, sparkle_cfg)
+
+    # GitHub release asset: the canonical signed-app zip. Reuse Sparkle's zip
+    # when it produced one (byte-identical archive of the same bundle);
+    # otherwise create it now, while the .app still exists.
+    release_zip_name = None
+    if release:
+        release_zip_name = f"{meta_full['project']}.zip"
+        if not (dst / release_zip_name).is_file():
+            _ditto_zip_app(staging_app, dst / release_zip_name)
 
     _shutil.rmtree(staging_app)
 
@@ -751,6 +821,8 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     }
     if sparkle_meta:
         meta["sparkle"] = sparkle_meta
+    if release_zip_name:
+        meta["release_zip"] = release_zip_name
     (dst / "_meta.json").write_text(json.dumps(meta, indent=2))
     return dmg_name, dmg_url
 
@@ -896,6 +968,76 @@ def _refresh_local_backend(port: int):
         sys.stderr.write(f"warning: local backend refresh failed: {exc}\n")
 
 
+def _release_notes_path(args, meta_full: dict, builds_dir: Path) -> Path:
+    """Notes file for the GitHub release: the agent-authored --release-notes-file
+    when present, else a minimal auto-note so a hand-run `deploy` still publishes
+    something legible."""
+    given = getattr(args, "release_notes_file", None)
+    if given:
+        p = Path(given)
+        if p.is_file():
+            return p
+        sys.stderr.write(f"deployit: --release-notes-file {p} not found; using a minimal note\n")
+    note = builds_dir / f"{meta_full['id']}.release-notes.md"
+    ver = meta_full.get("semver_version") or meta_full["marketing_version"]
+    note.write_text(f"{meta_full['project']} {ver} (build {meta_full['build_number']}, "
+                    f"commit {meta_full['commit']}).\n")
+    return note
+
+
+def _publish_github_release(plugin_root: Path, cwd: Path, state: Path, build_id: str,
+                            notes_file: Path, *, clobber: bool, prerelease: bool,
+                            attach_dmg: bool) -> dict:
+    """Invoke bin/deployit-release to publish the staged release zip, returning its
+    JSON result (or an {ok: False, ...} dict). Never raises: a release failure
+    must not roll back the already-deployed tailnet build. Honors
+    DEPLOYIT_SKIP_RELEASE_PUBLISH (no-op ok) for tests/offline runs."""
+    serve = state / "serve" / build_id
+    try:
+        meta = json.loads((serve / "_meta.json").read_text())
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        return {"ok": False, "display": f"release: could not read build meta: {exc}"}
+    zip_name = meta.get("release_zip")
+    if not zip_name:
+        return {"ok": False, "display": "release: no release zip was staged"}
+    zip_path = serve / zip_name
+
+    if os.environ.get("DEPLOYIT_SKIP_RELEASE_PUBLISH"):
+        return {"ok": True, "skipped": True,
+                "display": f"release publish skipped (env) for {zip_path.name}"}
+
+    # Full SHA pins the release to the exact build commit even if the tag is
+    # created later/elsewhere.
+    sha_res = subprocess.run(["git", "-C", str(cwd), "rev-parse", "HEAD"],
+                             capture_output=True, text=True)
+    target = sha_res.stdout.strip() if sha_res.returncode == 0 else meta.get("commit", "")
+    ver = meta.get("semver_version") or meta.get("marketing_version", "")
+    title = f"{meta.get('project', '')} {ver}".strip()
+
+    script = plugin_root / "bin" / "deployit-release"
+    cmd = ["python3", str(script), "--zip", str(zip_path), "--project-dir", str(cwd),
+           "--notes-file", str(notes_file)]
+    if target:
+        cmd += ["--target", target]
+    if title:
+        cmd += ["--title", title]
+    if clobber:
+        cmd.append("--clobber")
+    if prerelease:
+        cmd.append("--prerelease")
+    if attach_dmg:
+        dmg = meta.get("primary_artifact")
+        if dmg and (serve / dmg).is_file():
+            cmd += ["--attach", str(serve / dmg)]
+
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        return json.loads(res.stdout)
+    except json.JSONDecodeError:
+        return {"ok": False, "stderr": res.stderr.strip() or res.stdout.strip(),
+                "display": f"release: deployit-release produced no JSON (exit {res.returncode})"}
+
+
 def cmd_bootstrap(args):
     args.plugin_root = args.plugin_root.resolve()
     state = _state_dir()
@@ -937,6 +1079,13 @@ def cmd_deploy(args):
     base_url = cfg["server"]["base_url"].rstrip("/")
     origin_host = urlparse(base_url).netloc
 
+    # GitHub release publishing is on by default for macOS (escape hatches:
+    # [github] release = false in config.toml, or --no-release per deploy).
+    gh_cfg = cfg.get("github", {})
+    do_release = (args.platform == "macos"
+                  and gh_cfg.get("release", True)
+                  and not getattr(args, "no_release", False))
+
     build_id = _build_id(meta["project"], meta["platform"], meta["commit"])
     timestamp = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -975,7 +1124,7 @@ def cmd_deploy(args):
         notary_profile = cfg["macos"].get("notary_profile", "")
         sparkle_cfg = cfg.get("macos", {}).get("sparkle", {})
         _stage_macos(state, args.plugin_root, build_id, app, meta_full,
-                     notarize, notary_profile, sparkle_cfg)
+                     notarize, notary_profile, sparkle_cfg, release=do_release)
     else:
         fail(f"unsupported platform: {args.platform}")
 
@@ -988,9 +1137,24 @@ def cmd_deploy(args):
     entry["size_bytes"] = artifact_path.stat().st_size
     entry["archived"] = False
     entry["notes"] = None
+    entry.pop("release_zip", None)  # tailnet index doesn't track the GitHub asset
 
     _append_to_index(state, entry)
     _refresh_local_backend(cfg["server"]["port"])
+
+    # GitHub release — the final, recoverable step. It runs only after the
+    # tailnet build is fully published (index + backend), so a publish failure
+    # leaves a deployed, indexed build (retry by re-deploying) rather than an
+    # orphaned public release.
+    rel = None
+    if do_release:
+        notes_path = _release_notes_path(args, meta_full, builds_dir)
+        rel = _publish_github_release(
+            args.plugin_root, cwd, state, build_id, notes_path,
+            clobber=(getattr(args, "clobber_release", False) or gh_cfg.get("clobber", False)),
+            prerelease=(getattr(args, "prerelease", False) or gh_cfg.get("prerelease", False)),
+            attach_dmg=(getattr(args, "attach_dmg", False) or gh_cfg.get("attach_dmg", False)),
+        )
 
     install_url = f"{base_url}/{build_id}/"
     listing_url = f"{base_url}/"
@@ -1018,6 +1182,16 @@ def cmd_deploy(args):
             f"\nSUPublicEDKey: "
             f"{public_ed_key or '(set macos.sparkle.public_ed_key in config.toml)'}"
         )
+    if rel is not None:
+        if rel.get("ok") and rel.get("release_url"):
+            result["release_url"] = rel["release_url"]
+            display += f"\nrelease:  {rel['release_url']}"
+        elif rel.get("ok") and rel.get("skipped"):
+            display += "\nrelease:  (skipped)"
+        elif not rel.get("ok"):
+            result["release_error"] = rel.get("display") or "release publish failed"
+            display += (f"\nrelease:  FAILED — {result['release_error']}"
+                        "\n          (build is deployed; fix the cause and re-deploy to publish)")
     result["display"] = display
     ok(result)
 
@@ -1123,6 +1297,68 @@ def cmd_bump(args):
         "display": f"semver bump: {old_v} → {new_v} ({args.component})",
         "old_version": old_v,
         "new_version": new_v,
+    })
+
+
+def cmd_release_context(args):
+    """Read-only: gather the raw facts the SKILL turns into GitHub release notes —
+    the repo, the previous release tag, the commits since it (with URLs), and
+    recently closed issues (with URLs). Degrades to commits-only when gh is
+    unavailable. Never builds or mutates anything."""
+    cwd = Path.cwd()
+    res = subprocess.run(["git", "-C", str(cwd), "remote", "get-url", "origin"],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        fail("no git remote 'origin' in cwd — cannot build release context")
+    owner_repo = _parse_owner_repo(res.stdout)
+    if not owner_repo:
+        fail(f"could not parse owner/repo from remote URL: {res.stdout.strip()!r}")
+    owner, repo = owner_repo.split("/", 1)
+    gh = _gh_bin()
+
+    # Previous release tag: the latest GitHub release, else the newest tag.
+    prev_tag = None
+    rv = subprocess.run([gh, "release", "view", "--repo", owner_repo,
+                         "--json", "tagName", "-q", ".tagName"],
+                        capture_output=True, text=True)
+    if rv.returncode == 0 and rv.stdout.strip():
+        prev_tag = rv.stdout.strip()
+    else:
+        tg = subprocess.run(["git", "-C", str(cwd), "tag", "--sort=-v:refname"],
+                            capture_output=True, text=True)
+        tags = [t for t in tg.stdout.splitlines() if t.strip()] if tg.returncode == 0 else []
+        prev_tag = tags[0] if tags else None
+
+    rng = f"{prev_tag}..HEAD" if prev_tag else "HEAD"
+    lg = subprocess.run(["git", "-C", str(cwd), "log", rng,
+                         "--pretty=format:%H%x1f%h%x1f%s"], capture_output=True, text=True)
+    commits = []
+    if lg.returncode == 0:
+        for line in lg.stdout.splitlines():
+            if not line.strip():
+                continue
+            parts = (line.split("\x1f") + ["", "", ""])[:3]
+            sha, short, subject = parts
+            commits.append({"sha": sha, "short": short, "subject": subject,
+                            "url": f"https://github.com/{owner_repo}/commit/{sha}"})
+
+    closed = []
+    il = subprocess.run([gh, "issue", "list", "--repo", owner_repo, "--state", "closed",
+                         "--limit", "50", "--json", "number,title,url,closedAt"],
+                        capture_output=True, text=True)
+    if il.returncode == 0 and il.stdout.strip():
+        try:
+            for it in json.loads(il.stdout):
+                closed.append({"number": it.get("number"), "title": it.get("title"),
+                               "url": it.get("url"), "closed_at": it.get("closedAt")})
+        except json.JSONDecodeError:
+            pass
+
+    ok({
+        "display": (f"release context for {owner_repo}: {len(commits)} commit(s) since "
+                    f"{prev_tag or '(no previous tag)'}, {len(closed)} closed issue(s)"),
+        "owner": owner, "repo": repo, "owner_repo": owner_repo,
+        "prev_tag": prev_tag, "commits": commits, "closed_issues": closed,
     })
 
 
@@ -1397,6 +1633,12 @@ def build_parser():
     p_deploy = sub.add_parser("deploy")
     p_deploy.add_argument("--platform", choices=["ios", "macos", "visionos"])
     p_deploy.add_argument("--scheme")
+    # GitHub release (macOS): on by default; the agent passes --release-notes-file.
+    p_deploy.add_argument("--release-notes-file", dest="release_notes_file")
+    p_deploy.add_argument("--no-release", action="store_true", dest="no_release")
+    p_deploy.add_argument("--clobber-release", action="store_true", dest="clobber_release")
+    p_deploy.add_argument("--prerelease", action="store_true")
+    p_deploy.add_argument("--attach-dmg", action="store_true", dest="attach_dmg")
     p_deploy.add_argument("--__dump-metadata", action="store_true",
                           help=argparse.SUPPRESS, dest="dump_metadata")
     p_deploy.set_defaults(func=cmd_deploy)
@@ -1433,6 +1675,10 @@ def build_parser():
     p_bump = sub.add_parser("bump")
     p_bump.add_argument("--component", choices=["major", "minor", "patch"])
     p_bump.set_defaults(func=cmd_bump)
+
+    p_relctx = sub.add_parser("release-context")
+    p_relctx.add_argument("--platform", choices=["ios", "macos", "visionos"])  # accepted; unused
+    p_relctx.set_defaults(func=cmd_release_context)
 
     return parser
 

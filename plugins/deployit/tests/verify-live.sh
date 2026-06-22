@@ -93,6 +93,9 @@ if [[ -n "$appjs" ]]; then
     grep -q 'touchstart' <<<"$appjs" \
         && fail "app.js still has pull-to-refresh" "touchstart present in served app.js" \
         || pass "app.js has no pull-to-refresh (touchstart gone)"
+    grep -q 'pointerdown' <<<"$appjs" \
+        && pass "app.js has swipe-to-delete (pointerdown)" \
+        || fail "app.js swipe-to-delete" "served app.js missing pointerdown handler"
 fi
 
 # 4. data-href + row-count vs distinct products

@@ -77,9 +77,11 @@ done
 
 body=$(curl -sf "http://127.0.0.1:$PORT/deployit/")
 
-echo "$body" | grep -q "Lillist · iOS · build 17" \
+echo "$body" | grep -q 'class="name">Lillist' \
+    || { echo "FAIL: product name not rendered"; echo "$body"; exit 1; }
+echo "$body" | grep -q "iOS · build 17" \
     || { echo "FAIL: newest iOS build not rendered"; echo "$body"; exit 1; }
-echo "$body" | grep -q "Lillist · macOS · build 5" \
+echo "$body" | grep -q "macOS · build 5" \
     || { echo "FAIL: macOS build not rendered"; echo "$body"; exit 1; }
 echo "$body" | grep -q "build 16" \
     && { echo "FAIL: older iOS build 16 should be hidden"; echo "$body"; exit 1; }

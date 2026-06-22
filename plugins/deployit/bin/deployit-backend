@@ -2,11 +2,13 @@
 """deployit backend — long-running http server.
 
 Endpoints:
-  GET  /deployit/                       listing (git pull + render)
-  GET  /deployit/<build_id>/            per-build landing page
-  GET  /deployit/<build_id>/<artifact>  manifest.plist / ipa / dmg
-  POST /deployit/_internal/refresh      force git pull
-  GET  /deployit/_healthz               liveness probe
+  GET    /deployit/                        listing (git pull + render)
+  GET    /deployit/<build_id>/             per-build landing page
+  GET    /deployit/<build_id>/<artifact>   manifest.plist / ipa / dmg
+  DELETE /deployit/<build_id>/             delete a local build (shells to CLI rm)
+  DELETE /deployit/p/<bundle>/<platform>/  delete a local product (all its builds)
+  POST   /deployit/_internal/refresh       force git pull
+  GET    /deployit/_healthz                liveness probe
 
 Stdlib only. Designed to be supervised by launchd.
 """
@@ -17,6 +19,7 @@ import email.utils as _eut
 import html
 import json
 import mimetypes
+import os
 import re
 import string
 import subprocess
@@ -28,6 +31,13 @@ from pathlib import Path
 
 
 _BUILD_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+# Single path segments that look like a build id but never are one — guards the
+# DELETE build route against deleting health/internal/static-asset paths.
+_RESERVED_BUILD_WORDS = {
+    "p", "_healthz", "_internal", "icons",
+    "manifest.webmanifest", "app.css", "app.js", "icon.svg",
+    "apple-touch-icon.png", "apple-touch-icon-precomposed.png",
+}
 _pull_lock = threading.Lock()
 _last_pull = "never"
 
@@ -55,6 +65,25 @@ def _read_index(root: Path):
     except json.JSONDecodeError as exc:
         sys.stderr.write(f"backend: corrupt index/builds.json: {exc}\n")
         return {"version": 1, "builds": []}
+
+
+# Mirrors the CLI's config.toml parse (deployit-cli `_read_config`). Used to
+# decide which rows are "local" (this machine's origin) and thus eligible for
+# swipe-to-delete; foreign-origin builds get no delete affordance.
+_BASE_URL_RE = re.compile(r'base_url\s*=\s*"([^"]+)"')
+
+
+def _read_base_url(root: Path):
+    """This machine's listing base URL from <root>/config.toml, or None.
+
+    None when the config is absent/unreadable (e.g. test fixtures); callers then
+    treat no build as local, so no delete affordance is rendered."""
+    try:
+        text = (root / "config.toml").read_text()
+    except OSError:
+        return None
+    m = _BASE_URL_RE.search(text)
+    return m.group(1).rstrip("/") if m else None
 
 
 def _relative_time(iso: str) -> str:
@@ -98,43 +127,80 @@ def _version_label(build) -> str:
     return f"{sv} (build {bn})" if sv else f"build {bn}"
 
 
-_ROW_TEMPLATE = string.Template("""<li class="$archived_class"$data_href_attr>
-  <div class="row">
-    <span class="title">$project · $platform · $version_label</span>
-    <a class="install" href="$install_href">$install_label</a>
-  </div>
-  <div class="sub">$origin_host · $commit · $rel$older_html</div>
+# The visible content is wrapped in .swipe-content so it can translate left to
+# reveal the .swipe-delete button behind it. data-href / data-delete stay as
+# direct <li> attributes (row nav + delete target).
+_ROW_TEMPLATE = string.Template("""<li class="$archived_class"$data_href_attr$data_delete_attr>
+  <div class="swipe-content">
+    <div class="row">
+      $title_block
+      <a class="install" href="$install_href">$install_label</a>
+    </div>
+    <div class="sub">$origin_host · $commit · $rel$older_html</div>
+  </div>$delete_button
 </li>""")
+
+# Listing rows (one per product) lead with a prominent product name and demote
+# platform · version to a muted subline; per-build rows keep the single title.
+_LISTING_TITLE_TEMPLATE = string.Template(
+    '<div class="titles">'
+    '<span class="name">$project</span>'
+    '<span class="meta-line">$platform · $version_label</span>'
+    '</div>')
+_BUILD_TITLE_TEMPLATE = string.Template(
+    '<span class="title">$project · $platform · $version_label</span>')
+
+_DELETE_BUTTON_TEMPLATE = string.Template(
+    '\n  <button type="button" class="swipe-delete" '
+    'aria-label="Delete $delete_label">Delete</button>')
 
 
 def _product_path(bundle_id: str, platform: str) -> str:
     return f"/deployit/p/{urllib.parse.quote(bundle_id, safe='')}/{platform}/"
 
 
-def _render_row(build, *, older_count: int, link_to_product: bool) -> str:
+def _render_row(build, *, older_count: int, link_to_product: bool, is_local: bool) -> str:
     href, label = _install_link(build)
+    project = html.escape(build["project"])
+    platform = html.escape(_platform_display(build["platform"]))
+    version_label = html.escape(_version_label(build))
     if link_to_product:
-        data_attr = f' data-href="{html.escape(_product_path(build["bundle_id"], build["platform"]), quote=True)}"'
+        product_path = _product_path(build["bundle_id"], build["platform"])
+        data_attr = f' data-href="{html.escape(product_path, quote=True)}"'
+        title_block = _LISTING_TITLE_TEMPLATE.substitute(
+            project=project, platform=platform, version_label=version_label)
+        delete_path = product_path
+        delete_label = f'{build["project"]} {_platform_display(build["platform"])}'
     else:
         data_attr = ""
-    if older_count > 0:
-        older_html = (
-            f' · <span class="older">+{older_count} older</span>'
-        )
+        title_block = _BUILD_TITLE_TEMPLATE.substitute(
+            project=project, platform=platform, version_label=version_label)
+        delete_path = f'/deployit/{urllib.parse.quote(build["id"], safe="")}/'
+        delete_label = f'{build["project"]} {_version_label(build)}'
+    # Delete affordance only for builds this machine owns (origin == base_url);
+    # foreign builds can't have their files removed here, so no swipe button.
+    if is_local:
+        data_delete_attr = f' data-delete="{html.escape(delete_path, quote=True)}"'
+        delete_button = _DELETE_BUTTON_TEMPLATE.substitute(
+            delete_label=html.escape(delete_label))
     else:
-        older_html = ""
+        data_delete_attr = ""
+        delete_button = ""
+    older_html = (
+        f' · <span class="older">+{older_count} older</span>' if older_count > 0 else ""
+    )
     return _ROW_TEMPLATE.substitute(
         archived_class="archived" if build.get("archived") else "",
         data_href_attr=data_attr,
-        project=html.escape(build["project"]),
-        platform=html.escape(_platform_display(build["platform"])),
-        version_label=html.escape(_version_label(build)),
+        data_delete_attr=data_delete_attr,
+        title_block=title_block,
         install_href=html.escape(href, quote=True),
         install_label=label,
         origin_host=html.escape(build["origin_host"]),
         commit=html.escape(build["commit"][:7]),
         rel=html.escape(_relative_time(build["timestamp"])),
         older_html=older_html,
+        delete_button=delete_button,
     )
 
 
@@ -220,11 +286,14 @@ def _group_by_product(builds):
 
 def _render_listing(root: Path, local_host: str) -> bytes:
     data = _read_index(root)
+    base_url = _read_base_url(root)
     newest, counts = _group_by_product(data["builds"])
     rows = []
     for b in newest:
         key = (b.get("bundle_id"), b.get("platform"))
-        rows.append(_render_row(b, older_count=counts[key], link_to_product=True))
+        is_local = base_url is not None and b.get("origin_base_url") == base_url
+        rows.append(_render_row(b, older_count=counts[key], link_to_product=True,
+                                is_local=is_local))
     template_path = root / "_plugin_root" / "assets" / "listing.template.html"
     tmpl = string.Template(template_path.read_text())
     return tmpl.substitute(
@@ -271,8 +340,11 @@ def _render_product(root: Path, bundle_id: str, platform: str):
                if b.get("bundle_id") == bundle_id and b.get("platform") == platform]
     if not matches:
         return 404, None
+    base_url = _read_base_url(root)
     matches.sort(key=lambda b: b["timestamp"], reverse=True)
-    rows = [_render_row(b, older_count=0, link_to_product=False) for b in matches]
+    rows = [_render_row(b, older_count=0, link_to_product=False,
+                        is_local=base_url is not None and b.get("origin_base_url") == base_url)
+            for b in matches]
     sparkle_block = _render_sparkle_block(bundle_id, platform, matches)
     template_path = root / "_plugin_root" / "assets" / "product.template.html"
     tmpl = string.Template(template_path.read_text())
@@ -333,6 +405,40 @@ def _render_appcast(root: Path, bundle_id: str):
         ITEMS="\n".join(items),
     ).encode()
     return 200, body
+
+
+def _run_cli_rm(root: Path, *, build=None, product=None):
+    """Delete a build/product by spawning the CLI's `rm` subcommand — the single
+    writer that owns index commit/push. Returns (http_status, json_payload).
+
+    The backend never mutates the index or pushes directly: it validates input,
+    then shells out argv-only (no shell) so a hostile id can't be injected. The
+    CLI re-validates and only ever touches builds this machine owns."""
+    cli = root / "_plugin_root" / "bin" / "deployit-cli"
+    if not cli.is_file():
+        sys.stderr.write(f"backend: rm cli not found at {cli}\n")
+        return 500, {"ok": False, "error": "cli_unavailable"}
+    argv = [sys.executable or "python3", str(cli),
+            "--plugin-root", str(root / "_plugin_root"), "rm"]
+    if build is not None:
+        argv += ["--build", build]
+    else:
+        bundle_id, platform = product
+        argv += ["--product", bundle_id, "--platform", platform]
+    try:
+        res = subprocess.run(
+            argv, capture_output=True, text=True, timeout=90,
+            env={**os.environ, "DEPLOYIT_STATE_DIR": str(root)},
+        )
+    except subprocess.TimeoutExpired:
+        sys.stderr.write("backend: rm timed out\n")
+        return 504, {"ok": False, "error": "rm_timeout"}
+    try:
+        payload = json.loads(res.stdout.strip())  # CLI emits exactly one JSON object
+    except ValueError:
+        sys.stderr.write(f"backend: rm produced no JSON: {res.stdout!r} {res.stderr!r}\n")
+        return 500, {"ok": False, "error": "rm_failed"}
+    return (200 if payload.get("ok") else 409), payload
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -463,6 +569,37 @@ class Handler(BaseHTTPRequestHandler):
             if self.server.git_pull_enabled:
                 _git_pull(self.root)
             self._send_json(200, {"ok": True, "last_pull": _last_pull})
+            return
+        self._send_json(404, {"ok": False, "error": "not_found"})
+
+    def do_DELETE(self):
+        try:
+            self._dispatch_delete()
+        except Exception as exc:
+            sys.stderr.write(f"backend: DELETE {self.path} failed: {exc!r}\n")
+            self._send_json(500, {"ok": False, "error": "internal_error"})
+
+    def _dispatch_delete(self):
+        path = self.path
+        # Product delete first, mirroring GET's regex precedence:
+        #   DELETE /deployit/p/<bundle>/<platform>/
+        product_m = re.match(r"^/deployit/p/([^/]+)/(ios|macos|visionos)/?$", path)
+        if product_m:
+            bundle_id = urllib.parse.unquote(product_m.group(1))
+            platform = product_m.group(2)
+            status, payload = _run_cli_rm(self.root, product=(bundle_id, platform))
+            self._send_json(status, payload)
+            return
+        # Single build delete (root only, never an artifact subpath):
+        #   DELETE /deployit/<build_id>/
+        m = re.match(r"^/deployit/([^/]+)/?$", path)
+        if m:
+            build_id = m.group(1)
+            if build_id in _RESERVED_BUILD_WORDS or not _BUILD_ID_RE.match(build_id):
+                self._send_json(404, {"ok": False, "error": "bad_build_id"})
+                return
+            status, payload = _run_cli_rm(self.root, build=build_id)
+            self._send_json(status, payload)
             return
         self._send_json(404, {"ok": False, "error": "not_found"})
 

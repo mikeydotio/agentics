@@ -46,8 +46,11 @@ for _ in {1..50}; do
 done
 
 body=$(curl -sf "http://127.0.0.1:$PORT/deployit/")
-echo "$body" | grep -q "Lillist · iOS · build 16" \
-    || { echo "FAIL: row not rendered"; echo "$body"; exit 1; }
+# Listing rows lead with a prominent product name; platform · version is a subline.
+echo "$body" | grep -q 'class="name">Lillist' \
+    || { echo "FAIL: product name not rendered"; echo "$body"; exit 1; }
+echo "$body" | grep -q "iOS · build 16" \
+    || { echo "FAIL: platform/version subline not rendered"; echo "$body"; exit 1; }
 echo "$body" | grep -q 'itms-services' \
     || { echo "FAIL: install link missing"; echo "$body"; exit 1; }
 echo "PASS"

@@ -8,6 +8,7 @@ Subcommands:
   url                print this machine's listing URL
   status             backend health + recent local deploys
   gc                 prune local artifacts; archive in index
+  rm                 delete a local build/product (files + index); web-UI delete
 """
 
 import argparse
@@ -28,6 +29,9 @@ import time
 from textwrap import dedent
 
 __version__ = "0.1.0"
+
+# Same shape the backend enforces on build ids; `rm` re-validates independently.
+_BUILD_ID_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def ok(payload):
@@ -824,6 +828,65 @@ def _append_to_index(state: Path, entry: dict, attempts: int = 3):
          stderr=last_stderr)
 
 
+def _commit_and_push_index(state: Path, mutate, *, attempts: int = 3):
+    """Apply a mutation to index/builds.json and push it, robustly.
+
+    `mutate(data)` edits the parsed index in place and returns a commit message,
+    or None to abort with no change. Loops up to `attempts` times: pull --rebase,
+    re-read, mutate, write, commit, push; on a push conflict it resets --hard to
+    origin/main and retries, so a concurrent deploy never clobbers us. Honors
+    DEPLOYIT_SKIP_GC_PUSH (write + return locally, touch no git remote) for tests
+    and offline runs. Returns the commit message, or None if the mutation
+    aborted; raises via fail() if every push attempt fails.
+
+    Shared by cmd_gc and cmd_rm. The high-frequency deploy path keeps its own
+    prune-in-loop variant (`_append_to_index`)."""
+    index_dir = state / "index"
+    builds_path = index_dir / "builds.json"
+
+    if os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+        data = json.loads(builds_path.read_text())
+        msg = mutate(data)
+        if msg is None:
+            return None
+        builds_path.write_text(json.dumps(data, indent=2) + "\n")
+        return msg
+
+    def _git(*args, timeout=30):
+        # capture_output keeps git chatter (commit summaries, "HEAD is now at…")
+        # off our stdout, which must stay a single JSON object for callers such
+        # as the backend that parse it programmatically.
+        return subprocess.run(["git", "-C", str(index_dir), *args],
+                              check=True, capture_output=True, text=True, timeout=timeout)
+
+    last_stderr = ""
+    for _ in range(attempts):
+        _git("pull", "--rebase", "--quiet")
+        data = json.loads(builds_path.read_text())
+        msg = mutate(data)
+        if msg is None:
+            return None
+        builds_path.write_text(json.dumps(data, indent=2) + "\n")
+        _git("add", "builds.json")
+        _git("commit", "-m", msg)
+        try:
+            push = subprocess.run(
+                ["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
+                 "-C", str(index_dir), "push", "origin", "main"],
+                capture_output=True, text=True, timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            last_stderr = "git push timed out after 60s"
+            _git("reset", "--hard", "origin/main")
+            continue
+        if push.returncode == 0:
+            return msg
+        last_stderr = push.stderr.strip()
+        _git("reset", "--hard", "origin/main")
+
+    fail("push to deployit-index failed after retries", stderr=last_stderr)
+
+
 def _refresh_local_backend(port: int):
     try:
         req = urllib.request.Request(
@@ -1126,46 +1189,99 @@ def cmd_list(args):
 
 
 def cmd_gc(args):
+    if args.keep is None and getattr(args, "older_than", None) is None:
+        fail("gc requires --keep N or --older-than DAYS")
     state = _state_dir()
     cfg = _read_config(state)
     base_url = cfg["server"]["base_url"].rstrip("/")
-    builds_path = state / "index" / "builds.json"
-    data = json.loads(builds_path.read_text())
 
-    local = [b for b in data["builds"]
-             if b["origin_base_url"] == base_url and not b.get("archived")]
-    local.sort(key=lambda b: b["timestamp"], reverse=True)
+    archived_ids = []
 
-    if args.keep is not None:
-        to_archive = local[args.keep:]
-    elif getattr(args, "older_than", None) is not None:
-        cutoff = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=args.older_than)
-        to_archive = [b for b in local
-                      if _dt.datetime.fromisoformat(b["timestamp"]).astimezone(_dt.timezone.utc) < cutoff]
-    else:
-        fail("gc requires --keep N or --older-than DAYS")
+    def mutate(data):
+        local = [b for b in data["builds"]
+                 if b["origin_base_url"] == base_url and not b.get("archived")]
+        local.sort(key=lambda b: b["timestamp"], reverse=True)
+        if args.keep is not None:
+            to_archive = local[args.keep:]
+        else:
+            cutoff = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=args.older_than)
+            to_archive = [b for b in local
+                          if _dt.datetime.fromisoformat(b["timestamp"]).astimezone(_dt.timezone.utc) < cutoff]
+        if not to_archive:
+            return None
+        for b in to_archive:
+            b["archived"] = True
+        archived_ids[:] = [b["id"] for b in to_archive]
+        return f"chore(deploy): archive {len(to_archive)} build(s) from {base_url}"
+
+    msg = _commit_and_push_index(state, mutate)
 
     removed = 0
-    for b in to_archive:
-        d = state / "serve" / b["id"]
+    for bid in archived_ids:
+        d = state / "serve" / bid
         if d.exists():
             _shutil.rmtree(d)
             removed += 1
-        b["archived"] = True
-
-    builds_path.write_text(json.dumps(data, indent=2) + "\n")
-    if to_archive and not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
-        subprocess.run(["git", "-C", str(state / "index"), "add", "builds.json"], check=True)
-        subprocess.run(["git", "-C", str(state / "index"), "commit", "-m",
-                        f"chore(deploy): archive {len(to_archive)} build(s) from {base_url}"],
-                       check=True)
-        subprocess.run(["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
-                        "-C", str(state / "index"), "push", "origin", "main"],
-                       check=True, timeout=60)
+    if msg and not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
         _refresh_local_backend(cfg["server"]["port"])
 
-    ok({"display": f"archived {len(to_archive)} build(s); removed {removed} local dir(s)",
-        "archived": len(to_archive), "removed_local": removed})
+    ok({"display": f"archived {len(archived_ids)} build(s); removed {removed} local dir(s)",
+        "archived": len(archived_ids), "removed_local": removed})
+
+
+def cmd_rm(args):
+    """Delete a single local build (--build ID) or a whole local product
+    (--product BUNDLE_ID --platform P): remove the matching entries from the
+    shared index and rmtree their serve/ dirs. Scoped to builds this machine
+    owns (origin_base_url == base_url) — foreign builds are managed on their
+    origin Mac. This is the writer behind the web UI's swipe-to-delete."""
+    has_build = bool(args.build)
+    has_product = bool(args.product)
+    if has_build == has_product:
+        fail("rm requires exactly one of --build ID or --product BUNDLE_ID --platform P")
+    if has_product and not args.platform:
+        fail("rm --product requires --platform")
+    if has_build and not _BUILD_ID_RE.match(args.build):
+        fail("invalid build id")
+
+    state = _state_dir()
+    cfg = _read_config(state)
+    base_url = cfg["server"]["base_url"].rstrip("/")
+    host = urlparse(base_url).netloc
+
+    if has_build:
+        scope = f"build {args.build}"
+        match = lambda b: b.get("id") == args.build
+    else:
+        scope = f"product {args.product} {args.platform}"
+        match = lambda b: (b.get("bundle_id") == args.product
+                           and b.get("platform") == args.platform)
+
+    removed_ids = []
+
+    def mutate(data):
+        targets = [b for b in data["builds"] if match(b)]
+        local_ids = {b["id"] for b in targets if b.get("origin_base_url") == base_url}
+        if not local_ids:
+            hint = " (foreign builds are managed on their origin Mac)" if targets else ""
+            fail(f"no local {scope} to delete{hint}")
+        data["builds"] = [b for b in data["builds"] if b["id"] not in local_ids]
+        removed_ids[:] = sorted(local_ids)
+        return f"chore(deploy): rm {scope} via web from {host}"
+
+    msg = _commit_and_push_index(state, mutate)
+
+    removed = 0
+    for bid in removed_ids:
+        d = state / "serve" / bid
+        if d.exists():
+            _shutil.rmtree(d, ignore_errors=True)
+            removed += 1
+    if msg and not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+        _refresh_local_backend(cfg["server"]["port"])
+
+    ok({"display": f"removed {len(removed_ids)} build(s); {removed} local dir(s)",
+        "removed": len(removed_ids), "removed_local": removed})
 
 
 def _plist_is_legacy(state: Path) -> bool:
@@ -1297,6 +1413,12 @@ def build_parser():
     p_gc.add_argument("--keep", type=int)
     p_gc.add_argument("--older-than", type=int, help="days")
     p_gc.set_defaults(func=cmd_gc)
+
+    p_rm = sub.add_parser("rm")
+    p_rm.add_argument("--build")
+    p_rm.add_argument("--product")
+    p_rm.add_argument("--platform", choices=["ios", "macos", "visionos"])
+    p_rm.set_defaults(func=cmd_rm)
 
     p_redeploy = sub.add_parser("redeploy")
     p_redeploy.add_argument("--source", type=Path, default=None,

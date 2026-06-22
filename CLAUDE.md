@@ -40,10 +40,24 @@ Agentics is a Claude Code plugin marketplace (`mikeydotio/agentics`) providing p
 
 ## When Adding a New Plugin
 
-1. Create `plugins/<name>/.claude-plugin/plugin.json` with `name` and `description`
+1. Create `plugins/<name>/.claude-plugin/plugin.json` with `name` and `description` (the `version` field is auto-managed — see below)
 2. Add the skill in `plugins/<name>/skills/<name>/SKILL.md`
 3. Register in `.claude-plugin/marketplace.json`
 4. Keep SKILL.md as a thin router dispatching to reference docs for detailed procedures
+
+## Plugin Version Sync
+
+Every plugin shares the single repo `VERSION`. The post-bump hook
+`.semver/hooks/post-bump/01-sync-plugin-versions.sh` stamps the bare version into
+each `plugins/*/.claude-plugin/plugin.json` `version` field on every `/semver bump`,
+folding the change into the release commit and moving the (unpushed) tag onto it.
+This is one-way (`VERSION` → manifests) and deliberately over-eager: unchanged
+plugins are restamped too, so a bump can never miss one.
+
+- **Do not hand-edit** the `version` field in a `plugin.json` — it is derived.
+- To seed a brand-new plugin or repair drift between bumps, run the hook standalone:
+  `bash .semver/hooks/post-bump/01-sync-plugin-versions.sh` (files only, no git ops).
+- `tests/plugin-versions.bats` fails `make test` if any manifest drifts from `VERSION`.
 
 <!-- semver:start -->
 ## Semantic Versioning

@@ -78,6 +78,20 @@ d=json.load(open('$ROOT/index/builds.json'))
 sys.exit(0 if any(b['id']==sys.argv[1] for b in d['builds']) else 1)
 " "$1"; }
 
+# Assert the bare remote's tip log contains a substring. A successful local
+# push updates origin's ref synchronously, but receive-pack's post-receive
+# settle (quarantine migration + a detached `git maintenance run --auto`) means
+# a *fresh* reader can briefly fail to resolve the new tip even though it's
+# committed. Poll until it appears rather than reading exactly once — this is a
+# reader-side timing artifact of pushing to a local repo, not a push failure.
+remote_has() {
+    for _ in $(seq 1 50); do
+        git -C "$ROOT/remote.git" log --oneline | grep -q "$1" && return 0
+        sleep 0.02
+    done
+    return 1
+}
+
 # --- Argument validation (no state change, no git) ---
 for args in "rm" "rm --build x --product io.mikeydotio.App" "rm --product io.mikeydotio.App"; do
     out=$("${CLI[@]}" $args 2>&1 || true)
@@ -102,7 +116,7 @@ has app-ios-local1 && { echo "FAIL: app-ios-local1 still in index"; exit 1; } ||
 [[ ! -d "$ROOT/serve/app-ios-local1" ]] || { echo "FAIL: serve dir not removed"; exit 1; }
 has app-ios-local2 || { echo "FAIL: app-ios-local2 wrongly removed"; exit 1; }
 has app-macos-local || { echo "FAIL: macos build wrongly removed"; exit 1; }
-git -C "$ROOT/remote.git" log --oneline | grep -q 'rm build app-ios-local1' \
+remote_has 'rm build app-ios-local1' \
     || { echo "FAIL: rm not pushed to origin"; exit 1; }
 
 # --- rm --product: removes remaining LOCAL ios builds, leaves foreign + macos ---

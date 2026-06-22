@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # 01-sync-plugin-versions.sh — One-way propagate the marketplace VERSION into the
-# `version` field of every plugin's .claude-plugin/plugin.json.
+# `version` field of the top-level .claude-plugin/marketplace.json and of every
+# plugin's .claude-plugin/plugin.json.
 #
-# WHY: the agentics marketplace versions all plugins together. A change to any
-# plugin bumps the single repo VERSION, and every plugin.json is stamped with it
-# so each machine can tell at a glance whether its installed plugin code is stale.
+# WHY: the agentics marketplace versions everything together. A change to any
+# plugin bumps the single repo VERSION, and every manifest is stamped with it
+# so each machine can tell at a glance whether its installed code is stale.
 # Deliberately over-eager: unchanged plugins get the new version too, so a bump
-# can never *miss* a plugin. VERSION is the single source of truth — plugin.json
+# can never *miss* a manifest. VERSION is the single source of truth — manifest
 # versions are derived and never read back (one-way).
 #
 # TWO MODES, auto-detected:
@@ -53,19 +54,32 @@ fi
 
 command -v jq >/dev/null 2>&1 || { echo "sync-plugin-versions: jq is required" >&2; exit 1; }
 
-# --- Discover plugin manifests ----------------------------------------------
+# --- Discover manifests ------------------------------------------------------
+# The top-level marketplace.json plus every plugin.json. Both are JSON objects
+# with a "name" key, which is all the jq filter below assumes.
 shopt -s nullglob
-manifests=("$REPO_ROOT"/plugins/*/.claude-plugin/plugin.json)
+manifests=()
+[ -f "$REPO_ROOT/.claude-plugin/marketplace.json" ] && manifests+=("$REPO_ROOT/.claude-plugin/marketplace.json")
+manifests+=("$REPO_ROOT"/plugins/*/.claude-plugin/plugin.json)
 shopt -u nullglob
 if [ ${#manifests[@]} -eq 0 ]; then
-    echo "sync-plugin-versions: no plugin.json under $REPO_ROOT/plugins" >&2
+    echo "sync-plugin-versions: no manifests found under $REPO_ROOT" >&2
     exit 1
 fi
 
-# Insert/refresh `version` in the idiomatic plugin-manifest position (after name,
-# before description) while preserving every other field. del() drops the leftover
-# copies so they are not duplicated by the merge.
-JQ_SET='{name, version: $v, description} + del(.name, .version, .description)'
+# Set `version` immediately after `name` (idiomatic manifest position), or update
+# it in place if already present, preserving every other key and its order. Works
+# for both manifest shapes — crucially it never drops marketplace.json's $schema,
+# owner, or plugins array.
+JQ_SET='
+  to_entries as $e
+  | (if any($e[]; .key == "version")
+     then ($e | map(if .key == "version" then .value = $v else . end))
+     else (($e | map(.key) | index("name")) // (($e | length) - 1)) as $after
+          | ($e[:($after + 1)] + [{key: "version", value: $v}] + $e[($after + 1):])
+     end)
+  | from_entries
+'
 
 changed=0
 changed_paths=()

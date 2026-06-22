@@ -1,7 +1,7 @@
 ---
 name: deployit
-description: Use when the user wants to deploy an iOS / macOS / visionOS app to their tailnet for OTA install on their own devices. Commands are `/deployit bootstrap` (one-time per Mac), `/deployit deploy [--platform ios|macos|visionos] [--scheme NAME]`, `/deployit list`, `/deployit url`, `/deployit status`, `/deployit gc`, and `/deployit redeploy [--source PATH]` (refresh daemon + verify after PWA changes). When the project uses the semver plugin, deploy reports the semver version in the web UI and bumps it when it has not changed since the last build. Replaces hand-rolled `Tools/Deploy/deploy-ios.sh`-style scripts.
-argument-hint: <bootstrap | deploy [--platform P] [--scheme S] | list | url | status | gc | rm [--build ID | --product BUNDLE_ID --platform P] | redeploy [--source PATH]>
+description: Use when the user wants to deploy an iOS / macOS / visionOS app to their tailnet for OTA install on their own devices. Commands are `/deployit bootstrap` (one-time per Mac), `/deployit deploy [--platform ios|macos|visionos] [--scheme NAME]`, `/deployit list`, `/deployit url`, `/deployit status`, `/deployit gc`, and `/deployit redeploy [--source PATH]` (refresh daemon + verify after PWA changes). When the project uses the semver plugin, deploy reports the semver version in the web UI and bumps it when it has not changed since the last build. Every macOS deploy also publishes a GitHub release of the Developer-ID-signed app (as a .zip) with agent-authored notes; pass `--no-release` to skip. Replaces hand-rolled `Tools/Deploy/deploy-ios.sh`-style scripts.
+argument-hint: <bootstrap | deploy [--platform P] [--scheme S] [--no-release] | list | url | status | gc | rm [--build ID | --product BUNDLE_ID --platform P] | redeploy [--source PATH]>
 ---
 
 # deployit Orchestrator
@@ -10,7 +10,9 @@ argument-hint: <bootstrap | deploy [--platform P] [--scheme S] | list | url | st
 Development- or Developer-ID-signed binary, stages it under
 `~/Library/Application Support/deployit/serve/`, appends an entry
 to the shared `mikeydotio/deployit-index` repo, and points the
-user at a Tailscale-served URL.
+user at a Tailscale-served URL. For macOS, it additionally publishes a
+GitHub release of the Developer-ID-signed app (zipped) to the app's own
+repo, with release notes you author from the commit/issue history.
 
 **Router:** `bash ${CLAUDE_PLUGIN_ROOT}/bin/deployit-router.sh <ARGUMENTS>`
 
@@ -28,6 +30,10 @@ user at a Tailscale-served URL.
    the web UI and ensures it changed since the last build (see **Semver-aware
    deploy**). It never touches the app's `MARKETING_VERSION` or Info.plist —
    display only.
+6. For the GitHub release (macOS), your only job is to **author the notes** and
+   route them through `deploy --release-notes-file`. Never call `gh` or
+   `bin/deployit-release` yourself, and never create tags or releases directly —
+   the CLI owns publishing (see **macOS GitHub release**).
 
 ## Generic flow
 
@@ -87,12 +93,46 @@ uses the semver plugin. Run these steps in order (the user still just calls
       uncommitted changes into the `chore(release)` commit (no further prompts)
       and tagging per the project's semver config. If `ok` is false, show
       `display` and **stop** — never deploy a stale version.
-4. **Deploy**: `bash ${CLAUDE_PLUGIN_ROOT}/bin/deployit-router.sh deploy --platform <P> [--scheme <S>]`.
-   Handle the scheme question loop as usual, then show the deploy `display`.
+4. **macOS — author the release notes** (skip for iOS/visionOS, when the user
+   passed `--no-release`, or when `[github] release = false`). Every macOS
+   deploy publishes a GitHub release and you write its notes:
+   a. Gather facts:
+      `bash ${CLAUDE_PLUGIN_ROOT}/bin/deployit-router.sh release-context`.
+      Returns `owner_repo`, `prev_tag`, `commits` (each with a `url`), and
+      `closed_issues` (each with `number`, `title`, `url`).
+   b. Compose Markdown: an optional 1–3 sentence preamble, then a bulleted list
+      of the changes (from `commits`) and the closed issues, each a hyperlink
+      built from its `url`. Surface the issues the commits actually
+      reference/close; never invent entries; omit a section that has nothing.
+      Keep it tight and user-facing.
+   c. Write it to a temp file, e.g. `/tmp/deployit-release-notes.md`.
+5. **Deploy**: `bash ${CLAUDE_PLUGIN_ROOT}/bin/deployit-router.sh deploy --platform <P> [--scheme <S>] [--release-notes-file <tmp>]`.
+   Pass `--release-notes-file <tmp>` from step 4 for macOS (omit for other
+   platforms). Handle the scheme question loop as usual, then show the deploy
+   `display`.
 
-`preflight` and `bump` are internal sub-steps of `deploy` — users never invoke
-them directly. The build is archived from the (possibly just-created) release
-commit, so the recorded commit and build-id reflect that release.
+`preflight`, `bump`, and `release-context` are internal sub-steps of `deploy` —
+users never invoke them directly. The build is archived from the (possibly
+just-created) release commit, so the recorded commit and build-id reflect that
+release.
+
+## macOS GitHub release
+
+Every macOS `deploy` also publishes a GitHub release on the **app's own repo**
+(its `origin`), containing the Developer-ID-signed `.app` as a `.zip`:
+
+- **You author the notes** (step 4 above); the CLI publishes them verbatim.
+- The release **tag/version** is resolved by the CLI: the semver `VERSION` when
+  the project is semver-tracked, else the app's `CFBundleShortVersionString`. If
+  neither exists, the release step fails loudly.
+- It runs **last**, after the tailnet build is fully published, and is
+  **recoverable**: the deploy `display` ends with a `release:` line — either the
+  release URL, or `release: FAILED — …`. On failure the tailnet build still
+  deployed; surface the error and re-deploy to retry (add `--clobber-release` if
+  the tag already exists).
+- Prerequisite: the GitHub CLI must be authenticated (`gh auth login`). For a
+  download that opens without the Gatekeeper prompt, configure notarization
+  (`[macos] notarize`). Full details in `references/github-release.md`.
 
 ## Question loop
 
@@ -114,6 +154,7 @@ appended to the original command.
 - `references/bootstrap.md` — per-machine one-time setup walkthrough
 - `references/ios.md` — iOS specifics: signing, UDID registration, Trust flow
 - `references/macos.md` — macOS Developer-ID signing + notarytool
+- `references/github-release.md` — macOS GitHub release: version/tag rules, notes, notarization, recovery
 - `references/sparkle.md` — macOS Sparkle auto-update: appcast + EdDSA signing + app wiring
 - `references/visionos.md` — visionOS specifics (mostly ≡ iOS)
 - `references/tailscale-serve.md` — proxy config + Mac App Store variant quirks

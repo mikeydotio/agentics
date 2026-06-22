@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+"""deployit-release — publish a GitHub release for a Developer-ID-signed macOS app.
+
+Packages a signed `.app` as a `.zip` and publishes it as a GitHub release on the
+app's own repository. Designed to be the final step of `/deployit deploy
+--platform macos` (invoked by `bin/deployit-cli`), but also runnable by hand on
+any signed `.app`.
+
+Version resolution (the release tag) follows a strict ladder:
+  1. the project's semver `VERSION` (when `.semver/config.yaml` has tracking: true)
+  2. else the built app's `CFBundleShortVersionString` from its Info.plist
+  3. else fail loudly — we never publish an unversioned release.
+
+Inputs:
+  --app PATH | --zip PATH   the signed app bundle, or a pre-made .zip of it
+  --project-dir PATH        app checkout (default: cwd) — semver VERSION + git remote
+  --notes-file PATH         the release description (required) — authored by the agent
+  --target SHA              commit the release tag should point at
+  --repo OWNER/REPO         override the repo (default: parsed from `origin`)
+  --title TEXT              release title (default: the tag)
+  --prerelease              mark the release as a pre-release
+  --clobber                 replace an existing release's asset + notes
+  --attach PATH             extra asset to upload (repeatable, e.g. the .dmg)
+  --[no-]require-developer-id  require a Developer ID signature (default: require)
+  --dry-run                 print the gh command(s) as JSON; touch nothing
+
+Output is a single JSON object: {"ok": true, ...} or {"ok": false, "display": ...}.
+
+Env overrides (mirror bin/deployit-cli):
+  DEPLOYIT_GH_BIN               path to the `gh` binary (default: gh)
+  DEPLOYIT_SKIP_CODESIGN_VERIFY  treat the app as validly Developer-ID signed (tests)
+"""
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def ok(payload):
+    payload["ok"] = True
+    print(json.dumps(payload, indent=2))
+
+
+def fail(message, **extra):
+    payload = {"ok": False, "display": message, **extra}
+    print(json.dumps(payload, indent=2))
+    sys.exit(1)
+
+
+class JsonArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        fail(f"argument error: {message}")
+
+
+def _gh_bin() -> str:
+    return os.environ.get("DEPLOYIT_GH_BIN", "gh")
+
+
+# --- version resolution -----------------------------------------------------
+# These mirror bin/deployit-cli's semver readers. Like the CLI (see its
+# _parse_semver_config docstring), we deliberately re-read semver's flat on-disk
+# config rather than import the plugin, keeping this script standalone.
+
+def _parse_semver_config(project_dir: Path):
+    cfg = project_dir / ".semver" / "config.yaml"
+    if not cfg.is_file():
+        return None
+    out = {}
+    for line in cfg.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        out[key.strip()] = val.strip().strip('"').strip("'")
+    return out
+
+
+def _semver_version(project_dir: Path):
+    """The semver VERSION string iff semver is active for project_dir, else None."""
+    config = _parse_semver_config(project_dir)
+    if not config or config.get("tracking") != "true":
+        return None
+    version_file = project_dir / "VERSION"
+    if not version_file.is_file():
+        return None
+    return version_file.read_text().strip() or None
+
+
+def _semver_prefix(project_dir: Path) -> str:
+    config = _parse_semver_config(project_dir)
+    return config.get("version_prefix", "") if config else ""
+
+
+def _read_app_short_version(app_path: Path):
+    """CFBundleShortVersionString (the marketing version) from the app's Info.plist,
+    or None. macOS nests Info.plist under Contents/; iOS/visionOS keep it at the
+    bundle root — check both so any extracted bundle resolves."""
+    candidates = [app_path / "Contents" / "Info.plist", app_path / "Info.plist"]
+    plist = next((p for p in candidates if p.is_file()), None)
+    if plist is None:
+        return None
+    res = subprocess.run(
+        ["/usr/libexec/PlistBuddy", "-c", "Print :CFBundleShortVersionString", str(plist)],
+        capture_output=True, text=True,
+    )
+    if res.returncode != 0:
+        return None
+    return res.stdout.strip() or None
+
+
+def _resolve_version_and_tag(project_dir: Path, app_path: Path):
+    """(version, tag, source) following semver VERSION -> Info.plist -> fail loudly.
+    The tag is normalised to carry the semver version_prefix so it matches any tag
+    semver already created at the release commit (idempotent if already prefixed)."""
+    version = _semver_version(project_dir)
+    source = "semver"
+    if version is None:
+        version = _read_app_short_version(app_path)
+        source = "info.plist"
+    if not version:
+        fail("cannot resolve release version: no semver VERSION (with .semver "
+             "tracking: true) and no CFBundleShortVersionString in the app's Info.plist")
+    prefix = _semver_prefix(project_dir)
+    tag = version if (not prefix or version.startswith(prefix)) else f"{prefix}{version}"
+    return version, tag, source
+
+
+# --- signing ----------------------------------------------------------------
+
+def _verify_developer_id(app_path: Path) -> bool:
+    """True iff app_path has a valid Developer ID Application signature.
+    DEPLOYIT_SKIP_CODESIGN_VERIFY short-circuits to True for tests (no real cert)."""
+    if os.environ.get("DEPLOYIT_SKIP_CODESIGN_VERIFY"):
+        return True
+    try:
+        verify = subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app_path)],
+                                capture_output=True, text=True)
+    except FileNotFoundError:
+        return False
+    if verify.returncode != 0:
+        return False
+    info = subprocess.run(["codesign", "-dvv", str(app_path)], capture_output=True, text=True)
+    blob = (info.stdout or "") + (info.stderr or "")
+    return "Authority=Developer ID Application" in blob
+
+
+# --- packaging --------------------------------------------------------------
+
+def _ditto_zip(app_path: Path, zip_path: Path):
+    """Archive a .app preserving symlinks + resource forks (what a plain zip would
+    corrupt). --keepParent keeps the .app directory itself inside the archive."""
+    res = subprocess.run(
+        ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app_path), str(zip_path)],
+        capture_output=True, text=True,
+    )
+    if res.returncode != 0:
+        fail(f"ditto zip failed: {res.stderr.strip() or res.stdout.strip()}")
+
+
+def _extract_app_from_zip(zip_path: Path, dest_dir: Path) -> Path:
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    res = subprocess.run(["ditto", "-x", "-k", str(zip_path), str(dest_dir)],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        fail(f"could not extract {zip_path}: {res.stderr.strip() or res.stdout.strip()}")
+    apps = sorted(dest_dir.glob("*.app")) or sorted(dest_dir.glob("**/*.app"))
+    if not apps:
+        fail(f"no .app found inside {zip_path}")
+    return apps[0]
+
+
+# --- repo + gh --------------------------------------------------------------
+
+def _parse_owner_repo(remote_url: str):
+    """owner/repo from either git@github.com:owner/repo.git or
+    https://github.com/owner/repo(.git). None if unparseable."""
+    m = re.search(r'[:/]([^/:]+)/([^/]+?)(?:\.git)?/?$', remote_url.strip())
+    return f"{m.group(1)}/{m.group(2)}" if m else None
+
+
+def _resolve_repo(args) -> str:
+    if args.repo:
+        return args.repo
+    res = subprocess.run(["git", "-C", str(args.project_dir), "remote", "get-url", "origin"],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        fail("no GitHub repo: pass --repo, or run where `git remote get-url origin` works "
+             f"(project-dir: {args.project_dir})")
+    repo = _parse_owner_repo(res.stdout)
+    if not repo:
+        fail(f"could not parse owner/repo from remote URL: {res.stdout.strip()!r}")
+    return repo
+
+
+def _check_gh_auth(gh: str):
+    try:
+        res = subprocess.run([gh, "auth", "status"], capture_output=True, text=True)
+    except FileNotFoundError:
+        fail(f"`{gh}` not found — install GitHub CLI (`brew install gh`) or set DEPLOYIT_GH_BIN")
+    if res.returncode != 0:
+        fail("gh is not authenticated — run `gh auth login` (or set GH_TOKEN)",
+             stderr=res.stderr.strip() or res.stdout.strip())
+
+
+def _release_exists(gh: str, repo: str, tag: str) -> bool:
+    res = subprocess.run([gh, "release", "view", tag, "-R", repo],
+                         capture_output=True, text=True)
+    return res.returncode == 0
+
+
+def build_parser():
+    p = JsonArgumentParser(prog="deployit-release")
+    p.add_argument("--app")
+    p.add_argument("--zip")
+    p.add_argument("--project-dir", default=".", dest="project_dir")
+    p.add_argument("--notes-file", required=True, dest="notes_file")
+    p.add_argument("--target")
+    p.add_argument("--repo")
+    p.add_argument("--title")
+    p.add_argument("--prerelease", action="store_true")
+    p.add_argument("--clobber", action="store_true")
+    p.add_argument("--attach", action="append", default=[])
+    p.add_argument("--require-developer-id", action="store_true", default=True,
+                   dest="require_developer_id")
+    p.add_argument("--no-require-developer-id", action="store_false",
+                   dest="require_developer_id")
+    p.add_argument("--dry-run", action="store_true", dest="dry_run")
+    return p
+
+
+def main(argv):
+    args = build_parser().parse_args(argv)
+
+    if bool(args.app) == bool(args.zip):
+        fail("provide exactly one of --app PATH or --zip PATH")
+    notes = Path(args.notes_file)
+    if not notes.is_file():
+        fail(f"--notes-file not found: {notes}")
+    args.project_dir = Path(args.project_dir).resolve()
+    gh = _gh_bin()
+
+    with tempfile.TemporaryDirectory(prefix="deployit-release-") as tmp:
+        tmpd = Path(tmp)
+
+        # Resolve the .app to inspect and the .zip to upload.
+        if args.app:
+            app_path = Path(args.app)
+            if not app_path.is_dir():
+                fail(f"--app not found: {app_path}")
+            upload_zip = tmpd / f"{app_path.stem}.zip"
+            _ditto_zip(app_path, upload_zip)
+        else:
+            upload_zip = Path(args.zip)
+            if not upload_zip.is_file():
+                fail(f"--zip not found: {upload_zip}")
+            app_path = _extract_app_from_zip(upload_zip, tmpd / "x")
+
+        version, tag, source = _resolve_version_and_tag(args.project_dir, app_path)
+
+        if not _verify_developer_id(app_path):
+            if args.require_developer_id:
+                fail(f"{app_path.name} is not Developer-ID signed (or its signature is "
+                     "invalid). Pass --no-require-developer-id to publish anyway.")
+            sys.stderr.write("deployit-release: WARNING — app is not Developer-ID signed; "
+                             "publishing anyway (--no-require-developer-id)\n")
+
+        repo = _resolve_repo(args)
+        title = args.title or tag
+        assets = [str(upload_zip)] + [str(a) for a in args.attach]
+
+        exists = False
+        if not args.dry_run:
+            _check_gh_auth(gh)
+            exists = _release_exists(gh, repo, tag)
+            if exists and not args.clobber:
+                fail(f"release {tag} already exists in {repo}; pass --clobber to replace "
+                     "its asset and notes")
+
+        cmds = []
+        if exists and args.clobber:
+            edit = [gh, "release", "edit", tag, "-R", repo, "--notes-file", str(notes)]
+            if args.prerelease:
+                edit.append("--prerelease")
+            cmds.append(edit)
+            cmds.append([gh, "release", "upload", tag, *assets, "-R", repo, "--clobber"])
+        else:
+            create = [gh, "release", "create", tag, *assets, "-R", repo,
+                      "--title", title, "--notes-file", str(notes)]
+            if args.target:
+                create += ["--target", args.target]
+            if args.prerelease:
+                create.append("--prerelease")
+            cmds.append(create)
+
+        if args.dry_run:
+            ok({"display": f"[dry-run] would publish {tag} to {repo}",
+                "tag": tag, "version": version, "version_source": source, "repo": repo,
+                "commands": cmds})
+            return
+
+        release_url = None
+        for c in cmds:
+            res = subprocess.run(c, capture_output=True, text=True)
+            if res.returncode != 0:
+                fail(f"gh failed: {' '.join(c[1:])}",
+                     stderr=res.stderr.strip() or res.stdout.strip())
+            if c[1:3] == ["release", "create"] and res.stdout.strip():
+                release_url = res.stdout.strip().splitlines()[-1].strip()
+
+        if release_url is None:
+            view = subprocess.run([gh, "release", "view", tag, "-R", repo,
+                                   "--json", "url", "-q", ".url"],
+                                  capture_output=True, text=True)
+            release_url = view.stdout.strip() if view.returncode == 0 else f"{repo}@{tag}"
+
+        ok({"display": f"published release {tag} ({version}, via {source}) -> {release_url}",
+            "tag": tag, "version": version, "version_source": source, "repo": repo,
+            "release_url": release_url})
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

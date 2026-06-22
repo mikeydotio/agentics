@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-semver test-deployit test-atlas
+.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas
 
-test: test-root-bats test-semver test-deployit test-atlas
+test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -14,6 +14,11 @@ test-root-bats:
 	else \
 		echo "bats not installed — skipping root bats suite (tests/*.bats)"; \
 	fi
+
+# Marketplace-wide plugin.json version-sync drift guard + sync-hook behaviour.
+# Plain bash (no bats) so it always runs as part of the pre-push gate.
+test-plugin-versions:
+	bash tests/plugin-versions.sh
 
 test-semver:
 	bash plugins/semver/tests/run-tests.sh

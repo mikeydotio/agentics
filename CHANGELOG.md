@@ -3,6 +3,60 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.23.0] - 2026-06-22
+
+### Added
+- extend version sync to marketplace.json (b300f76)
+- sync plugin.json versions from VERSION on bump (5f66754)
+- publish a GitHub release on every macOS deploy (7dbd26f)
+- add deployit-release GitHub release publisher (f5dbacf)
+- swipe-to-delete, prominent names, shorter buttons (8116e0f)
+- tree-sitter Swift helper (atlas-ts-helper) (267b197)
+- edge.semantic relationship richness (1c9420c)
+- add `judgment verify-set` — verify the prose delta (b1794fb)
+- add `judgment prune` to drop orphaned cells (3e946ec)
+- migrate-v1 + hardening + v2 release docs (1b96031)
+- v2 protocols, cartographer-as-annotator, e2e flows (e0d130f)
+- lint v2 — L7 join, L15, L16 + status divergence (da4be11)
+- Ledger v2 + judgment diff (the update engine) (4ab245f)
+- project — deterministic doc render (the JOIN) (63ddf10)
+- Judgment Cache, orthogonal-hash keys, judge-plan, ingest (84fff35)
+- resolve_edges engine + tree-sitter helper backend (4405dba)
+- add `extract` Structure Index core (regex backend) (9eb6a8a)
+
+### Fixed
+- poll origin in test-cli-rm to fix post-push read race (23d1dcd)
+- drop extraction noise found by the v2 dogfood (1d1003b)
+- make cartographer output-medium-neutral (9bccd44)
+
+### Changed
+- retire v1 — ground command, structure-less ledger, design.md (1f787e7)
+
+### Documentation
+- cover marketplace.json in version sync, fix test path (bbca0c6)
+- document plugin version sync in CLAUDE.md (d093c6b)
+- document the macOS GitHub release flow (cf94b23)
+- note v2 Projection architecture in the plugin table (4b1e626)
+- add v2 Projection architecture design record (f17fc14)
+- full codebase map (35 modules, cartographer/2) (2371f93)
+- checkpoint — overview (17e6ecc)
+- checkpoint — verified docs (ec70da7)
+- checkpoint — verifier fix pass (7 docs) (1966667)
+- checkpoint — remove re-partitioned orphans (b4cedef)
+- checkpoint — module docs wave 5 (87710dc)
+- checkpoint — module docs wave 4 (1f6efa6)
+- checkpoint — module docs wave 3 (9932991)
+- checkpoint — module docs wave 2 (30258eb)
+- checkpoint — module docs wave 1 (3471142)
+
+### Testing
+- guard plugin.json version drift and cover the sync hook (8f26acc)
+
+### Maintenance
+- gitignore .council/ deliberation artifacts (d878b43)
+
+_[manual]_
+
 ## [v2.22.0] - 2026-06-17
 
 ### Added

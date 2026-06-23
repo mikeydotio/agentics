@@ -108,4 +108,17 @@ echo "$appcss" | grep -q '.swipe-delete' \
 echo "$appcss" | grep -q '.swipe-content' \
     || { echo "FAIL: app.css missing .swipe-content style"; exit 1; }
 
+# --- Swap layout: equal-width pill slot/track driven by one --action-w token ---
+echo "$appcss" | grep -q -- '--action-w' \
+    || { echo "FAIL: app.css missing --action-w pill-width token"; exit 1; }
+echo "$appcss" | grep -q '.actions-slot' \
+    || { echo "FAIL: app.css missing .actions-slot style"; exit 1; }
+echo "$appcss" | grep -q '.action-track' \
+    || { echo "FAIL: app.css missing .action-track style"; exit 1; }
+# The slot width lives in CSS alone; app.js measures it instead of hardcoding 88.
+echo "$appjs" | grep -q 'getBoundingClientRect' \
+    || { echo "FAIL: app.js should measure the slot width, not hardcode it"; exit 1; }
+echo "$appjs" | grep -Eq 'WIDTH *= *88' \
+    && { echo "FAIL: app.js still hardcodes WIDTH=88 (must match CSS — removed)"; exit 1; } || true
+
 echo "PASS"

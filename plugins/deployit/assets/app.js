@@ -1,37 +1,45 @@
 (function () {
   "use strict";
 
-  // Swipe-to-delete state. A row (li[data-delete]) reveals its .swipe-delete
-  // button when its .swipe-content is dragged left (right-to-left swipe). Only
-  // local builds carry data-delete, so only they are swipeable.
-  var WIDTH = 88;   // must match .swipe-delete width in app.css
-  var SNAP = 44;    // past half-open, snap open; otherwise snap closed
+  // Swipe-to-swap state. A row (li[data-delete]) swaps its Install pill for the
+  // Delete pill by translating its .action-track left by one .actions-slot width
+  // when its .swipe-content is dragged left (right-to-left swipe); swiping back
+  // right restores Install. Only local builds carry data-delete, so only they are
+  // swipeable. The slot width is measured from the DOM each drag, so the pill
+  // width lives in app.css alone — no constant to keep in sync.
   var SLOP = 8;     // movement under this is a tap, not a swipe
   var openRow = null;       // the currently-open <li>, or null
   var suppressClick = false; // set after a swipe so the trailing click is ignored
   var drag = null;
 
-  function contentOf(li) { return li.querySelector(".swipe-content"); }
+  function trackOf(li) { return li.querySelector(".action-track"); }
+  function slotWidth(li) {
+    var slot = li.querySelector(".actions-slot");
+    return slot ? slot.getBoundingClientRect().width : 0;
+  }
   function closeRow(li) {
-    var c = contentOf(li);
-    if (c) c.style.transform = "";
+    var t = trackOf(li);
+    if (t) t.style.transform = "";
   }
   function openRowEl(li) {
-    var c = contentOf(li);
-    if (c) c.style.transform = "translateX(-" + WIDTH + "px)";
+    var t = trackOf(li);
+    if (t) t.style.transform = "translateX(-" + slotWidth(li) + "px)";
   }
 
   document.addEventListener("pointerdown", function (e) {
     suppressClick = false; // clear any stale flag from a swipe that fired no click
     if (!e.isPrimary) return;
-    var content = e.target.closest(".swipe-content");
-    var li = content && content.closest("li[data-delete]");
+    var surface = e.target.closest(".swipe-content");
+    var li = surface && surface.closest("li[data-delete]");
     if (!li) return;
+    var track = trackOf(li);
+    if (!track) return;
     if (openRow && openRow !== li) { closeRow(openRow); openRow = null; }
+    var width = slotWidth(li);
     drag = {
-      li: li, content: content, pointerId: e.pointerId,
+      li: li, surface: surface, track: track, width: width, pointerId: e.pointerId,
       startX: e.clientX, startY: e.clientY,
-      base: (openRow === li) ? -WIDTH : 0,
+      base: (openRow === li) ? -width : 0,
       active: false, moved: false
     };
   });
@@ -45,25 +53,25 @@
       // scrolling through; touch-action: pan-y handles the rest).
       if (Math.abs(dx) <= SLOP || Math.abs(dx) <= Math.abs(dy)) return;
       drag.active = true;
-      drag.content.style.transition = "none";
-      if (drag.content.setPointerCapture) {
-        try { drag.content.setPointerCapture(e.pointerId); } catch (_) {}
+      drag.track.style.transition = "none";
+      if (drag.surface.setPointerCapture) {
+        try { drag.surface.setPointerCapture(e.pointerId); } catch (_) {}
       }
     }
     e.preventDefault();
     drag.moved = true;
-    var x = Math.max(-WIDTH, Math.min(0, drag.base + dx));
-    drag.content.style.transform = "translateX(" + x + "px)";
+    var x = Math.max(-drag.width, Math.min(0, drag.base + dx));
+    drag.track.style.transform = "translateX(" + x + "px)";
   });
 
   function endDrag(e) {
     if (!drag || (e && e.pointerId !== drag.pointerId)) return;
     var d = drag; drag = null;
-    d.content.style.transition = "";
+    d.track.style.transition = "";
     if (!d.active) return; // a tap — let the click handler run
     var dx = (e ? e.clientX : d.startX) - d.startX;
-    var x = Math.max(-WIDTH, Math.min(0, d.base + dx));
-    if (x <= -SNAP) { openRowEl(d.li); openRow = d.li; }
+    var x = Math.max(-d.width, Math.min(0, d.base + dx));
+    if (x <= -d.width / 2) { openRowEl(d.li); openRow = d.li; } // past half-open, snap open
     else { closeRow(d.li); if (openRow === d.li) openRow = null; }
     if (d.moved) suppressClick = true;
   }

@@ -127,17 +127,20 @@ def _version_label(build) -> str:
     return f"{sv} (build {bn})" if sv else f"build {bn}"
 
 
-# The visible content is wrapped in .swipe-content so it can translate left to
-# reveal the .swipe-delete button behind it. data-href / data-delete stay as
-# direct <li> attributes (row nav + delete target).
+# The Install link and the Delete button share one fixed-width .actions-slot
+# (overflow-clipped) holding a two-button .action-track. At rest the track shows
+# Install; a right-to-left swipe translates the track one slot-width left so
+# Delete occupies Install's exact rectangle (an in-place swap, not a reveal).
+# .swipe-content is the gesture surface; data-href / data-delete stay as direct
+# <li> attributes (row nav + delete target).
 _ROW_TEMPLATE = string.Template("""<li class="$archived_class"$data_href_attr$data_delete_attr>
   <div class="swipe-content">
     <div class="row">
       $title_block
-      <a class="install" href="$install_href">$install_label</a>
+      <div class="actions-slot"><div class="action-track"><a class="install" href="$install_href">$install_label</a>$delete_button</div></div>
     </div>
     <div class="sub">$origin_host · $commit · $rel$older_html</div>
-  </div>$delete_button
+  </div>
 </li>""")
 
 # Listing rows (one per product) lead with a prominent product name and demote
@@ -151,7 +154,7 @@ _BUILD_TITLE_TEMPLATE = string.Template(
     '<span class="title">$project · $platform · $version_label</span>')
 
 _DELETE_BUTTON_TEMPLATE = string.Template(
-    '\n  <button type="button" class="swipe-delete" '
+    '<button type="button" class="swipe-delete" '
     'aria-label="Delete $delete_label">Delete</button>')
 
 

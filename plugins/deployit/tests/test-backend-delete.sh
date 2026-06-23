@@ -83,9 +83,22 @@ echo "$listing" | grep -q 'class="swipe-delete"' \
 echo "$listing" | grep -q 'data-delete="/deployit/p/io.mikeydotio.Foreign/ios/"' \
     && { echo "FAIL: foreign product row should not be deletable"; echo "$listing"; exit 1; } || true
 
+# --- Swap structure: Install + Delete are equal-width pills sharing one fixed
+#     .actions-slot via a two-button .action-track (Delete swaps into Install's
+#     rectangle on swipe), not a full-height bar revealed behind .swipe-content ---
+echo "$listing" | grep -q 'class="actions-slot"' \
+    || { echo "FAIL: listing row missing .actions-slot"; echo "$listing"; exit 1; }
+echo "$listing" | grep -Eq '<div class="action-track"><a class="install"[^>]*>[^<]*</a><button type="button" class="swipe-delete"' \
+    || { echo "FAIL: local row Install + Delete not siblings inside .action-track"; echo "$listing"; exit 1; }
+# Foreign row: Install pill alone in the track, no Delete button after it.
+echo "$listing" | grep -Eq 'class="install"[^>]*>Install</a></div></div>' \
+    || { echo "FAIL: foreign row should be Install-only inside .action-track"; echo "$listing"; exit 1; }
+
 prod=$(curl -sf "$B/deployit/p/io.mikeydotio.App/ios/")
 echo "$prod" | grep -q 'data-delete="/deployit/app-ios-1/"' \
     || { echo "FAIL: local build row missing data-delete"; echo "$prod"; exit 1; }
+echo "$prod" | grep -Eq '<div class="action-track"><a class="install"[^>]*>[^<]*</a><button type="button" class="swipe-delete"' \
+    || { echo "FAIL: local build row Install + Delete not siblings inside .action-track"; echo "$prod"; exit 1; }
 foreign_prod=$(curl -sf "$B/deployit/p/io.mikeydotio.Foreign/ios/")
 echo "$foreign_prod" | grep -q 'data-delete' \
     && { echo "FAIL: foreign build row should not be deletable"; echo "$foreign_prod"; exit 1; } || true

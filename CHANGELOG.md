@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.23.1] - 2026-06-23
+
+### Fixed
+- swap Delete into Install's exact rectangle on swipe (129411c)
+
+### Testing
+- cover the Install/Delete swap layout (67f60d3)
+
+_[manual]_
+
 ## [v2.23.0] - 2026-06-22
 
 ### Added

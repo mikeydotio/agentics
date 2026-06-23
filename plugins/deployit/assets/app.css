@@ -1,4 +1,4 @@
-:root { color-scheme: light dark; --fg:#0a0a0a; --bg:#f6f6f6; --muted:#6b6b6b; --border:rgba(0,0,0,0.1); --accent:#2563eb; --row-active:rgba(0,0,0,0.05); }
+:root { color-scheme: light dark; --fg:#0a0a0a; --bg:#f6f6f6; --muted:#6b6b6b; --border:rgba(0,0,0,0.1); --accent:#2563eb; --row-active:rgba(0,0,0,0.05); --action-w:92px; }
 @media (prefers-color-scheme: dark) { :root { --fg:#f6f6f6; --bg:#0a0a0a; --muted:#9a9a9a; --border:rgba(255,255,255,0.12); --accent:#3b82f6; --row-active:rgba(255,255,255,0.06); } }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -20,25 +20,21 @@ ul { list-style: none; padding: 0; margin: 0; }
 li { border-bottom: 1px solid var(--border); padding: 14px 0; min-height: 44px; position: relative; overflow: hidden; }
 li[data-href] { cursor: pointer; }
 li[data-href]:active .swipe-content { box-shadow: inset 0 0 0 999px var(--row-active); }
-/* Swipe-to-delete: the visible content sits above an absolutely-positioned
-   Delete button and translates left (right-to-left swipe) to reveal it. The
-   button is always in the DOM (keyboard/VoiceOver reachable) but covered by the
-   opaque content at rest. */
+/* Swipe-to-delete: Install and Delete are equal-width pills stacked in a
+   .action-track inside a one-pill-wide .actions-slot (overflow-clipped). At rest
+   the track shows Install; a right-to-left swipe translates it one slot-width
+   left so Delete takes Install's exact rectangle. The button is always in the
+   DOM (keyboard/VoiceOver reachable), clipped out of view at rest. */
 .swipe-content {
-  position: relative; z-index: 1; background: var(--bg);
-  transition: transform .2s ease; touch-action: pan-y; will-change: transform;
+  position: relative; z-index: 1; background: var(--bg); touch-action: pan-y;
 }
-.swipe-delete {
-  position: absolute; top: 0; right: 0; bottom: 0; width: 88px; z-index: 0;
-  display: flex; align-items: center; justify-content: center;
-  border: 0; background: #dc2626; color: #fff;
-  font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer;
-}
-.swipe-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-/* Keyboard focus on the otherwise-hidden Delete button slides the row open so
-   the destructive action is visible without needing the swipe gesture. */
-li:has(.swipe-delete:focus-visible) .swipe-content { transform: translateX(-88px); }
-@media (prefers-reduced-motion: reduce) { .swipe-content { transition: none; } }
+.actions-slot { flex: 0 0 auto; width: var(--action-w); overflow: hidden; }
+.action-track { display: flex; transition: transform .2s ease; will-change: transform; }
+/* Keyboard focus on the otherwise-clipped Delete button slides the track open so
+   the destructive action is visible without needing the swipe gesture. A track
+   holds two equal pills, so -50% is exactly one slot-width — no magic number. */
+li:has(.swipe-delete:focus-visible) .action-track { transform: translateX(-50%); }
+@media (prefers-reduced-motion: reduce) { .action-track { transition: none; } }
 .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .title { font-weight: 600; }
 .titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -46,12 +42,19 @@ li:has(.swipe-delete:focus-visible) .swipe-content { transform: translateX(-88px
 .meta-line { color: var(--muted); font-size: 13px; }
 .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .older { color: var(--muted); font-size: 13px; }
-a.install {
-  display: inline-block; background: var(--accent); color: #fff;
-  padding: 8px 14px; border-radius: 8px; text-decoration: none;
-  font-size: 14px; font-weight: 600; white-space: nowrap;
-  min-height: 20px; line-height: 1.2;
+/* Install/Download and Delete are the same pill: equal fixed width (sized for the
+   longest label, "Download"), same height and corner radius. Flex centering keeps
+   the label exactly centered regardless of text. */
+a.install, .swipe-delete {
+  box-sizing: border-box; flex: 0 0 var(--action-w); width: var(--action-w);
+  height: 30px; border: 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1;
+  white-space: nowrap; text-decoration: none; cursor: pointer;
 }
+a.install { background: var(--accent); color: #fff; }
+.swipe-delete { background: #dc2626; color: #fff; }
+.swipe-delete:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .archived { opacity: 0.5; }
 .nav {
   display: flex; align-items: center; justify-content: space-between;

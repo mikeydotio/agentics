@@ -44,7 +44,7 @@ app = state / "export" / "Lillist.app"
 
 meta = {
     "id": "lillist-macos-nosign", "platform": "macos", "project": "Lillist",
-    "bundle_id": "io.mikeydotio.Lillist", "marketing_version": "0.1.0",
+    "bundle_id": "io.mikey.lillist", "marketing_version": "0.1.0",
     "semver_version": None, "build_number": "5", "commit": "mac0001",
     "timestamp": "2026-05-20T09:00:00-07:00",
     "origin_host": "demo.tail.ts.net",

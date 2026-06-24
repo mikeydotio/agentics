@@ -20,7 +20,7 @@ cat > "$ROOT/index/builds.json" <<JSON
   "builds": [
     {
       "id": "lillist-macos-A", "platform": "macos", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist", "marketing_version": "0.2.0",
+      "bundle_id": "io.mikey.lillist", "marketing_version": "0.2.0",
       "semver_version": null, "build_number": "7", "commit": "aaaaaaa",
       "timestamp": "2026-05-25T09:00:00-07:00",
       "origin_host": "studio.tail-abc.ts.net", "origin_base_url": "$ORIGIN",
@@ -30,7 +30,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     },
     {
       "id": "lillist-macos-B", "platform": "macos", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist", "marketing_version": "0.1.0",
+      "bundle_id": "io.mikey.lillist", "marketing_version": "0.1.0",
       "semver_version": null, "build_number": "6", "commit": "bbbbbbb",
       "timestamp": "2026-05-24T09:00:00-07:00",
       "origin_host": "studio.tail-abc.ts.net", "origin_base_url": "$ORIGIN",
@@ -40,7 +40,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     },
     {
       "id": "lillist-macos-C", "platform": "macos", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist", "marketing_version": "0.0.9",
+      "bundle_id": "io.mikey.lillist", "marketing_version": "0.0.9",
       "semver_version": null, "build_number": "99", "commit": "ccccccc",
       "timestamp": "2026-05-23T09:00:00-07:00",
       "origin_host": "studio.tail-abc.ts.net", "origin_base_url": "$ORIGIN",
@@ -49,7 +49,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     },
     {
       "id": "lillist-macos-D", "platform": "macos", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist", "marketing_version": "0.0.8",
+      "bundle_id": "io.mikey.lillist", "marketing_version": "0.0.8",
       "semver_version": null, "build_number": "8", "commit": "ddddddd",
       "timestamp": "2026-05-22T09:00:00-07:00",
       "origin_host": "studio.tail-abc.ts.net", "origin_base_url": "$ORIGIN",
@@ -59,7 +59,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     },
     {
       "id": "lillist-ios-E", "platform": "ios", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist", "marketing_version": "0.2.0",
+      "bundle_id": "io.mikey.lillist", "marketing_version": "0.2.0",
       "semver_version": null, "build_number": "20", "commit": "eeeeeee",
       "timestamp": "2026-05-21T09:00:00-07:00",
       "origin_host": "studio.tail-abc.ts.net", "origin_base_url": "$ORIGIN",
@@ -90,7 +90,7 @@ for _ in {1..50}; do
     sleep 0.1
 done
 
-FEED="http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/macos/appcast.xml"
+FEED="http://127.0.0.1:$PORT/deployit/p/io.mikey.lillist/macos/appcast.xml"
 
 # --- Content-Type is application/xml ---
 headers=$(curl -sf -o /dev/null -D - "$FEED")
@@ -136,18 +136,18 @@ code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/deployit/p
 [[ "$code" == "404" ]] || { echo "FAIL: zero-signed product appcast should 404, got $code"; exit 1; }
 
 # --- Product page Auto-update block (macOS with signed builds) ---
-prod=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/macos/")
+prod=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikey.lillist/macos/")
 echo "$prod" | grep -q "Auto-update (Sparkle)" \
     || { echo "FAIL: product page missing Sparkle block"; echo "$prod"; exit 1; }
 echo "$prod" | grep -q "SUFeedURL" \
     || { echo "FAIL: product page missing SUFeedURL label"; echo "$prod"; exit 1; }
-echo "$prod" | grep -q "$ORIGIN/p/io.mikeydotio.Lillist/macos/appcast.xml" \
+echo "$prod" | grep -q "$ORIGIN/p/io.mikey.lillist/macos/appcast.xml" \
     || { echo "FAIL: product page missing appcast URL"; echo "$prod"; exit 1; }
 echo "$prod" | grep -q "PUBKEY==" \
     || { echo "FAIL: product page missing SUPublicEDKey"; echo "$prod"; exit 1; }
 
 # --- iOS product page has NO Sparkle block ---
-prod_ios=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/ios/")
+prod_ios=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikey.lillist/ios/")
 echo "$prod_ios" | grep -q "Auto-update" \
     && { echo "FAIL: iOS product page should not show Sparkle block"; echo "$prod_ios"; exit 1; }
 

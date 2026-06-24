@@ -21,7 +21,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     {
       "id": "$SEMVER_ID",
       "platform": "ios", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0", "semver_version": "v2.16.1",
       "build_number": "20", "commit": "sem1234",
       "timestamp": "2026-06-01T10:00:00-07:00",
@@ -49,7 +49,7 @@ JSON
 # Per-build _meta.json so the landing pages render.
 mkdir -p "$ROOT/serve/$SEMVER_ID" "$ROOT/serve/$PLAIN_ID"
 cat > "$ROOT/serve/$SEMVER_ID/_meta.json" <<JSON
-{"id":"$SEMVER_ID","platform":"ios","project":"Lillist","bundle_id":"io.mikeydotio.Lillist","marketing_version":"0.1.0","semver_version":"v2.16.1","build_number":"20","commit":"sem1234","timestamp":"2026-06-01T10:00:00-07:00","origin_host":"studio.tail-abc.ts.net","origin_base_url":"https://studio.tail-abc.ts.net/deployit","install":{"kind":"itms-services","manifest_url":"https://x/m.plist","ipa_url":"https://x/a.ipa"}}
+{"id":"$SEMVER_ID","platform":"ios","project":"Lillist","bundle_id":"io.mikey.lillist","marketing_version":"0.1.0","semver_version":"v2.16.1","build_number":"20","commit":"sem1234","timestamp":"2026-06-01T10:00:00-07:00","origin_host":"studio.tail-abc.ts.net","origin_base_url":"https://studio.tail-abc.ts.net/deployit","install":{"kind":"itms-services","manifest_url":"https://x/m.plist","ipa_url":"https://x/a.ipa"}}
 JSON
 cat > "$ROOT/serve/$PLAIN_ID/_meta.json" <<JSON
 {"id":"$PLAIN_ID","platform":"ios","project":"Other","bundle_id":"io.mikeydotio.Other","marketing_version":"1.2.3","semver_version":null,"build_number":"7","commit":"pln5678","timestamp":"2026-06-01T11:00:00-07:00","origin_host":"studio.tail-abc.ts.net","origin_base_url":"https://studio.tail-abc.ts.net/deployit","install":{"kind":"itms-services","manifest_url":"https://y/m.plist","ipa_url":"https://y/a.ipa"}}

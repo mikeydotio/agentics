@@ -18,7 +18,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     {
       "id": "lillist-ios-20260521-153012-abc1234",
       "platform": "ios", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0", "build_number": "16", "commit": "abc1234",
       "timestamp": "2026-05-21T15:30:12-07:00",
       "origin_host": "studio.tail-abc.ts.net",
@@ -29,7 +29,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     {
       "id": "lillist-macos-20260520-090000-mac0001",
       "platform": "macos", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0", "build_number": "5", "commit": "mac0001",
       "timestamp": "2026-05-20T09:00:00-07:00",
       "origin_host": "studio.tail-abc.ts.net",
@@ -66,7 +66,7 @@ echo "$listing" | grep -qi 'pull to refresh' \
     && { echo "FAIL: listing still says 'pull to refresh'"; echo "$listing"; exit 1; }
 
 # --- Product page: nav Refresh + back link, pull-to-refresh gone ---
-product=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/ios/")
+product=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikey.lillist/ios/")
 echo "$product" | grep -q 'id="refresh"' \
     || { echo "FAIL: product page missing nav Refresh button"; echo "$product"; exit 1; }
 echo "$product" | grep -q '← all products' \

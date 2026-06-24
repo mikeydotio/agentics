@@ -17,7 +17,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     {
       "id": "lillist-ios-20260522-100000-def5678",
       "platform": "ios", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0", "build_number": "17",
       "commit": "def5678",
       "timestamp": "2026-05-22T10:00:00-07:00",
@@ -29,7 +29,7 @@ cat > "$ROOT/index/builds.json" <<JSON
     {
       "id": "lillist-ios-20260521-153012-abc1234",
       "platform": "ios", "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0", "build_number": "16",
       "commit": "abc1234",
       "timestamp": "2026-05-21T15:30:12-07:00",
@@ -66,14 +66,14 @@ for _ in {1..50}; do
 done
 
 # Known product returns 200 and lists both builds in desc order
-body=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/ios/")
+body=$(curl -sf "http://127.0.0.1:$PORT/deployit/p/io.mikey.lillist/ios/")
 echo "$body" | grep -q "Lillist · iOS" \
     || { echo "FAIL: product header missing"; echo "$body"; exit 1; }
 echo "$body" | grep -q "build 17" \
     || { echo "FAIL: build 17 missing"; echo "$body"; exit 1; }
 echo "$body" | grep -q "build 16" \
     || { echo "FAIL: build 16 missing"; echo "$body"; exit 1; }
-echo "$body" | grep -q "io.mikeydotio.Lillist" \
+echo "$body" | grep -q "io.mikey.lillist" \
     || { echo "FAIL: bundle_id missing"; echo "$body"; exit 1; }
 echo "$body" | grep -q "← all products" \
     || { echo "FAIL: back link missing"; echo "$body"; exit 1; }
@@ -98,7 +98,7 @@ echo "$body_mac" | grep -q "build 17" \
 # /p/ route is not interpreted as a build-id (would otherwise 404 with bad_build_id)
 # Visiting /deployit/p/ without bundle/platform should fall through to the build-id route
 # and 404 — but importantly should NOT 200.
-code_bad=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/deployit/p/io.mikeydotio.Lillist/")
+code_bad=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/deployit/p/io.mikey.lillist/")
 [[ "$code_bad" == "404" ]] \
     || { echo "FAIL: malformed /p/ URL should 404, got $code_bad"; exit 1; }
 

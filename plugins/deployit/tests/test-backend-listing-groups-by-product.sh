@@ -22,7 +22,7 @@ cat > "$ROOT/index/builds.json" <<JSON
       "id": "lillist-ios-20260522-100000-def5678",
       "platform": "ios",
       "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0",
       "build_number": "17",
       "commit": "def5678",
@@ -36,7 +36,7 @@ cat > "$ROOT/index/builds.json" <<JSON
       "id": "lillist-ios-20260521-153012-abc1234",
       "platform": "ios",
       "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0",
       "build_number": "16",
       "commit": "abc1234",
@@ -50,7 +50,7 @@ cat > "$ROOT/index/builds.json" <<JSON
       "id": "lillist-macos-20260520-090000-mac0001",
       "platform": "macos",
       "project": "Lillist",
-      "bundle_id": "io.mikeydotio.Lillist",
+      "bundle_id": "io.mikey.lillist",
       "marketing_version": "0.1.0",
       "build_number": "5",
       "commit": "mac0001",
@@ -89,9 +89,9 @@ echo "$body" | grep -q "build 16" \
 echo "$body" | grep -q "+1 older" \
     || { echo "FAIL: '+1 older' indicator missing"; echo "$body"; exit 1; }
 
-echo "$body" | grep -q 'data-href="/deployit/p/io.mikeydotio.Lillist/ios/"' \
+echo "$body" | grep -q 'data-href="/deployit/p/io.mikey.lillist/ios/"' \
     || { echo "FAIL: ios product data-href missing"; echo "$body"; exit 1; }
-echo "$body" | grep -q 'data-href="/deployit/p/io.mikeydotio.Lillist/macos/"' \
+echo "$body" | grep -q 'data-href="/deployit/p/io.mikey.lillist/macos/"' \
     || { echo "FAIL: macos product data-href missing"; echo "$body"; exit 1; }
 
 echo "$body" | grep -q "2 products" \

@@ -337,6 +337,37 @@ test_lint_l7_still_flags_truly_missing_symbol() {
     cleanup_fixture_repo "$repo"
 }
 
+test_lint_l7_accepts_annotated_symbol_cell() {
+    # A Symbol cell may carry a clarifying annotation after the backticked
+    # identifier (`Name` extension, `Name` (library)). L7 must resolve the
+    # identifier, not the whole cell — even when the cited file IS indexed
+    # (so the empty-names short-circuit does not save us).
+    local repo
+    repo=$(create_fixture_repo)
+    mkdir -p "$repo/src/log"
+    printf 'class LogNamespace {}\n' > "$repo/src/log/log.swift"
+    write_full_module_doc "$repo" "src-log" "src/log" "LogNamespace" \
+        "src/log/log.swift"
+    python3 - "$repo/docs/atlas/modules/src-log.md" <<'PY'
+import sys
+p = sys.argv[1]
+with open(p) as f:
+    body = f.read()
+body = body.replace("`LogNamespace` | class", "`LogNamespace` extension | class")
+with open(p, "w") as f:
+    f.write(body)
+PY
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+
+    run_atlas "$repo" lint
+    assert_json_field "$OUTPUT" '[.warnings[] | select(.check == "L7")] | length' "0" \
+        "annotated Symbol cell resolves via the backticked identifier" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
 # --- L14: over-length read_when / summary (WARN, never gates) ---
 
 test_lint_l14_warns_overlong_read_when() {

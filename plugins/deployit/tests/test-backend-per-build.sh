@@ -14,7 +14,7 @@ cat > "$ROOT/serve/$BUILD_ID/_meta.json" <<JSON
   "id": "$BUILD_ID",
   "platform": "ios",
   "project": "Lillist",
-  "bundle_id": "io.mikeydotio.Lillist",
+  "bundle_id": "io.mikey.lillist",
   "marketing_version": "0.1.0",
   "build_number": "16",
   "commit": "abc1234",

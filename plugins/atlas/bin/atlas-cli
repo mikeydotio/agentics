@@ -3478,6 +3478,19 @@ def github_slug(heading):
     return s.replace(" ", "-")
 
 
+_SYMBOL_CELL_RE = re.compile(r"`([^`]+)`")
+
+
+def _symbol_cell_token(cell):
+    """The Symbol-cell identifier: the first backticked span, dropping any
+    trailing annotation (e.g. ``Name`` extension, ``Name`` (library)). The
+    format blesses a clarifying word/parenthetical after the backticked
+    identifier; keeping it would make L7's symbol grep/join miss. Falls back to
+    the de-backticked cell when nothing is backticked."""
+    m = _SYMBOL_CELL_RE.search(cell)
+    return m.group(1) if m else cell.strip("`")
+
+
 def parse_symbol_tables(body):
     """(symbol, location) rows from Public API / Load-bearing tables."""
     rows = []
@@ -3494,9 +3507,9 @@ def parse_symbol_tables(body):
         table_row += 1
         if table_row <= 2:  # header + separator
             continue
-        cells = [c.strip().strip("`") for c in stripped.strip("|").split("|")]
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
         if len(cells) >= 3 and cells[0]:
-            rows.append((cells[0], cells[2]))
+            rows.append((_symbol_cell_token(cells[0]), cells[2].strip("`")))
     return rows
 
 

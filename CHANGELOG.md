@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.23.2] - 2026-06-23
+
+### Fixed
+- L7 resolves annotated Symbol cells via the backticked identifier (b26a24c)
+
+_[manual]_
+
 ## [v2.23.1] - 2026-06-23
 
 ### Fixed

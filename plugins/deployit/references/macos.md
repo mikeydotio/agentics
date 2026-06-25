@@ -61,6 +61,44 @@ Edit it directly or re-run `/deployit bootstrap` (bootstrap preserves
 existing keys, so add these lines manually before re-running, or add them
 after).
 
+### 4. Headless / SSH deploys: avoid the screen-lock trap
+
+`xcrun notarytool store-credentials` writes the profile to the
+**data-protection keychain** by default. That keychain unlocks with the GUI
+login and **re-locks the moment the screen locks** — so a deploy run over
+SSH/mosh while the Mac's screen is locked fails at the notarize step with:
+
+```
+Error: No Keychain password item found for profile: <profile>
+```
+
+even though `codesign` succeeded (it reads the *file-based* login keychain,
+which `security set-keychain-settings` can keep `no-timeout` / always
+unlocked). The signal is telling: archive + sign work, only notarize fails.
+
+The fix is to keep the notary profile in a **file-based** keychain and point
+notarytool at it with `--keychain`. Set:
+
+```toml
+[macos]
+notary_keychain = "~/Library/Keychains/login.keychain-db"
+```
+
+and store the profile *into that keychain* (the `--keychain` flag works on
+both `store-credentials` and `submit`):
+
+```bash
+xcrun notarytool store-credentials <profile> \
+  --apple-id <id> --team-id <TEAMID> \
+  --keychain ~/Library/Keychains/login.keychain-db
+```
+
+When `notary_keychain` is set, deployit appends `--keychain <path>` to every
+`notarytool submit`, so notarization reads the always-unlocked login keychain
+and is immune to the GUI screen-lock state. Leave `notary_keychain` unset to
+keep the default data-protection-keychain behavior (fine for deploys run at the
+machine with the screen unlocked).
+
 ## What happens at deploy with notarization enabled
 
 1. `xcodebuild archive` → `xcodebuild -exportArchive` → `.app`

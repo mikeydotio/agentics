@@ -469,6 +469,7 @@ def _read_config(state: Path) -> dict:
             fail("config.toml missing required server.port or server.base_url")
         notarize = bool(_re.search(r'notarize\s*=\s*true', text))
         notary_profile_m = _re.search(r'notary_profile\s*=\s*"([^"]+)"', text)
+        notary_keychain_m = _re.search(r'notary_keychain\s*=\s*"([^"]+)"', text)
         # [macos.sparkle] — `enabled = true` must sit inside that section (match
         # up to the next table header); the path keys are unique so a global
         # search is unambiguous.
@@ -489,6 +490,7 @@ def _read_config(state: Path) -> dict:
             "server": {"port": int(port_m.group(1)), "base_url": base_m.group(1)},
             "macos":  {"notarize": notarize,
                        "notary_profile": notary_profile_m.group(1) if notary_profile_m else "",
+                       "notary_keychain": notary_keychain_m.group(1) if notary_keychain_m else "",
                        "sparkle": {
                            "enabled": sp_enabled,
                            "sign_update_path": _sp("sign_update_path"),
@@ -687,20 +689,32 @@ def _ditto_zip_app(app_path: Path, zip_path: Path):
         fail(f"ditto zip failed: {res.stderr.strip() or res.stdout.strip()}")
 
 
-def _notarize_staple_app(app_path: Path, notary_profile: str):
+def _notarize_staple_app(app_path: Path, notary_profile: str, notary_keychain: str = ""):
     """Notarize and staple a .app so a GitHub-release download opens past
     Gatekeeper without the right-click dance. notarytool takes a zip, so we
     submit a throwaway zip of the bundle, then staple the ticket onto the .app
-    itself (the release zip is taken from the stapled bundle afterwards)."""
+    itself (the release zip is taken from the stapled bundle afterwards).
+
+    When `notary_keychain` is set (macos.notary_keychain in config.toml),
+    notarytool is pointed at that file-based keychain via `--keychain` so
+    headless SSH/mosh deploys work even with the GUI screen locked. By default
+    `notarytool store-credentials` writes to the *data-protection* keychain,
+    which locks when the screen locks — so over SSH the profile reads back as
+    "No Keychain password item found." Storing the profile in the login keychain
+    (`no-timeout`, always unlocked) and pointing notarytool at it sidesteps that.
+    See references/macos.md."""
     if not notary_profile:
         fail("notarize requested but macos.notary_profile is empty in config.toml")
     tmp_zip = app_path.with_suffix(".notarize.zip")
     _ditto_zip_app(app_path, tmp_zip)
     try:
-        notary = subprocess.run([
+        cmd = [
             "xcrun", "notarytool", "submit", str(tmp_zip),
             "--keychain-profile", notary_profile, "--wait",
-        ], capture_output=True, text=True)
+        ]
+        if notary_keychain:
+            cmd += ["--keychain", str(Path(notary_keychain).expanduser())]
+        notary = subprocess.run(cmd, capture_output=True, text=True)
         if notary.returncode != 0:
             fail(f"notarytool submit (app) failed: {notary.stderr.strip() or notary.stdout.strip()}")
     finally:
@@ -740,7 +754,7 @@ def _stage_sparkle_zip(plugin_root: Path, dst: Path, build_id: str,
 def _stage_macos(state: Path, plugin_root: Path, build_id: str,
                  app_src: Path, meta_full: dict, notarize: bool,
                  notary_profile: str, sparkle_cfg: dict = None,
-                 release: bool = False):
+                 release: bool = False, notary_keychain: str = ""):
     """Wrap the exported .app in a .dmg, optionally notarize + staple, and (when
     [macos.sparkle] is enabled) also produce an EdDSA-signed .zip for Sparkle
     auto-update. When `release` is set, also stage a `<Project>.zip` of the
@@ -764,7 +778,7 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     # bundle's own ticket — not the .dmg's). Staple before any zipping/dmg so
     # every downstream artifact inherits it.
     if release and notarize:
-        _notarize_staple_app(staging_app, notary_profile)
+        _notarize_staple_app(staging_app, notary_profile, notary_keychain)
 
     res = subprocess.run([
         "hdiutil", "create",
@@ -797,11 +811,14 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     if notarize:
         if not notary_profile:
             fail("macos.notarize=true but macos.notary_profile is empty in config.toml")
-        notary = subprocess.run([
+        notary_cmd = [
             "xcrun", "notarytool", "submit", str(dmg_path),
             "--keychain-profile", notary_profile,
             "--wait",
-        ], capture_output=True, text=True)
+        ]
+        if notary_keychain:
+            notary_cmd += ["--keychain", str(Path(notary_keychain).expanduser())]
+        notary = subprocess.run(notary_cmd, capture_output=True, text=True)
         if notary.returncode != 0:
             fail(f"notarytool submit failed: {notary.stderr.strip() or notary.stdout.strip()}")
         staple = subprocess.run(["xcrun", "stapler", "staple", str(dmg_path)],
@@ -1122,9 +1139,11 @@ def cmd_deploy(args):
             fail("export produced no .app")
         notarize = cfg["macos"]["notarize"]
         notary_profile = cfg["macos"].get("notary_profile", "")
+        notary_keychain = cfg["macos"].get("notary_keychain", "")
         sparkle_cfg = cfg.get("macos", {}).get("sparkle", {})
         _stage_macos(state, args.plugin_root, build_id, app, meta_full,
-                     notarize, notary_profile, sparkle_cfg, release=do_release)
+                     notarize, notary_profile, sparkle_cfg,
+                     release=do_release, notary_keychain=notary_keychain)
     else:
         fail(f"unsupported platform: {args.platform}")
 

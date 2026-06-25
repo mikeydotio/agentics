@@ -4,6 +4,7 @@
 #   FAKE_GH_LOG=path          append each invocation's args (one line) here
 #   FAKE_GH_AUTH_FAIL=1       `gh auth status` exits non-zero
 #   FAKE_GH_RELEASE_EXISTS=1  `gh release view <tag>` succeeds (release exists)
+#   FAKE_GH_TAG_EXISTS=1      `gh api .../git/ref/tags/<tag>` succeeds (tag exists)
 #   FAKE_GH_PREV_TAG=v1.2.3   tag emitted by `gh release view --json tagName`
 #   FAKE_GH_ISSUES_JSON=...   JSON emitted by `gh issue list --json ...`
 [ -n "${FAKE_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$FAKE_GH_LOG"
@@ -30,6 +31,12 @@ case "${1:-} ${2:-}" in
     exit 0 ;;
   "issue list")
     printf '%s' "${FAKE_GH_ISSUES_JSON:-[]}"; exit 0 ;;
+  "api "*)
+    # `api repos/<R>/git/ref/tags/<tag>` -> tag existence probe (404 -> absent).
+    if printf '%s ' "$@" | grep -q 'git/ref/tags/'; then
+      [ -n "${FAKE_GH_TAG_EXISTS:-}" ] && exit 0 || { echo "Not Found" >&2; exit 1; }
+    fi
+    exit 0 ;;
   *)
     echo "fake-gh: $*" >&2; exit 0 ;;
 esac

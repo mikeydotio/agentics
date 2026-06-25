@@ -213,6 +213,20 @@ def _release_exists(gh: str, repo: str, tag: str) -> bool:
     return res.returncode == 0
 
 
+def _tag_exists(gh: str, repo: str, tag: str) -> bool:
+    """True when the git tag already exists on the remote. `gh release create`
+    sets the tag at `--target` only when creating it; passing a `--target` that
+    diverges from an *existing* tag's commit makes the releases API reject the
+    create with HTTP 422 'Release.target_commitish is invalid' — e.g. semver
+    tagged the release commit, then a later commit (a build-number bump) became
+    HEAD and is handed to deployit as the build's `--target`. On an existing tag
+    gh simply attaches the release, so `--target` is unnecessary and must be
+    omitted."""
+    res = subprocess.run([gh, "api", f"repos/{repo}/git/ref/tags/{tag}"],
+                         capture_output=True, text=True)
+    return res.returncode == 0
+
+
 def build_parser():
     p = JsonArgumentParser(prog="deployit-release")
     p.add_argument("--app")
@@ -274,12 +288,14 @@ def main(argv):
         assets = [str(upload_zip)] + [str(a) for a in args.attach]
 
         exists = False
+        tag_present = False
         if not args.dry_run:
             _check_gh_auth(gh)
             exists = _release_exists(gh, repo, tag)
             if exists and not args.clobber:
                 fail(f"release {tag} already exists in {repo}; pass --clobber to replace "
                      "its asset and notes")
+            tag_present = _tag_exists(gh, repo, tag)
 
         cmds = []
         if exists and args.clobber:
@@ -291,7 +307,9 @@ def main(argv):
         else:
             create = [gh, "release", "create", tag, *assets, "-R", repo,
                       "--title", title, "--notes-file", str(notes)]
-            if args.target:
+            # gh sets the tag at --target only when creating it; on an existing
+            # tag a divergent target_commitish triggers HTTP 422, so omit it.
+            if args.target and not tag_present:
                 create += ["--target", args.target]
             if args.prerelease:
                 create.append("--prerelease")

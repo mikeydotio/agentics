@@ -4,8 +4,7 @@
 set -euo pipefail
 
 FORGE_DIR="${1:-.forge}"
-
-# --- Artifact presence ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ARTIFACT_NAMES=(
   "IDEA.md"
@@ -21,18 +20,6 @@ ARTIFACT_NAMES=(
   "COMPLETION.md"
 )
 
-build_artifacts_json() {
-  local obj="{}"
-  for a in "${ARTIFACT_NAMES[@]}"; do
-    if [ -f "$FORGE_DIR/$a" ]; then
-      obj=$(echo "$obj" | jq --arg k "$a" '. + {($k): true}')
-    else
-      obj=$(echo "$obj" | jq --arg k "$a" '. + {($k): false}')
-    fi
-  done
-  echo "$obj"
-}
-
 # --- Config reading ---
 
 read_config_json() {
@@ -41,24 +28,6 @@ read_config_json() {
     jq '{yolo: (.yolo // false), max_fix_cycles: (.max_fix_cycles // 3), max_fix_cycles_yolo: (.max_fix_cycles_yolo // 10)}' "$config_file"
   else
     jq -n '{yolo: false, max_fix_cycles: 3, max_fix_cycles_yolo: 10}'
-  fi
-}
-
-# --- State detection ---
-
-detect_state() {
-  if [ -f "$FORGE_DIR/COMPLETION.md" ]; then echo "complete"
-  elif [ -f "$FORGE_DIR/DEPLOY-APPROVAL.md" ]; then echo "deploy"
-  elif [ -f "$FORGE_DIR/DOCUMENTATION.md" ]; then echo "document"
-  elif [ -f "$FORGE_DIR/TRIAGE.md" ]; then echo "triage"
-  elif [ -f "$FORGE_DIR/VALIDATE-REPORT.md" ]; then echo "validate"
-  elif [ -f "$FORGE_DIR/REVIEW-REPORT.md" ]; then echo "review"
-  elif [ -f "$FORGE_DIR/plan-mapping.json" ]; then echo "execute"
-  elif [ -f "$FORGE_DIR/PLAN.md" ]; then echo "decompose"
-  elif [ -f "$FORGE_DIR/DESIGN.md" ]; then echo "plan"
-  elif [ -f "$FORGE_DIR/research/SUMMARY.md" ]; then echo "design"
-  elif [ -f "$FORGE_DIR/IDEA.md" ]; then echo "research"
-  else echo "interrogate"
   fi
 }
 
@@ -101,9 +70,13 @@ get_story_counts() {
     story_json=$(story list --json 2>/dev/null) || { echo ""; return; }
     local total done_count in_progress pending
     total=$(echo "$story_json" | jq '.stories | length')
-    done_count=$(echo "$story_json" | jq '[.stories[] | select(.state == "done")] | length')
-    in_progress=$(echo "$story_json" | jq '[.stories[] | select(.state == "in-progress")] | length')
-    pending=$(echo "$story_json" | jq '[.stories[] | select(.state == "pending" or .state == "ready")] | length')
+    # Real shape is double-nested: .stories[].story.state — NOT .stories[].state
+    # (the same nesting bug as forge-state.sh's check_storyhook — fixed here too).
+    done_count=$(echo "$story_json" | jq '[.stories[] | select(.story.state == "done")] | length')
+    in_progress=$(echo "$story_json" | jq '[.stories[] | select(.story.state == "in-progress")] | length')
+    # "todo" is the real default open state; "pending"/"ready" are not real
+    # storyhook states (there is no such state — see storyhook-contract.md).
+    pending=$(echo "$story_json" | jq '[.stories[] | select(.story.state == "todo")] | length')
     jq -n \
       --argjson total "$total" \
       --argjson done "$done_count" \
@@ -202,9 +175,17 @@ build_display() {
 }
 
 # --- Main ---
+#
+# State detection is NOT re-derived here. forge-state.sh is the single
+# source of truth for the pipeline state machine (it also consults storyhook,
+# which this script's own former detect_state() never did) — this script
+# only renders a dashboard around what forge-state.sh reports, so `/forge
+# status` can never show a state that contradicts what `/forge continue`
+# will actually dispatch to.
+state_json=$(bash "$SCRIPT_DIR/forge-state.sh" "$FORGE_DIR")
+state=$(echo "$state_json" | jq -r '.state')
+artifacts_json=$(echo "$state_json" | jq -c '.artifacts')
 
-state=$(detect_state)
-artifacts_json=$(build_artifacts_json)
 config_json=$(read_config_json)
 fix_cycles=$(count_fix_cycles)
 display=$(build_display "$state" "$config_json" "$artifacts_json" "$fix_cycles")

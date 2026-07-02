@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests for forge-status.sh
 
-SCRIPT="$BATS_TEST_DIRNAME/../plugins/forge/bin/forge-status.sh"
+SCRIPT="$BATS_TEST_DIRNAME/forge-status.sh"
 
 setup() {
   TEST_DIR="$(mktemp -d)"
@@ -223,4 +223,52 @@ teardown() {
   local display
   display="$(echo "$output" | jq -r '.display')"
   [[ "$display" == *"Execution Progress"* ]]
+}
+
+# --- state comes from forge-state.sh, not a private re-derivation ---
+
+@test "status: VALIDATE-REPORT.md alone reports review_validate, not validate (both reports required for triage)" {
+  ( cd "$TEST_DIR" && git init -q . && story init --prefix ST >/dev/null 2>&1 && \
+    story new "Task" >/dev/null && story move ST-1 done >/dev/null )
+  touch "$FORGE_DIR/VALIDATE-REPORT.md"
+  run bash -c "cd '$TEST_DIR' && bash '$SCRIPT' '$FORGE_DIR'"
+  local state
+  state="$(echo "$output" | jq -r '.state')"
+  # The old private detect_state() said "validate" here — wrong, since
+  # review hasn't run and triage needs BOTH reports. forge-state.sh is now
+  # the single source of truth, so /forge status can't contradict what
+  # /forge continue will actually dispatch.
+  [ "$state" = "review_validate" ]
+}
+
+@test "status: DOCUMENTATION.md alone reports the pending deploy gate, not \"document\"" {
+  touch "$FORGE_DIR/DOCUMENTATION.md"
+  run bash "$SCRIPT" "$FORGE_DIR"
+  local state
+  state="$(echo "$output" | jq -r '.state')"
+  # The old private detect_state() said "document" (the step that PRODUCED
+  # DOCUMENTATION.md) even though the pipeline is actually paused awaiting
+  # the user's deploy decision.
+  [ "$state" = "pause_deploy" ]
+}
+
+# --- get_story_counts real storyhook shape ---
+
+@test "get_story_counts reads the real double-nested story list --json shape" {
+  ( cd "$TEST_DIR" && git init -q . && story init --prefix ST >/dev/null 2>&1 && \
+    story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
+    story move ST-1 done >/dev/null )
+  echo "idea" > "$FORGE_DIR/IDEA.md"
+  mkdir -p "$FORGE_DIR/research"
+  echo "summary" > "$FORGE_DIR/research/SUMMARY.md"
+  echo "design" > "$FORGE_DIR/DESIGN.md"
+  echo "plan" > "$FORGE_DIR/PLAN.md"
+  echo '{"stories": {}}' > "$FORGE_DIR/plan-mapping.json"
+  echo '{"status": "running", "sessions_completed": 1, "stories_attempted": 2, "stories_this_session": 1}' > "$FORGE_DIR/state.json"
+  run bash -c "cd '$TEST_DIR' && bash '$SCRIPT' '$FORGE_DIR'"
+  local display
+  display="$(echo "$output" | jq -r '.display')"
+  # Before the fix, .stories[].state always parsed as null, so this always
+  # read "0 done, 0 in-progress, 0 pending" regardless of real story state.
+  [[ "$display" == *"1 done, 0 in-progress, 1 pending"* ]]
 }

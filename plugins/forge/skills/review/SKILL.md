@@ -91,10 +91,17 @@ If multiple agents flag the same issue, merge into a single finding with the hig
    - Key Decisions: critical findings, alignment assessment
    - Context for Next Step: report summary for triage
 3. Commit: `git add .forge/ && git commit -m "forge(review): static analysis complete"`
-4. **If validate is also complete** (check for `.forge/VALIDATE-REPORT.md`): queue freshen with `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Review and validation complete"`
-5. **If validate is not yet complete**: STOP without queuing freshen (wait for validate to complete — the orchestrator handles this)
-6. STOP
+4. Queue freshen unconditionally: `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Review complete"`
+5. STOP
 
-**Note:** Review and validate run in parallel. The orchestrator dispatches both, and only advances to triage when BOTH reports exist. If review finishes first, it commits its report and stops. The orchestrator detects both reports on the next `continue`.
+**Note:** Review never checks for `.forge/VALIDATE-REPORT.md` before deciding whether to queue
+freshen — that file-presence "whoever finishes second queues" coordination previously deadlocked
+the pipeline (review would STOP without queuing when validate hadn't finished yet, so validate
+never got dispatched). `forge-state.sh` is the single source of truth for whether review, validate,
+or both still need to run — see `skills/forge/SKILL.md`'s **Review+Validate Parallel Dispatch**.
+When the orchestrator dispatches `review_validate --orchestrated`, it spawns review's and
+validate's agents together in one message and queues one freshen after synthesizing both reports
+— it does not invoke this skill's own Exit twice. This Exit section applies when review runs alone
+(`dispatch: "review --orchestrated"`, i.e. validate's report already exists).
 
 **If standalone:** Write `.forge/REVIEW-REPORT.md`, report findings to user, exit.

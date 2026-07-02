@@ -77,7 +77,8 @@ Read the first H1 from `.forge/IDEA.md` for the project name (or "Unknown" if mi
 | `plan` | Design complete, awaiting planning |
 | `decompose` | Plan complete, awaiting story decomposition |
 | `execute` | Execution in progress |
-| `review_validate` | Execution complete, awaiting review |
+| `blocked` | One or more stories permanently blocked — user decision needed |
+| `review_validate` | Execution complete, awaiting review and/or validate |
 | `triage` | Review complete, awaiting triage |
 | `fix_loop` | Fix cycle in progress (cycle N of M) |
 | `document` | Triage complete, awaiting documentation |
@@ -152,12 +153,32 @@ On every `continue` invocation, run the state detection script:
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-state.sh
 ```
 
-This returns JSON with `state`, `dispatch`, `fix_cycle`, `artifacts`, and `has_handoff`.
+This returns JSON with `state`, `dispatch`, `fix_cycle`, `artifacts`, `has_handoff`,
+`expected_handoff`, `expected_handoff_present`, `stories_blocked_only`, `state_json_exists`, and
+`state_json_status`.
 
-1. If `has_handoff` is true, read the file at `latest_handoff` for context
-2. If `storyhook_available` is false and state requires storyhook data (`review_validate`, `execute`, `pause_escalate`), retry directly via the `story` CLI (e.g. `story list --json` / `story summary --json` — see `references/storyhook-contract.md`; there is no MCP server) to confirm the state. If the CLI itself is unavailable or still failing, follow storyhook-contract.md's Consecutive Failure Tracking: log a warning and retry, then pause forge with a handoff ("storyhook unavailable") after 3 consecutive failures
-3. Read the SKILL.md for the detected next step
-4. Dispatch to the step indicated by `dispatch` with `--orchestrated`
+1. If `expected_handoff` is non-empty and `expected_handoff_present` is `false` → the handoff
+   required to resume the detected state is missing (this is the SPECIFIC handoff for the step
+   being resumed — not just "some handoff exists somewhere," which `has_handoff`/`latest_handoff`
+   alone cannot guarantee). Follow the missing-handoff protocol in `references/step-handoff.md`
+   before proceeding.
+2. Otherwise, if `has_handoff` is true, read the file at `latest_handoff` for context.
+3. If `storyhook_available` is false and state requires storyhook data (`review_validate`,
+   `execute`, `blocked`, `pause_escalate`), retry directly via the `story` CLI (e.g. `story list
+   --json` / `story summary --json` — see `references/storyhook-contract.md`; there is no MCP
+   server) to confirm the state. If the CLI itself is unavailable or still failing, follow
+   storyhook-contract.md's Consecutive Failure Tracking: log a warning and retry, then pause forge
+   with a handoff ("storyhook unavailable") after 3 consecutive failures.
+4. Branch on `dispatch`:
+   - Ends in ` --orchestrated` and names one of the 11 pipeline skills (e.g. `research
+     --orchestrated`) → read that skill's SKILL.md and dispatch to it directly.
+   - `review_validate --orchestrated` → follow **Review+Validate Parallel Dispatch** below (spawns
+     BOTH review's and validate's agent sets in a single message).
+   - `blocked_review` → follow **Blocked Stories Pause** below.
+   - `escalate_review` → follow **ESCALATE Review Loop** below.
+   - `deploy_gate` → follow **Deploy Permission Gate** below.
+   - `report_complete` → the pipeline previously reached `.forge/COMPLETION.md`. Report completion
+     to the user; there is nothing further to dispatch.
 
 ### Fix Loop Handling
 
@@ -169,9 +190,60 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-fix-archive.sh .forge
 
 Then dispatch to `plan --orchestrated` with the FIX items as input.
 
+### Review+Validate Parallel Dispatch
+
+Review and validate always run to completion together — never as two independent sessions that
+each guess whether the other is done. `forge-state.sh` is the single source of truth for which of
+the three cases applies, and names it explicitly in `dispatch`:
+
+| `dispatch` | Meaning | What to do |
+|---|---|---|
+| `review_validate --orchestrated` | Neither report exists yet | Read **both** `skills/review/SKILL.md` and `skills/validate/SKILL.md`. Spawn every agent from review's Step 2 AND every agent from validate's Step 1 **in a single message** (Hard Rule 11 — multiple `Agent()` calls, one message, orchestrator waits for all). Synthesize both `.forge/REVIEW-REPORT.md` and `.forge/VALIDATE-REPORT.md`, write both handoffs, commit both, then queue **one** freshen call to `/forge continue`. |
+| `validate --orchestrated` | `REVIEW-REPORT.md` exists, `VALIDATE-REPORT.md` doesn't | Read only `skills/validate/SKILL.md` and run it. On exit, queue freshen to `/forge continue` unconditionally — do not check for the other report first (that file-presence check is exactly what deadlocked before; `forge-state.sh` already decided this dispatch by seeing review's report present). |
+| `review --orchestrated` | `VALIDATE-REPORT.md` exists, `REVIEW-REPORT.md` doesn't | Read only `skills/review/SKILL.md` and run it. Same unconditional-freshen rule as above. |
+
+The next `/forge continue` re-runs state detection: once both reports exist, `forge-state.sh`
+reports `state: triage`. This makes the transition deterministic no matter which of the three
+dispatches actually fired, and there is no path where a step finishes, finds the other report
+absent, and silently stops without queuing freshen.
+
+### Blocked Stories Pause
+
+`dispatch: "blocked_review"` (state `blocked`) means every remaining non-`done` story is in the
+custom `blocked` state — there is nothing left for `story next` to hand back, so execute would
+otherwise loop forever without ever reaching review. Handle it like a pause, not a silent
+re-dispatch to execute:
+
+1. Run `story list --json`, filter to stories with `state == "blocked"`, and read each one's
+   comments for its `blocked_reason` (see `references/storyhook-contract.md`'s **Structured
+   Feedback**).
+2. Present the blocked stories and their reasons to the user.
+3. Use `AskUserQuestion`:
+   - **header:** "Blocked Stories"
+   - **question:** "N stor(y/ies) are blocked and execution cannot proceed further on its own. How
+     would you like to proceed?"
+   - **options:**
+     - "Unblock and retry (Recommended)" / "I'll resolve the blockers, then move the stories back
+       to `todo` myself. Pros: work continues normally once unblocked. Cons: requires me to take
+       action before `/forge continue` can proceed."
+     - "Treat as ESCALATE and move on" / "Prefix each blocked story's title with `ESCALATE:` and
+       close it, so execution can advance to review_validate. Pros: unblocks the pipeline
+       immediately. Cons: the blocked work stays undone until a human decides at the post-document
+       ESCALATE gate."
+     - "Stop the pipeline" / "Pause here; I'll investigate manually. Pros: no automated action
+       taken. Cons: pipeline stays paused until I resume."
+4. If "Treat as ESCALATE and move on": `stories_all_done` can only become true once a story is
+   `done`, so for each blocked story: `story set <id> --title "ESCALATE: <original title>"` then
+   `story move <id> done "escalated — see blocked_reason"`. This reuses the existing ESCALATE
+   convention (title-substring detection in `forge-state.sh`) — the story surfaces again at the
+   post-document ESCALATE gate for a human decision, rather than being silently discarded. Then run
+   `/forge continue` to resume state detection (it will now see `stories_all_done` and advance to
+   `review_validate`).
+5. If "Unblock and retry" or "Stop" → exit cleanly; do not dispatch further this turn.
+
 ### ESCALATE Review Loop (Post-Document Pause)
 
-When ESCALATE stories are pending after Document:
+When ESCALATE stories are pending after Document (`dispatch: "escalate_review"`):
 1. Summarize pipeline results and any deviations from the happy path
 2. List FIX stories that were resolved and any FIX→ESCALATE promotions
 3. For each ESCALATE story, use `AskUserQuestion` to present:
@@ -182,7 +254,7 @@ When ESCALATE stories are pending after Document:
 
 ### Deploy Permission Gate
 
-When no ESCALATE stories remain after Document:
+When no ESCALATE stories remain after Document (`dispatch: "deploy_gate"`):
 1. Present pipeline summary
 2. Use `AskUserQuestion`:
    - **header:** "Deploy?"
@@ -364,9 +436,14 @@ The research step produces `.forge/TEAM.md` recommending which conditional agent
 ## Resumption
 
 If the user invokes `/forge` or `/forge continue` at any point:
-1. The orchestrator scans artifacts to detect state
-2. Reads the most recent handoff from `.forge/handoffs/`
-3. If the expected handoff is missing → pause and ask user via `AskUserQuestion` (missing-handoff protocol from `references/step-handoff.md`)
-4. Dispatches to the detected next step
+1. The orchestrator scans artifacts (and storyhook) to detect state via `forge-state.sh`
+2. Checks `expected_handoff_present` — the handoff `forge-state.sh` computed as required for the
+   SPECIFIC step being resumed (not just "the newest file in `handoffs/`," which can silently be
+   the wrong step's handoff after a crash or a git operation that resets mtimes)
+3. If `expected_handoff_present` is `false` → pause and ask user via `AskUserQuestion`
+   (missing-handoff protocol from `references/step-handoff.md`)
+4. Otherwise, reads the handoff named in `expected_handoff` (or `latest_handoff` if none is
+   expected, e.g. a fresh pipeline) for context
+5. Dispatches to the detected next step
 
 This makes the pipeline fully resumable from any point. The orchestrator never needs to know which step just finished — it derives everything from artifacts + handoff.

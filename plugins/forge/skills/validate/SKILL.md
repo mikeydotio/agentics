@@ -101,10 +101,15 @@ The validator writes tests for critical gaps found during analysis:
 3. Write `.forge/handoffs/handoff-validate.md` with:
    - Key Decisions: test results, coverage gaps
    - Context for Next Step: report summary for triage
-4. **If review is also complete** (check for `.forge/REVIEW-REPORT.md`): queue freshen with `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Review and validation complete"`
-5. **If review is not yet complete**: STOP without queuing freshen
-6. STOP
+4. Queue freshen unconditionally: `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Validation complete"`
+5. STOP
 
-**Note:** Same parallel coordination as review — see review skill for details.
+**Note:** Validate never checks for `.forge/REVIEW-REPORT.md` before deciding whether to queue
+freshen — that file-presence "whoever finishes second queues" coordination previously deadlocked
+the pipeline. See `skills/review/SKILL.md`'s Exit section and `skills/forge/SKILL.md`'s
+**Review+Validate Parallel Dispatch** for the full model: `forge-state.sh` decides whether review,
+validate, or both still need to run, and the orchestrator dispatches accordingly. This Exit section
+applies when validate runs alone (`dispatch: "validate --orchestrated"`, i.e. review's report
+already exists).
 
 **If standalone:** Write report, commit tests, report findings to user, exit.

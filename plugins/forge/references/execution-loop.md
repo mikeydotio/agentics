@@ -73,7 +73,7 @@ Load only what this specific story needs:
 ### Step 3: Generate
 
 ```
-story HP-N is in-progress
+story move HP-N in-progress
 Update lock heartbeat (before spawning — reflects active work)
 git checkout .  # clean working tree for fresh attempt
 ```
@@ -97,8 +97,8 @@ Agent(
 **Parse generator response**:
 - `status: "complete"` → proceed to step 4
 - `status: "blocked"` or `status: "needs_decision"` →
-  - `story HP-N is blocked`
-  - `story HP-N '{"blocked_reason":"decision","description":"<generator's description>"}'`
+  - `story move HP-N blocked`
+  - `story comment HP-N '{"blocked_reason":"decision","description":"<generator's description>"}'`
   - Continue to next iteration (step 0)
 
 **Dry-run mode**: Skip subagent spawn. Return canned response based on `--dry-run-mode`.
@@ -119,8 +119,8 @@ diff /tmp/forge-pre-gen-checksums /tmp/forge-post-gen-checksums
 
 If checksums differ:
 - Revert `.forge/` changes: `git checkout .forge/`
-- Mark story blocked: `story HP-N is blocked`
-- Add comment: `story HP-N '{"blocked_reason":"integrity","description":"Generator modified forge state files"}'`
+- Mark story blocked: `story move HP-N blocked`
+- Add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator modified forge state files"}'`
 - Continue to next iteration
 
 ### Step 4: Deterministic Pre-Checks
@@ -134,7 +134,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-prechecks.sh --story-id HP-N --mapping .for
 Parse the JSON result:
 - If `all_passed` is true → proceed to evaluation
 - If any check has `passed: false`:
-  - Store failure details as storyhook comment: `story HP-N comment '{"check":"<name>","details":"<details>"}'`
+  - Store failure details as storyhook comment: `story comment HP-N '{"check":"<name>","details":"<details>"}'`
   - Goto retry
 - Flaky tests (in `flaky_tests` array) are flagged in handoff.md but do not count as failures
 - Scope warnings (unexpected files) are logged in handoff.md but do not count as failures
@@ -142,7 +142,7 @@ Parse the JSON result:
 ### Step 5: Evaluate
 
 ```
-story HP-N is verifying
+story move HP-N verifying
 Update lock heartbeat (before spawning evaluator)
 ```
 
@@ -164,12 +164,12 @@ Agent(
 **Parse evaluator response**:
 - `verdict: "pass"` →
   - Commit atomically: `git add -A && git commit -m "feat(<story>): <title>"`
-  - `story HP-N is done`
+  - `story move HP-N done`
   - Sync git if needed
   - Continue to step 6
 - `verdict: "fail"` →
   - Store structured JSON feedback as storyhook comment:
-    `story HP-N '{"verdict":"fail","failures":[...]}'`
+    `story comment HP-N '{"verdict":"fail","failures":[...]}'`
   - goto retry
 
 **Dry-run mode**: Skip subagent spawn. Return canned verdict based on mode.
@@ -192,7 +192,7 @@ If new files appeared (evaluator modified code):
 1. Discard evaluator verdict
 2. Restore pre-evaluator state: `git checkout .` then re-apply generator changes from the stash
 3. Re-run evaluator (one retry only)
-4. If it modifies files again → mark story blocked: `story HP-N is blocked` with integrity violation reason
+4. If it modifies files again → mark story blocked: `story move HP-N blocked` with integrity violation reason
 
 ### Step 5b: Log Verdict
 
@@ -262,13 +262,13 @@ retry:
   state.total_retries += 1
 
   If retry_count < config.max_retries:
-    story HP-N is todo  # with evaluator/check feedback already in comments
+    story move HP-N todo  # with evaluator/check feedback already in comments
     Write state.json to disk
     continue  # back to top of loop
 
   If retry_count >= config.max_retries:
-    story HP-N is blocked
-    story HP-N '{"blocked_reason":"max_retries","description":"Failed <max_retries> attempts","last_feedback":{...}}'
+    story move HP-N blocked
+    story comment HP-N '{"blocked_reason":"max_retries","description":"Failed <max_retries> attempts","last_feedback":{...}}'
     Write state.json to disk
     continue  # back to top of loop — will pick next story
 ```

@@ -34,7 +34,7 @@ story list --json
 ```
 
 Any story in `in-progress` or `verifying` state indicates a crash mid-work:
-- Reset these stories to `todo`: `story HP-N is todo`
+- Reset these stories to `todo`: `story move HP-N todo`
 - Clean working tree: `git checkout .`
 
 This ensures no partially-completed work contaminates the next attempt.

@@ -10,7 +10,7 @@ FILES_TO_ARCHIVE=("TRIAGE.md" "PLAN.md" "plan-mapping.json")
 # Count existing cycle directories to determine next number
 next_cycle=0
 if [ -d "$FORGE_DIR/fix-cycles" ]; then
-  next_cycle=$(find "$FORGE_DIR/fix-cycles" -maxdepth 1 -type d -name 'cycle-*' | wc -l)
+  next_cycle=$(find "$FORGE_DIR/fix-cycles" -maxdepth 1 -type d -name 'cycle-*' | wc -l | tr -d ' ')
 fi
 
 # Determine which files exist

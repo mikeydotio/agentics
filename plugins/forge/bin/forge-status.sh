@@ -36,7 +36,7 @@ read_config_json() {
 count_fix_cycles() {
   local count=0
   if [ -d "$FORGE_DIR/fix-cycles" ]; then
-    count=$(find "$FORGE_DIR/fix-cycles" -maxdepth 1 -type d -name 'cycle-*' | wc -l)
+    count=$(find "$FORGE_DIR/fix-cycles" -maxdepth 1 -type d -name 'cycle-*' | wc -l | tr -d ' ')
   fi
   echo "$count"
 }

@@ -60,9 +60,33 @@ When the session ends unexpectedly (not a graceful `/forge stop`), the forge ses
 3. Releases the lock
 4. Attempts to queue a freshen signal for auto-resume:
    - Writes `.freshen/forge.signal` directly (bypasses `freshen.sh` to avoid tmux validation in hook context)
+   - Sends `/clear` itself via `tmux send-keys` (see **Cross-Plugin Hook Ordering** below) — it does
+     not wait for freshen's own Stop hook to notice the signal
    - If tmux is not available or the write fails, the signal is skipped -- user must `/forge resume` manually
 
-Note: There is a timing consideration with freshen's own Stop hook. If freshen's Stop hook runs before forge's, it will not find a signal (because forge hasn't written one yet). The signal then sits until the next session's startup clears it, or until the user manually resumes. This is acceptable degradation -- the graceful path (orchestrator queues freshen before session ends) covers the normal case.
+### Cross-Plugin Hook Ordering
+
+Claude Code does **not** guarantee execution order between different plugins' hooks registered on
+the same event (forge's `session-stop.sh` and freshen's `on-stop.sh` are two independent `Stop`
+hooks that both fire on the same Stop event). This matters here specifically because forge's hook
+*writes* the signal file that freshen's hook *reads* — if freshen's hook happened to run first, it
+would find nothing yet and exit without ever sending `/clear`, silently stranding the signal until
+the next session start deleted it unread.
+
+The fix is to not depend on ordering at all: forge's session-stop hook sends `/clear` itself
+(`tmux send-keys -t "$TMUX_PANE" "/clear" Enter`) immediately after writing the signal, rather than
+relying on freshen's Stop hook to pick it up. To avoid a double `/clear` if freshen's hook runs
+*after* forge's in the same batch and finds the just-written signal, both hooks treat
+`.freshen/.clear-pending` as a single "has `/clear` already been sent for this Stop event" marker:
+whichever hook sends `/clear` first sets it; the other checks it first and skips sending a second
+one. Either hook can safely run first or run alone — the outcome (exactly one `/clear` sent, the
+signal left for `on-clear.sh` to consume) is the same.
+
+(Separately, tmux itself buffers keystrokes until the CLI is ready to accept input, so a `/clear`
+sent from within a Stop hook is not acted on until all of that turn's Stop hooks have finished
+running. That buffering guarantee is real, but it is unrelated to the ordering problem above — it
+governs *when a already-sent* `/clear` is processed, not *whether* one gets sent in the first
+place.)
 
 ## Safety
 

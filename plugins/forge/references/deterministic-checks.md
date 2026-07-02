@@ -27,7 +27,7 @@ make test         # Makefile
 If a test fails:
 1. Re-run the specific failing test ONCE
 2. If it passes on re-run → flag as **potentially flaky**
-   - Record test name in handoff.md
+   - Record test name in `.forge/handoffs/handoff-execute.md`
    - Proceed to next check (do NOT count as failure)
 3. If it fails again → **genuine failure**
    - Store failure details as storyhook comment
@@ -77,7 +77,7 @@ git diff --name-only
 Compare against `plan-mapping.json`'s `files_expected` for the current story.
 
 - **Expected files modified**: Good — generator stayed in scope
-- **Unexpected files modified**: Log warning in handoff.md with the unexpected file list
+- **Unexpected files modified**: Log warning in `.forge/handoffs/handoff-execute.md` with the unexpected file list
   - **Warning only, not automatic failure** — generators sometimes need to touch shared files (imports, exports, type definitions)
   - The evaluator will review whether unexpected modifications are appropriate
 

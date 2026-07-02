@@ -1,6 +1,10 @@
 # Handoff Format
 
-Specification for the handoff artifact that enables clean session transitions.
+Specification for the execute step's own session-to-session handoff artifact —
+`.forge/handoffs/handoff-execute.md` — that enables clean transitions between execution sessions
+within the execute step (as distinct from `references/step-handoff.md`, which specifies the
+generic between-*steps* handoff format used by every pipeline step, including execute's own final
+handoff to review_validate).
 
 ## Four Layers
 
@@ -9,13 +13,17 @@ Forge handoffs use four complementary persistence layers:
 | Layer | File | Purpose | Tracked? |
 |-------|------|---------|----------|
 | Config + State | `.forge/config.json` + `.forge/state.json` | Machine-readable settings and runtime state | config: yes, state: no |
-| Handoff | `.forge/handoff.md` | Human-readable session narrative | No (ephemeral) |
+| Handoff | `.forge/handoffs/handoff-execute.md` | Human-readable session narrative | Yes (version-controlled, per `references/step-handoff.md`) |
 | Verdict Log | `.forge/verdicts.jsonl` | Structured evaluator history | No (ephemeral) |
 | Storyhook | `.storyhook/` | Story-level state and comments | Yes |
 
-**Priority**: config.json + state.json + storyhook are required for mechanical recovery. handoff.md is the primary context source — if missing, pause and ask the user (see "Recovery Without Handoff" below).
+**Priority**: config.json + state.json + storyhook are required for mechanical recovery.
+`handoff-execute.md` is the primary context source — if missing, pause and ask the user (see
+"Recovery Without Handoff" below). `forge-state.sh`'s `expected_handoff`/`expected_handoff_present`
+fields name this exact file when the detected state is `execute` and a resume (not a fresh start)
+is in progress.
 
-## handoff.md Format
+## handoff-execute.md Format
 
 ```markdown
 # Work Handoff
@@ -58,7 +66,7 @@ Forge handoffs use four complementary persistence layers:
 
 ## Incremental Handoff Updates
 
-After each story completes (Step 7 of the execution loop), update handoff.md incrementally rather than rewriting from scratch. This ensures crash recovery has fresh context even without a clean pause.
+After each story completes (Step 7 of the execution loop), update `handoff-execute.md` incrementally rather than rewriting from scratch. This ensures crash recovery has fresh context even without a clean pause.
 
 **Before** (after HP-5 completes):
 ```markdown
@@ -125,10 +133,10 @@ Key files and their roles, so the next session knows where things are without ex
 
 ## Recovery Without Handoff
 
-If handoff.md is missing (crash without clean shutdown), the orchestrator MUST pause and ask the user what to do via `AskUserQuestion`:
+If `.forge/handoffs/handoff-execute.md` is missing (crash without clean shutdown), the orchestrator MUST pause and ask the user what to do via `AskUserQuestion`:
 
 - **header:** "Missing Handoff"
-- **question:** "The handoff document from the previous session is missing (`.forge/handoff.md`). Without it, the generator will work without knowledge of patterns and conventions established in prior sessions, which may cause inconsistencies."
+- **question:** "The handoff document from the previous session is missing (`.forge/handoffs/handoff-execute.md`). Without it, the generator will work without knowledge of patterns and conventions established in prior sessions, which may cause inconsistencies."
 - **options:**
   - "Continue anyway (Recommended)" / "Proceed using storyhook + state.json + git log — I can fill in context if needed. Pros: resumes execution immediately. Cons: generator works without established patterns, risking inconsistencies."
   - "Stop" / "Let me investigate what happened before resuming. Pros: avoids compounding problems from the crash. Cons: pipeline stalls until manual investigation completes."

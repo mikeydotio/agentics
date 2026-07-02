@@ -114,9 +114,9 @@ Write `.forge/plan-mapping.json` (version-controlled):
 ```json
 {
   "plan_hash": "<md5 of PLAN.md>",
-  "project_story": "HP-1",
+  "project_story": "<STORY_ID>",
   "stories": {
-    "HP-2": {
+    "<STORY_ID>": {
       "task_ref": "Task 1.1",
       "wave": 1,
       "title": "Create config module",
@@ -127,6 +127,9 @@ Write `.forge/plan-mapping.json` (version-controlled):
   }
 }
 ```
+
+IDs come from `story new` / `story decompose` output — never assume a prefix. (The default prefix
+is `SH`, not `HP`; if a project runs `story init --prefix <X>`, IDs use `<X>` instead.)
 
 ### 9. Validate DAG
 

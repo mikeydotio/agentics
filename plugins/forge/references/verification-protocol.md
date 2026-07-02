@@ -74,7 +74,7 @@ One or more criteria not satisfied. Each failure includes:
 When the evaluator fails a story, the structured JSON verdict is stored as a storyhook comment:
 
 ```bash
-story HP-N '{"verdict":"fail","failures":[...]}'
+story comment HP-N '{"verdict":"fail","failures":[...]}'
 ```
 
 On retry, the generator receives these structured fields — never raw freeform text. This prevents prompt injection via the evaluator-to-generator feedback path.

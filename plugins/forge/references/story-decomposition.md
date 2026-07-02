@@ -118,15 +118,25 @@ is `SH`, not `HP`; if a project runs `story init --prefix <X>`, IDs use `<X>` in
 
 ### 7. Validate DAG
 
-`story graph` is text-only and reports no `blocked-by` cycle information; `story doctor` only
-catches parent/child cycles. Do not have the model eyeball `story graph` output for cycles.
+Neither `story graph` (text or `--json`) nor `story doctor` reports `blocked-by` cycles — do not
+have the model eyeball `story graph` output for cycles (see `storyhook-contract.md`'s **DAG
+Validation** section for why that's unreliable). Instead, run the validator script:
 
-In practice this is low-risk here specifically: `story decompose` only emits forward cross-wave
-`blocked-by` edges, which are acyclic by construction. A `blocked-by` cycle can only be introduced
-by a manual `story relate` call outside decompose. A general-purpose cycle validator is a known
-remaining gap (see `storyhook-contract.md`'s DAG Validation section) — not implemented as part of
-this pass. If decompose only used the automatic wave edges, no further validation is needed;
-report the story count and structure to the user.
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-dag-validate.sh .
+```
+
+- If `.ok` is `false` (script couldn't run — `story` CLI missing or `story list --json` failed),
+  fall back to the Consecutive Failure Tracking flow in `storyhook-contract.md`.
+- If `.has_cycles` is `true`, **abort decompose**: report the cycle(s) from `.cycles` to the user
+  (each is a story-ID path that closes back on itself) and do not proceed to `execute` — a cyclic
+  `blocked-by` graph has no valid execution order.
+- If `.has_cycles` is `false`, report the story count and structure to the user and continue.
+
+`story decompose` itself only emits forward cross-wave `blocked-by` edges, which are acyclic by
+construction, so a fresh decompose should always pass. The check matters most when Step 1 chose
+"Continue with existing mapping" (inheriting whatever the graph already looked like) or when a
+manual `story relate` call was made outside decompose.
 
 ## Offline Constraint
 

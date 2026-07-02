@@ -155,7 +155,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-state.sh
 This returns JSON with `state`, `dispatch`, `fix_cycle`, `artifacts`, and `has_handoff`.
 
 1. If `has_handoff` is true, read the file at `latest_handoff` for context
-2. If `storyhook_available` is false and state requires storyhook data (`review_validate`, `execute`, `pause_escalate`), query storyhook via MCP tools to confirm the state
+2. If `storyhook_available` is false and state requires storyhook data (`review_validate`, `execute`, `pause_escalate`), retry directly via the `story` CLI (e.g. `story list --json` / `story summary --json` — see `references/storyhook-contract.md`; there is no MCP server) to confirm the state. If the CLI itself is unavailable or still failing, follow storyhook-contract.md's Consecutive Failure Tracking: log a warning and retry, then pause forge with a handoff ("storyhook unavailable") after 3 consecutive failures
 3. Read the SKILL.md for the detected next step
 4. Dispatch to the step indicated by `dispatch` with `--orchestrated`
 

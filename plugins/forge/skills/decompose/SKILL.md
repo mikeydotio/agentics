@@ -130,15 +130,24 @@ Write `.forge/plan-mapping.json` (version-controlled):
 
 ### 9. Validate DAG
 
-`story graph` is text-only and reports no cycle information for `blocked-by` edges; `story doctor`
-only catches parent/child cycles. Do not eyeball `story graph` output for cycles — that judgment
-is unreliable from rendered text.
+Neither `story graph` (text or `--json`) nor `story doctor` reports `blocked-by` cycles — do not
+eyeball `story graph` output for cycles, that judgment is unreliable from rendered text (see
+`storyhook-contract.md`'s **DAG Validation** section). Instead, run the validator script:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-dag-validate.sh .
+```
+
+- If `.ok` is `false`, fall back to the Consecutive Failure Tracking flow in
+  `storyhook-contract.md`.
+- If `.has_cycles` is `true`, **abort**: report the cycle(s) from `.cycles` to the user and do not
+  proceed to `execute`.
+- If `.has_cycles` is `false`, continue.
 
 In practice this is low-risk here: the wave `blocked-by` edges created in Step 5 are always
 forward (wave N+1 blocked-by wave N), which is acyclic by construction. A cycle can only be
-introduced by a manual `story relate` call outside this decompose flow, which this skill doesn't
-perform. A general-purpose `blocked-by` cycle validator is a known remaining gap (see
-`storyhook-contract.md`'s DAG Validation section) — not implemented as part of this pass.
+introduced by resuming an existing `plan-mapping.json` (Step 1's "Continue" path) or a manual
+`story relate` call outside this decompose flow — the validator catches both.
 
 Report story count and structure to the user.
 

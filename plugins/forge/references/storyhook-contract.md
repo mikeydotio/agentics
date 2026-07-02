@@ -30,7 +30,7 @@ exit 2). Verify any command you're unsure of with `story help <command>` or `sto
 | Decompose a plan into stories | `story decompose --stdin --json` (create) or `story decompose --stdin --dry-run` (preview) | One call does the whole job — see **Decompose** |
 | Add a custom state | `story state add <slug> --super OPEN\|CLOSED [--role active]` | Idempotent-unsafe: errors (exit 2) if the slug already exists — see **Custom States** |
 | Status overview | `story summary --json` | `.summary.{total_open,total_closed,by_state,by_priority,blocked_count,ready_count,ready_stories}` |
-| Dependency graph | `story graph [--critical-path] [--parallel-groups]` | Text/ASCII output only — no JSON, no cycle report (see **DAG Validation**) |
+| Dependency graph | `story graph [--critical-path] [--parallel-groups] [--json]` | `--json` → `.graph.{critical_path,parallel_groups,overview}` — no cycle field, in JSON or text (see **DAG Validation**) |
 | Search | `story search "<query>" --json` | |
 | Project context | `story load-context [--format json]` | |
 | Handoff narrative | `story handoff [--since <duration>]` | |
@@ -228,17 +228,28 @@ extracting only the `## Task Breakdown` section first — see `references/story-
 
 ## DAG Validation
 
-`story graph` is text/ASCII only — it has no `--json` mode and reports no cycle information for
-`blocked-by` edges. `story doctor` only catches parent/child cycles, not `blocked-by` cycles.
-**Do not** ask the model to "eyeball `story graph` for cycles" — visual cycle detection from
-rendered output is unreliable.
+`story graph` **does** have a `--json` mode (`story graph --json`, `story graph --parallel-groups
+--json` — the CLI's own `story help graph` documents the latter as an example). Don't assume it's
+text-only. But neither form reports cycle information for `blocked-by` edges: the JSON is only
+`.graph.{critical_path,parallel_groups,overview}`, and the text output silently renders a cycle as
+a garbled, self-repeating "critical path" with no warning. `story doctor` only catches parent/child
+cycles, not `blocked-by` cycles — verified experimentally: with a live `blocked-by` cycle present,
+`story doctor` reports "no integrity issues found." **Do not** ask the model to "eyeball
+`story graph` for cycles" — visual cycle detection from rendered output is unreliable and has been
+observed to miss a real cycle.
 
-In practice this is low-risk for the decompose path specifically: `story decompose` only emits
-forward cross-wave `blocked-by` edges (wave N+1 blocked-by wave N), which are acyclic by
-construction. A `blocked-by` cycle can only arise from a manual `story relate` call outside
-decompose. A general-purpose cycle validator (parsing `story list --json` relationships and
-detecting cycles in the `blocked-by` graph) is a known remaining gap — not implemented as part of
-this pass.
+Use `bin/forge-dag-validate.sh [project-dir]` instead: it loads `story list --json`, builds the
+`blocked-by` adjacency graph, and runs a DFS cycle search over it, returning
+`{ok, has_cycles, cycles, story_count, display}`. The decompose flow runs it after story creation
+(see `story-decomposition.md`'s **Validate DAG** step) and aborts — reporting `.cycles` to the
+user instead of proceeding to execute — whenever `.has_cycles` is `true`.
+
+`story decompose` itself only emits forward cross-wave `blocked-by` edges (wave N+1 blocked-by
+wave N), which are acyclic by construction, so in the common case the validator is a fast
+confirmation, not a rescue. It earns its keep in the two cases that aren't acyclic by
+construction: resuming an existing `plan-mapping.json` (the idempotency check's "Continue with
+existing mapping" path, which skips a fresh decompose and inherits whatever the graph already
+looks like) and any manual `story relate` call made outside decompose.
 
 ## Priority Levels
 

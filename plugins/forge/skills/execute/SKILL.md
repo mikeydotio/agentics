@@ -16,7 +16,7 @@ You are the execute skill. Your job is to implement stories autonomously through
 - `references/deterministic-checks.md` — Pre-checks before evaluator
 - `references/verification-protocol.md` — Evaluator criteria and debiasing
 - `references/handoff-format.md` — Handoff artifact spec
-- `references/storyhook-contract.md` — Story CLI command mapping
+- `references/storyhook-contract.md` — Story CLI command mapping (verb-first; the CLI has no MCP interface)
 
 **Read inputs:**
 - `.forge/plan-mapping.json` (required)

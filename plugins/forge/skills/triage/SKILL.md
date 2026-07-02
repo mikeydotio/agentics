@@ -58,8 +58,8 @@ For each ESCALATE finding, create a storyhook story with rich context:
 
 ```bash
 story new "ESCALATE: [finding title]"
-story HP-N priority critical
-story HP-N '{"type":"escalate","finding":"[title]","severity":"[level]","description":"[full description]","options":[{"label":"Option 1","solution":"...","pros":"...","cons":"..."},{"label":"Option 2",...}],"recommendation":"[team recommendation]"}'
+story prioritize HP-N critical
+story comment HP-N '{"type":"escalate","finding":"[title]","severity":"[level]","description":"[full description]","options":[{"label":"Option 1","solution":"...","pros":"...","cons":"..."},{"label":"Option 2",...}],"recommendation":"[team recommendation]"}'
 ```
 
 This gives the user structured context when they review ESCALATE items during the post-document pause.

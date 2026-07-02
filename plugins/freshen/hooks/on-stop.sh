@@ -30,6 +30,15 @@ find "$FRESHEN_DIR" -name '*.signal' -mmin +120 -delete 2>/dev/null || true
 SIGNAL=$(ls "$FRESHEN_DIR"/*.signal 2>/dev/null | head -1) || true
 [ -n "$SIGNAL" ] || exit 0
 
+# Another Stop hook in this same batch may already have sent /clear for this
+# signal (forge's session-stop.sh does this itself rather than depending on
+# hook ordering — see its comments). .clear-pending is the single "a /clear
+# has already been sent for this Stop event" marker; if it's already set,
+# sending a second /clear would double up in the tmux pane. Leave the signal
+# in place — on-clear.sh still consumes it normally once the pending clear
+# actually lands.
+[ -f "$FRESHEN_DIR/.clear-pending" ] && exit 0
+
 # tmux is required — if not available, leave the signal for manual handling
 [ -n "${TMUX:-}" ] || exit 0
 [ -n "${TMUX_PANE:-}" ] || exit 0

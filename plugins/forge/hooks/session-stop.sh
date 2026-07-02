@@ -127,6 +127,25 @@ if [[ -n "${TMUX:-}" ]] && [[ -n "${TMUX_PANE:-}" ]]; then
   done
   if [[ "$CONFLICT" -eq 0 ]] && [[ ! -f "$FRESHEN_DIR/forge.signal" ]]; then
     printf '/forge resume\nEmergency stop — session interrupted, degraded handoff written\n' > "$FRESHEN_DIR/forge.signal"
+
+    # Send /clear ourselves rather than relying on freshen's own Stop hook
+    # (on-stop.sh) to notice this signal in the same Stop-hook batch. Claude
+    # Code does not guarantee hook execution order across plugins: if
+    # on-stop.sh happens to run before this point, it finds no signal yet
+    # (we hadn't written it) and exits without sending /clear, stranding the
+    # signal until the next session start deletes it unread. Being
+    # self-sufficient here means auto-resume no longer depends on which
+    # plugin's Stop hook Claude Code happens to invoke first.
+    #
+    # Guard against double-sending in the opposite ordering (on-stop.sh runs
+    # AFTER this in the same batch and would otherwise also see the signal we
+    # just wrote and send its own /clear): .clear-pending is the single
+    # "a /clear has already been sent for this Stop event" marker. on-stop.sh
+    # checks it too before sending — see plugins/freshen/hooks/on-stop.sh.
+    if [[ ! -f "$FRESHEN_DIR/.clear-pending" ]]; then
+      touch "$FRESHEN_DIR/.clear-pending"
+      tmux send-keys -t "$TMUX_PANE" "/clear" Enter 2>/dev/null || true
+    fi
   fi
 fi
 

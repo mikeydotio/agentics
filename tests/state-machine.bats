@@ -52,7 +52,7 @@ teardown() {
   local heartbeat_at
   heartbeat_at="$(jq -r '.heartbeat_at' "$TEST_PROJECT_DIR/.pilot/lock.json")"
   local heartbeat_epoch
-  heartbeat_epoch="$(date -d "$heartbeat_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$heartbeat_at" +%s 2>/dev/null)"
+  heartbeat_epoch="$(date -u -d "$heartbeat_at" +%s 2>/dev/null || date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$heartbeat_at" +%s 2>/dev/null)"
   local now_epoch
   now_epoch="$(date +%s)"
   local age_minutes=$(( (now_epoch - heartbeat_epoch) / 60 ))
@@ -64,7 +64,7 @@ teardown() {
   local heartbeat_at
   heartbeat_at="$(jq -r '.heartbeat_at' "$TEST_PROJECT_DIR/.pilot/lock.json")"
   local heartbeat_epoch
-  heartbeat_epoch="$(date -d "$heartbeat_at" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%SZ" "$heartbeat_at" +%s 2>/dev/null)"
+  heartbeat_epoch="$(date -u -d "$heartbeat_at" +%s 2>/dev/null || date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$heartbeat_at" +%s 2>/dev/null)"
   local now_epoch
   now_epoch="$(date +%s)"
   local age_minutes=$(( (now_epoch - heartbeat_epoch) / 60 ))

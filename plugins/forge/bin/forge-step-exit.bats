@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests for forge-step-exit.sh
 
-SCRIPT="$BATS_TEST_DIRNAME/../plugins/forge/bin/forge-step-exit.sh"
+SCRIPT="$BATS_TEST_DIRNAME/forge-step-exit.sh"
 
 setup() {
   TEST_DIR="$(mktemp -d)"
@@ -15,7 +15,7 @@ setup() {
   git -C "$TEST_DIR" commit -q -m "init"
 
   mkdir -p "$TEST_DIR/.forge/handoffs"
-  echo "test artifact" > "$TEST_DIR/.forge/handoff.md"
+  echo "test artifact" > "$TEST_DIR/.forge/handoffs/handoff-research.md"
 
   # Unset TMUX to test freshen-unavailable path
   unset TMUX

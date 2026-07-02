@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests for forge-prechecks.sh
 
-SCRIPT="$BATS_TEST_DIRNAME/../plugins/forge/bin/forge-prechecks.sh"
+SCRIPT="$BATS_TEST_DIRNAME/forge-prechecks.sh"
 
 setup() {
   TEST_DIR="$(mktemp -d)"

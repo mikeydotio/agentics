@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Tests for forge-fix-archive.sh
 
-SCRIPT="$BATS_TEST_DIRNAME/../plugins/forge/bin/forge-fix-archive.sh"
+SCRIPT="$BATS_TEST_DIRNAME/forge-fix-archive.sh"
 
 setup() {
   TEST_DIR="$(mktemp -d)"

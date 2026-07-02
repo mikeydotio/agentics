@@ -15,15 +15,21 @@ Resume and recovery sequence for forge — restoring context after session bound
 ### 2. State Read
 
 - Read `.forge/state.json`
-- If missing or malformed → report clear error, exit (do not guess)
-- If `status` is `complete` → cancel freshen signal if pending (`bash plugins/freshen/bin/freshen.sh cancel --source forge`), exit
+- If missing → this is a fresh start from decompose, not a resume (see **Fresh-Start vs. Resume
+  Discriminator** below) — this recovery sequence does not apply; follow execute/SKILL.md's Fresh
+  Start entry mode instead.
+- If present but malformed → report clear error, exit (do not guess)
+- `status` is only ever `"running"` or `"paused"` (see `references/execution-loop.md`'s Complete
+  block) — there is no `"complete"` status to check here. Whether execution should hand off to
+  review_validate is decided by storyhook + `forge-state.sh`, never by state.json alone (Hard Rule
+  1: storyhook is authoritative for story-level state).
 
 ### 3. Handoff Read (Primary Context Source)
 
-- Read `.forge/handoff.md` if it exists
+- Read `.forge/handoffs/handoff-execute.md` if it exists
 - Extract: patterns established, micro-decisions, code landmarks, test state, blockers, why did we stop
 - Feed extracted context into the generator prompt for the next story
-- **If handoff.md is missing** → pause and ask the user via `AskUserQuestion` (see `references/handoff-format.md` for the missing-handoff protocol). Do NOT silently continue with degraded context.
+- **If `.forge/handoffs/handoff-execute.md` is missing** → pause and ask the user via `AskUserQuestion` (see `references/step-handoff.md` for the missing-handoff protocol — `forge-state.sh`'s `expected_handoff`/`expected_handoff_present` fields name this specific file for the `execute` state). Do NOT silently continue with degraded context.
 
 ### 4. Crash Recovery
 
@@ -47,8 +53,16 @@ story next --json
 
 Check what's available:
 - Stories available → proceed to execution loop
-- No stories, all `done` → transition to `complete` (even if state.json said `paused`)
-- No stories, some `blocked` → pause: "blocked stories remain — user intervention needed"
+- No stories, all `done` → follow the Complete path in `references/execution-loop.md` (write
+  handoff, commit, queue freshen to `/forge continue`) so the pipeline hands off to review_validate
+  — even if state.json said `paused`. Do NOT write `.forge/COMPLETION.md` here (see the note
+  in `execution-loop.md`'s Complete section — that artifact is the pipeline's terminal marker,
+  owned by deploy).
+- No stories, some (but not all) `blocked` and at least one `todo`/`in-progress`/`verifying` →
+  proceed to execution loop as normal (there is still actionable work)
+- No stories, and every non-`done` story is `blocked` → pause: `forge-state.sh` reports this as
+  state `blocked` (`dispatch: "blocked_review"`) — follow `skills/forge/SKILL.md`'s **Blocked
+  Stories Pause**, not a generic "user intervention needed" message
 
 ### 6. Context Gathering and Validation
 
@@ -76,5 +90,23 @@ This step is especially important when the handoff is from a much older session.
 ## Cross-Layer Inconsistency Detection
 
 If `state.json` says `paused` but all stories are `done`:
-- Transition to `complete` — state.json was stale
+- Follow the Complete path (write handoff, commit, queue freshen to `/forge continue`) exactly as
+  if the loop had just finished normally — state.json was stale. Do NOT write `.forge/COMPLETION.md`
+  (it is the pipeline's terminal artifact, not "this execute session finished").
 - This handles the case where a session completed all stories but crashed before updating state.json
+
+## Fresh-Start vs. Resume Discriminator
+
+`execute/SKILL.md` is dispatched identically (`execute --orchestrated`) both for a brand-new
+execute step and for every crash/auto-resume — the skill must not guess which one it is:
+
+- **`state_json_exists: false`** (from `forge-state.sh`) → **Fresh Start**: initialize
+  `.forge/state.json` from scratch; do NOT run this recovery protocol (there is nothing to
+  recover); read `.forge/handoffs/handoff-decompose.md` for context (`forge-state.sh`'s
+  `expected_handoff` names this file for a fresh `execute` state).
+- **`state_json_exists: true`** → **Resume**: follow this recovery protocol in full, including
+  Crash Recovery (step 4). Never re-initialize `state.json` in this case — doing so silently wipes
+  `total_retries`/`retry_counts`/`sessions_completed` and defeats the runaway safeguards.
+
+This is a fact read from disk, not an inference from conversation context — see execute/SKILL.md's
+Entry Modes.

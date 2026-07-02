@@ -37,7 +37,19 @@ You are the execute skill. Your job is to implement stories autonomously through
 
 ## Entry Modes
 
-### Fresh Start (from decompose)
+`forge-state.sh` is dispatched at `execute --orchestrated` identically for a brand-new execute step
+and for every crash/auto-resume — do NOT infer which one this is from conversation context. Read
+the `state_json_exists` field from `forge-state.sh`'s JSON output (this is why it always runs
+before dispatch — see `skills/forge/SKILL.md`'s State Detection section):
+
+- **`state_json_exists: false`** → **Fresh Start** (below). There has never been an execute
+  session for this pipeline run.
+- **`state_json_exists: true`** → **Resume** (below). At least one execute session has already run
+  the loop. Re-initializing `state.json` in this case would silently wipe
+  `total_retries`/`retry_counts`/`sessions_completed` and defeat the runaway safeguards — never
+  do it.
+
+### Fresh Start (from decompose) — `state_json_exists: false`
 
 1. Verify `.forge/plan-mapping.json` exists
 2. Verify storyhook has stories in `todo` state

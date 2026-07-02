@@ -41,61 +41,67 @@ If `.forge/plan-mapping.json` exists:
 
 ### 2. State Setup
 
-Ensure required storyhook states exist (idempotent):
-- Check `.storyhook/states.toml` for `in-progress`, `verifying`, `blocked`
-- If missing, append them:
-  ```toml
-  [in-progress]
-  super = "open"
-  description = "Generator working on this story"
-
-  [verifying]
-  super = "open"
-  description = "Evaluator reviewing this story"
-
-  [blocked]
-  super = "open"
-  description = "Dependency unmet, decision needed, or max retries exhausted"
-  ```
-
-### 3. Create Parent Story
+`story init` already seeds `todo` / `in-progress` / `done`. Create the two additional states the
+execution loop needs:
 
 ```bash
-story new "[Project Name] — Work Execution"
+story state add verifying --super OPEN --role active
+story state add blocked --super OPEN --role active
 ```
 
-Record the returned ID as `project_story`.
+`story state add` is **not** idempotent — it errors (exit 2, `state \`<slug>\` already exists`) if
+the slug already exists, and there is no `story state list` to check first. Tolerate that specific
+exit-2 error rather than treating it as a failure. Never hand-edit `.storyhook/states.toml`
+directly.
 
-### 4. Prepare PLAN.md for Decomposition
+### 3. Extract the Task Breakdown Section
 
-The PLAN.md already uses the format `storyhook_decompose_spec` expects:
+`story decompose` treats **every** Markdown heading in its input as a story, not just wave
+headings — piping the entire PLAN.md would turn `## Test Strategy`, `## Resumption Points`, and
+`## Risk Register` into spurious stories alongside the real tasks. Extract just the
+`## Task Breakdown` section (from that heading up to, but not including, the next `## ` heading)
+into a temp file:
+
+```bash
+TASKS_FILE=$(mktemp)
+awk '/^## Task Breakdown/{flag=1} /^## / && !/^## Task Breakdown/{if(flag)exit} flag' .forge/PLAN.md > "$TASKS_FILE"
+```
+
+Do **not** separately run `story new` to create a parent story: `story decompose` auto-creates
+one from the first heading in its input (here, "Task Breakdown"), and calling `story new` first
+would leave two disconnected parent stories.
+
+### 4. Verify Wave Structure
+
+Verify `$TASKS_FILE` has:
 - `### Wave N` headings for sequencing (auto-creates wave dependencies)
 - `- [ ]` checkbox items for stories
-- Inline `[HIGH]`, `[MEDIUM]`, `[LOW]` markers for priority
+- Inline `[HIGH]`, `[MEDIUM]`, `[LOW]` markers for priority (optional)
 
-Verify the PLAN.md has this structure. If the wave headings use a different format, normalize them to `### Wave N` before passing to decompose_spec.
+If the wave headings use a different format, normalize them to `### Wave N` first. Error if no
+waves or no checkbox items are found.
 
-Error if no waves found or waves are empty.
+### 5. Decompose (Single Call)
 
-### 5. Decompose via MCP (Single Call)
+`story decompose` creates the parent story, every task story, and all wave `blocked-by`
+dependencies in one call — this replaces what would otherwise be 60-80+ sequential CLI calls:
 
-Use `storyhook_decompose_spec` to create all stories with wave dependencies and priorities in one call:
-
-1. **Preview first** with `dry_run: true`:
-   ```
-   storyhook_decompose_spec(content: <PLAN.md content>, dry_run: true)
+1. **Preview first**:
+   ```bash
+   story decompose --stdin --dry-run < "$TASKS_FILE"
    ```
    Verify the preview shows the expected story count, wave structure, and relationships.
 
 2. **Create stories**:
+   ```bash
+   story decompose --stdin --json < "$TASKS_FILE"
    ```
-   storyhook_decompose_spec(content: <PLAN.md content>, dry_run: false)
-   ```
-   This single call replaces what was previously 60-80+ sequential CLI calls.
 
-3. **Record returned story IDs** from the response for plan-mapping.json.
-
-**Fallback**: If `storyhook_decompose_spec` is unavailable, use `storyhook_bulk_create` with pre-constructed relationship arrays. If MCP tools are entirely unavailable, fall back to sequential CLI creation (see `references/story-decomposition.md` for the CLI fallback procedure).
+3. **Record story IDs** from `.stories[].story.id` in the response. The first story returned
+   corresponds to the "Task Breakdown" heading — record it as `project_story`. Each subsequent
+   story maps to one task; nested `- Acceptance: …` / `- Files: …` bullets under a task's
+   checkbox item are captured automatically as that story's first comment (no separate
+   comment call needed for them).
 
 ### 7. Map Stories to DESIGN.md Sections
 
@@ -124,13 +130,17 @@ Write `.forge/plan-mapping.json` (version-controlled):
 
 ### 9. Validate DAG
 
-```bash
-story graph
-```
+`story graph` is text-only and reports no cycle information for `blocked-by` edges; `story doctor`
+only catches parent/child cycles. Do not eyeball `story graph` output for cycles — that judgment
+is unreliable from rendered text.
 
-If cycles detected -> report cycle path(s) and abort. Do not proceed with execution on a cyclic plan.
+In practice this is low-risk here: the wave `blocked-by` edges created in Step 5 are always
+forward (wave N+1 blocked-by wave N), which is acyclic by construction. A cycle can only be
+introduced by a manual `story relate` call outside this decompose flow, which this skill doesn't
+perform. A general-purpose `blocked-by` cycle validator is a known remaining gap (see
+`storyhook-contract.md`'s DAG Validation section) — not implemented as part of this pass.
 
-If DAG valid -> report story count and structure.
+Report story count and structure to the user.
 
 ## Exit
 

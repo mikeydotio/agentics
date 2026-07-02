@@ -1,6 +1,9 @@
 # Story Decomposition
 
-How PLAN.md wave structure maps to storyhook stories with dependencies, priorities, and acceptance criteria.
+How PLAN.md's `## Task Breakdown` wave structure maps to storyhook stories with dependencies,
+priorities, and acceptance criteria. See `references/storyhook-contract.md` for the full command
+reference (relationship vocabulary, JSON shapes, custom states) — this document covers only the
+decompose-specific procedure.
 
 ## Process
 
@@ -18,111 +21,115 @@ Before creating stories, check if `.forge/plan-mapping.json` exists:
 
 ### 2. State Setup
 
-Ensure required storyhook states exist (idempotent):
-- Check `.storyhook/states.toml` for `in-progress`, `verifying`, `blocked`
-- If missing, append them (same logic as `/forge init`)
-
-### 3. Create Parent Story
+`story init` already seeds `todo` / `in-progress` / `done`. Create the two additional states
+forge's execution loop needs:
 
 ```bash
-story new "[Project Name] — Work Execution"
+story state add verifying --super OPEN --role active
+story state add blocked --super OPEN --role active
 ```
 
-Record the returned ID as `project_story` in plan-mapping.json.
+`story state add` is not idempotent — it errors (exit 2, `state \`<slug>\` already exists`) if the
+slug is already present. Tolerate that specific error rather than treating it as a failure; there
+is no `story state list` to check first. Never hand-edit `.storyhook/states.toml`.
 
-### 4. Decompose via MCP (Preferred — Single Call)
+### 3. Extract the Task Breakdown Section
 
-The PLAN.md markdown format matches what `storyhook_decompose_spec` expects:
-- `### Wave N` headings → automatic wave dependency creation (later waves blocked-by earlier waves)
+`story decompose` treats **every** Markdown heading in its input as a story, not just wave
+headings — piping the entire PLAN.md would turn `## Test Strategy`, `## Resumption Points`, and
+`## Risk Register` (all present in the plan/SKILL.md PLAN.md template) into spurious stories
+alongside the real tasks. Extract just the `## Task Breakdown` section (from that heading up to,
+but not including, the next `## ` heading):
+
+```bash
+TASKS_FILE=$(mktemp)
+awk '/^## Task Breakdown/{flag=1} /^## / && !/^## Task Breakdown/{if(flag)exit} flag' .forge/PLAN.md > "$TASKS_FILE"
+```
+
+Do **not** separately run `story new` to create a parent story: `story decompose` auto-creates
+one from the first heading in its input (here, "Task Breakdown"), and calling `story new` first
+would leave two disconnected parent stories.
+
+Verify `$TASKS_FILE` has `### Wave N` headings and `- [ ]` checkbox items before proceeding; if
+the wave headings use a different format, normalize them to `### Wave N` first. Error if no waves
+or no checkbox items are found.
+
+### 4. Decompose (Single Call)
+
+`story decompose` creates the parent story, every task story, and all wave dependencies in one
+call. It parses:
+
+- `### Wave N` headings → `blocked-by` edges from every wave-N+1 story to every wave-N story
 - `- [ ]` checkbox items → individual stories
-- Inline `[HIGH]`, `[MEDIUM]`, `[LOW]` markers → priority assignment
-- `#label` → label assignment
+- `[HIGH]` / `[MEDIUM]` / `[LOW]` inline markers → priority
+- `#label` → labels
+- Nested bullets under a task (e.g. `- Acceptance: …`, `- Files: …`) → that story's initial
+  comment, captured automatically — no separate `story comment` call needed for them
+- The input's top-level heading ("Task Breakdown") → the synthetic parent story (`parent-of` /
+  `child-of` edges to every created story)
 
-**Steps:**
+```bash
+# Preview first — verify story count, wave structure, relationships:
+story decompose --stdin --dry-run < "$TASKS_FILE"
 
-1. **Preview**: Call `storyhook_decompose_spec(content: <PLAN.md>, dry_run: true)` to see what will be created
-2. **Create**: Call `storyhook_decompose_spec(content: <PLAN.md>, dry_run: false)` to create all stories
-3. **Record IDs**: Map returned story IDs to task references for plan-mapping.json
-
-This replaces what was previously 60-80+ sequential CLI calls with a single MCP tool call. The MCP tool handles:
-- Story creation with titles
-- Wave dependency wiring (stories in wave N+1 are blocked-by stories in wave N)
-- Priority assignment from inline markers
-- Label assignment from inline markers
-
-### 5. Add Acceptance Criteria
-
-After decomposition, add acceptance criteria as comments on each story:
-
-```
-storyhook_add_comment(id: "HP-N", body: "Acceptance: Config loads from YAML and returns typed object")
+# Create for real:
+story decompose --stdin --json < "$TASKS_FILE"
 ```
 
-Or via CLI: `story HP-N "Acceptance: <criteria>"`
+Record `.stories[].story.id` from the `--json` response: the first story is `project_story` (the
+"Task Breakdown" parent), and each subsequent story maps to one task for `plan-mapping.json`.
 
-### CLI Fallback (If MCP Unavailable)
+If a task needs acceptance criteria beyond what's already captured from its nested bullets, add
+it as an additional comment:
 
-If MCP tools are unavailable, fall back to sequential CLI creation:
-
-```
-For each wave:
-  For each task in wave:
-    story new "<task title>"
-    → record returned story ID
-    story HP-X priority <level>  (wave 1=high, 2=medium, 3+=low)
-    story HP-X "Acceptance: <criteria>"
-
-For each task T in wave N and each task U in wave N+1:
-  story HP-T precedes HP-U
+```bash
+story comment <id> "Acceptance: Config loads from YAML and returns typed object"
 ```
 
-This is significantly slower (N×3 calls + M dependency calls vs. 1 MCP call) but functionally equivalent.
+### 5. Map Stories to DESIGN.md
 
-### 8. Map Stories to DESIGN.md
+For each story, identify the relevant DESIGN.md section by matching task descriptions to section
+headers. **Embed the section content** (not just headers) in plan-mapping.json so the execution
+loop doesn't depend on reading DESIGN.md later.
 
-For each story, identify the relevant DESIGN.md section by matching task descriptions to section headers. **Embed the section content** (not just headers) in plan-mapping.json so the execution loop doesn't depend on reading DESIGN.md later.
-
-### 9. Write plan-mapping.json
+### 6. Write plan-mapping.json
 
 Write `.forge/plan-mapping.json` (version-controlled):
 
 ```json
 {
   "plan_hash": "<md5 of PLAN.md>",
-  "project_story": "HP-1",
+  "project_story": "<STORY_ID>",
   "stories": {
-    "HP-2": {
+    "<STORY_ID>": {
       "task_ref": "Task 1.1",
       "wave": 1,
       "title": "Create config module",
       "acceptance_criteria": "Config loads from YAML file and returns typed object",
       "design_section": "## Config Module\nLoads YAML config from disk. Returns a typed configuration object.",
       "files_expected": ["src/config.ts"]
-    },
-    "HP-3": {
-      "task_ref": "Task 1.2",
-      "wave": 1,
-      "title": "Create logger module",
-      "acceptance_criteria": "Logger writes structured JSON to stdout",
-      "design_section": "## Logger Module\nStructured JSON logger. Writes to stdout.",
-      "files_expected": ["src/logger.ts"]
     }
   }
 }
 ```
 
-### 10. Validate DAG
+IDs come from `story new` / `story decompose` output — never assume a prefix. (The default prefix
+is `SH`, not `HP`; if a project runs `story init --prefix <X>`, IDs use `<X>` instead.)
 
-After creating all stories and relationships:
+### 7. Validate DAG
 
-```bash
-story graph
-```
+`story graph` is text-only and reports no `blocked-by` cycle information; `story doctor` only
+catches parent/child cycles. Do not have the model eyeball `story graph` output for cycles.
 
-Inspect the output for cycles. If cycles are detected:
-1. Report the cycle path(s) to the user
-2. Abort — do not proceed with `/forge run` on a cyclic plan
+In practice this is low-risk here specifically: `story decompose` only emits forward cross-wave
+`blocked-by` edges, which are acyclic by construction. A `blocked-by` cycle can only be introduced
+by a manual `story relate` call outside decompose. A general-purpose cycle validator is a known
+remaining gap (see `storyhook-contract.md`'s DAG Validation section) — not implemented as part of
+this pass. If decompose only used the automatic wave edges, no further validation is needed;
+report the story count and structure to the user.
 
 ## Offline Constraint
 
-`.forge/` artifacts (PLAN.md, DESIGN.md) must exist locally. During decomposition, `plan-mapping.json` embeds the relevant DESIGN.md section content, so the execution loop does not depend on reading PLAN.md or DESIGN.md after decomposition.
+`.forge/` artifacts (PLAN.md, DESIGN.md) must exist locally. During decomposition,
+`plan-mapping.json` embeds the relevant DESIGN.md section content, so the execution loop does not
+depend on reading PLAN.md or DESIGN.md after decomposition.

@@ -136,8 +136,8 @@ Parse the JSON result:
 - If any check has `passed: false`:
   - Store failure details as storyhook comment: `story comment HP-N '{"check":"<name>","details":"<details>"}'`
   - Goto retry
-- Flaky tests (in `flaky_tests` array) are flagged in handoff.md but do not count as failures
-- Scope warnings (unexpected files) are logged in handoff.md but do not count as failures
+- Flaky tests (in `flaky_tests` array) are flagged in `.forge/handoffs/handoff-execute.md` but do not count as failures
+- Scope warnings (unexpected files) are logged in `.forge/handoffs/handoff-execute.md` but do not count as failures
 
 ### Step 5: Evaluate
 
@@ -214,7 +214,7 @@ Update lock heartbeat
 If story reached done:
   stories_this_session += 1
 
-# Incremental handoff: update handoff.md with this story's outcomes.
+# Incremental handoff: update .forge/handoffs/handoff-execute.md with this story's outcomes.
 # This ensures crash recovery has fresh context even without a clean pause.
 # Append to "Stories Completed This Session" section and update "Working Context"
 # with any new patterns, micro-decisions, or code landmarks from this story.
@@ -304,38 +304,54 @@ pause:
 
 ### Complete
 
+**IMPORTANT:** "Complete" here means *all stories are done*, not *the pipeline is done*.
+Execution must hand off to review_validate — it must NOT write `.forge/COMPLETION.md` and must NOT
+cancel the freshen signal. `COMPLETION.md` is the pipeline's terminal artifact; it is owned
+exclusively by the deploy step (`skills/deploy/SKILL.md`) and the "no deployment needed" branch of
+the Deploy Permission Gate (`skills/forge/SKILL.md`). Writing it here would make `forge-state.sh`'s
+very first check (`artifact_exists "COMPLETION.md"` → `state: complete`) treat the pipeline as
+fully finished, silently skipping review, validate, triage, document, and deploy.
+
 ```
 complete:
   # 1. Full test suite
   Run full project test suite
   If tests fail:
     Do NOT re-enter the loop
-    Write failure details to handoff.md
+    Write failure details to .forge/handoffs/handoff-execute.md
     state.status = "paused"
     state.pause_reason = "final-test-suite-failed"
     Write state.json to disk
     Release lock
     # Do NOT remove auto-resume trigger
-    Log: "Final test suite failed — manual review required. See handoff.md."
+    Log: "Final test suite failed — manual review required. See handoffs/handoff-execute.md."
     return
 
   # 2. Storyhook report
   story summary
   story handoff --since <total_duration>
 
-  # 3. Completion artifact
-  Write .forge/COMPLETION.md:
+  # 3. Write handoff to .forge/handoffs/handoff-execute.md (NOT COMPLETION.md):
     - Project summary
     - Stories completed with acceptance criteria
     - Test results
     - Notable decisions and patterns
     - Duration and session count
 
-  # 4. Cancel freshen signal
-  bash plugins/freshen/bin/freshen.sh cancel --source forge
+  # 4. Commit
+  git add .forge/ && git commit -m "forge(execute): all stories complete"
 
-  # 5. Update state
-  state.status = "complete"
+  # 5. Queue freshen for the NEXT step (review_validate) — do NOT cancel:
+  bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Execution complete — all stories done"
+
+  # 6. Update state
+  # status stays in the same two-value space as every other exit path
+  # ("running" while looping, "paused" once the loop has exited for any
+  # reason). There is no third "complete" status — storyhook + forge-state.sh
+  # (not state.json) decide the review_validate transition, per Hard Rule 1
+  # ("storyhook is authoritative for story-level state — never duplicate it
+  # in forge files").
+  state.status = "paused"
   state.resume = null
   Write state.json to disk
   Release lock (delete lock.json)

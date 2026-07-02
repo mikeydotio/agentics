@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Forge SessionStart hook — injects recovery context when forge is active.
-# Reads .forge/state.json and optionally .forge/handoff.md.
+# Reads .forge/state.json and optionally the newest .forge/handoffs/handoff-*.md.
 # Outputs nothing (no-op) if forge is not active in this project.
 #
 # Input:  JSON on stdin from Claude Code SessionStart event

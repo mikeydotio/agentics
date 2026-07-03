@@ -1,7 +1,47 @@
 #!/usr/bin/env bash
+# forge-state.sh — the single source of truth for forge's pipeline state
+# machine. Detects `state`/`dispatch` from artifact presence + storyhook,
+# plus (agentics#33) a `category` classification and derived `auto_advance`
+# boolean: `category` names the same internal branch that already produces
+# `dispatch`, so callers no longer have to re-derive "is this a safe
+# pass-through, or does it need human/side-effecting handling?" by
+# string-matching `dispatch` themselves. Both are pure telemetry today —
+# nothing acts on them — laying the groundwork to measure whether further
+# automation (deferred, see the issue) is actually worth building.
+#
+# Usage: forge-state.sh [forge-dir] [--record-transition]
+#   forge-dir            positional, defaults to .forge (unchanged).
+#   --record-transition  opt-in: append a `predicted` line (category,
+#                         dispatch, transition_id) to .freshen/transitions.log
+#                         via freshen's existing transition-log.sh helper.
+#                         Order-independent relative to the positional arg.
+#                         Best-effort — a logging failure never changes this
+#                         script's exit code or stdout JSON.
 set -euo pipefail
 
-FORGE_DIR="${1:-.forge}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+FORGE_DIR=".forge"
+RECORD_TRANSITION=false
+for arg in "$@"; do
+  case "$arg" in
+    --record-transition) RECORD_TRANSITION=true ;;
+    *) FORGE_DIR="$arg" ;;
+  esac
+done
+
+# Best-effort transition logging (agentics#33) — reuses freshen's own
+# lightweight audit log (F047) rather than inventing a second log format.
+# Sourced unconditionally (cheap) but only ever called under
+# --record-transition. Mirrors forge-step-exit.sh's identical sourcing idiom
+# exactly, including the declare -f guard so a missing/partial freshen
+# install can never abort this script under `set -e`.
+_TRANSITION_LOG_LIB="$SCRIPT_DIR/../../freshen/lib/transition-log.sh"
+# shellcheck source=plugins/freshen/lib/transition-log.sh
+[ -f "$_TRANSITION_LOG_LIB" ] && . "$_TRANSITION_LOG_LIB" || true
+log_predicted_transition() {
+  declare -f freshen_log_transition >/dev/null 2>&1 && freshen_log_transition "$1" || true
+}
 
 # --- Artifact presence ---
 #
@@ -311,22 +351,45 @@ check_storyhook() {
 detect_state() {
   local state=""
   local dispatch=""
+  # agentics#33: category is the router's own classification of `dispatch`,
+  # set alongside it at every branch below rather than re-derived by a
+  # caller string-matching `dispatch` (or, worse, by a second external
+  # mapping table that could drift from this function the way forge's
+  # storyhook docs once drifted from the real CLI — see
+  # forge-contract-check.sh). Exactly one of these values per branch:
+  #   pass_through     - dispatch ends " --orchestrated" and names one of
+  #                       the 11 pipeline skills directly; no side effect,
+  #                       no human input required to advance.
+  #   fix_loop         - dispatch is the literal string "plan --orchestrated"
+  #                       (byte-identical to a plain design->plan pass-
+  #                       through) but state=="fix_loop" makes this the
+  #                       ONLY entry point that may run plan with FIX items,
+  #                       gated behind forge-fix-archive.sh's mandatory,
+  #                       unconditional cycle-counter increment (F003).
+  #   blocked_review, escalate_review, deploy_gate, report_complete
+  #                     - genuine human-input or terminal states; SKILL.md
+  #                       owns all judgment here, unconditionally.
+  local category=""
 
   if artifact_exists "COMPLETION.md"; then
     state="complete"
     # Explicit machine-readable token instead of an empty dispatch —
     # the router no longer has to infer behavior from the state name alone.
     dispatch="report_complete"
+    category="report_complete"
   elif artifact_exists "DEPLOY-APPROVAL.md"; then
     state="deploy"
     dispatch="deploy --orchestrated"
+    category="pass_through"
   elif artifact_exists "DOCUMENTATION.md"; then
     if [ "$has_escalate_pending" = "true" ]; then
       state="pause_escalate"
       dispatch="escalate_review"
+      category="escalate_review"
     else
       state="pause_deploy"
       dispatch="deploy_gate"
+      category="deploy_gate"
     fi
   elif artifact_exists "TRIAGE.md"; then
     local fix_cycle
@@ -334,13 +397,16 @@ detect_state() {
     if has_fix_items && [ "$fix_cycle" -lt "$effective_max" ]; then
       state="fix_loop"
       dispatch="plan --orchestrated"
+      category="fix_loop"
     else
       state="document"
       dispatch="document --orchestrated"
+      category="pass_through"
     fi
   elif artifact_exists "REVIEW-REPORT.md" && artifact_exists "VALIDATE-REPORT.md"; then
     state="triage"
     dispatch="triage --orchestrated"
+    category="pass_through"
   elif [ "$stories_exist" = "true" ] && [ "$stories_all_done" = "true" ]; then
     # Review and validate must never be dispatched such that one
     # can finish, find the other's report absent, and STOP without queuing
@@ -354,36 +420,54 @@ detect_state() {
     artifact_exists "VALIDATE-REPORT.md" && validate_done="true"
     if [ "$review_done" = "true" ] && [ "$validate_done" = "false" ]; then
       dispatch="validate --orchestrated"
+      category="pass_through"
     elif [ "$review_done" = "false" ] && [ "$validate_done" = "true" ]; then
       dispatch="review --orchestrated"
+      category="pass_through"
     else
       dispatch="review_validate --orchestrated"
+      category="pass_through"
     fi
   elif [ "$stories_exist" = "true" ] && [ "$stories_blocked_only" = "true" ]; then
     state="blocked"
     dispatch="blocked_review"
+    category="blocked_review"
   elif artifact_exists "plan-mapping.json" && [ "$stories_all_done" != "true" ]; then
     state="execute"
     dispatch="execute --orchestrated"
+    category="pass_through"
   elif artifact_exists "PLAN.md" && ! artifact_exists "plan-mapping.json"; then
     state="decompose"
     dispatch="decompose --orchestrated"
+    category="pass_through"
   elif artifact_exists "DESIGN.md" && ! artifact_exists "PLAN.md"; then
     state="plan"
     dispatch="plan --orchestrated"
+    category="pass_through"
   elif artifact_exists "research/SUMMARY.md" && ! artifact_exists "DESIGN.md"; then
     state="design"
     dispatch="design --orchestrated"
+    category="pass_through"
   elif artifact_exists "IDEA.md" && ! artifact_exists "research/SUMMARY.md"; then
     state="research"
     dispatch="research --orchestrated"
+    category="pass_through"
   else
     state="interrogate"
     dispatch="interrogate --orchestrated"
+    category="pass_through"
   fi
+
+  # Fail-closed default: every branch above sets category explicitly, so
+  # this is unreachable today (the final `else` above is exhaustive) — pure
+  # defense-in-depth against a future branch being added without its
+  # category. Deliberately NOT "pass_through": an unrecognized branch must
+  # never look safe to auto-advance by default.
+  [ -n "$category" ] || category="unknown"
 
   echo "$state"
   echo "$dispatch"
+  echo "$category"
 }
 
 # --- Main ---
@@ -395,15 +479,40 @@ read_state_json
 result=$(detect_state)
 state=$(echo "$result" | sed -n '1p')
 dispatch=$(echo "$result" | sed -n '2p')
+category=$(echo "$result" | sed -n '3p')
 fix_cycle=$(count_fix_cycles)
+
+# auto_advance is a pure derived view of category (one predicate, one
+# owner) — never recomputed independently, so it can't drift from it.
+if [ "$category" = "pass_through" ]; then
+  auto_advance=true
+else
+  auto_advance=false
+fi
+
+# transition_id: a diagnostic correlator (not a security boundary) so a
+# --record-transition "predicted" line here can later be matched against
+# forge-step-exit.sh's "actual" line by forge-transition-report.sh, even
+# across crashes/interleaved concurrent sessions. PID + bash's own RANDOM
+# builtin is sufficient collision resistance for that purpose and, unlike
+# `date +%N`, is portable to BSD/macOS date (F074-class portability — see
+# CLAUDE.md).
+transition_id="$$-$RANDOM"
 
 detect_handoff "$state"
 
 artifacts=$(build_artifacts)
 
+if [ "$RECORD_TRANSITION" = "true" ]; then
+  log_predicted_transition "predicted category=${category} dispatch=\"${dispatch}\" transition_id=${transition_id}"
+fi
+
 jq -n \
   --arg state "$state" \
   --arg dispatch "$dispatch" \
+  --arg category "$category" \
+  --argjson auto_advance "$auto_advance" \
+  --arg transition_id "$transition_id" \
   --argjson fix_cycle "$fix_cycle" \
   --argjson max_fix_cycles "$effective_max" \
   --argjson yolo "$yolo" \
@@ -419,6 +528,9 @@ jq -n \
   '{
     state: $state,
     dispatch: $dispatch,
+    category: $category,
+    auto_advance: $auto_advance,
+    transition_id: $transition_id,
     fix_cycle: $fix_cycle,
     max_fix_cycles: $max_fix_cycles,
     yolo: $yolo,

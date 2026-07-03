@@ -339,7 +339,8 @@ Graceful stop:
 1. If execution phase is active:
    - Write handoff following `references/handoff-format.md`
    - Update `.forge/state.json`: set `status: "paused"`
-   - Release lock: delete `.forge/lock.json`
+   - Release lock: `bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --forge-dir .forge` (see
+     `references/session-locking.md`) — never `rm` the file directly.
 2. Cancel pending freshen signal: `bash plugins/freshen/bin/freshen.sh cancel --source forge`
 3. Report: "Pipeline stopped. Run `/forge continue` to resume."
 

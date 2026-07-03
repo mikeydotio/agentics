@@ -6,11 +6,18 @@ Resume and recovery sequence for forge — restoring context after session bound
 
 ### 1. Lock Check
 
-- Check `.forge/lock.json`
-- If heartbeat fresh (< `heartbeat_window_minutes`) → exit: "Work is already running"
-- If lock exists but heartbeat stale → break lock, log warning
-- Acquire new lock
-- Clear stale resume context: set `state.resume = null` (prevents prior session's resume metadata from persisting)
+Generate a session ID (e.g. `sess-$(date -u +%Y%m%dT%H%M%SZ)-$$`), then acquire the lock in one
+call — see `references/session-locking.md` for the full protocol this implements:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh acquire --session-id "$SESSION_ID" --forge-dir .forge
+```
+
+- `acquired: false` → exit: "Work is already running in another session (held_by: `<held_by>`)."
+- `acquired: true` → proceeds (the script itself breaks a stale lock and logs it via `display`
+  when `broke_stale: true` — no separate staleness math to run here).
+- Clear stale resume context: set `state.resume = null` (prevents prior session's resume metadata
+  from persisting)
 
 ### 2. State Read
 
@@ -33,17 +40,19 @@ Resume and recovery sequence for forge — restoring context after session bound
 
 ### 4. Crash Recovery
 
-Query storyhook for stories in inconsistent states:
+Reset any story stuck in `in-progress`/`verifying` back to `todo` and clean the working tree, in
+one call (F038):
 
 ```bash
-story list --json
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-crash-recover.sh .
 ```
 
-Any story in `in-progress` or `verifying` state indicates a crash mid-work:
-- Reset these stories to `todo`: `story move HP-N todo`
-- Clean working tree: `git checkout .`
-
-This ensures no partially-completed work contaminates the next attempt.
+Parse the JSON result:
+- `ok: false` → the `story` CLI is unavailable or `story list --json` failed (see `error`) — this
+  is a storyhook-health problem, not a "nothing to recover" result; do not treat it as success.
+- `ok: true` → `reset_stories` lists every story ID actually moved back to `todo` (empty is a
+  normal, healthy outcome — most resumes have nothing stuck); `tree_clean` confirms `git checkout
+  .` ran. This ensures no partially-completed work contaminates the next attempt.
 
 ### 5. Determine Next Action
 

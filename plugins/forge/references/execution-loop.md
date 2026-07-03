@@ -2,10 +2,20 @@
 
 Complete specification for the autonomous execution loop. The SKILL.md router dispatches here for `/forge run` and `/forge resume`.
 
+Per-iteration bookkeeping (counters, locks, verdicts, integrity checks) is scripted — see
+`bin/forge-loop-state.sh`, `bin/forge-lock.sh`, `bin/forge-verdict.sh`, `bin/forge-integrity.sh`,
+`bin/forge-predecessor-diff.sh` (WS4). The model calls a script and branches on its returned JSON;
+it never hand-edits `.forge/state.json`'s counters, hand-computes lock staleness, or hand-diffs
+the working tree. What stays genuine model judgment: constructing agent prompts, writing handoff
+*content*, and deciding what a summarized predecessor diff should say when one is too large to
+paste verbatim.
+
 ## Prerequisites
 
 Before entering the loop, the caller must have:
-1. Acquired the session lock
+1. Generated a session ID and acquired the session lock: `bash
+   ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh acquire --session-id "$SESSION_ID" --forge-dir .forge`
+   (see `references/session-locking.md`) — if `acquired` is `false`, STOP here.
 2. Checked auto-resume capability (tmux availability)
 3. Read/created `.forge/config.json`
 4. Read/created `.forge/state.json` with `status: "running"` and `resume: null` (clear stale resume context)
@@ -19,32 +29,18 @@ stories_this_session = 0  # counts unique stories reaching done
 loop:
 ```
 
-### Step 0: Storyhook Health Check
+### Step 0: Runaway & Health Safeguard Check
 
-Before every operation that touches storyhook, track consecutive failures:
+One call covers all three halt conditions (max sessions, max total retries, and the persisted
+storyhook-failure streak — F093, F097):
 
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh runaway-check --forge-dir .forge
 ```
-If state.storyhook_consecutive_failures >= 3:
-  → write_handoff("storyhook unavailable — 3 consecutive failures")
-  → goto pause
-```
 
-The counter resets to 0 on ANY successful storyhook operation. Pattern: fail, fail → counter=2 → succeed → counter=0.
-
-### Step 0a: Runaway Safeguard Check
-
-```
-Read config.json (fresh from disk every iteration)
-Read state.json (fresh from disk every iteration)
-
-If state.sessions_completed >= config.max_sessions:
-  → write_handoff("Runaway safeguard: max sessions reached ({sessions_completed}/{max_sessions}). Review progress with /forge status.")
-  → goto pause
-
-If state.total_retries >= config.max_total_retries:
-  → write_handoff("Runaway safeguard: max total retries reached ({total_retries}/{max_total_retries}). Review progress with /forge status.")
-  → goto pause
-```
+- `halt: true` → `write_handoff(reason)` (the script's `reason` field already names which
+  safeguard tripped and the exact counter/limit values) → `goto pause`
+- `halt: false` → proceed to Step 1
 
 ### Step 1: Pick Next Story
 
@@ -53,10 +49,16 @@ story next --json
 ```
 
 Parse the response:
-- **Story returned**: Proceed with this story
-- **No story, all done**: `goto complete`
-- **No story, some blocked**: `write_handoff("blocked stories remain — user intervention needed")`, `goto pause`
-- **Storyhook error**: Increment `storyhook_consecutive_failures`, continue to top of loop
+- **Story returned**: `bash forge-loop-state.sh storyhook-failure --result ok --forge-dir .forge`
+  (resets the persisted consecutive-failure counter), proceed with this story
+- **No story, all done**: `bash forge-loop-state.sh storyhook-failure --result ok --forge-dir
+  .forge`, `goto complete`
+- **No story, some blocked**: `bash forge-loop-state.sh storyhook-failure --result ok --forge-dir
+  .forge`, `write_handoff("blocked stories remain — user intervention needed")`, `goto pause`
+- **Storyhook error** (nonzero exit / unparseable JSON): `bash forge-loop-state.sh
+  storyhook-failure --result fail --forge-dir .forge`, continue to top of loop (Step 0 will halt
+  once the persisted counter reaches 3 — it survives the mandatory fresh state re-read per Hard
+  Rule 6, unlike the old in-memory counter)
 
 ### Step 2: Load Just-in-Time Context
 
@@ -65,18 +67,23 @@ Load only what this specific story needs:
 1. **Story criteria**: From storyhook (title, acceptance criteria from comments)
 2. **Design section**: From `plan-mapping.json` → `stories[story_id].design_section`
 3. **Expected files**: From `plan-mapping.json` → `stories[story_id].files_expected`
-4. **Predecessor diffs**: Git diffs from recently completed stories
-   - Truncated: most recent 3 stories OR 5000 lines, whichever is smaller
-   - If larger → generate a brief summary instead
+4. **Predecessor diffs**:
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-predecessor-diff.sh --limit-stories 3 --limit-lines 5000 --project-dir .
+   ```
+   - `truncated: false` → paste `.diff` directly into the generator prompt.
+   - `truncated: true` → `.diff` is empty (not meant to be pasted at that size); write a brief
+     summary of `.commits` instead (this judgment call — what the summary should say — stays with
+     the model; the script only does the mechanical truncation and reports whether it truncated).
 5. **Prior evaluator feedback**: If this is a retry, extract structured JSON feedback from storyhook comments on this story
 
 ### Step 3: Generate
 
-```
+```bash
 story move HP-N in-progress
-Update lock heartbeat (before spawning — reflects active work)
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh heartbeat --session-id "$SESSION_ID" --forge-dir .forge
 git checkout .  # clean working tree for fresh attempt
-PRE_GEN_HEAD=$(git rev-parse HEAD)  # F064 interim check — see Step 3a
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh snapshot --phase pre-gen --forge-dir .forge --scope forge-only
 ```
 
 **Resolve `subagent_type`** per `references/team-roles.md`'s "Resolving subagent_type" (Preferred:
@@ -99,7 +106,7 @@ Agent(
 ```
 
 **Parse generator response**:
-- `status: "complete"` → proceed to step 4
+- `status: "complete"` → proceed to step 3a
 - `status: "blocked"` or `status: "needs_decision"` →
   - `story move HP-N blocked`
   - `story comment HP-N '{"blocked_reason":"decision","description":"<generator's description>"}'`
@@ -112,40 +119,27 @@ Agent(
 Defense-in-depth: verify the generator did not modify forge state files, and (F064) did not commit.
 
 ```bash
-# Before generator spawn, compute checksums:
-md5sum .forge/config.json .forge/state.json > /tmp/forge-pre-gen-checksums
-
-# After generator returns:
-md5sum .forge/config.json .forge/state.json > /tmp/forge-post-gen-checksums
-
-diff /tmp/forge-pre-gen-checksums /tmp/forge-post-gen-checksums
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-gen --forge-dir .forge --scope forge-only
 ```
 
-If checksums differ:
-- Revert `.forge/` changes: `git checkout .forge/`
-- Mark story blocked: `story move HP-N blocked`
-- Add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator modified forge state files"}'`
-- Continue to next iteration
-
-**F064 — "generator never commits" check (interim, cheap):**
-
-```bash
-POST_GEN_HEAD=$(git rev-parse HEAD)
-```
-
-If `$POST_GEN_HEAD` != `$PRE_GEN_HEAD` (captured in Step 3), the generator committed, violating
-Hard Rule 3. This is more serious than the checksum case above and is NOT auto-reverted — a `git
-reset` here risks destroying the commit's forensic trail or interacting badly with any concurrent
-work, and unlike the checksum-guarded files there's no cheap "just checkout" undo for a moved
-HEAD. Instead:
-- Mark story blocked: `story move HP-N blocked`
-- Add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator committed (HEAD moved from <PRE_GEN_HEAD> to <POST_GEN_HEAD>) — violates Hard Rule 3. Needs manual review before continuing."}'`
-- Write a handoff noting the exact SHAs and pause (do not silently continue the loop past this —
-  treat it the same as a runaway-safeguard trip)
-
-This is a lightweight interim guard, not exhaustive integrity scripting — the fuller
-content-hash-based `bin/forge-integrity.sh` (WS4) is the durable replacement for this and Step 5a
-below.
+Parse the JSON result:
+- `tampered: false` → proceed to Step 4.
+- `tampered: true`, `action: "restored"` → the generator modified `.forge/config.json` or
+  `.forge/state.json`; the script already restored their exact pre-spawn content (content-hash
+  based, correct even for the gitignored `state.json` — F096). Mark story blocked: `story move
+  HP-N blocked`; add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator
+  modified forge state files"}'`; continue to next iteration.
+- `tampered: true`, `head_moved: true`, `action: "manual_review_required"` (F064): the generator
+  committed, violating Hard Rule 3. This is more serious than the file-content case above and is
+  **NOT** auto-reverted — a `git reset` here risks destroying the commit's forensic trail or
+  interacting badly with any concurrent work. Instead: mark story blocked (`story move HP-N
+  blocked`); add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator
+  committed (HEAD moved from <head_before> to <head_after>) — violates Hard Rule 3. Needs manual
+  review before continuing."}'` (use the script's own `head_before`/`head_after` fields); write a
+  handoff noting the exact SHAs and pause (do not silently continue the loop past this — treat it
+  the same as a runaway-safeguard trip).
+- `tampered: true`, `action: "restore_failed"` → the script could not restore forge state files.
+  Treat as blocked + pause; this needs manual intervention.
 
 ### Step 4: Deterministic Pre-Checks
 
@@ -165,11 +159,10 @@ Parse the JSON result:
 
 ### Step 5: Evaluate
 
-```
+```bash
 story move HP-N verifying
-Update lock heartbeat (before spawning evaluator)
-PRE_EVAL_SNAPSHOT=$(git stash create "forge-eval-guard-<story-id>" || true)  # see Step 5a
-git diff --name-only > /tmp/forge-pre-eval-files
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh heartbeat --session-id "$SESSION_ID" --forge-dir .forge
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh snapshot --phase pre-eval --forge-dir .forge --scope full-tree
 ```
 
 **Resolve `subagent_type`** per `references/team-roles.md`'s "Resolving subagent_type" (Preferred:
@@ -194,21 +187,17 @@ Agent(
 )
 ```
 
-**Parse evaluator response** (the FULL schema — see `evaluator.md`'s Output Format, the single
-authoritative verdict schema):
-- `verdict: "pass"` →
-  - Commit atomically: `git add -A && git commit -m "feat(<story>): <title>"`
-  - `story move HP-N done`
-  - Sync git if needed
-  - Continue to step 6
-- `verdict: "fail"` →
-  - Store the COMPACT projection (`{verdict, failures}` — see `evaluator.md`'s "Storage split")
-    as a storyhook comment: `story comment HP-N '{"verdict":"fail","failures":[...]}'`
-  - goto retry
-
 **Dry-run mode**: Skip subagent spawn. Return canned verdict based on mode.
 
 ### Step 5a: Post-Evaluator Integrity Check
+
+Run this **immediately after the evaluator returns and BEFORE acting on its verdict** — a verdict
+from a subagent that tampered with the working tree must never reach the commit step, pass or
+fail:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-eval --forge-dir .forge --scope full-tree
+```
 
 **With WS3's `agents:evaluator` resolution in place (Step 5 above), this check is
 belt-and-suspenders, not the primary enforcement:** when the evaluator resolves to the real
@@ -218,43 +207,33 @@ blocked," not just "gets caught after the fact" (closes F057/F058 at the mechani
 path). This check remains necessary for the `general-purpose` fallback path (no platform-level
 tool restriction applies there) and as defense-in-depth either way.
 
-The evaluator should have modified ZERO files. Compare the file list captured before spawn (Step
-5) against after:
+Parse the JSON result:
+- `tampered: false` → discard nothing; proceed to **Parse evaluator response** below.
+- `tampered: true`, `action: "restored"` → the evaluator modified the working tree (content-hash
+  based — this catches BOTH an edit to a file the generator already touched AND a brand-new
+  untracked file, the two cases a filename-set diff misses; F092/F058). The script already
+  restored the exact pre-evaluator content and removed anything newly added. Discard the
+  evaluator's verdict entirely (do not act on it, pass or fail). Re-run the evaluator once (spawn
+  again, fresh integrity snapshot). If it tampers again → mark story blocked: `story move HP-N
+  blocked` with an integrity-violation reason.
+- `tampered: true`, `head_moved: true`, `action: "manual_review_required"` → the evaluator
+  committed (via Bash — it retains Bash even without Write/Edit). Same reasoning as Step 3a's
+  generator case: do NOT auto-revert. Mark story blocked, write a handoff with the exact SHAs, and
+  pause.
+- `tampered: true`, `action: "restore_failed"` → mark blocked + pause for manual intervention.
 
-```bash
-# After evaluator returns:
-git diff --name-only > /tmp/forge-post-eval-files
-
-diff /tmp/forge-pre-eval-files /tmp/forge-post-eval-files
-```
-
-If the file lists differ (a tracked file shows up in the diff that wasn't there before — the
-evaluator modified a tracked file the generator hadn't already touched):
-1. Discard the evaluator verdict.
-2. Restore the actual pre-evaluator content — NOT "from the stash" (nothing is ever pushed onto
-   the stash list, so that language was always false and following it literally would find
-   nothing to pop): `$PRE_EVAL_SNAPSHOT` (captured in Step 5 via `git stash create`, which builds a
-   commit object representing the working tree at that point WITHOUT touching the index, the
-   working tree, or the stash list) is the actual restorable snapshot.
-   - If `$PRE_EVAL_SNAPSHOT` is non-empty: `git checkout "$PRE_EVAL_SNAPSHOT" -- .`
-   - If `$PRE_EVAL_SNAPSHOT` is empty (nothing was uncommitted before the evaluator ran — `git
-     stash create` produces no output when the tree is clean): `git checkout .` is equivalent.
-3. Re-run evaluator (one retry only).
-4. If it modifies files again → mark story blocked: `story move HP-N blocked` with integrity violation reason.
-
-**Known gap (F092), intentionally not fully solved here — WS4's `bin/forge-integrity.sh` closes
-it:** `git diff --name-only` only lists unstaged changes to already-tracked files. It is blind to
-two cases this check is supposed to catch:
-- **An evaluator edit to a file the generator already modified** — the file was already in both
-  the pre- and post-spawn diff-name lists, so nothing changes and the tampering is invisible.
-- **An evaluator-created brand-new file** — untracked files never appear in `git diff --name-only`
-  output at all, before or after.
-
-For the `agents:evaluator` path this is an acceptable interim gap because the tool restriction
-above is the real barrier for both cases (the evaluator cannot Write/Edit regardless of what this
-heuristic would or wouldn't catch). For the `general-purpose` fallback path, these two cases are a
-genuine blind spot until WS4 lands; don't treat this heuristic as a complete guarantee for that
-path.
+**Parse evaluator response** (the FULL schema — see `evaluator.md`'s Output Format, the single
+authoritative verdict schema). Only reachable once the integrity check above reports
+`tampered: false`:
+- `verdict: "pass"` →
+  - Commit atomically: `git add -A && git commit -m "feat(<story>): <title>"`
+  - `story move HP-N done`
+  - Sync git if needed
+  - Continue to step 5b
+- `verdict: "fail"` →
+  - Store the COMPACT projection (`{verdict, failures}` — see `evaluator.md`'s "Storage split")
+    as a storyhook comment: `story comment HP-N '{"verdict":"fail","failures":[...]}'`
+  - Continue to step 5b, then goto retry
 
 ### Step 5b: Log Verdict
 
@@ -262,87 +241,108 @@ Append to `.forge/verdicts.jsonl` — this is the durable, uncapped home for the
 response (see `evaluator.md`'s "Storage split"; only the storyhook comment gets the compact
 `{verdict, failures}` projection, not this file):
 
-```json
-{"story": "HP-N", "attempt": <attempt_number>, "timestamp": "<now>", "verdict_full": {"verdict": "pass|fail", "failures": [...], "criteria_checks": [...], "edge_case_findings": [...], "security_findings": [...], "design_adherence": "aligned|drifted", "design_drift_details": "...", "summary": "..."}}
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-verdict.sh --story HP-N --attempt <attempt_number> \
+  --verdict pass|fail --failures-json '[...]' --verdict-json '<the evaluator's full JSON response>' \
+  --forge-dir .forge
 ```
+
+The script owns the timestamp (ISO-8601, via `jq`'s own clock — never model-fabricated) and the
+append. `--verdict-json` is the evaluator's full response verbatim; the script stores it as-is
+under `verdict_full`. If only the compact `{verdict, failures}` shape is available (e.g. dry-run
+canned responses), omit `--verdict-json` — the script falls back to constructing `verdict_full`
+from `--verdict`/`--failures-json` alone.
 
 ### Step 6: State Management
 
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh attempt --forge-dir .forge
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh heartbeat --session-id "$SESSION_ID" --forge-dir .forge
 ```
-Update state.json:
-  stories_attempted += 1 (if story reached evaluation, regardless of pass/fail)
-  updated_at = now
 
-Update lock heartbeat
+`attempt` runs once per story that reached evaluation, regardless of pass/fail — it increments
+`stories_attempted` and stamps `updated_at`.
 
-If story reached done:
-  stories_this_session += 1
+If the story reached `done` this iteration:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh done --forge-dir .forge
+```
+`stories_this_session` counts unique stories reaching `done`, not total iterations — a story that
+retries and eventually passes still only calls `done` once, at the point it actually reaches
+`done`. Parse the result:
+- `session_limit_hit: false` → continue the loop.
+- `session_limit_hit: true` → `write_handoff("Session limit reached ({stories_this_session}
+  stories completed)")` → `goto pause`.
 
+```
 # Incremental handoff: update .forge/handoffs/handoff-execute.md with this story's outcomes.
 # This ensures crash recovery has fresh context even without a clean pause.
 # Append to "Stories Completed This Session" section and update "Working Context"
 # with any new patterns, micro-decisions, or code landmarks from this story.
 write_handoff(incremental=true)
-
-If stories_this_session >= config.max_stories_per_session:
-  → write_handoff("Session limit reached ({stories_this_session} stories completed)")
-  → goto pause
 ```
-
-`stories_this_session` counts unique stories reaching `done`, not total iterations. A story that retries 3 times and passes counts as 1.
 
 ### Step 7: Architectural Drift Check
 
-```
-Track stories_since_last_architect_review (in-memory counter, not persisted)
-
-If completed story was last in its wave OR stories_since_last_architect_review >= 3:
-  Resolve subagent_type per references/team-roles.md's "Resolving subagent_type":
-    Preferred: "agents:software-architect" (there is no "forge:" namespace — forge registers no
-    agents of its own; software-architect lives in the agents plugin like every other shared
-    agent). Fallback: "general-purpose" with software-architect.md +
-    agent-overrides/software-architect-context.md inlined.
-
-  Spawn architect-reviewer subagent:
-    Agent(
-      subagent_type: "agents:software-architect",  # or "general-purpose" + inlined role on fallback
-      prompt: <constructed prompt with:
-        - [Fallback path only] software-architect.md + agent-overrides/software-architect-context.md
-        - Recent commits: <git log of stories completed since last review>
-        - DESIGN.md: <relevant sections>
-      >
-    )
-  Reset stories_since_last_architect_review = 0
-
-  If architect reports significant drift:
-    → write_handoff("Architectural drift detected: <details>")
-    → goto pause
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh architect-check --wave-boundary true|false --forge-dir .forge
 ```
 
-**Dry-run mode**: Skip architect review.
+Pass `--wave-boundary true` when the completed story was the last one in its wave, else `false`.
+The script persists `stories_since_last_architect_review` in `.forge/state.json` — this is what
+makes the trigger reachable under the default `max_stories_per_session: 1` (context clears between
+every single story, so an in-memory counter could never accumulate to its own threshold; F098).
+
+Parse the result:
+- `trigger: false` → continue the loop (no review this iteration).
+- `trigger: true` → run the architect review:
+
+  Resolve subagent_type per `references/team-roles.md`'s "Resolving subagent_type": Preferred:
+  `"agents:software-architect"` (there is no "forge:" namespace — forge registers no agents of its
+  own; software-architect lives in the agents plugin like every other shared agent). Fallback:
+  `"general-purpose"` with `software-architect.md` + `agent-overrides/software-architect-context.md`
+  inlined.
+
+  ```
+  Agent(
+    subagent_type: "agents:software-architect",  # or "general-purpose" + inlined role on fallback
+    prompt: <constructed prompt with:
+      - [Fallback path only] software-architect.md + agent-overrides/software-architect-context.md
+      - Recent commits: <git log of stories completed since last review>
+      - DESIGN.md: <relevant sections>
+    >
+  )
+  ```
+
+  If the architect reports significant drift → `write_handoff("Architectural drift detected:
+  <details>")` → `goto pause`.
+
+**Dry-run mode**: Skip architect review entirely (do not call `architect-check` either — dry runs
+have no real story completions to track drift against).
 
 ### Retry
 
-```
+```bash
 retry:
   git checkout .  # discard failed attempt's changes
-
-  retry_count = state.retry_counts[story_id] || 0
-  retry_count += 1
-  state.retry_counts[story_id] = retry_count
-  state.total_retries += 1
-
-  If retry_count < config.max_retries:
-    story move HP-N todo  # with evaluator/check feedback already in comments
-    Write state.json to disk
-    continue  # back to top of loop
-
-  If retry_count >= config.max_retries:
-    story move HP-N blocked
-    story comment HP-N '{"blocked_reason":"max_retries","description":"Failed <max_retries> attempts","last_feedback":{...}}'
-    Write state.json to disk
-    continue  # back to top of loop — will pick next story
+  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh retry --story-id HP-N --forge-dir .forge
 ```
+
+Parse the result:
+- `action: "retry"` →
+  ```bash
+  story move HP-N todo  # with evaluator/check feedback already in comments
+  ```
+  continue (back to top of loop)
+- `action: "block"` →
+  ```bash
+  story move HP-N blocked
+  story comment HP-N '{"blocked_reason":"max_retries","description":"Failed <max_retries> attempts","last_feedback":{...}}'
+  ```
+  continue (back to top of loop — will pick next story)
+
+The script owns `retry_counts[story_id]`, `total_retries`, and the retry-vs-block comparison
+against `config.max_retries` — no model-run counter arithmetic or JSON edits.
 
 ### Pause
 
@@ -355,16 +355,25 @@ pause:
   #   - Test State (pass/fail/flaky, run command, env setup)
   # This is critical because context WILL be cleared before resume.
   write_handoff()
-  state.status = "paused"
-  state.sessions_completed += 1
-  state.resume = {
-    command: "/forge resume",
-    handoff_file: "handoffs/handoff-execute.md",
-    summary: "Execution paused — {stories_this_session} stories completed. {reason}"
-  }
-  Write state.json to disk
-  Release lock (delete lock.json)
+```
 
+```bash
+jq --arg cmd "/forge resume" \
+   --arg hf "handoffs/handoff-execute.md" \
+   --arg sum "Execution paused — ${STORIES_THIS_SESSION} stories completed. ${REASON}" \
+   '.status = "paused"
+    | .sessions_completed = (.sessions_completed + 1)
+    | .updated_at = (now | todate)
+    | .resume = {command: $cmd, handoff_file: $hf, summary: $sum}' \
+  .forge/state.json > .forge/state.json.tmp && mv .forge/state.json.tmp .forge/state.json
+
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
+```
+
+(Same atomic read-modify-write idiom `hooks/session-stop.sh` already uses for its own crash-path
+pause — this is the graceful-pause equivalent, not a new pattern.)
+
+```
   # Queue automatic context clear + resume via freshen:
   #   bash plugins/freshen/bin/freshen.sh queue "/forge resume" --source forge --summary "Execution paused — [N] stories completed"
   # If the queue command fails (tmux not available), log a warning:
@@ -404,10 +413,15 @@ complete:
   If tests fail:
     Do NOT re-enter the loop
     Write failure details to .forge/handoffs/handoff-execute.md
-    state.status = "paused"
-    state.pause_reason = "final-test-suite-failed"
-    Write state.json to disk
-    Release lock
+```
+
+```bash
+jq '.status = "paused" | .pause_reason = "final-test-suite-failed" | .updated_at = (now | todate)' \
+  .forge/state.json > .forge/state.json.tmp && mv .forge/state.json.tmp .forge/state.json
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
+```
+
+```
     # Do NOT remove auto-resume trigger
     Log: "Final test suite failed — manual review required. See handoffs/handoff-execute.md."
     return
@@ -417,7 +431,8 @@ complete:
   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .
   # Ignore `.ok`/`.reason` beyond logging: `no_plan_mapping`, `story_cli_missing`,
   # etc. are all fine to silently continue past. Only `.closed == true` means
-  # `.storyhook/` actually changed and needs to ride along in Step 4's commit.
+  # `.storyhook/` actually changed and needs to ride along in item 5's commit
+  # below.
 
   # 3. Storyhook report
   story summary
@@ -435,7 +450,9 @@ complete:
 
   # 6. Queue freshen for the NEXT step (review_validate) — do NOT cancel:
   bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Execution complete — all stories done"
+```
 
+```bash
   # 7. Update state
   # status stays in the same two-value space as every other exit path
   # ("running" while looping, "paused" once the loop has exited for any
@@ -443,10 +460,9 @@ complete:
   # (not state.json) decide the review_validate transition, per Hard Rule 1
   # ("storyhook is authoritative for story-level state — never duplicate it
   # in forge files").
-  state.status = "paused"
-  state.resume = null
-  Write state.json to disk
-  Release lock (delete lock.json)
+  jq '.status = "paused" | .resume = null | .updated_at = (now | todate)' \
+    .forge/state.json > .forge/state.json.tmp && mv .forge/state.json.tmp .forge/state.json
+  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
 ```
 
 ## State Transition Summary

@@ -335,3 +335,56 @@ teardown() {
   echo "$output" | jq . >/dev/null
   rm -rf "$isolated"
 }
+
+# --- --transition-id (agentics#33) ---
+#
+# Correlates this step-exit's "actual" log line with the "predicted" line
+# forge-state.sh --record-transition wrote when the router read its JSON
+# output earlier this same turn, so forge-transition-report.sh can pair them
+# by transition_id instead of positional adjacency in the log (which a
+# crashed/interleaved session would silently corrupt).
+
+@test "--transition-id is optional -- omitting it still succeeds exactly as before" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" --step research --summary "done" --next "/forge design --orchestrated"
+  [ "$status" -eq 0 ]
+  local ok
+  ok="$(echo "$output" | jq -r '.ok')"
+  [ "$ok" = "true" ]
+}
+
+@test "--transition-id: logs an actual line with the given id when provided" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" --step research --summary "done" --next "/forge design --orchestrated" --transition-id "12345-6789"
+  [ "$status" -eq 0 ]
+  run grep -c "actual step=research transition_id=12345-6789" "$TEST_DIR/.freshen/transitions.log"
+  [ "$output" = "1" ]
+}
+
+@test "--transition-id: omitted logs transition_id=none instead of failing" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" --step research --summary "done" --next "/forge design --orchestrated"
+  [ "$status" -eq 0 ]
+  run grep -c "actual step=research transition_id=none" "$TEST_DIR/.freshen/transitions.log"
+  [ "$output" = "1" ]
+}
+
+@test "--transition-id: logs the actual line on --terminal exits too" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" --step deploy --summary "pipeline complete" --terminal --transition-id "42-1"
+  [ "$status" -eq 0 ]
+  run grep -c "actual step=deploy transition_id=42-1" "$TEST_DIR/.freshen/transitions.log"
+  [ "$output" = "1" ]
+}
+
+@test "--transition-id: logging failure (missing freshen lib) never fails the step-exit" {
+  cd "$TEST_DIR"
+  local isolated
+  isolated="$(mktemp -d)"
+  mkdir -p "$isolated/forge-only/bin"
+  cp "$SCRIPT" "$isolated/forge-only/bin/forge-step-exit.sh"
+  run bash "$isolated/forge-only/bin/forge-step-exit.sh" --step research --summary "done" --next "/forge design --orchestrated" --transition-id "1-1"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq . >/dev/null
+  rm -rf "$isolated"
+}

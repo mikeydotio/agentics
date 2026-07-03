@@ -21,9 +21,21 @@ that was already made deliberately.
 
 1. **tmux watchdog/supervisor** (findings F044/F104) — inverting control so a scripted supervisor
    drives `/forge` transitions instead of the LLM re-deriving `forge-state.sh`'s output every turn.
-   Scoped as a design spike, tracked at
-   [mikeydotio/agentics#33](https://github.com/mikeydotio/agentics/issues/33). Do the read-back
-   verification and pane-option pieces first if you pick this up — they're smaller and safer.
+   [mikeydotio/agentics#33](https://github.com/mikeydotio/agentics/issues/33) was picked up
+   2026-07-03: a design spike (3 independent architecture proposals, adversarial safety/complexity/
+   operational review) concluded the supervisor — and the issue's own originally-proposed "Level
+   1.5" synchronous helper — are **not** worth building yet. WS6 already delivers confirmed/audited
+   sends; the remaining gap is the router's *classification* judgment (fix_loop's mandatory archive
+   call, the three human-gate states), and a bash reimplementation of that judgment would be a
+   second source of truth for the exact drift class `forge-contract-check.sh` exists to catch.
+   Shipped instead: `forge-state.sh --record-transition` (emits `category`/`auto_advance`/
+   `transition_id`), `forge-step-exit.sh --transition-id`, and `forge-transition-report.sh` —
+   pure telemetry, correlated by id (not log position) so a stalled/crashed session degrades to a
+   visible orphan count instead of corrupting the data. Full design doc + adversarial review:
+   [agentics#33 comment](https://github.com/mikeydotio/agentics/issues/33#issuecomment-4879731013).
+   Re-scoped, not closed — revisit only once `transitions.log` data actually shows category-1
+   overhead is non-trivial, a real predicted/actual mismatch appears, or orphaned-predicted counts
+   are persistently nonzero. Until then, no further action needed here.
 
 2. **Pane-option state migration** (finding F046) — replacing `.freshen/.clear-pending` with a
    tmux pane option. WS6 judged the cost/benefit had shifted since the plan was written: WS7's

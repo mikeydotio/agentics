@@ -37,11 +37,14 @@ that was already made deliberately.
 
 ## Genuinely open follow-up
 
-3. **storyhook repo portability** (finding F074's storyhook-side half) — `session-start.sh`'s
-   fragile sed-based cwd parse (should be `jq -r '.cwd'`) and `post-git.sh`'s per-invocation
-   `python3` spawn. Tracked at
-   [mikeydotio/storyhook#10](https://github.com/mikeydotio/storyhook/issues/10). Small, well-scoped,
-   no Rust changes needed.
+None remaining. Finding F074's storyhook-side half (`post-git.sh`'s per-invocation `python3`
+spawn) was fixed in [storyhook#11](https://github.com/mikeydotio/storyhook/pull/11) — a cheap
+substring pre-filter now skips the interpreter spawn for the vast majority of Bash calls that
+aren't git-related. `session-start.sh`'s sed-based cwd parse was investigated and left
+**intentionally** unchanged: `tests/session_start_hook.rs` has explicit tests
+(`hook_script_does_not_use_python3`, `hook_script_is_under_20_functional_lines`) encoding a
+deliberate design constraint that hook must satisfy — introducing python3 there broke both tests.
+Not a bug; [storyhook#10](https://github.com/mikeydotio/storyhook/issues/10) is closed.
 
 ## Where to look for context
 

@@ -48,8 +48,12 @@ Valid modes: `default`, `plan`, `acceptEdits`, `bypassPermissions`
 current=$(grep '^disabled_modes:' ~/.config/greenlight/config.yaml | sed 's/^disabled_modes: *//')
 # Remove the mode from the list
 updated=$(echo "$current" | tr ' ' '\n' | grep -v "^<mode>$" | tr '\n' ' ' | sed 's/ *$//')
-# Write back
-sed -i "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml
+# Write back — portable in-place edit (BSD sed's `-i` requires a backup-suffix
+# argument and silently misparses `-i "s/.../"` as one; GNU sed doesn't. A
+# temp-file rewrite works identically on both — see F079.)
+tmp=$(mktemp)
+sed "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml > "$tmp" \
+  && mv "$tmp" ~/.config/greenlight/config.yaml
 ```
 
 Report the change: "Greenlight is now **enabled** in `<mode>` mode."
@@ -63,7 +67,11 @@ current=$(grep '^disabled_modes:' ~/.config/greenlight/config.yaml | sed 's/^dis
 if ! echo " $current " | grep -q " <mode> "; then
   updated="${current} <mode>"
   updated=$(echo "$updated" | sed 's/^ *//')
-  sed -i "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml
+  # Portable in-place edit — see the F079 note above (mktemp + sed + mv,
+  # not `sed -i` which is GNU-only without a backup-suffix argument).
+  tmp=$(mktemp)
+  sed "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml > "$tmp" \
+    && mv "$tmp" ~/.config/greenlight/config.yaml
 fi
 ```
 
@@ -85,21 +93,29 @@ Change the analysis mode:
 - **permissive**: More lenient deterministic checks. AI fallback for the rest.
 
 ```bash
-sed -i 's/^mode: .*/mode: <value>/' ~/.config/greenlight/config.yaml
+tmp=$(mktemp)
+sed 's/^mode: .*/mode: <value>/' ~/.config/greenlight/config.yaml > "$tmp" && mv "$tmp" ~/.config/greenlight/config.yaml
 ```
 
 ### /greenlight ai <on|off>
-Enable or disable AI fallback:
+Enable or disable AI fallback (opt-in — off by default; see AI Fallback in README.md for why):
 ```bash
-sed -i 's/^ai_enabled: .*/ai_enabled: <true|false>/' ~/.config/greenlight/config.yaml
+tmp=$(mktemp)
+sed 's/^ai_enabled: .*/ai_enabled: <true|false>/' ~/.config/greenlight/config.yaml > "$tmp" && mv "$tmp" ~/.config/greenlight/config.yaml
 ```
 
 ### /greenlight model <model-name>
-Change the AI model for fallback analysis:
+Change the AI model for fallback analysis. Must be a structured-outputs-capable model (this
+feature calls `output_config.format`) — check the current model roster (e.g. via the `claude-api`
+skill's model reference) rather than assuming a name is still valid; do not hand-roll a dated
+snapshot ID.
 ```bash
-sed -i 's/^ai_model: .*/ai_model: <value>/' ~/.config/greenlight/config.yaml
+tmp=$(mktemp)
+sed 's/^ai_model: .*/ai_model: <value>/' ~/.config/greenlight/config.yaml > "$tmp" && mv "$tmp" ~/.config/greenlight/config.yaml
 ```
-Valid models: `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-opus-4-6`
+Structured-outputs-capable models as of this writing: `claude-haiku-4-5` (default — cheapest/fastest,
+appropriate for a boolean safety check), `claude-sonnet-5`, `claude-opus-4-8`. Verify against the
+live model roster before suggesting a different one — this list goes stale.
 
 ## Allow/Block Commands
 
@@ -107,7 +123,9 @@ Valid models: `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-opus-4-6
 Add a command to the custom always-allow list. Read current `custom_allow`, append the command, write back:
 ```bash
 current=$(grep '^custom_allow:' ~/.config/greenlight/config.yaml | sed 's/^custom_allow: *//')
-sed -i "s/^custom_allow: .*/custom_allow: ${current} <command-name>/" ~/.config/greenlight/config.yaml
+tmp=$(mktemp)
+sed "s/^custom_allow: .*/custom_allow: ${current} <command-name>/" ~/.config/greenlight/config.yaml > "$tmp" \
+  && mv "$tmp" ~/.config/greenlight/config.yaml
 ```
 
 ### /greenlight block <command-name>
@@ -148,10 +166,10 @@ If `CLAUDE_PLUGIN_ROOT` is not available, write the defaults inline:
 cat > ~/.config/greenlight/config.yaml << 'EOF'
 disabled_modes: bypassPermissions
 mode: standard
-ai_enabled: true
-ai_model: claude-sonnet-4-6
+ai_enabled: false
+ai_model: claude-haiku-4-5
 ai_timeout: 10
-ai_show_rationale: true
+ai_show_rationale: false
 custom_allow:
 custom_pass:
 log_file:

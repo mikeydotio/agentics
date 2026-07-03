@@ -13,17 +13,26 @@ disabled_modes: bypassPermissions
 #   permissive — more lenient deterministic checks + AI for the rest
 mode: standard
 
-# AI fallback: call Claude API for uncertain commands
-ai_enabled: true
+# AI fallback: call Claude API for uncertain commands. Opt-in (off by
+# default) — it sits on the critical path of any autonomous loop (latency +
+# token cost per uncertain command); turn it on deliberately if you want
+# the extra judgment call for commands the deterministic checks can't place.
+ai_enabled: false
 
-# AI model for fallback analysis
-ai_model: claude-sonnet-4-6
+# AI model for fallback analysis. Must be a structured-outputs-capable
+# model (this feature depends on output_config.format) — currently Fable 5,
+# Opus 4.8, Sonnet 5, Haiku 4.5, or legacy Opus 4.5/4.1. Haiku 4.5 is the
+# cheapest/fastest of these and is the right size for a single boolean
+# safety judgment.
+ai_model: claude-haiku-4-5
 
 # AI request timeout in seconds
 ai_timeout: 10
 
-# Show AI rationale to user when AI is invoked
-ai_show_rationale: true
+# Show AI rationale to user when AI is invoked. Off by default (F082) — the
+# rationale line is injected into the agent's context on every AI-approved
+# command, which adds transcript noise on a long autonomous run.
+ai_show_rationale: false
 
 # Custom always-allow commands (space-separated base command names)
 # Example: custom_allow: make tsc webpack

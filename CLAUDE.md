@@ -60,6 +60,27 @@ plugins are restamped too, so a bump can never miss one.
   `bash .semver/hooks/post-bump/01-sync-plugin-versions.sh` (files only, no git ops).
 - `tests/plugin-versions.sh` (in `make test`) fails if any manifest drifts from `VERSION`.
 
+## Hardening Roadmap
+
+The forge × storyhook seam underwent a full hardening pass (2026-07 audit + 8-workstream plan,
+106 findings — see `~/Enderchest/agentics-harness-audit/`). All landed, one PR per workstream:
+
+- ✅ WS1 — storyhook seam rewrite (verb-first CLI, real JSON shapes, DAG cycle guard)
+- ✅ WS2 — state-machine correctness (F009 JSON-path fix, review/validate deadlock, resume spine)
+- ✅ WS8 (F103) — docs↔CLI contract guard, regression-proofs the seam
+- ✅ Critical fix — decompose's auto-created parent story could permanently deadlock `execute`
+  (found by live dry-run, not in the original 106 findings)
+- ✅ WS3 — agent alignment (real `agents:*` types, tool restrictions actually bind)
+- ✅ WS4 — loop bookkeeping scripted (lock, verdicts, integrity, crash-recovery, predecessor-diff)
+- ✅ WS5 — step-exit consolidated (fixed a live cross-project relative-path bug in all 12 step skills)
+- ✅ WS7 — hooks/greenlight/portability (breaker correctness, greenlight tests+hardening, BSD/macOS)
+- ✅ WS6 — tmux determinism (capture-pane verification, transition audit log)
+- ⏸ Deferred by design (not oversights): tmux watchdog/supervisor
+  ([agentics#33](https://github.com/mikeydotio/agentics/issues/33)); pane-option state migration
+  (reasoning in `plugins/forge/references/auto-resume.md`)
+- 📋 Open follow-up: storyhook repo's `session-start.sh`/`post-git.sh` portability
+  ([storyhook#10](https://github.com/mikeydotio/storyhook/issues/10))
+
 <!-- semver:start -->
 ## Semantic Versioning
 

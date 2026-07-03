@@ -75,9 +75,23 @@ The forge × storyhook seam underwent a full hardening pass (2026-07 audit + 8-w
 - ✅ WS5 — step-exit consolidated (fixed a live cross-project relative-path bug in all 12 step skills)
 - ✅ WS7 — hooks/greenlight/portability (breaker correctness, greenlight tests+hardening, BSD/macOS)
 - ✅ WS6 — tmux determinism (capture-pane verification, transition audit log)
-- ⏸ Deferred by design (not oversights): tmux watchdog/supervisor
-  ([agentics#33](https://github.com/mikeydotio/agentics/issues/33)); pane-option state migration
-  (reasoning in `plugins/forge/references/auto-resume.md`)
+- ✅ agentics#33 — re-scoped from "build a supervisor" to instrumentation: `forge-state.sh` now
+  emits `category`/`auto_advance`/`transition_id` (the router's own pass_through vs.
+  fix_loop/blocked_review/escalate_review/deploy_gate/report_complete classification, named
+  instead of left implicit in `dispatch`), `--record-transition` and `forge-step-exit.sh
+  --transition-id` log correlated predicted/actual lines to `.freshen/transitions.log`, and
+  `forge-transition-report.sh` correlates them by id (not position) into matched/orphaned-
+  predicted/orphaned-actual buckets. Pure telemetry — nothing acts on `category`/`auto_advance`
+  yet. A full supervisor (or the issue's original "Level 1.5" helper) remains explicitly **not
+  built**: WS6 already delivers confirmed/audited sends, and a bash reimplementation of
+  categories 2–6's judgment (fix_loop's mandatory archive call, the three human-gate states)
+  would be a second source of truth for exactly the class of drift `forge-contract-check.sh`
+  exists to catch. Revisit only on a concrete signal — `transitions.log` data showing category-1
+  transitions are a non-trivial cost, a predicted/actual mismatch (a real misroute), or a
+  persistent orphaned-predicted count — not on a schedule. Full design doc:
+  [agentics#33 comment](https://github.com/mikeydotio/agentics/issues/33#issuecomment-4879731013).
+  Pane-option state migration remains separately deferred (reasoning in
+  `plugins/forge/references/auto-resume.md`).
 - ✅ storyhook repo portability follow-up (F074) — `post-git.sh`'s python3 spawn fixed
   ([storyhook#11](https://github.com/mikeydotio/storyhook/pull/11)); `session-start.sh`'s
   sed-based cwd parse investigated and left intentionally unchanged (a tested design constraint

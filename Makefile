@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge
+.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight
 
-test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge
+test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -36,4 +36,24 @@ test-forge:
 		bash plugins/forge/tests/run-tests.sh; \
 	else \
 		echo "bats not installed — skipping forge bats suite (plugins/forge/bin,hooks/*.bats)"; \
+	fi
+
+# hook-guard's bats suites (plugins/hook-guard/lib/*.bats, hooks/*.bats) —
+# the Stop-loop circuit breaker (F048/F043/F050/F052/F054/F055 regression
+# coverage). Same bats-not-installed-everywhere caveat as test-root-bats.
+test-hook-guard:
+	@if command -v bats >/dev/null 2>&1; then \
+		bash plugins/hook-guard/tests/run-tests.sh; \
+	else \
+		echo "bats not installed — skipping hook-guard bats suite (plugins/hook-guard/lib,hooks/*.bats)"; \
+	fi
+
+# greenlight's bats suite (plugins/greenlight/tests/*.bats) — the PreToolUse
+# safety hook (F075/F076/F077/F078/F080/F081/F082 regression coverage).
+# Same bats-not-installed-everywhere caveat as test-root-bats.
+test-greenlight:
+	@if command -v bats >/dev/null 2>&1; then \
+		bash plugins/greenlight/tests/run-tests.sh; \
+	else \
+		echo "bats not installed — skipping greenlight bats suite (plugins/greenlight/tests/*.bats)"; \
 	fi

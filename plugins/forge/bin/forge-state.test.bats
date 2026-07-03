@@ -504,6 +504,33 @@ decompose_single_task_plan() {
   [ "$(jq_field '.state')" = "review_validate" ]
 }
 
+@test "a project story with zero real task stories does not wedge check_storyhook on an empty states list" {
+  # `story decompose --stdin` allows a wave with zero checkbox items,
+  # producing a parent-only story list (project_story is the ONLY story).
+  # Excluding project_story then leaves an empty selection. A prior
+  # implementation computed the non-done count via
+  # `states=$(... ) ; echo "$states" | grep -cv '^done$'` -- but `echo ""`
+  # still emits one blank line, so grep counted it as 1 non-done entry and
+  # stories_all_done stayed false forever, wedging execute the same way the
+  # project-story deadlock above does, just via a different trigger. Guard
+  # against regressing back to that shell/grep counting idiom.
+  init_storyhook
+  mkdir -p "$FORGE_DIR"
+  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  ( cd "$TEST_DIR" && \
+    printf '## Task Breakdown\n\n### Wave 1\n\n' \
+      | story decompose --stdin --json >/dev/null )
+  run bash -c "cd '$TEST_DIR' && story list --json | jq '.stories | length'"
+  [ "$output" = "1" ]
+
+  echo '{"plan_hash":"x","project_story":"ST-1","stories":{}}' > "$FORGE_DIR/plan-mapping.json"
+
+  run_state_in_project
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "review_validate" ]
+  [ "$(jq_field '.dispatch')" = "review_validate --orchestrated" ]
+}
+
 # --- Expected handoff for the specific step being resumed ---
 
 @test "expected handoff for design is research's, not just any newest file" {

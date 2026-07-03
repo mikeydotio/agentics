@@ -54,6 +54,22 @@ run_on_clear() {
   ( cd "$TEST_DIR" && TMUX= TMUX_PANE= CLAUDE_PLUGIN_ROOT="$FRESHEN_ROOT" bash "$ON_CLEAR" )
 }
 
+# Sets a file's mtime N seconds in the past, portably across GNU and BSD
+# `date`/`touch` (macOS ships BSD touch; Linux ships GNU touch -- their `-t`
+# argument format is shared, but the epoch-seconds -> formatted-timestamp
+# step differs: GNU `date -d "@<epoch>"` vs BSD `date -r <epoch>`). Used to
+# simulate a genuinely later, distinct SessionStart(clear) event without
+# sleeping in the test -- real distinct events are always at least one full
+# model round-trip apart (seconds), so backdating past the hook's freshness
+# window (default 5s) is a faithful stand-in.
+backdate_mtime() {
+  local file="$1" seconds_ago="$2" past_epoch ts
+  past_epoch=$(( $(date +%s) - seconds_ago ))
+  ts="$(date -d "@$past_epoch" +%Y%m%d%H%M.%S 2>/dev/null \
+    || date -r "$past_epoch" +%Y%m%d%H%M.%S 2>/dev/null)"
+  touch -t "$ts" "$file"
+}
+
 @test "source=startup always resets the breaker" {
   seed_guard_file
   run run_session_start startup
@@ -168,6 +184,76 @@ run_on_clear() {
   [ "$status" -eq 0 ]
   [ -f "$(guard_file_for)" ]
   [[ "$output" == *"skipped reset"* ]]
+  [ ! -f "$TEST_DIR/.freshen/.clear-consumed" ]
+}
+
+@test "a stale .clear-consumed marker is ignored (not treated as evidence) and still cleaned up" {
+  # Direct/isolated regression coverage for the freshness-window mechanism
+  # itself: an old .clear-consumed (older than CLEAR_CONSUMED_WINDOW) must
+  # NOT suppress the reset, regardless of how it got there.
+  seed_guard_file
+  mkdir -p "$TEST_DIR/.freshen"
+  touch "$TEST_DIR/.freshen/.clear-consumed"
+  backdate_mtime "$TEST_DIR/.freshen/.clear-consumed" 30
+  run run_session_start clear
+  [ "$status" -eq 0 ]
+  # Stale marker must NOT suppress the reset -- this /clear was not
+  # (as far as current evidence shows) freshen-initiated.
+  [ ! -f "$(guard_file_for)" ]
+  [[ "$output" == *"ignoring stale .clear-consumed"* ]]
+  [[ "$output" == *"hook-guard: ok"* ]]
+  # Cleaned up regardless of the staleness verdict.
+  [ ! -f "$TEST_DIR/.freshen/.clear-consumed" ]
+}
+
+@test "a SECOND, unrelated bare /clear after a hook-guard-first freshen cycle resets the breaker (residual regression)" {
+  # Reproduces the exact residual regression from adversarial verification of
+  # F052's fix: hook-guard sees .clear-pending and skips (ordering: hook-guard
+  # first) -> on-clear.sh runs after it in the SAME event and hands the flag
+  # off to .clear-consumed as always -> nothing in that cycle ever reads that
+  # .clear-consumed back, so it lingers -> a SECOND, wholly unrelated bare
+  # user /clear must still reset the breaker, not be fooled by the leftover.
+  seed_guard_file
+  mkdir -p "$TEST_DIR/.freshen"
+  touch "$TEST_DIR/.freshen/.clear-pending"
+
+  # Cycle 1, event A: hook-guard runs FIRST. It must see .clear-pending
+  # directly, skip the reset, and -- critically -- leave .clear-pending
+  # completely untouched (on-clear.sh still needs its content).
+  run run_session_start clear
+  [ "$status" -eq 0 ]
+  [ -f "$(guard_file_for)" ]
+  [[ "$output" == *"skipped reset"* ]]
+  [ -f "$TEST_DIR/.freshen/.clear-pending" ]
+
+  # Cycle 1, event A continued: on-clear.sh runs SECOND for this SAME event,
+  # as always, and hands .clear-pending off by renaming it to
+  # .clear-consumed. hook-guard has already finished with event A and will
+  # not run again for it -- this .clear-consumed has no reader this cycle.
+  run run_on_clear
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"freshen: ok"* ]]
+  [ ! -f "$TEST_DIR/.freshen/.clear-pending" ]
+  [ -f "$TEST_DIR/.freshen/.clear-consumed" ]
+
+  # A real, distinct SessionStart(clear) event is always at least one full
+  # model round-trip away (seconds) -- simulate that elapsed time by
+  # backdating the leftover marker past the freshness window instead of
+  # sleeping in the test.
+  backdate_mtime "$TEST_DIR/.freshen/.clear-consumed" 30
+
+  # Event B: a SECOND, wholly unrelated, bare user /clear. No .clear-pending
+  # was ever touched for it -- this has nothing to do with freshen. Before
+  # the fix, hook-guard would find the stale .clear-consumed left over from
+  # event A and wrongly treat it as evidence that event B was ALSO
+  # freshen-initiated, skipping a reset that should happen.
+  run run_session_start clear
+  [ "$status" -eq 0 ]
+  # The breaker MUST reset this time -- this is the crux of the regression.
+  [ ! -f "$(guard_file_for)" ]
+  [[ "$output" == *"hook-guard: ok"* ]]
+  [[ "$output" != *"skipped reset"* ]]
+  # The stale marker must still be cleaned up, whichever way it was judged.
   [ ! -f "$TEST_DIR/.freshen/.clear-consumed" ]
 }
 

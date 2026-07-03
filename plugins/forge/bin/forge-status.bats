@@ -61,7 +61,7 @@ teardown() {
 }
 
 @test "status: detects research state when IDEA.md exists" {
-  echo "idea" > "$FORGE_DIR/IDEA.md"
+  printf '# Idea\n\nidea\n' > "$FORGE_DIR/IDEA.md"
   run bash "$SCRIPT" "$FORGE_DIR"
   local state
   state="$(echo "$output" | jq -r '.state')"
@@ -69,9 +69,9 @@ teardown() {
 }
 
 @test "status: detects design state" {
-  echo "idea" > "$FORGE_DIR/IDEA.md"
+  printf '# Idea\n\nidea\n' > "$FORGE_DIR/IDEA.md"
   mkdir -p "$FORGE_DIR/research"
-  echo "summary" > "$FORGE_DIR/research/SUMMARY.md"
+  printf '# Summary\n\nsummary\n' > "$FORGE_DIR/research/SUMMARY.md"
   run bash "$SCRIPT" "$FORGE_DIR"
   local state
   state="$(echo "$output" | jq -r '.state')"
@@ -79,10 +79,10 @@ teardown() {
 }
 
 @test "status: detects plan state" {
-  echo "idea" > "$FORGE_DIR/IDEA.md"
+  printf '# Idea\n\nidea\n' > "$FORGE_DIR/IDEA.md"
   mkdir -p "$FORGE_DIR/research"
-  echo "summary" > "$FORGE_DIR/research/SUMMARY.md"
-  echo "design" > "$FORGE_DIR/DESIGN.md"
+  printf '# Summary\n\nsummary\n' > "$FORGE_DIR/research/SUMMARY.md"
+  printf '# Design\n\ndesign\n' > "$FORGE_DIR/DESIGN.md"
   run bash "$SCRIPT" "$FORGE_DIR"
   local state
   state="$(echo "$output" | jq -r '.state')"
@@ -120,7 +120,7 @@ teardown() {
 }
 
 @test "status: display shows IDEA.md as exists when present" {
-  echo "idea" > "$FORGE_DIR/IDEA.md"
+  printf '# Idea\n\nidea\n' > "$FORGE_DIR/IDEA.md"
   run bash "$SCRIPT" "$FORGE_DIR"
   local display
   display="$(echo "$output" | jq -r '.display')"
@@ -212,11 +212,11 @@ teardown() {
 # --- Execution progress ---
 
 @test "status: includes execution progress when state.json exists" {
-  echo "idea" > "$FORGE_DIR/IDEA.md"
+  printf '# Idea\n\nidea\n' > "$FORGE_DIR/IDEA.md"
   mkdir -p "$FORGE_DIR/research"
-  echo "summary" > "$FORGE_DIR/research/SUMMARY.md"
-  echo "design" > "$FORGE_DIR/DESIGN.md"
-  echo "plan" > "$FORGE_DIR/PLAN.md"
+  printf '# Summary\n\nsummary\n' > "$FORGE_DIR/research/SUMMARY.md"
+  printf '# Design\n\ndesign\n' > "$FORGE_DIR/DESIGN.md"
+  printf '# Plan\n\nplan\n' > "$FORGE_DIR/PLAN.md"
   echo '{"stories": {}}' > "$FORGE_DIR/plan-mapping.json"
   echo '{"status": "running", "sessions_completed": 2, "stories_attempted": 5, "stories_this_session": 3}' > "$FORGE_DIR/state.json"
   run bash "$SCRIPT" "$FORGE_DIR"
@@ -230,7 +230,7 @@ teardown() {
 @test "status: VALIDATE-REPORT.md alone reports review_validate, not validate (both reports required for triage)" {
   ( cd "$TEST_DIR" && git init -q . && story init --prefix ST >/dev/null 2>&1 && \
     story new "Task" >/dev/null && story move ST-1 done >/dev/null )
-  touch "$FORGE_DIR/VALIDATE-REPORT.md"
+  printf '# Validate Report\n\ncontent\n' > "$FORGE_DIR/VALIDATE-REPORT.md"
   run bash -c "cd '$TEST_DIR' && bash '$SCRIPT' '$FORGE_DIR'"
   local state
   state="$(echo "$output" | jq -r '.state')"
@@ -242,7 +242,7 @@ teardown() {
 }
 
 @test "status: DOCUMENTATION.md alone reports the pending deploy gate, not \"document\"" {
-  touch "$FORGE_DIR/DOCUMENTATION.md"
+  printf '# Documentation\n\ncontent\n' > "$FORGE_DIR/DOCUMENTATION.md"
   run bash "$SCRIPT" "$FORGE_DIR"
   local state
   state="$(echo "$output" | jq -r '.state')"
@@ -258,11 +258,11 @@ teardown() {
   ( cd "$TEST_DIR" && git init -q . && story init --prefix ST >/dev/null 2>&1 && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
     story move ST-1 done >/dev/null )
-  echo "idea" > "$FORGE_DIR/IDEA.md"
+  printf '# Idea\n\nidea\n' > "$FORGE_DIR/IDEA.md"
   mkdir -p "$FORGE_DIR/research"
-  echo "summary" > "$FORGE_DIR/research/SUMMARY.md"
-  echo "design" > "$FORGE_DIR/DESIGN.md"
-  echo "plan" > "$FORGE_DIR/PLAN.md"
+  printf '# Summary\n\nsummary\n' > "$FORGE_DIR/research/SUMMARY.md"
+  printf '# Design\n\ndesign\n' > "$FORGE_DIR/DESIGN.md"
+  printf '# Plan\n\nplan\n' > "$FORGE_DIR/PLAN.md"
   echo '{"stories": {}}' > "$FORGE_DIR/plan-mapping.json"
   echo '{"status": "running", "sessions_completed": 1, "stories_attempted": 2, "stories_this_session": 1}' > "$FORGE_DIR/state.json"
   run bash -c "cd '$TEST_DIR' && bash '$SCRIPT' '$FORGE_DIR'"

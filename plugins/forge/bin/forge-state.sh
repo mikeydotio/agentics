@@ -4,9 +4,31 @@ set -euo pipefail
 FORGE_DIR="${1:-.forge}"
 
 # --- Artifact presence ---
-
+#
+# F102: presence used to mean file EXISTENCE only, so a truncated or
+# zero-byte artifact (exactly what a freshen `/clear` mid-write, or a
+# Stop-hook timeout, can leave behind) silently advanced the state machine —
+# worse than a missing file, since missing at least re-runs the step. A file
+# only counts as "present" once it also passes a minimal-shape check:
+#   - .md  files: non-empty AND has a top-level H1 (`^# `) somewhere in it
+#   - .json files: non-empty AND parses as valid JSON
+#   - anything else: non-empty is the only requirement
+# This is deliberately cheap (no schema validation) — just enough to reject
+# an empty or mid-write file, which is the concrete failure mode F102 named.
 artifact_exists() {
-  [ -f "$FORGE_DIR/$1" ]
+  local f="$FORGE_DIR/$1"
+  [ -s "$f" ] || return 1
+  case "$1" in
+    *.md)
+      grep -qE '^# ' "$f" 2>/dev/null
+      ;;
+    *.json)
+      jq -e . "$f" >/dev/null 2>&1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
 }
 
 build_artifacts() {
@@ -25,7 +47,7 @@ build_artifacts() {
   )
   local pairs=()
   for a in "${artifacts[@]}"; do
-    if [ -f "$FORGE_DIR/$a" ]; then
+    if artifact_exists "$a"; then
       pairs+=("$a" "true")
     else
       pairs+=("$a" "false")

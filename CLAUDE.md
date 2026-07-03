@@ -78,8 +78,10 @@ The forge × storyhook seam underwent a full hardening pass (2026-07 audit + 8-w
 - ⏸ Deferred by design (not oversights): tmux watchdog/supervisor
   ([agentics#33](https://github.com/mikeydotio/agentics/issues/33)); pane-option state migration
   (reasoning in `plugins/forge/references/auto-resume.md`)
-- 📋 Open follow-up: storyhook repo's `session-start.sh`/`post-git.sh` portability
-  ([storyhook#10](https://github.com/mikeydotio/storyhook/issues/10))
+- ✅ storyhook repo portability follow-up (F074) — `post-git.sh`'s python3 spawn fixed
+  ([storyhook#11](https://github.com/mikeydotio/storyhook/pull/11)); `session-start.sh`'s
+  sed-based cwd parse investigated and left intentionally unchanged (a tested design constraint
+  bans python3 there) — [storyhook#10](https://github.com/mikeydotio/storyhook/issues/10) closed
 
 <!-- semver:start -->
 ## Semantic Versioning

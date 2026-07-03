@@ -112,9 +112,25 @@ freshen_queued=false
 freshen_cancelled=false
 fallback_message=null
 
+# F047: append to the same lightweight transition audit log freshen's own
+# on-stop.sh/on-clear.sh write to (.freshen/transitions.log), so a stalled
+# pipeline's timeline reads as one story: which step queued/cancelled what,
+# when, and (from the freshen hooks) whether it was actually confirmed sent.
+# Sourced via the same resolved sibling-plugin path already used to invoke
+# freshen.sh below (ground rule 5 — never a bare `plugins/freshen/...` path).
+# Best-effort: if freshen isn't installed/available, skip logging silently
+# rather than fail this script over pure diagnostics.
+_TRANSITION_LOG_LIB="$SCRIPT_DIR/../../freshen/lib/transition-log.sh"
+# shellcheck source=plugins/freshen/lib/transition-log.sh
+[ -f "$_TRANSITION_LOG_LIB" ] && . "$_TRANSITION_LOG_LIB" || true
+log_step_exit_transition() {
+  declare -f freshen_log_transition >/dev/null 2>&1 && freshen_log_transition "$1" || true
+}
+
 if [ "$terminal" = true ]; then
   # Best-effort — a terminal exit has nothing to resume to either way.
   bash "$SCRIPT_DIR/../../freshen/bin/freshen.sh" cancel --source forge >/dev/null 2>&1 && freshen_cancelled=true || true
+  log_step_exit_transition "forge-step-exit: step '${step}' terminal -- freshen signal cancelled=${freshen_cancelled}"
 else
   # Fully silence freshen.sh's own stdout/stderr — it prints a human-readable
   # confirmation line ("freshen: queued '...'") on success, which would
@@ -127,6 +143,7 @@ else
   else
     fallback_message="Run /clear then: ${next_cmd}"
   fi
+  log_step_exit_transition "forge-step-exit: step '${step}' -> queued next '${next_cmd}' (queued=${freshen_queued})"
 fi
 
 jq -n \

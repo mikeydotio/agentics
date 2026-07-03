@@ -287,3 +287,51 @@ teardown() {
   [ "$status" -eq 0 ]
   echo "$output" | jq . >/dev/null
 }
+
+# --- F047: transition audit log ---
+#
+# forge-step-exit.sh shares freshen's own .freshen/transitions.log so a
+# stalled pipeline's timeline reads as one story across both plugins.
+
+@test "F047: a --next step-exit logs a queue transition" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" --step research --summary "done" --next "/forge design --orchestrated"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/transitions.log" ]
+  run grep -c "step 'research' -> queued next '/forge design --orchestrated'" "$TEST_DIR/.freshen/transitions.log"
+  [ "$output" = "1" ]
+}
+
+@test "F047: a --terminal step-exit logs a cancel transition" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" --step deploy --summary "pipeline complete" --terminal
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/transitions.log" ]
+  run grep -c "step 'deploy' terminal -- freshen signal cancelled" "$TEST_DIR/.freshen/transitions.log"
+  [ "$output" = "1" ]
+}
+
+@test "F047: the logged queued=/cancelled= flag reflects whether tmux was actually available" {
+  cd "$TEST_DIR"
+  # No TMUX env in this test's environment (unset in setup()) -- freshen
+  # queue fails, so the logged line must say queued=false, not a blind
+  # "we called queue" record.
+  run bash "$SCRIPT" --step research --summary "done" --next "/forge design --orchestrated"
+  [ "$status" -eq 0 ]
+  run grep -c "queued=false" "$TEST_DIR/.freshen/transitions.log"
+  [ "$output" = "1" ]
+}
+
+@test "F047: logging is best-effort and never fails the step-exit when freshen's lib is missing" {
+  cd "$TEST_DIR"
+  # Point SCRIPT_DIR's sibling resolution at a copy of forge's bin/ with no
+  # freshen plugin next to it, simulating a partial/incomplete install.
+  local isolated
+  isolated="$(mktemp -d)"
+  mkdir -p "$isolated/forge-only/bin"
+  cp "$SCRIPT" "$isolated/forge-only/bin/forge-step-exit.sh"
+  run bash "$isolated/forge-only/bin/forge-step-exit.sh" --step research --summary "done" --next "/forge design --orchestrated"
+  [ "$status" -eq 0 ]
+  echo "$output" | jq . >/dev/null
+  rm -rf "$isolated"
+}

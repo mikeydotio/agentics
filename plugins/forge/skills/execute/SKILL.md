@@ -8,16 +8,25 @@ argument-hint: "[--dry-run [--dry-run-mode all-pass|all-fail|mixed]]"
 
 You are the execute skill. Your job is to implement stories autonomously through a generator-evaluator loop with session persistence, retry logic, and clean handoffs.
 
-**Read before starting (load all — this is the most complex skill):**
+**Read before starting — tiered, not "load all" (F019/F026/F027 — this skill re-runs once per
+story under the default `max_stories_per_session: 1`, so every reference eagerly loaded here is a
+recurring cost, not a one-time one):**
+
+Always load, every entry:
 - `references/execution-loop.md` — Full loop specification (AUTHORITATIVE — follow it completely)
-- `references/session-locking.md` — Lock protocol
-- `references/recovery-protocol.md` — Resume/recovery sequence
-- `references/auto-resume.md` — Freshen-based auto-resume
-- `references/deterministic-checks.md` — Pre-checks before evaluator
-- `references/verification-protocol.md` — Evaluator criteria and debiasing
-- `references/handoff-format.md` — Handoff artifact spec
-- `references/storyhook-contract.md` — Story CLI command mapping (verb-first; the CLI has no MCP interface)
-- `references/team-roles.md` — "Resolving subagent_type" — governs the generator/evaluator/software-architect spawns below
+- `references/storyhook-contract.md` — Story CLI command mapping (verb-first; the CLI has no MCP interface) — needed for every `story` call
+- `references/team-roles.md`'s "Resolving subagent_type" section — governs the generator/evaluator/software-architect spawns below
+
+Load only when the condition applies:
+- `references/recovery-protocol.md` — **only on Resume** (`state_json_exists: true`, see Entry Modes below). A Fresh Start never needs it.
+- `references/handoff-format.md` — **only once a pause or Complete is actually about to happen** (session limit hit, blocked, error, all stories done). Not needed while still looping through generate/evaluate.
+- `references/session-locking.md` — **only if a `forge-lock.sh` call returns something other than the expected success** (contention, staleness) and you need the full protocol to interpret it. The inline calls in this skill and in `execution-loop.md` already carry the correct flags for the happy path.
+- `references/auto-resume.md` — **only if freshen behaves unexpectedly** (queue/cancel fails in a surprising way, or you need to explain resume latency/hook-ordering guarantees to the user). The actionable step is just calling `forge-step-exit.sh`; this doc is mechanism background, not an instruction to follow.
+- `references/deterministic-checks.md` — **only if a pre-check's `passed: false` needs more context than its own `details` field gives you.** The happy path (`all_passed: true`) never needs it.
+
+Never needed by this skill at all: `references/verification-protocol.md` documents the
+**evaluator agent's own** methodology (and defers to `evaluator.md` as the single source for its
+output schema) — that's the evaluator's context to carry when spawned, not the orchestrator's.
 
 **Read inputs:**
 - `.forge/plan-mapping.json` (required)
@@ -27,14 +36,12 @@ You are the execute skill. Your job is to implement stories autonomously through
 
 ## Hard Rules
 
-1. **Storyhook is authoritative** for story-level state.
-2. **One story at a time** through the generator-evaluator loop.
-3. **Generator does NOT commit.** Commits happen only after evaluation passes.
-4. **Evaluator has NO Write/Edit tools.** It judges, never fixes.
-5. **Clean working tree** before each generator spawn: `git checkout .`
-6. **State files re-read every iteration** from disk.
-7. **Structured JSON** for all evaluator feedback in storyhook comments.
-8. **`jq` for JSON construction** in all shell commands.
+`skills/forge/SKILL.md`'s Hard Rules 1-8 apply here verbatim (storyhook authority, one story at a time,
+generator-never-commits, evaluator-never-writes, clean working tree, re-read state from disk,
+structured JSON feedback, `jq` for JSON) — read them there rather than re-deriving a second copy
+here. Rule 9 (one `AskUserQuestion` at a time) applies if this skill ever needs to ask the user
+something. Rule 11 (foreground-only agents) governs every generator/evaluator/architect spawn
+below. Rule 10's step-exit ordering is this skill's own Exit section, below.
 
 ## Entry Modes
 
@@ -148,6 +155,11 @@ Exercises full loop logic without API credits.
 
 ## Exit
 
+Both paths below end in `forge-step-exit.sh` (`references/step-handoff.md`), but neither uses its
+default commit scope unmodified: Pause needs the session counter incremented first (a field
+`forge-step-exit.sh` doesn't know about), and Complete needs `--extra-path .storyhook/` (the
+project-story close in its step 2 can change `.storyhook/`).
+
 ### Pause (session limit, blocked, error)
 
 1. Write handoff to `.forge/handoffs/handoff-execute.md` with **cold-start essentials**:
@@ -155,9 +167,17 @@ Exercises full loop logic without API credits.
    - Micro-Decisions (not in DESIGN.md but load-bearing)
    - Code Landmarks (key files and their roles)
    - Test State (pass/fail/flaky, run command, env setup)
-2. Update state.json: `status: "paused"`, increment `sessions_completed`
-3. Release lock
-4. Queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/forge resume" --source forge --summary "Execution paused — [N] stories completed this session"`
+2. Increment the session counter (the one `state.json` field `forge-step-exit.sh`'s own patch
+   doesn't touch):
+   ```bash
+   jq '.sessions_completed = ((.sessions_completed // 0) + 1)' .forge/state.json > .forge/state.json.tmp \
+     && mv .forge/state.json.tmp .forge/state.json
+   ```
+3. Release lock: `bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge`
+4. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
+     --summary "paused — [N] stories completed this session" --next "/forge resume"
+   ```
 5. STOP
 
 ### Complete (all stories done)
@@ -166,15 +186,18 @@ When all stories reach `done` (see `references/execution-loop.md`'s "The project
 this excludes `plan-mapping.json`'s `project_story`, which `story next` can never hand back and so
 never reaches `done` through the loop itself):
 1. Run full project test suite
-   - If fails → set `status: "paused"`, `pause_reason: "final-test-suite-failed"`, do NOT cancel freshen
+   - If fails → set `status: "paused"`, `pause_reason: "final-test-suite-failed"`, do NOT cancel
+     freshen, and do not proceed past this step (see `execution-loop.md`'s Complete section for the
+     exact state.json patch)
 2. Close the project story (hygiene only, best-effort — never a precondition for anything below):
    `bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .` — ignore `.ok`/`.reason` beyond
    logging; only `.closed == true` means `.storyhook/` changed and must ride along in step 5's commit.
 3. Generate storyhook report: `story summary` + `story handoff`
 4. Write handoff to `.forge/handoffs/handoff-execute.md`
-5. Commit (include `.storyhook/` in case step 2 closed the project story):
-   `git add .forge/ .storyhook/ && git commit -m "forge(execute): all stories complete"`
-6. Queue freshen for next step (review+validate): `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Execution complete — all stories done"`
-7. STOP
+5. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
+     --summary "all stories complete" --next "/forge continue" --extra-path .storyhook/
+   ```
+6. STOP
 
 **If standalone:** Same loop, but on completion return to user instead of queuing freshen.

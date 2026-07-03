@@ -358,10 +358,28 @@ Graceful stop:
   "max_retries": 4,
   "max_stories_per_session": 1,
   "max_sessions": 200,
-  "max_total_retries": 20,
+  "max_total_retries": 100,
   "heartbeat_window_minutes": 30
 }
 ```
+
+**How the runaway safeguards relate (F097):** `max_retries` caps attempts on a SINGLE story (4
+attempts — 1 initial + up to 3 retries — before it blocks). `max_total_retries` caps the sum of
+every failed attempt across the WHOLE plan, regardless of which story. `max_sessions` caps the
+number of execute sessions (with `max_stories_per_session: 1`, effectively the number of stories
+attempted across the plan's full run). These are independent safeguards, but their DEFAULTS must
+not contradict each other: `total_retries` increments once per failed evaluation/pre-check
+(`references/execution-loop.md`'s Retry step), not just when a story exhausts its retries — so a
+plan of dozens to ~100 stories at a realistic ~30-50% first-attempt retry rate can rack up total
+retries in the tens purely from normal, healthy operation. A `max_total_retries` in the low tens
+(the pre-F097 default was 20) would false-halt such a plan partway through, well before
+`max_sessions` ever came into play — defeating the long-run autonomy `max_sessions: 200` is meant
+to provide. 100 gives realistic multi-wave plans (see the worked example in the hardening audit's
+F097 finding) headroom to complete under normal failure rates, while still tripping well before
+the full `max_sessions` budget if failures are systemic rather than incidental (e.g. a broken
+generator/evaluator pairing failing on every single attempt trips this in ~25 stories, not 200).
+If you change `max_retries` or `max_sessions`, re-check this relationship — the two are NOT meant
+to be independent of each other's practical scale, only independently configurable.
 
 `--yolo` overrides at runtime (sets `yolo: true` in config for the session).
 

@@ -1,98 +1,30 @@
 # Agent Team Roles
 
-> **Note**: Agent definitions have moved to the shared library at `plugins/agents/agents/`. See `plugins/agents/references/agent-catalog.md` for the full roster.
+> **Note**: Agent definitions AND the roster (name, tools, description, "Used By") live in the
+> shared library — `plugins/agents/references/agent-catalog.md` is the single source. This doc
+> (F025) covers only what's genuinely forge-specific: which real filename to use for a role that's
+> easy to misname, the project-type→team mapping, and how spawning actually works. For the
+> per-step "who's used where" index, see `skills/forge/SKILL.md`'s Agent Roster table — don't
+> restate it here.
 
-The forge pipeline uses a cross-functional team of specialized agents. Each agent has a distinct perspective, toolset, and responsibility. The orchestrator spawns them at the appropriate step.
+## Naming gotchas
 
-## Role Catalog
+These three roles get misnamed often enough to call out explicitly — the name on the left does
+**not** exist in `plugins/agents/agents/`:
 
-### Domain Researcher
-**Perspective:** "What already exists? What are the established patterns?"
-**When spawned:** During interrogation (to check existing solutions) and research step (to research best practices)
-**Output:** Research findings with confidence levels, existing solution analysis, best practice recommendations
+| Wrong | Real agent file |
+|---|---|
+| `senior-engineer` | `software-engineer.md` |
+| `devils-advocate` (or "devil's advocate") | `skeptic.md` — "devil's advocate" is this role's description, not its filename |
+| `ux-designer` (bare) | one of `ux-designer-cli.md` / `ux-designer-web.md` / `ux-designer-mobile.md` — pick the variant matching `TEAM.md`'s recorded project type; if ambiguous or cross-platform, default to `ux-designer-web` and say so explicitly in the handoff |
 
-### Software Architect
-**Perspective:** "Does this design hold together? Are the abstractions right?"
-**When spawned:** During design step, review step, and execution drift checks
-**Output:** Architecture review, component diagram descriptions, interface definitions, integration concerns
-
-### Software Engineer
-**Agent file:** `software-engineer.md` (not `senior-engineer` — that name doesn't exist in the library)
-**Perspective:** "How do I build this correctly and maintainably?"
-**When spawned:** During execution (available via team roster)
-**Output:** Working code, implementation notes, technical debt flags
-
-### QA Engineer
-**Perspective:** "How do I break this? What hasn't been tested?"
-**When spawned:** During plan step, validate step, and triage step
-**Output:** Test plan, test cases (unit/integration/e2e), edge case catalog, test coverage analysis
-
-### UX Designer (platform-specific)
-**Agent file:** one of `ux-designer-cli.md` / `ux-designer-web.md` / `ux-designer-mobile.md` — there
-is no bare `ux-designer.md`. Pick the variant matching the project type recorded in `TEAM.md`
-(CLI tool → `ux-designer-cli`; Web application → `ux-designer-web`; Mobile app → `ux-designer-mobile`).
-If the project type is ambiguous or spans platforms, default to `ux-designer-web` (the most
-general of the three) and say so explicitly in the handoff.
-**Perspective:** "Does this make sense to a human? Is it pleasant to use?"
-**When spawned:** During design step (only when the project has user-facing interfaces)
-**Output:** Interaction flow analysis, usability concerns, design pattern recommendations, accessibility notes
-
-### Project Manager
-**Perspective:** "Are we building what we said we'd build? Can we resume if interrupted?"
-**When spawned:** During plan step, validate step, triage step, and decompose step
-**Output:** Task list with dependencies, progress tracking, requirement-to-implementation traceability, resumption state
-
-### Skeptic (the team's "devil's advocate")
-**Agent file:** `skeptic.md` (not `devils-advocate` — that name doesn't exist in the library; "devil's
-advocate" is this role's description, not its filename)
-**Perspective:** "What if we're wrong? What are we not seeing?"
-**When spawned:** During design step, plan step, review step, and triage step
-**Output:** Assumption challenges (ranked by risk), alternative approaches worth considering, blind spot identification
-
-### Security Researcher
-**Perspective:** "How can this be exploited? What are we exposing?"
-**When spawned:** During design step (conditional) and review step (conditional)
-**Output:** Threat model, vulnerability assessment, security recommendations, OWASP compliance notes
-
-### Accessibility Engineer
-**Perspective:** "Can everyone use this? What barriers exist?"
-**When spawned:** During design step (conditional) and review step (conditional)
-**Output:** WCAG compliance assessment, assistive technology compatibility notes, inclusive design recommendations
-
-### Technical Writer
-**Perspective:** "Can someone understand this without asking the author?"
-**When spawned:** During the document step
-**Output:** API documentation, architecture decision records, usage guides, inline documentation review
-
-### Generator
-**Perspective:** "Implement this story precisely and completely."
-**When spawned:** During execute step for each story
-**Output:** Implemented code with structured JSON status report
-
-### Evaluator
-**Perspective:** "Prove to me this implementation is correct."
-**When spawned:** During execute step after each generator run
-**Output:** Structured JSON verdict with cited evidence
-
-### Reviewer
-**Perspective:** "What quality gaps and design drift exist in the codebase?"
-**When spawned:** During review step
-**Output:** Structured findings by severity, returned as its response (it is `read_only: true` —
-it does NOT write `REVIEW-REPORT.md` itself; the review skill synthesizes that file from the
-reviewer's, software-architect's, and skeptic's findings)
-
-### Validator
-**Perspective:** "What tests are missing? What coverage gaps exist?"
-**When spawned:** During validate step
-**Output:** VALIDATE-REPORT.md with test coverage findings (the validator IS `read_only: false` —
-unlike reviewer/triager, it legitimately writes both the report and new test files itself)
-
-### Triager
-**Perspective:** "Should we fix this automatically or ask the user?"
-**When spawned:** During triage step
-**Output:** Structured FIX/ESCALATE decisions, returned as its response (it is `read_only: true` —
-it does NOT write `TRIAGE.md` itself; the triage skill synthesizes that file from the triager's,
-qa-engineer's, and skeptic's decisions)
+**Read/write ownership** for the three `read_only: true` pipeline agents (`reviewer`, `triager`)
+vs. the one that legitimately isn't (`validator`): `reviewer` and `triager` return findings/
+decisions as their response — the orchestrating skill (review/triage) synthesizes the report file
+from that response, the agent never writes it itself. `validator` is the exception — it writes
+both `VALIDATE-REPORT.md` and new test files directly. Each spawn site (`skills/review/SKILL.md`,
+`skills/validate/SKILL.md`, `skills/triage/SKILL.md`) states this at its own point of use; this is
+just the one-line summary, not a third copy of the reasoning.
 
 ## Spawning Philosophy
 
@@ -131,10 +63,11 @@ Read it in full; this section only adds forge-specific specifics.
 **Which forge agents have an override** (`${CLAUDE_PLUGIN_ROOT}/agent-overrides/<name>-context.md`)
 to concatenate in when spawning them: `generator`, `evaluator`, `reviewer`, `triager`, `validator`,
 `software-architect` (the execution-loop drift check only — see `agent-overrides/software-architect-context.md`).
-Every other agent in the Role Catalog above (domain-researcher, qa-engineer, ux-designer-*,
-project-manager, skeptic, security-researcher, accessibility-engineer, technical-writer) has no
-forge override — skip that step for them and inline only the shared definition (or use the
-registered `agents:<name>` type directly).
+Every other agent forge uses (domain-researcher, qa-engineer, ux-designer-*, project-manager,
+skeptic, security-researcher, accessibility-engineer, technical-writer — see
+`plugins/agents/references/agent-catalog.md` for the full library) has no forge override — skip
+that step for them and inline only the shared definition (or use the registered `agents:<name>`
+type directly).
 
 **Quick reference for every spawn:**
 1. Try `subagent_type: "agents:<name>"`. If it's in your available subagent types, use it — done

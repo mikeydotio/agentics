@@ -1,97 +1,44 @@
 # Deterministic Pre-Checks
 
-Pre-check layer that runs BEFORE the LLM evaluator. More reliable and cheaper than LLM judgment for objective checks.
+Objective, scriptable checks that run BEFORE the LLM evaluator — cheaper and more reliable than
+LLM judgment for anything mechanically verifiable. Fully implemented by `bin/forge-prechecks.sh`
+(F024 — this doc used to restate the script's own logic in prose, which silently drifted from the
+real implementation; it now only says what the script checks and how to read its output).
 
-## Check Order
-
-1. **Test suite**
-2. **Linter / type checker**
-3. **Stub grep**
-4. **Generator scope check**
-
-## 1. Test Suite
-
-Run the project's test command (auto-detected or from config):
+## Running it
 
 ```bash
-# Auto-detect: check for package.json scripts, Makefile, pytest, cargo test, etc.
-npm test          # Node.js
-pytest            # Python
-cargo test        # Rust
-make test         # Makefile
-./tests/run-tests.sh  # Custom
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-prechecks.sh --story-id <id> --mapping .forge/plan-mapping.json
 ```
 
-### Flaky Test Handling
+## What it checks (in order)
 
-If a test fails:
-1. Re-run the specific failing test ONCE
-2. If it passes on re-run → flag as **potentially flaky**
-   - Record test name in `.forge/handoffs/handoff-execute.md`
-   - Proceed to next check (do NOT count as failure)
-3. If it fails again → **genuine failure**
-   - Store failure details as storyhook comment
-   - Go to retry
+1. **Tests** — auto-detects the project's test command (`npm test` / `pytest` / `cargo test` /
+   `make test` / `tests/run-tests.sh`, in that priority order); no detected command is a skip, not
+   a failure. A failure is re-run once — if it passes on retry it's reported as `passed: true` with
+   a `flaky_tests` note, not a failure.
+2. **Linter** — auto-detects ESLint / `tsc --noEmit` / ruff / clippy from project files present; no
+   detected linter is a skip.
+3. **Stub grep** — scans only files touched by the current diff (staged + unstaged) for
+   whole-word `TODO`/`FIXME`/`HACK` and a small set of language-specific "intentionally
+   unimplemented" idioms (`NotImplementedError`, `unimplemented!`, `throw new Error(...not
+   implemented)`, `fatalError(...not implemented)`, `preconditionFailure(...not implemented)`).
+   Deliberately **not** bare `stub`/`placeholder`/`XXX` substrings (F105 — those false-positived on
+   legitimate code, e.g. a form field's `placeholder` prop).
+4. **Scope** — compares the diff's touched files against `plan-mapping.json`'s `files_expected`
+   for `--story-id`. **Always passes** — `unexpected_modified` is a warning surfaced for the
+   evaluator to judge, never an automatic failure (generators sometimes legitimately touch shared
+   files).
 
-## 2. Linter / Type Checker
-
-Run project-appropriate linting:
-
-```bash
-# Auto-detect based on project files
-npx eslint --no-warn .   # Node.js with ESLint
-npx tsc --noEmit          # TypeScript
-ruff check .              # Python
-cargo clippy              # Rust
-```
-
-If linter fails → store feedback as storyhook comment → go to retry.
-
-## 3. Stub Grep
-
-Scan for incomplete implementations:
-
-```bash
-# Search for common stub patterns in modified files only
-git diff --name-only | xargs grep -n \
-  -e 'TODO' -e 'FIXME' -e 'HACK' -e 'XXX' \
-  -e 'not implemented' -e 'stub' -e 'placeholder' \
-  -e 'throw new Error.*not implemented' \
-  -e 'pass  # TODO' \
-  -e 'unimplemented!' \
-  2>/dev/null
-```
-
-If stubs found → store as storyhook comment → go to retry.
-
-**Note**: Only scan files in the current `git diff`, not the entire codebase. Existing TODOs in unmodified files are not the generator's responsibility.
-
-## 4. Generator Scope Check
-
-Compare modified files against expected files:
-
-```bash
-git diff --name-only
-```
-
-Compare against `plan-mapping.json`'s `files_expected` for the current story.
-
-- **Expected files modified**: Good — generator stayed in scope
-- **Unexpected files modified**: Log warning in `.forge/handoffs/handoff-execute.md` with the unexpected file list
-  - **Warning only, not automatic failure** — generators sometimes need to touch shared files (imports, exports, type definitions)
-  - The evaluator will review whether unexpected modifications are appropriate
-
-## Check Results
-
-Each check produces a structured result:
+## Reading the output
 
 ```json
-{
-  "check": "tests|linter|stub_grep|scope",
-  "passed": true|false,
-  "details": "Description of what failed",
-  "flaky_tests": ["test_name"]  // only for test check
-}
+{"ok": true, "all_passed": true|false, "checks": [{"check": "tests|linter|stub_grep|scope", "passed": ..., "details": "...", ...}], "display": "..."}
 ```
 
-All checks must pass before invoking the evaluator. Any failure short-circuits to retry (except flaky tests, which are flagged and allowed to proceed).
+- `all_passed: true` → proceed to the evaluator (Step 5 of `references/execution-loop.md`).
+- `all_passed: false` → find the failing check(s) in `checks[]`, store its `details` as a storyhook
+  comment, and go to retry (`references/execution-loop.md`'s Retry step) — do not invoke the
+  evaluator on a failing pre-check.
+- A check's own `flaky_tests` (tests) or `unexpected_modified` (scope) fields are informational,
+  not failures — they don't block proceeding to the evaluator.

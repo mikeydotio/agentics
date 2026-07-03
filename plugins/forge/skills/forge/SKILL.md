@@ -69,12 +69,24 @@ Parse the user's message to determine the subcommand. If the input is a bare ide
 On every `continue` invocation, run the state detection script:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-state.sh
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-state.sh --record-transition
 ```
 
-This returns JSON with `state`, `dispatch`, `fix_cycle`, `artifacts`, `has_handoff`,
-`expected_handoff`, `expected_handoff_present`, `stories_blocked_only`, `state_json_exists`, and
-`state_json_status`.
+This returns JSON with `state`, `dispatch`, `category`, `auto_advance`, `transition_id`,
+`fix_cycle`, `artifacts`, `has_handoff`, `expected_handoff`, `expected_handoff_present`,
+`stories_blocked_only`, `state_json_exists`, and `state_json_status`.
+
+`category`/`auto_advance` (agentics#33) are the same classification this section's branch order
+already encodes (pass_through / fix_loop / blocked_review / escalate_review / deploy_gate /
+report_complete) — pure telemetry today, not something to branch on; continue following `state`
+then `dispatch` exactly as below. `--record-transition` appends a `predicted` line to
+`.freshen/transitions.log` (best-effort, never fails this call) so the classification and the step
+that actually ran can later be measured against each other. Carry `transition_id` forward in this
+turn's context: whichever step this dispatches to must pass it as `--transition-id` to its
+`forge-step-exit.sh` call (see `references/step-handoff.md`'s Step Exit Protocol) so the two lines
+correlate. If this state detection call is skipped (e.g. `state` was already known from context and
+`continue` wasn't re-run), there is no `transition_id` to thread through — omit
+`--transition-id` from that step's exit call rather than inventing one.
 
 1. If `expected_handoff` is non-empty and `expected_handoff_present` is `false` → the handoff
    required to resume the detected state is missing (this is the SPECIFIC handoff for the step

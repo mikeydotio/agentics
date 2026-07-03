@@ -10,6 +10,19 @@ the working tree. What stays genuine model judgment: constructing agent prompts,
 *content*, and deciding what a summarized predecessor diff should say when one is too large to
 paste verbatim.
 
+## Scope Note: F074 Is Not Closeable From This Repo
+
+**F074** ("Hook robustness: fragile `sed` cwd parse in session-start, python3 spawned on every Bash
+call in post-git") is sometimes bundled with agentics-side hook-hardening work because it reads
+like the same category of fix. It is not: F074's evidence is entirely
+`storyhook/plugin/claude-code/hooks/session-start.sh` (the `sed`-based `cwd` parse) and
+`hooks/post-git.sh` (the per-Bash-call `python3` spawn) — both live in the separate `storyhook`
+repository, not `agentics`. No change to any file under `plugins/` (this loop included) can close
+it; it requires a commit in `storyhook` itself. Before marking F074 resolved, verify against
+`storyhook`'s own git history (mirroring `references/story-decomposition.md`'s note on the
+`has_children` filter in `storyhook/src/app.rs` — another storyhook-side item this document
+references but cannot fix).
+
 ## Prerequisites
 
 Before entering the loop, the caller must have:

@@ -76,20 +76,24 @@ Load only what this specific story needs:
 story move HP-N in-progress
 Update lock heartbeat (before spawning — reflects active work)
 git checkout .  # clean working tree for fresh attempt
+PRE_GEN_HEAD=$(git rev-parse HEAD)  # F064 interim check — see Step 3a
 ```
 
-**Spawn generator agent** as an isolated subagent:
+**Resolve `subagent_type`** per `references/team-roles.md`'s "Resolving subagent_type" (Preferred:
+`agents:generator` if exposed; Fallback: `general-purpose` with `generator.md` +
+`agent-overrides/generator-context.md` inlined). **Spawn generator agent** as an isolated subagent:
 
 ```
 Agent(
-  subagent_type: "general-purpose",
+  subagent_type: "agents:generator",  # or "general-purpose" + inlined role on fallback — see above
   prompt: <constructed prompt with:
     - Story title and acceptance criteria
     - Relevant DESIGN.md section (from plan-mapping.json)
-    - File list to read (files_expected + related existing files)
+    - File list to read (files_expected + related existing files), as a <files_to_read> block
     - Memory entities for this component
     - Prior evaluator feedback (if retry)
-    - Generator agent instructions (from plugins/agents/agents/generator.md)
+    - [Fallback path only] Generator agent instructions (from generator.md) + forge override
+      (from agent-overrides/generator-context.md)
   >
 )
 ```
@@ -105,7 +109,7 @@ Agent(
 
 ### Step 3a: Post-Generator Integrity Check
 
-Defense-in-depth: verify the generator did not modify forge state files.
+Defense-in-depth: verify the generator did not modify forge state files, and (F064) did not commit.
 
 ```bash
 # Before generator spawn, compute checksums:
@@ -122,6 +126,26 @@ If checksums differ:
 - Mark story blocked: `story move HP-N blocked`
 - Add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator modified forge state files"}'`
 - Continue to next iteration
+
+**F064 — "generator never commits" check (interim, cheap):**
+
+```bash
+POST_GEN_HEAD=$(git rev-parse HEAD)
+```
+
+If `$POST_GEN_HEAD` != `$PRE_GEN_HEAD` (captured in Step 3), the generator committed, violating
+Hard Rule 3. This is more serious than the checksum case above and is NOT auto-reverted — a `git
+reset` here risks destroying the commit's forensic trail or interacting badly with any concurrent
+work, and unlike the checksum-guarded files there's no cheap "just checkout" undo for a moved
+HEAD. Instead:
+- Mark story blocked: `story move HP-N blocked`
+- Add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator committed (HEAD moved from <PRE_GEN_HEAD> to <POST_GEN_HEAD>) — violates Hard Rule 3. Needs manual review before continuing."}'`
+- Write a handoff noting the exact SHAs and pause (do not silently continue the loop past this —
+  treat it the same as a runaway-safeguard trip)
+
+This is a lightweight interim guard, not exhaustive integrity scripting — the fuller
+content-hash-based `bin/forge-integrity.sh` (WS4) is the durable replacement for this and Step 5a
+below.
 
 ### Step 4: Deterministic Pre-Checks
 
@@ -144,62 +168,102 @@ Parse the JSON result:
 ```
 story move HP-N verifying
 Update lock heartbeat (before spawning evaluator)
+PRE_EVAL_SNAPSHOT=$(git stash create "forge-eval-guard-<story-id>" || true)  # see Step 5a
+git diff --name-only > /tmp/forge-pre-eval-files
 ```
 
-**Spawn evaluator agent** as an isolated subagent:
+**Resolve `subagent_type`** per `references/team-roles.md`'s "Resolving subagent_type" (Preferred:
+`agents:evaluator` if exposed — the platform then structurally blocks Write/Edit; Fallback:
+`general-purpose` with `evaluator.md` + `agent-overrides/evaluator-context.md` inlined). **Spawn
+evaluator agent** as an isolated subagent:
 
 ```
 Agent(
-  subagent_type: "general-purpose",
+  subagent_type: "agents:evaluator",  # or "general-purpose" + inlined role on fallback — see above
   prompt: <constructed prompt with:
     - Acceptance criteria for the story
     - git diff of uncommitted changes
     - Deterministic check output (test results, linter, stub grep)
     - Relevant DESIGN.md section
-    - Evaluator agent instructions (from plugins/agents/agents/evaluator.md)
+    - A <files_to_read> block listing the story's files_expected + files the diff touches (F065 —
+      without this explicit block, evaluator.md's "Mandatory Initial Read" protocol never fires
+      and the evaluator judges from the diff hunk alone, without full-file context)
+    - [Fallback path only] Evaluator agent instructions (from evaluator.md) + forge override
+      (from agent-overrides/evaluator-context.md)
   >
 )
 ```
 
-**Parse evaluator response**:
+**Parse evaluator response** (the FULL schema — see `evaluator.md`'s Output Format, the single
+authoritative verdict schema):
 - `verdict: "pass"` →
   - Commit atomically: `git add -A && git commit -m "feat(<story>): <title>"`
   - `story move HP-N done`
   - Sync git if needed
   - Continue to step 6
 - `verdict: "fail"` →
-  - Store structured JSON feedback as storyhook comment:
-    `story comment HP-N '{"verdict":"fail","failures":[...]}'`
+  - Store the COMPACT projection (`{verdict, failures}` — see `evaluator.md`'s "Storage split")
+    as a storyhook comment: `story comment HP-N '{"verdict":"fail","failures":[...]}'`
   - goto retry
 
 **Dry-run mode**: Skip subagent spawn. Return canned verdict based on mode.
 
 ### Step 5a: Post-Evaluator Integrity Check
 
-The evaluator should have modified ZERO files. Record the file list before and compare after:
+**With WS3's `agents:evaluator` resolution in place (Step 5 above), this check is
+belt-and-suspenders, not the primary enforcement:** when the evaluator resolves to the real
+registered `agents:evaluator` type, the platform enforces `evaluator.md`'s `tools: Read, Bash,
+Grep, Glob` and the evaluator structurally cannot call Write or Edit — a leaky evaluator "gets
+blocked," not just "gets caught after the fact" (closes F057/F058 at the mechanism level for that
+path). This check remains necessary for the `general-purpose` fallback path (no platform-level
+tool restriction applies there) and as defense-in-depth either way.
+
+The evaluator should have modified ZERO files. Compare the file list captured before spawn (Step
+5) against after:
 
 ```bash
-# Before evaluator spawn:
-git diff --name-only > /tmp/forge-pre-eval-files
-
 # After evaluator returns:
 git diff --name-only > /tmp/forge-post-eval-files
 
 diff /tmp/forge-pre-eval-files /tmp/forge-post-eval-files
 ```
 
-If new files appeared (evaluator modified code):
-1. Discard evaluator verdict
-2. Restore pre-evaluator state: `git checkout .` then re-apply generator changes from the stash
-3. Re-run evaluator (one retry only)
-4. If it modifies files again → mark story blocked: `story move HP-N blocked` with integrity violation reason
+If the file lists differ (a tracked file shows up in the diff that wasn't there before — the
+evaluator modified a tracked file the generator hadn't already touched):
+1. Discard the evaluator verdict.
+2. Restore the actual pre-evaluator content — NOT "from the stash" (nothing is ever pushed onto
+   the stash list, so that language was always false and following it literally would find
+   nothing to pop): `$PRE_EVAL_SNAPSHOT` (captured in Step 5 via `git stash create`, which builds a
+   commit object representing the working tree at that point WITHOUT touching the index, the
+   working tree, or the stash list) is the actual restorable snapshot.
+   - If `$PRE_EVAL_SNAPSHOT` is non-empty: `git checkout "$PRE_EVAL_SNAPSHOT" -- .`
+   - If `$PRE_EVAL_SNAPSHOT` is empty (nothing was uncommitted before the evaluator ran — `git
+     stash create` produces no output when the tree is clean): `git checkout .` is equivalent.
+3. Re-run evaluator (one retry only).
+4. If it modifies files again → mark story blocked: `story move HP-N blocked` with integrity violation reason.
+
+**Known gap (F092), intentionally not fully solved here — WS4's `bin/forge-integrity.sh` closes
+it:** `git diff --name-only` only lists unstaged changes to already-tracked files. It is blind to
+two cases this check is supposed to catch:
+- **An evaluator edit to a file the generator already modified** — the file was already in both
+  the pre- and post-spawn diff-name lists, so nothing changes and the tampering is invisible.
+- **An evaluator-created brand-new file** — untracked files never appear in `git diff --name-only`
+  output at all, before or after.
+
+For the `agents:evaluator` path this is an acceptable interim gap because the tool restriction
+above is the real barrier for both cases (the evaluator cannot Write/Edit regardless of what this
+heuristic would or wouldn't catch). For the `general-purpose` fallback path, these two cases are a
+genuine blind spot until WS4 lands; don't treat this heuristic as a complete guarantee for that
+path.
 
 ### Step 5b: Log Verdict
 
-Append to `.forge/verdicts.jsonl`:
+Append to `.forge/verdicts.jsonl` — this is the durable, uncapped home for the evaluator's FULL
+response (see `evaluator.md`'s "Storage split"; only the storyhook comment gets the compact
+`{verdict, failures}` projection, not this file):
 
 ```json
-{"story": "HP-N", "attempt": <attempt_number>, "verdict": "pass|fail", "failures": [...], "timestamp": "<now>"}
+{"story": "HP-N", "attempt": <attempt_number>, "timestamp": "<now>", "verdict_full": {"verdict": "pass|fail", "failures": [...], "criteria_checks": [...], "edge_case_findings": [...], "security_findings": [...], "design_adherence": "aligned|drifted", "design_drift_details": "...", "summary": "..."}}
 ```
 
 ### Step 6: State Management
@@ -233,13 +297,20 @@ If stories_this_session >= config.max_stories_per_session:
 Track stories_since_last_architect_review (in-memory counter, not persisted)
 
 If completed story was last in its wave OR stories_since_last_architect_review >= 3:
+  Resolve subagent_type per references/team-roles.md's "Resolving subagent_type":
+    Preferred: "agents:software-architect" (there is no "forge:" namespace — forge registers no
+    agents of its own; software-architect lives in the agents plugin like every other shared
+    agent). Fallback: "general-purpose" with software-architect.md +
+    agent-overrides/software-architect-context.md inlined.
+
   Spawn architect-reviewer subagent:
     Agent(
-      subagent_type: "forge:software-architect",
-      prompt: "Review recent diffs against DESIGN.md contracts.
-               Check for naming inconsistencies, interface drift, pattern violations.
-               Recent commits: <git log of stories completed since last review>
-               DESIGN.md: <relevant sections>"
+      subagent_type: "agents:software-architect",  # or "general-purpose" + inlined role on fallback
+      prompt: <constructed prompt with:
+        - [Fallback path only] software-architect.md + agent-overrides/software-architect-context.md
+        - Recent commits: <git log of stories completed since last review>
+        - DESIGN.md: <relevant sections>
+      >
     )
   Reset stories_since_last_architect_review = 0
 

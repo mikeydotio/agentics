@@ -17,6 +17,7 @@ You are the execute skill. Your job is to implement stories autonomously through
 - `references/verification-protocol.md` — Evaluator criteria and debiasing
 - `references/handoff-format.md` — Handoff artifact spec
 - `references/storyhook-contract.md` — Story CLI command mapping (verb-first; the CLI has no MCP interface)
+- `references/team-roles.md` — "Resolving subagent_type" — governs the generator/evaluator/software-architect spawns below
 
 **Read inputs:**
 - `.forge/plan-mapping.json` (required)
@@ -106,35 +107,14 @@ loop:
   complete: all stories done → transition to review+validate
 ```
 
-### Generator Subagent Spawn
+### Generator and Evaluator Subagent Spawns
 
-```
-Agent(
-  subagent_type: "general-purpose",
-  prompt: <constructed with:
-    - Story title and acceptance criteria
-    - Relevant DESIGN.md section (from plan-mapping.json)
-    - File list to read (files_expected + related existing files)
-    - Prior evaluator feedback (if retry)
-    - Generator agent instructions (from plugins/agents/agents/generator.md)
-  >
-)
-```
-
-### Evaluator Subagent Spawn
-
-```
-Agent(
-  subagent_type: "general-purpose",
-  prompt: <constructed with:
-    - Acceptance criteria for the story
-    - git diff of uncommitted changes
-    - Deterministic check output
-    - Relevant DESIGN.md section
-    - Evaluator agent instructions (from plugins/agents/agents/evaluator.md)
-  >
-)
-```
+Full spawn construction (subagent_type resolution, override wiring, the `<files_to_read>` block)
+is authoritative in `references/execution-loop.md` Steps 3 and 5 — read it there, don't re-derive
+it here. In short: resolve `subagent_type` per `references/team-roles.md`'s "Resolving
+subagent_type" (`agents:generator` / `agents:evaluator` preferred; `general-purpose` + inlined
+`generator.md`/`evaluator.md` + the matching `agent-overrides/*-context.md` only as fallback —
+never default straight to `general-purpose`, that's exactly what makes the Hard Rules cosmetic).
 
 ## Dry-Run Mode
 

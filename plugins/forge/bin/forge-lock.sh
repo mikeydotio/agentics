@@ -62,8 +62,25 @@ resolve_window_min() {
   fi
 }
 
+# A lock.json is only usable if it is syntactically valid JSON *and* carries
+# a well-formed `holder` (non-empty string) and `heartbeat_at` (a string
+# `fromdate` can actually parse). write_lock() always produces both together,
+# but this file can also be reached by external hands (a user hand-editing a
+# stuck lock.json while debugging, or a lock left by tooling that doesn't
+# share this exact schema) — schema-valid-but-field-incomplete JSON must not
+# reach lock_age_seconds()'s unguarded `fromdate`, which throws under
+# `set -euo pipefail` and would crash every acquire/check call (the very
+# first gate of every execute-loop iteration and resume). Any such file is
+# therefore treated identically to "no lock present": the safe recovery is
+# to let the current session acquire a fresh, complete lock rather than
+# have the whole script exit non-zero without emitting the promised JSON.
 read_lock() {
-  if [ -f "$LOCK_FILE" ] && jq -e . "$LOCK_FILE" >/dev/null 2>&1; then
+  if [ -f "$LOCK_FILE" ] && jq -e '
+      type == "object"
+      and (.holder | type) == "string" and (.holder | length > 0)
+      and (.heartbeat_at | type) == "string"
+      and (.heartbeat_at | fromdate | type) == "number"
+    ' "$LOCK_FILE" >/dev/null 2>&1; then
     cat "$LOCK_FILE"
   else
     echo ""

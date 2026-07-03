@@ -27,6 +27,20 @@ write_stale_lock() {
     > "$FORGE_DIR/lock.json"
 }
 
+# Schema-valid JSON that is nonetheless missing/malforming the fields
+# lock_age_seconds() depends on (F096-style hand-edited or foreign-tool
+# lock.json). read_lock() must treat these identically to "no lock present"
+# rather than letting jq's `fromdate` throw under `set -euo pipefail`.
+write_lock_missing_heartbeat() {
+  jq -n --arg holder "$1" '{holder: $holder}' > "$FORGE_DIR/lock.json"
+}
+
+write_lock_unparseable_heartbeat() {
+  jq -n --arg holder "$1" \
+    '{holder: $holder, acquired_at: "2020-01-01T00:00:00Z", heartbeat_at: "not-a-date"}' \
+    > "$FORGE_DIR/lock.json"
+}
+
 # --- acquire ---
 
 @test "acquire: succeeds when no lock exists" {
@@ -187,6 +201,44 @@ write_stale_lock() {
   bash "$SCRIPT" check --session-id sess-NEW --forge-dir "$FORGE_DIR" >/dev/null
   after="$(cat "$FORGE_DIR/lock.json")"
   [ "$before" = "$after" ]
+}
+
+# --- Schema-valid-but-field-incomplete lock.json (F096-style corruption) ---
+
+@test "acquire: does not crash on a lock.json missing heartbeat_at, treats it as absent" {
+  write_lock_missing_heartbeat "sess-OLD"
+  run bash "$SCRIPT" acquire --session-id sess-NEW --forge-dir "$FORGE_DIR"
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.acquired')" = "true" ]
+  [ "$(jq -r '.holder' "$FORGE_DIR/lock.json")" = "sess-NEW" ]
+}
+
+@test "acquire: does not crash on a lock.json with an unparseable heartbeat_at, treats it as absent" {
+  write_lock_unparseable_heartbeat "sess-OLD"
+  run bash "$SCRIPT" acquire --session-id sess-NEW --forge-dir "$FORGE_DIR"
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.acquired')" = "true" ]
+  [ "$(jq -r '.holder' "$FORGE_DIR/lock.json")" = "sess-NEW" ]
+}
+
+@test "check: does not crash on a lock.json missing heartbeat_at, treats it as absent" {
+  write_lock_missing_heartbeat "sess-OLD"
+  run bash "$SCRIPT" check --session-id sess-NEW --forge-dir "$FORGE_DIR"
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.held')" = "false" ]
+  [ "$(jq_field '.action')" = "acquire" ]
+}
+
+@test "check: does not crash on a lock.json with an unparseable heartbeat_at, treats it as absent" {
+  write_lock_unparseable_heartbeat "sess-OLD"
+  run bash "$SCRIPT" check --session-id sess-NEW --forge-dir "$FORGE_DIR"
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.held')" = "false" ]
+  [ "$(jq_field '.action')" = "acquire" ]
 }
 
 # --- Unknown subcommand ---

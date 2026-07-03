@@ -162,11 +162,9 @@ project-story close in its step 2 can change `.storyhook/`).
 
 ### Pause (session limit, blocked, error)
 
-1. Write handoff to `.forge/handoffs/handoff-execute.md` with **cold-start essentials**:
-   - Patterns Established (naming, architecture, error handling)
-   - Micro-Decisions (not in DESIGN.md but load-bearing)
-   - Code Landmarks (key files and their roles)
-   - Test State (pass/fail/flaky, run command, env setup)
+1. Write handoff to `.forge/handoffs/handoff-execute.md` (content: see step-handoff.md's Execute
+   Handoff table — Working Context is REQUIRED here; see `references/handoff-format.md`'s
+   "Cold-Start Essentials" for what each of its four subsections must contain)
 2. Increment the session counter (the one `state.json` field `forge-step-exit.sh`'s own patch
    doesn't touch):
    ```bash

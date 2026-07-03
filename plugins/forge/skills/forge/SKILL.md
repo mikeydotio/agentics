@@ -172,12 +172,13 @@ re-dispatch to execute:
      - "Stop the pipeline" / "Pause here; I'll investigate manually. Pros: no automated action
        taken. Cons: pipeline stays paused until I resume."
 4. If "Treat as ESCALATE and move on": `stories_all_done` can only become true once a story is
-   `done`, so for each blocked story: `story set <id> --title "ESCALATE: <original title>"` then
-   `story move <id> done "escalated — see blocked_reason"`. This reuses the existing ESCALATE
-   convention (title-substring detection in `forge-state.sh`) — the story surfaces again at the
-   post-document ESCALATE gate for a human decision, rather than being silently discarded. Then run
-   `/forge continue` to resume state detection (it will now see `stories_all_done` and advance to
-   `review_validate`).
+   `done`, so for each blocked story: `story set <id> --title "ESCALATE: <original title>" --type
+   escalate` then `story move <id> done "escalated — see blocked_reason"`. `--type escalate` sets
+   the structured `story_type` field `forge-state.sh` actually detects (F006 — not a title
+   substring; the `ESCALATE:` prefix is kept only for human readability) — the story surfaces
+   again at the post-document ESCALATE gate for a human decision, rather than being silently
+   discarded. Then run `/forge continue` to resume state detection (it will now see
+   `stories_all_done` and advance to `review_validate`).
 5. If "Unblock and retry" or "Stop" → exit cleanly; do not dispatch further this turn.
 
 ### ESCALATE Review Loop (Post-Document Pause)

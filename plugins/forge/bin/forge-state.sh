@@ -281,9 +281,24 @@ check_storyhook() {
           stories_blocked_only=true
         fi
       fi
-      # Check for ESCALATE stories that are not done
+      # Check for ESCALATE stories that are not done.
+      #
+      # F006: this used to grep a case-insensitive TITLE SUBSTRING
+      # ("ESCALATE" anywhere in .story.title), which is both over-inclusive
+      # (a legitimate story titled e.g. "Implement alert escalation policy"
+      # would wedge the pipeline in pause_escalate) and under-inclusive (it
+      # depended entirely on triage's title-prefix convention, with no
+      # queryable field backing it). Detect the structured `story_type`
+      # field instead — triage now sets `story_type: "escalate"` via
+      # `story new --type escalate` / `story set --type escalate` (see
+      # skills/triage/SKILL.md Step 4 and skills/forge/SKILL.md's Blocked
+      # Stories Pause), a real, settable, queryable field on the story
+      # (confirmed against storyhook/src/{cli.rs,domain.rs} — always
+      # serialized, defaults to null when unset, never skipped). The
+      # "ESCALATE:" title prefix is kept purely as a human-readable
+      # convention; it is no longer what detection keys on.
       local escalate_not_done
-      escalate_not_done=$(echo "$story_json" | jq '[.stories[] | select(.story.title != null and (.story.title | test("ESCALATE"; "i")) and .story.state != "done")] | length')
+      escalate_not_done=$(echo "$story_json" | jq '[.stories[] | select(.story.story_type == "escalate" and .story.state != "done")] | length')
       if [ "$escalate_not_done" -gt 0 ]; then
         has_escalate_pending=true
       fi

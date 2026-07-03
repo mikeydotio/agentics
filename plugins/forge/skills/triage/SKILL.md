@@ -62,10 +62,10 @@ When the team is split → use `when_in_doubt` from config.json (default: "escal
 
 ### 4. Out-of-Band Decompose for ESCALATE Items
 
-For each ESCALATE finding, create a storyhook story with rich context:
+For each ESCALATE finding, create a storyhook story with rich context. `--type escalate` sets the real, queryable `story_type` field (F006 — `forge-state.sh` detects pending escalations by this field, not by a title-substring match); the `ESCALATE:` title prefix is kept only as a human-readable convention, not the detection mechanism:
 
 ```bash
-story new "ESCALATE: [finding title]"
+story new "ESCALATE: [finding title]" --type escalate
 story prioritize HP-N critical
 story comment HP-N '{"type":"escalate","finding":"[title]","severity":"[level]","description":"[full description]","options":[{"label":"Option 1","solution":"...","pros":"...","cons":"..."},{"label":"Option 2",...}],"recommendation":"[team recommendation]"}'
 ```

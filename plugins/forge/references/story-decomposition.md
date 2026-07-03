@@ -19,7 +19,7 @@ Before creating stories, check if `.forge/plan-mapping.json` exists:
   - **Hash differs**: PLAN.md has changed since last decomposition. Warn user and offer same three options but mark "Recreate stories (destructive) (Recommended)" instead.
 - **If not exists**: Proceed with fresh decomposition
 
-### 2. State Setup
+### 2. State and Type Setup
 
 `story init` already seeds `todo` / `in-progress` / `done`. Create the two additional states
 forge's execution loop needs (see `storyhook-contract.md`'s **Custom States** for the
@@ -28,6 +28,15 @@ not-idempotent/exit-2 caveat and why `.storyhook/states.toml` must never be hand
 ```bash
 story state add verifying --super OPEN --role active
 story state add blocked --super OPEN --role active
+```
+
+Also register the `escalate` custom `story_type` triage and the blocked-stories-pause flow use to
+flag a story needing a human decision (`forge-state.sh` detects this via the structured field, not
+a title match — F006). Same not-idempotent/exit-2 caveat as custom states — see
+`storyhook-contract.md`'s **Custom Types**:
+
+```bash
+story type add escalate --description "Needs a human decision (forge triage escalation)"
 ```
 
 ### 3. Extract the Task Breakdown Section

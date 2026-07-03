@@ -150,11 +150,17 @@ Created IDs are at **`.stories[].story.id`**.
 
 ## Field Updates
 
-`story set <id> [--title …] [--state …] [--priority …] [--assignee …] [--labels …] [--blocked "reason"] [--unblocked] [--json '{...}']`
+`story set <id> [--title …] [--state …] [--priority …] [--assignee …] [--labels …] [--blocked "reason"] [--unblocked] [--type <slug>] [--json '{...}']`
 updates several fields in a single call. `--json` accepts only these keys:
 `title, state, priority, assignee, labels, blocked, story_type` — any other key errors
 (`unknown field "<name>" in JSON. Valid fields: ...`). For single-field updates, the dedicated
-verbs (`move`, `prioritize`, `assign`, `label`, `block`) are more concise and preferred.
+verbs (`move`, `prioritize`, `assign`, `label`, `block`) are more concise and preferred; `story_type`
+is one of these — `story new <title> --type <slug>` sets it at creation, `story set <id> --type
+<slug>` afterward — prefer the dedicated `--type` flag over `--json '{"story_type":...}'` for a
+single-field update. `story_type` is **not** a free-form string — see **Custom Types** below, the
+same "register before use" pattern as custom states. Once registered, `story_type` is always
+present in `--json` output (`null` when unset, never omitted), so it is safe to filter on directly
+(e.g. `.story.story_type == "escalate"` — see forge-state.sh's escalate detection, F006).
 
 ## Structured Feedback (evaluator verdicts, blocked reasons)
 
@@ -206,6 +212,25 @@ states forge needs (e.g. `verifying`, `blocked`) must be created explicitly:
 story state add verifying --super OPEN --role active
 story state add blocked --super OPEN --role active
 ```
+
+## Custom Types
+
+`story_type` (set via `story new <title> --type <slug>` / `story set <id> --type <slug>` /
+`--json '{"story_type":...}'`) is a **fixed, project-scoped enum** — `story init` seeds
+`bug`/`chore`/`epic`/`story`/`task`, and setting any other slug errors (`unknown type
+\`<slug>\`. Available types: ...`, exit 2) until it's registered:
+
+```bash
+story type add <slug> [--description "<text>"]
+```
+
+Same idempotency caveat as `story state add`: **not** idempotent — re-running it on an existing
+slug errors (`type \`<slug>\` already exists`, exit 2). There is no `story type list` short-circuit
+check before adding (there is a `story type list` command, but callers that need idempotency should
+tolerate/ignore the specific exit-2 "already exists" error rather than pre-checking). Forge
+registers an `escalate` type this way (`decompose/SKILL.md` Step 2) so `story_type: "escalate"` can
+flag stories needing a human decision (F006) — see `forge-state.sh`'s escalate detection and
+`skills/triage/SKILL.md`'s ESCALATE story creation.
 
 `story state add` is **not** idempotent — re-running it on an existing slug errors
 (`error: state \`verifying\` already exists`, exit 2). There is no `story state list` to check
@@ -295,5 +320,6 @@ Track consecutive storyhook command failures. Reset the counter to 0 on ANY succ
 - **`unknown field "<name>" in JSON`**: a `set --json` payload used a key outside
   `title, state, priority, assignee, labels, blocked, story_type` — use `comment` instead for
   free-form structured data.
+- **`unknown type "<slug>"`** (exit 2): `story_type` not yet registered — see **Custom Types** above.
 - **Invalid state**: state not yet created — see **Custom States** above.
 - **Permission error**: `.storyhook/` not writable.

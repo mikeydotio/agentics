@@ -403,6 +403,14 @@ init_storyhook() {
   ( cd "$TEST_DIR" && git init -q . && story init --prefix ST >/dev/null 2>&1 )
 }
 
+# `story_type` is a fixed, project-scoped enum (story init seeds
+# bug/chore/epic/story/task, NOT escalate) -- `story new/set --type escalate`
+# errors with "unknown type" until this is registered once, mirroring
+# decompose/SKILL.md Step 2's real registration call.
+register_escalate_type() {
+  ( cd "$TEST_DIR" && story type add escalate --description "test" >/dev/null 2>&1 )
+}
+
 run_state_in_project() {
   run bash -c "cd '$TEST_DIR' && bash '$SCRIPT' '$FORGE_DIR'"
 }
@@ -421,11 +429,12 @@ run_state_in_project() {
   [ "$(jq_field '.state')" = "review_validate" ]
 }
 
-@test "escalate detection reads .story.title, not .title" {
+@test "escalate detection reads the structured story_type field, not a title substring (F006)" {
   init_storyhook
+  register_escalate_type
   mkdir -p "$FORGE_DIR"
   mkmd "$FORGE_DIR/DOCUMENTATION.md"
-  ( cd "$TEST_DIR" && story new "ESCALATE: needs a decision" >/dev/null )
+  ( cd "$TEST_DIR" && story new "ESCALATE: needs a decision" --type escalate >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "pause_escalate" ]
@@ -434,9 +443,25 @@ run_state_in_project() {
 
 @test "a resolved (done) ESCALATE story does not block the deploy gate" {
   init_storyhook
+  register_escalate_type
   mkdir -p "$FORGE_DIR"
   mkmd "$FORGE_DIR/DOCUMENTATION.md"
-  ( cd "$TEST_DIR" && story new "ESCALATE: needs a decision" >/dev/null && story move ST-1 done >/dev/null )
+  ( cd "$TEST_DIR" && story new "ESCALATE: needs a decision" --type escalate >/dev/null && story move ST-1 done >/dev/null )
+  run_state_in_project
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "pause_deploy" ]
+  [ "$(jq_field '.dispatch')" = "deploy_gate" ]
+}
+
+@test "a legitimate story whose title merely contains 'escalate' is NOT mistaken for a pending escalation (F006)" {
+  # Regression guard for the false-positive half of F006: before the fix,
+  # forge-state.sh grepped the title case-insensitively for 'ESCALATE'
+  # anywhere in it, so a normal feature story like this one would have
+  # wedged the pipeline in pause_escalate forever.
+  init_storyhook
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/DOCUMENTATION.md"
+  ( cd "$TEST_DIR" && story new "Implement alert escalation policy" >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "pause_deploy" ]

@@ -39,7 +39,7 @@ If `.forge/plan-mapping.json` exists:
 - If "Recreate" -> proceed with fresh decomposition
 - If "Cancel" -> exit
 
-### 2. State Setup
+### 2. State and Type Setup
 
 `story init` already seeds `todo` / `in-progress` / `done`. Create the two additional states the
 execution loop needs (see `storyhook-contract.md`'s **Custom States** for why this isn't
@@ -48,6 +48,19 @@ idempotent and must tolerate exit 2 — do not hand-edit `.storyhook/states.toml
 ```bash
 story state add verifying --super OPEN --role active
 story state add blocked --super OPEN --role active
+```
+
+Also register the `escalate` custom **type** triage and the blocked-stories-pause flow use to flag
+a story as needing a human decision (`forge-state.sh` detects pending escalations via the
+structured `story_type` field, not a title match — F006). `story_type` values are a fixed,
+project-scoped enum (`story new --type <slug>` rejects anything not registered with `story type
+add` first — verified against storyhook's built-in default set, `bug`/`chore`/`epic`/`story`/`task`,
+which does **not** include `escalate`). Same idempotency caveat as custom states — `story type add`
+errors (exit 2, `type \`escalate\` already exists`) on a slug that's already registered; tolerate
+that specific error rather than treating it as a failure:
+
+```bash
+story type add escalate --description "Needs a human decision (forge triage escalation)"
 ```
 
 ### 3. Extract and Verify the Task Breakdown Section

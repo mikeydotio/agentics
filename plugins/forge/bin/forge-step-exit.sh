@@ -5,9 +5,9 @@
 #
 # Usage:
 #   forge-step-exit.sh --step <name> --summary <text> --next <command> \
-#     [--extra-path <path>]...
+#     [--extra-path <path>]... [--transition-id <id>]
 #   forge-step-exit.sh --step <name> --summary <text> --terminal \
-#     [--extra-path <path>]...
+#     [--extra-path <path>]... [--transition-id <id>]
 #
 # Exactly one of --next / --terminal is required:
 #   --next <command>   Normal step transition. Commits, marks state.json
@@ -23,6 +23,13 @@
 # reaching for a broad `git add -A`, which sweeps in unrelated untracked
 # files. A path that doesn't exist on disk is silently skipped (e.g.
 # `.storyhook/` on a project with no storyhook data yet).
+#
+# --transition-id <id> (optional, agentics#33) — the `transition_id` from
+# the `forge-state.sh --record-transition` JSON output the router read
+# earlier this same turn, threaded through so this step's "actual" log line
+# can be correlated with that "predicted" line by forge-transition-report.sh.
+# Omit it (older/manual call sites) and the logged line reads
+# `transition_id=none` instead of failing.
 #
 # Output (always exit 0 on a successful run — callers branch on the JSON):
 #   {ok, committed, commit_hash, freshen_queued, freshen_cancelled, fallback_message}
@@ -42,7 +49,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-step="" summary="" next_cmd="" terminal=false
+step="" summary="" next_cmd="" terminal=false transition_id=""
 extra_paths=()
 
 while [[ $# -gt 0 ]]; do
@@ -56,9 +63,12 @@ while [[ $# -gt 0 ]]; do
     --terminal) terminal=true; shift ;;
     --extra-path) extra_paths+=("$2"); shift 2 ;;
     --extra-path=*) extra_paths+=("${1#*=}"); shift ;;
+    --transition-id) transition_id="$2"; shift 2 ;;
+    --transition-id=*) transition_id="${1#*=}"; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
+[ -n "$transition_id" ] || transition_id="none"
 
 [ -n "$step" ]    || { echo "Error: --step is required" >&2; exit 1; }
 [ -n "$summary" ] || { echo "Error: --summary is required" >&2; exit 1; }
@@ -126,6 +136,15 @@ _TRANSITION_LOG_LIB="$SCRIPT_DIR/../../freshen/lib/transition-log.sh"
 log_step_exit_transition() {
   declare -f freshen_log_transition >/dev/null 2>&1 && freshen_log_transition "$1" || true
 }
+
+# agentics#33: log this step-exit's "actual" line, correlated by
+# transition_id with the "predicted" line forge-state.sh --record-transition
+# wrote when the router read its JSON output earlier this turn (or
+# transition_id=none for older/manual call sites that don't thread it
+# through). Logged unconditionally, once, before the terminal/next branch
+# below — which one ran is already captured by the existing queue/cancel
+# line either branch logs next.
+log_step_exit_transition "actual step=${step} transition_id=${transition_id}"
 
 if [ "$terminal" = true ]; then
   # Best-effort — a terminal exit has nothing to resume to either way.

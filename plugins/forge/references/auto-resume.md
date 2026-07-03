@@ -145,6 +145,101 @@ way the marker is deleted the moment hook-guard reads it, fresh or stale, so it 
 or be misread by a later event again — there is exactly one consumer responsible for cleaning up
 each marker, on exactly one read.
 
+## Capture-Pane Read-Back (F045, F041, F056)
+
+Both tmux sends in the auto-resume cycle — `on-stop.sh`'s `/clear` and `on-clear.sh`'s
+re-invocation command — used to blind-fire `tmux send-keys` and immediately treat the send as
+"done": `on-stop.sh` was explicitly "fail-fast, no retry", and `on-clear.sh` deleted its signal
+file gated only on the *first* of its two send-keys calls (the literal command text) succeeding,
+independent of whether the follow-up `Enter` did. A busy, wedged, or dead pane could silently
+strand the whole pipeline: context cleared with nothing typed, or a command typed but never
+submitted, with the durable state already discarded and no path back except the 2-hour stale-signal
+sweep.
+
+Both hooks now confirm the send via `plugins/freshen/lib/pane-confirm.sh`, a bounded
+`tmux capture-pane -p` poll + resend loop:
+
+1. Send the keys (`"keys"` mode: one `send-keys <text> Enter` call, for short control sequences
+   like `/clear`; `"literal"` mode: `send-keys -l <text>` then a *separate* `send-keys … Enter`
+   call, for arbitrary re-invocation command strings — both calls must succeed for the send to
+   count as attempted, closing F041's exact gap).
+2. Poll `capture-pane -p` (a handful of attempts, ~300ms apart) for evidence the sent text no
+   longer sits, unsubmitted, on the pane's last non-blank line — i.e. it left the input box. This
+   is deliberately agnostic to what Claude Code's TUI renders once a command is accepted (an
+   implementation detail that could change); "no longer sitting there unsubmitted" is the weakest
+   claim that still meaningfully distinguishes "the pane reacted" from "the pane never processed
+   it at all" (the busy/wedged-pane failure mode). A failed `capture-pane` call itself (dead pane,
+   bad target) is treated as *not yet confirmed*, never as success.
+3. On failure to confirm, resend (bounded — a couple of extra attempts) rather than giving up
+   after one try or polling forever.
+
+**What changes on an unconfirmed send:**
+
+- `on-stop.sh` only sets `.clear-pending` — the durable flag `on-clear.sh` and hook-guard's
+  breaker-skip both key off of — once the `/clear` is confirmed. If it's never confirmed,
+  `.clear-pending` is left unset and the `*.signal` file untouched, so the *next* Stop event
+  retries the whole clear from scratch. This is safe without introducing a new cross-plugin race:
+  Stop hooks in the same batch run sequentially (see "Cross-Plugin Hook Ordering" above), so
+  `on-stop.sh` — including its confirm/resend loop — always finishes before any other plugin's
+  Stop hook in the same batch starts. There is no window where a partially-confirmed clear could
+  be observed by forge's `session-stop.sh`.
+- `on-clear.sh` only deletes the signal once both send-keys calls succeeded *and* the read-back
+  confirms acceptance. The F052 `.clear-pending` → `.clear-consumed` hand-off (see above) is
+  unconditional either way — it must keep firing regardless of whether the re-invoke itself was
+  ultimately confirmed, since that fact (whether *this* `/clear` was freshen-initiated) is
+  independent of the re-invoke's success.
+
+Every send/confirm decision is also recorded in `.freshen/transitions.log` — see below.
+
+## Transition Audit Log (F047)
+
+`on-stop.sh`, `on-clear.sh`, and `forge-step-exit.sh` each append one short, timestamped line to
+`.freshen/transitions.log` (gitignored, inside the already-ignored `.freshen/` directory) at every
+transition point: which step queued/cancelled what, which hook sent what, and whether it was
+confirmed. This is deliberately **not** `tmux pipe-pane` (which mirrors a pane's entire raw output
+continuously and would need its own enable/disable lifecycle plus size/rotation management to stay
+bounded — real added scope for comparatively little extra diagnostic value here). The log is capped
+to the most recent 500 lines (`plugins/freshen/lib/transition-log.sh`) so it stays lightweight
+across a long-running pipeline. A stalled auto-resume cycle can be diagnosed post-hoc with a plain
+`cat`/`tail .freshen/transitions.log`.
+
+## Pane-Option Migration (F046) — Deferred
+
+The hardening audit's F046 proposed replacing the file-based `.freshen/.clear-pending` /
+`.clear-consumed` coordination with a tmux user pane option (`tmux set-option -p @forge_clear_pending
+1` / `show-options -pv`), reasoning that pane options are pane-scoped, atomic, and can't be
+"orphaned on disk" the way an unscoped, untimestamped file can (F040).
+
+That reasoning predates the F052 hardening above: the orphaning concern it was chiefly aimed at is
+now substantially closed by `.clear-consumed`'s freshness window (hook-guard's `session-start.sh`
+bounds how long it trusts a marker it didn't just create itself, so a stale leftover is
+self-limiting — ignored after `CLEAR_CONSUMED_WINDOW` seconds — rather than orphaned indefinitely).
+Weighed against that much-reduced remaining benefit, a full migration would require:
+
+- Re-deriving the *same* cross-plugin ordering and freshness-window logic against pane options
+  instead of file mtimes (pane options have no built-in timestamp — a second option would be
+  needed just to carry one, giving up the atomicity that was the whole selling point).
+- Updating hook-guard's `session-start.sh` in lockstep (the two sides coordinate on the same
+  signal and cannot be migrated independently), re-touching logic that took two rounds of
+  adversarial verification to get right, including a real regression the first fix attempt
+  introduced.
+- Weaker test confidence than the current file-based coverage: this repo's established convention
+  for these exact hooks (`plugins/forge/hooks/session-stop.bats`) is a *stubbed* tmux executable,
+  not a live session, specifically so hook tests stay hermetic and don't depend on a real tmux
+  server being available wherever `make test` runs. A pane-option migration would need that stub to
+  fake a *stateful* key-value store (to make `show-options` reflect a prior `set-option`) with
+  timestamp semantics of its own — a materially higher-fidelity-risk stand-in for the exact
+  correctness-critical logic that must not regress, for a benefit that has already largely been
+  captured by the freshness-window fix.
+
+Given the cost/benefit has shifted since the plan was written, F046's full migration is deferred
+(mirroring how F044/F104's watchdog/supervisor spike was deliberately deferred) rather than forced
+through at the expense of the hard-won F052 test confidence. The genuinely self-contained,
+purely-additive pieces (F045, F041, F056, F047 above) shipped on their own. Revisit F046 if a future
+need actually requires pane-scoped (rather than project-dir-scoped) coordination — e.g. two
+concurrent Claude Code panes operating in the same project directory — which the current file-based
+approach does not handle and pane options would.
+
 ## Safety
 
 - Signal cancelled on `/forge stop` (user-initiated graceful stop)

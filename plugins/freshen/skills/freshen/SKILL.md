@@ -16,8 +16,10 @@ You manage the freshen signal queue. Freshen lets plugins automatically clear co
 
 1. A plugin calls `freshen.sh queue "/some-command" --source plugin-name`
 2. This creates `.freshen/plugin-name.signal` containing the command
-3. When Claude's turn ends, the **Stop hook** detects the signal and sends `/clear` via tmux
-4. After the clear, the **SessionStart(clear) hook** reads the signal, deletes it, and sends the re-invocation command via tmux
+3. When Claude's turn ends, the **Stop hook** detects the signal and sends `/clear` via tmux, confirming via a bounded `tmux capture-pane` read-back that it actually landed before treating the clear as done
+4. After the clear, the **SessionStart(clear) hook** reads the signal, sends the re-invocation command via tmux, confirms (same read-back) that it was actually accepted, and only then deletes the signal
+
+Both hooks retry a bounded number of times on an unconfirmed send (busy/wedged pane) before giving up and leaving the signal for the next cycle to retry from scratch — see `plugins/freshen/lib/pane-confirm.sh` and `plugins/forge/references/auto-resume.md`'s "Capture-Pane Read-Back" section for the full mechanism, and `.freshen/transitions.log` for a timestamped record of every send/confirm decision.
 
 **Requires tmux.** The `queue` command fails with an error if Claude is not running inside a tmux session.
 

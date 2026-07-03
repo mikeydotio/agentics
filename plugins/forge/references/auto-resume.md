@@ -7,7 +7,9 @@ Freshen-based context clearing and re-invocation for autonomous execution.
 Forge uses the freshen plugin for automatic session transitions. When forge pauses (session limit reached, blocked, or any pause trigger), it queues a freshen signal. The sequence:
 
 1. **Pause**: Forge writes handoff, sets status to `paused`, releases lock
-2. **Queue**: Forge runs `bash plugins/freshen/bin/freshen.sh queue "/forge resume" --source forge --summary "Execution paused — [reason]"`
+2. **Queue**: Forge runs `bin/forge-step-exit.sh` (`references/step-handoff.md`), which queues the
+   signal via freshen (resolving freshen's own portable path internally — never a bare
+   `plugins/freshen/...` invocation from a step skill)
 3. **Stop**: Session ends. Freshen's Stop hook detects the signal, sends `/clear` via tmux
 4. **Clear**: Context is wiped. Freshen's SessionStart(clear) hook reads the signal, echoes the summary as a progress breadcrumb, sends `/forge resume` via tmux
 5. **Resume**: New session starts. Forge's SessionStart hook injects state context. `/forge resume` acquires lock and continues
@@ -34,23 +36,21 @@ Else:
 
 ## Pause (queuing the signal)
 
-At every pause point in the execution loop:
+At every pause point in the execution loop, `bin/forge-step-exit.sh --step execute --summary "..."
+--next "/forge resume"` (see `references/step-handoff.md`) queues the signal as part of the
+standard step-exit call — there is no separate freshen invocation to write by hand.
 
-```bash
-bash plugins/freshen/bin/freshen.sh queue "/forge resume" --source forge --summary "Execution paused — [N] stories completed this session"
-```
-
-If the queue command fails (tmux not available, freshen not installed):
-- Log: "Auto-resume unavailable. Run `/forge resume` manually."
+If the queue fails (tmux not available, freshen not installed), the script reports
+`freshen_queued: false` with a `fallback_message`:
+- Show it to the user: "Auto-resume unavailable. Run `/forge resume` manually."
 - Do NOT treat this as a fatal error -- forge still pauses cleanly.
 
 ## Teardown
 
-On `/forge stop` or completion, cancel any pending signal:
-
-```bash
-bash plugins/freshen/bin/freshen.sh cancel --source forge
-```
+On `/forge stop`, cancel any pending signal — see `skills/forge/SKILL.md`'s `/forge stop` section
+for the portable path resolution (freshen's plugin root as a sibling of forge's own, never a bare
+`plugins/freshen/...` path). On completion (all stories done), deploy's terminal step-exit call
+(`--terminal`) cancels the signal instead of queueing a next one.
 
 ## Session-Stop Hook
 

@@ -90,15 +90,19 @@ The technical writer may also create or update other documentation files (README
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol:
+**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/DOCUMENTATION.md` (and any other doc files)
-2. Write `.forge/handoffs/handoff-document.md` with:
+2. Write `.forge/handoffs/handoff-document.md`:
    - Key Decisions: documentation scope, files created
    - Context for Next Step: pipeline summary, ESCALATE status
    - Pipeline State: ESCALATE stories pending count
-3. Commit: `git add .forge/ && git commit -m "forge(document): project documentation"`
-4. Queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Documentation complete — ready for review"`
-5. STOP
+3. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step document \
+     --summary "project documentation" --next "/forge continue"
+   ```
+   If the technical writer created or updated files outside `.forge/` (README.md, API docs, etc.
+   per Step 1 above), pass each as its own `--extra-path` so they ride along in the same commit.
+4. STOP
 
 The orchestrator enters the **post-document pause** on next `continue` — it ALWAYS pauses here for user review, never auto-advances to deploy.
 

@@ -357,29 +357,25 @@ pause:
   write_handoff()
 ```
 
+`sessions_completed` is the one counter `forge-step-exit.sh`'s own state.json patch doesn't touch
+(it only sets `status`/`updated_at`/`resume`) — increment it first, same atomic read-modify-write
+idiom `hooks/session-stop.sh` uses for its own crash-path pause:
+
 ```bash
-jq --arg cmd "/forge resume" \
-   --arg hf "handoffs/handoff-execute.md" \
-   --arg sum "Execution paused — ${STORIES_THIS_SESSION} stories completed. ${REASON}" \
-   '.status = "paused"
-    | .sessions_completed = (.sessions_completed + 1)
-    | .updated_at = (now | todate)
-    | .resume = {command: $cmd, handoff_file: $hf, summary: $sum}' \
-  .forge/state.json > .forge/state.json.tmp && mv .forge/state.json.tmp .forge/state.json
+jq '.sessions_completed = ((.sessions_completed // 0) + 1)' .forge/state.json > .forge/state.json.tmp \
+  && mv .forge/state.json.tmp .forge/state.json
 
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
 ```
 
-(Same atomic read-modify-write idiom `hooks/session-stop.sh` already uses for its own crash-path
-pause — this is the graceful-pause equivalent, not a new pattern.)
+Then run the step-exit script — it commits, sets `status: "paused"` with a `resume` object
+(`command`, `handoff_file: "handoffs/handoff-execute.md"`, `summary`), and queues freshen to
+`/forge resume` (or reports `fallback_message` if tmux is unavailable — not a fatal error, pause
+completes normally either way):
 
-```
-  # Queue automatic context clear + resume via freshen:
-  #   bash plugins/freshen/bin/freshen.sh queue "/forge resume" --source forge --summary "Execution paused — [N] stories completed"
-  # If the queue command fails (tmux not available), log a warning:
-  #   "Auto-resume unavailable. Run /forge resume manually."
-  # Do NOT treat freshen failure as a fatal error — pause completes normally.
-  return
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
+  --summary "paused — ${STORIES_THIS_SESSION} stories completed. ${REASON}" --next "/forge resume"
 ```
 
 ### Complete
@@ -445,24 +441,18 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" 
     - Notable decisions and patterns
     - Duration and session count
 
-  # 5. Commit (include .storyhook/ in case Step 2 closed the project story)
-  git add .forge/ .storyhook/ && git commit -m "forge(execute): all stories complete"
-
-  # 6. Queue freshen for the NEXT step (review_validate) — do NOT cancel:
-  bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Execution complete — all stories done"
-```
-
-```bash
-  # 7. Update state
+  # 5. Release the lock, then step-exit: commit (include .storyhook/ in case
+  #    Step 2 closed the project story) and queue freshen for the NEXT step
+  #    (review_validate) — do NOT cancel.
+  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
+  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
+    --summary "all stories complete" --next "/forge continue" --extra-path .storyhook/
   # status stays in the same two-value space as every other exit path
   # ("running" while looping, "paused" once the loop has exited for any
-  # reason). There is no third "complete" status — storyhook + forge-state.sh
-  # (not state.json) decide the review_validate transition, per Hard Rule 1
-  # ("storyhook is authoritative for story-level state — never duplicate it
-  # in forge files").
-  jq '.status = "paused" | .resume = null | .updated_at = (now | todate)' \
-    .forge/state.json > .forge/state.json.tmp && mv .forge/state.json.tmp .forge/state.json
-  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
+  # reason) — forge-step-exit.sh's own patch sets it. There is no third
+  # "complete" status — storyhook + forge-state.sh (not state.json) decide
+  # the review_validate transition, per Hard Rule 1 ("storyhook is
+  # authoritative for story-level state — never duplicate it in forge files").
 ```
 
 ## State Transition Summary

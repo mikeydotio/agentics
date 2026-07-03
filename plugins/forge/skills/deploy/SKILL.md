@@ -94,8 +94,12 @@ Write `.forge/COMPLETION.md`:
 
 **If `--orchestrated`:**
 1. Write `.forge/COMPLETION.md`
-2. Cancel freshen signal: `bash plugins/freshen/bin/freshen.sh cancel --source forge`
-3. Commit: `git add .forge/ && git commit -m "forge(deploy): pipeline complete"`
-4. Report completion to user — this is the end of the pipeline
+2. Deploy is the pipeline's one terminal step exit — `--terminal` commits and cancels any pending
+   freshen signal instead of queueing a next command (there is no next step):
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step deploy \
+     --summary "pipeline complete" --terminal
+   ```
+3. Report completion to user — this is the end of the pipeline
 
 **If standalone:** Same as orchestrated — deploy is always the final step.

@@ -112,14 +112,16 @@ to spawn, so a wrong name here breaks every step that reads it):
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol:
+**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/research/SUMMARY.md` and `.forge/TEAM.md`
-2. Write `.forge/handoffs/handoff-research.md` with:
+2. Write `.forge/handoffs/handoff-research.md`:
    - Key Decisions: existing solutions user chose to use/ignore, technology preferences
    - Context for Next Step: research summary, recommended stack, patterns to follow, pitfalls, team roster
    - Open Questions: design questions research could not resolve
-3. Commit: `git add .forge/ && git commit -m "forge(research): domain research + team roster"`
-4. Queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/forge design --orchestrated" --source forge --summary "Research complete — domain analysis and team roster"`
-5. STOP
+3. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step research \
+     --summary "domain research + team roster" --next "/forge design --orchestrated"
+   ```
+4. STOP
 
 **If standalone:** Write outputs, report completion to user, exit.

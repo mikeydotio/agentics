@@ -83,7 +83,7 @@ Load only what this specific story needs:
 story move HP-N in-progress
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh heartbeat --session-id "$SESSION_ID" --forge-dir .forge
 git checkout .  # clean working tree for fresh attempt
-bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh snapshot --phase pre-gen --forge-dir .forge --scope forge-only
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh snapshot --phase pre-gen --forge-dir .forge --scope forge-only --session-id "$SESSION_ID"
 ```
 
 **Resolve `subagent_type`** per `references/team-roles.md`'s "Resolving subagent_type" (Preferred:
@@ -119,7 +119,7 @@ Agent(
 Defense-in-depth: verify the generator did not modify forge state files, and (F064) did not commit.
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-gen --forge-dir .forge --scope forge-only
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-gen --forge-dir .forge --scope forge-only --session-id "$SESSION_ID"
 ```
 
 Parse the JSON result:
@@ -162,7 +162,7 @@ Parse the JSON result:
 ```bash
 story move HP-N verifying
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh heartbeat --session-id "$SESSION_ID" --forge-dir .forge
-bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh snapshot --phase pre-eval --forge-dir .forge --scope full-tree
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh snapshot --phase pre-eval --forge-dir .forge --scope full-tree --session-id "$SESSION_ID"
 ```
 
 **Resolve `subagent_type`** per `references/team-roles.md`'s "Resolving subagent_type" (Preferred:
@@ -196,7 +196,7 @@ from a subagent that tampered with the working tree must never reach the commit 
 fail:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-eval --forge-dir .forge --scope full-tree
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-eval --forge-dir .forge --scope full-tree --session-id "$SESSION_ID"
 ```
 
 **With WS3's `agents:evaluator` resolution in place (Step 5 above), this check is

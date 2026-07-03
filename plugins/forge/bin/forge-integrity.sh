@@ -6,12 +6,19 @@
 # calls.
 #
 # Usage:
-#   forge-integrity.sh snapshot --phase <name> --forge-dir <dir> [--scope forge-only|full-tree]
-#   forge-integrity.sh check    --phase <name> --forge-dir <dir> [--scope forge-only|full-tree]
+#   forge-integrity.sh snapshot --phase <name> --forge-dir <dir> [--scope forge-only|full-tree] [--session-id <id>]
+#   forge-integrity.sh check    --phase <name> --forge-dir <dir> [--scope forge-only|full-tree] [--session-id <id>]
 #
-# --phase   a label identifying which snapshot to read/write, e.g. "pre-gen"
-#           or "pre-eval" — lets a story's post-generator and post-evaluator
-#           checks (and consecutive stories) never collide.
+# --phase       a label identifying which snapshot to read/write, e.g.
+#               "pre-gen" or "pre-eval" — lets a story's post-generator and
+#               post-evaluator checks (and consecutive stories) never collide.
+# --session-id  optional (F100). Further scopes the snapshot path by the
+#               caller's forge-lock.sh session id so two CONCURRENT runs
+#               against the SAME project (two tmux panes, a race between a
+#               resumed and a still-running session) never share one
+#               snapshot per phase. `snapshot` and the matching `check` for
+#               one phase must pass the same value. Omit for the prior,
+#               project-only-scoped behavior.
 # --scope   forge-only (default): only .forge/config.json + .forge/state.json.
 #           Matches the post-generator check's actual concern — the
 #           generator is EXPECTED to touch source files; only forge's own
@@ -55,7 +62,18 @@
 # whereas `/private/tmp` (what `/tmp` symlinks to) is never indexed. The
 # snapshot path is keyed by a hash of the project's absolute directory (not
 # a fixed shared literal, unlike the prose this replaces) so concurrent runs
-# against different projects on the same machine can never collide.
+# against DIFFERENT projects on the same machine can never collide.
+#
+# F100 (remaining gap): the project-key alone does not protect two
+# CONCURRENT runs against the SAME project (e.g. two tmux panes both
+# running `/forge execute` in the same repo, or a resumed session racing a
+# still-running one) — they'd share one snapshot file per phase and
+# clobber each other's baseline. `--session-id` (optional, threaded through
+# from the caller's `$SESSION_ID` — see execution-loop.md's Step 3/Step 5
+# `forge-lock.sh acquire/heartbeat --session-id` calls, which already
+# generate one per loop) further scopes the snapshot directory per session,
+# closing that gap. Omitting it preserves the exact prior (project-only)
+# behavior for any caller/test that hasn't been updated to pass it yet.
 #
 # Output: always one JSON object with `ok` + `display`. Always exits 0 for
 # `snapshot`/`check` (callers branch on the JSON); argument errors exit 1
@@ -79,6 +97,7 @@ SUBCOMMAND="${1:-}"
 FORGE_DIR=".forge"
 PHASE=""
 SCOPE="forge-only"
+SESSION_ID=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -88,6 +107,8 @@ while [[ $# -gt 0 ]]; do
     --phase=*)     PHASE="${1#*=}"; shift ;;
     --scope)       SCOPE="$2"; shift 2 ;;
     --scope=*)     SCOPE="${1#*=}"; shift ;;
+    --session-id)   SESSION_ID="$2"; shift 2 ;;
+    --session-id=*) SESSION_ID="${1#*=}"; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -118,7 +139,21 @@ project_key() {
   printf '%s' "$abs" | git hash-object --stdin | cut -c1-16
 }
 
-SNAPSHOT_DIR="/tmp/forge-integrity/$(project_key)"
+# F100: scope the snapshot directory by session (in addition to project) so
+# two concurrent runs against the SAME project never share one snapshot
+# file per phase. Sanitize to a safe path segment (the session id is
+# caller-supplied) rather than trusting it verbatim as a directory name;
+# fall back to "default" when no session id is given (single-session
+# callers and existing tests keep the prior, project-only-scoped path).
+session_key() {
+  if [ -z "$SESSION_ID" ]; then
+    echo "default"
+  else
+    printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9_.-' '_' | cut -c1-64
+  fi
+}
+
+SNAPSHOT_DIR="/tmp/forge-integrity/$(project_key)/$(session_key)"
 SNAPSHOT_FILE="$SNAPSHOT_DIR/${PHASE}.json"
 
 # --- File list for a given scope ---

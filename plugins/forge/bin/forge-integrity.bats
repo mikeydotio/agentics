@@ -209,3 +209,47 @@ jq_field() {
   run_in_repo "check --phase p --forge-dir .forge"
   echo "$output" | jq . >/dev/null
 }
+
+# --- F100: --session-id scopes snapshots so concurrent same-project runs can't collide ---
+
+@test "two concurrent sessions in the SAME project do not clobber each other's snapshot" {
+  # Session A snapshots, then tampers its own state.json (simulating its
+  # own generator run) -- session B (different --session-id, same phase
+  # name, same project) must have its OWN baseline, unaffected by A's.
+  run_in_repo "snapshot --phase pre-gen --forge-dir .forge --session-id session-A"
+  [ "$(jq_field '.ok')" = "true" ]
+  echo '{"stories_attempted": 1}' > "$FORGE_DIR/state.json"
+  run_in_repo "snapshot --phase pre-gen --forge-dir .forge --session-id session-B"
+  [ "$(jq_field '.ok')" = "true" ]
+
+  # Check session B FIRST: its own baseline was taken AFTER the state.json
+  # change above, so nothing has changed since -- ok. (Order matters here:
+  # a tampered check auto-restores file content, which would otherwise
+  # disturb the file before this check runs -- same ordering caveat as the
+  # pre-gen/pre-eval phase-isolation test above, just across sessions
+  # instead of phases.)
+  run_in_repo "check --phase pre-gen --forge-dir .forge --session-id session-B"
+  [ "$(jq_field '.tampered')" = "false" ]
+
+  # Session A's baseline predates that change, so ITS check must see it as
+  # tampering relative to ITS OWN snapshot -- proving the two sessions
+  # never shared one snapshot file (without session scoping, both checks
+  # above would have read/raced on the same path).
+  run_in_repo "check --phase pre-gen --forge-dir .forge --session-id session-A"
+  [ "$(jq_field '.tampered')" = "true" ]
+}
+
+@test "omitting --session-id preserves the prior project-only-scoped path (back-compat)" {
+  run_in_repo "snapshot --phase p --forge-dir .forge"
+  run_in_repo "check --phase p --forge-dir .forge"
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.tampered')" = "false" ]
+}
+
+@test "a session id with unsafe path characters is sanitized, not passed through raw" {
+  run_in_repo "snapshot --phase p --forge-dir .forge --session-id '../../etc/evil'"
+  [ "$(jq_field '.ok')" = "true" ]
+  # The snapshot must land under forge-integrity's own /tmp tree, not have
+  # escaped it via the session id.
+  [ ! -d "/tmp/etc" ]
+}

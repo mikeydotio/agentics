@@ -2,9 +2,9 @@
 
 Intelligent PreToolUse safety hook for Claude Code. Evaluates every tool call using a three-tier decision pipeline:
 
-1. **Deterministic ALLOW** — 150+ known-safe readonly commands, plus deep subcommand analysis for git, gh, docker, kubectl, terraform, aws, gcloud, npm, and more
+1. **Deterministic ALLOW** — 150+ known-safe readonly commands, plus deep subcommand analysis for git, gh, docker, kubectl, terraform, aws, gcloud, npm, and more (including a fast path for an autonomous forge-style inner loop: `story`, `git add/commit/checkout`, `cargo|npm|go test/build`, `make test`)
 2. **Deterministic PASS with warning** — Known-destructive commands (`rm`, `sudo`, `kill`, `chmod`, etc.) surface clear `[greenlight]` warnings
-3. **AI Fallback** — Uncertain commands evaluated by Claude Sonnet via structured API call
+3. **AI Fallback (opt-in)** — Uncertain commands evaluated by Claude Haiku via structured API call; off by default (`ai_enabled: false`) since it sits on the critical path of any autonomous loop
 
 ## Permission Mode Awareness
 
@@ -25,9 +25,10 @@ Config at `~/.config/greenlight/config.yaml` (auto-initialized on first run from
 |---------|---------|-------------|
 | `disabled_modes` | `bypassPermissions` | Space-separated modes to disable in |
 | `mode` | `standard` | `standard` / `strict` / `permissive` |
-| `ai_enabled` | `true` | Claude API fallback for uncertain commands |
-| `ai_model` | `claude-sonnet-4-6` | Model for AI evaluation |
+| `ai_enabled` | `false` | Claude API fallback for uncertain commands — opt-in |
+| `ai_model` | `claude-haiku-4-5` | Model for AI evaluation (must support structured outputs) |
 | `ai_timeout` | `10` | API call timeout (seconds) |
+| `ai_show_rationale` | `false` | Inject the AI's rationale into context when it approves a command |
 | `custom_allow` | _(empty)_ | Space-separated commands to always allow |
 | `custom_pass` | _(empty)_ | Space-separated commands to always pass |
 
@@ -49,7 +50,7 @@ Use `/greenlight` to manage at runtime:
 
 ## AI Fallback
 
-Set `ANTHROPIC_API_KEY` in your environment. When a command is uncertain, greenlight calls Claude Sonnet with a structured prompt asking "Is this command potentially destructive?" and gets `{answer: boolean, rationale: string}` back. The rationale is always shown to the user.
+Opt-in — run `/greenlight ai on` (or set `ai_enabled: true`) to turn it on. Set `ANTHROPIC_API_KEY` in your environment. When enabled and a command is uncertain, greenlight calls the configured model (`claude-haiku-4-5` by default — must be a structured-outputs-capable model) with a structured prompt asking "Is this command potentially destructive?" and gets `{answer: boolean, rationale: string}` back. The rationale is only shown to the user when `ai_show_rationale: true`.
 
 ## Requirements
 

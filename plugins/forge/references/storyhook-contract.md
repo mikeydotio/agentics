@@ -98,6 +98,15 @@ Detect "nothing ready" by checking for `.message`, not by checking for empty std
 distinguish "all done" from "some blocked," consult `story summary --json`
 (`.summary.ready_count`, `.summary.blocked_count`, `.summary.total_open`) or `story list --json`.
 
+**Any story with children is never returned, permanently, regardless of the children's state.**
+This is a `story next` design choice (not just a transient readiness gate), and it means `story
+summary --json`'s own `ready_stories`/`ready_count` do NOT apply the same filter — a parent whose
+children are ALL done can show up in `.summary.ready_stories` (with a `progress.children_done ==
+progress.children_total`) while `story next` will still never hand it back. This matters for
+`decompose`'s auto-created parent story (`project_story` in `plan-mapping.json` — see
+`references/story-decomposition.md`): treat it as permanently unreachable via `story next` and
+never require it to reach `done` the same way a leaf story does.
+
 ### `story list --json`
 
 ```json

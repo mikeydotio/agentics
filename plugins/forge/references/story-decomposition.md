@@ -79,6 +79,22 @@ story decompose --stdin --json < "$TASKS_FILE"
 Record `.stories[].story.id` from the `--json` response: the first story is `project_story` (the
 "Task Breakdown" parent), and each subsequent story maps to one task for `plan-mapping.json`.
 
+**The project story never reaches `done` on its own.** storyhook's `story next` permanently
+refuses to hand back ANY story with children (a `has_children` filter — see the hardening plan's
+notes on `storyhook/src/app.rs`; this is intentionally out of scope to change, it's storyhook's
+Rust source). Since `project_story` is `parent-of` every task story created here, it can never be
+selected by the execution loop's normal Step 1/3/5 path the way a real leaf task story is — it
+would stay `todo` forever even after every real task is `done`, unless something explicitly
+downstream accounts for it. Two things do:
+
+1. `forge-state.sh`'s `check_storyhook()` reads `project_story` straight out of this file and
+   excludes it from its "are all stories done" computation, so the pipeline's `review_validate`
+   transition never depends on the project story reaching `done` at all.
+2. The execution loop's Complete step (`references/execution-loop.md`) additionally closes it for
+   real via `bin/forge-close-project-story.sh`, once every real task story is done — purely so
+   `story list` / `story summary` don't show a permanently-open story to a human later. This is a
+   hygiene step, not a correctness dependency; (1) alone is what keeps the pipeline unstuck.
+
 If a task needs acceptance criteria beyond what's already captured from its nested bullets, add
 it as an additional comment:
 

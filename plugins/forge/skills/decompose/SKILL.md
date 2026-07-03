@@ -101,7 +101,10 @@ dependencies in one call — this replaces what would otherwise be 60-80+ sequen
    corresponds to the "Task Breakdown" heading — record it as `project_story`. Each subsequent
    story maps to one task; nested `- Acceptance: …` / `- Files: …` bullets under a task's
    checkbox item are captured automatically as that story's first comment (no separate
-   comment call needed for them).
+   comment call needed for them). `project_story` can never reach `done` through the normal
+   execution loop (storyhook refuses to hand a story with children back to `story next`) — this
+   is expected, not a defect; see `references/story-decomposition.md`'s "The project story never
+   reaches `done` on its own" for how the pipeline accounts for it.
 
 ### 7. Map Stories to DESIGN.md Sections
 

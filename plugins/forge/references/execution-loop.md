@@ -312,6 +312,20 @@ the Deploy Permission Gate (`skills/forge/SKILL.md`). Writing it here would make
 very first check (`artifact_exists "COMPLETION.md"` → `state: complete`) treat the pipeline as
 fully finished, silently skipping review, validate, triage, document, and deploy.
 
+**The project story.** decompose auto-created a synthetic "project story" from PLAN.md's
+`## Task Breakdown` heading (`plan-mapping.json`'s `project_story` — see
+`references/story-decomposition.md`). storyhook's `story next` permanently refuses to ever hand
+back a story with children, so the project story can *never* reach `done` through Step 1/3/5 of
+this loop the way a real leaf task story does — "all real task stories done" is reached with the
+project story still sitting at `todo` forever. That's expected, not a bug in this loop: reaching
+`complete` only ever requires every *real* task story (i.e. everything except `project_story`) to
+be `done` — `forge-state.sh`'s `check_storyhook()` already computes "all done" that way by reading
+`project_story` straight out of `plan-mapping.json` and excluding it, so the `review_validate`
+transition below works with zero special-casing here. Step 2 below closes the project story for
+real anyway — purely so `story list` / `story summary` don't show a permanently-open story to
+anyone inspecting the project afterward. If it fails or is skipped, nothing downstream breaks: the
+`review_validate` transition never depended on it succeeding.
+
 ```
 complete:
   # 1. Full test suite
@@ -327,24 +341,31 @@ complete:
     Log: "Final test suite failed — manual review required. See handoffs/handoff-execute.md."
     return
 
-  # 2. Storyhook report
+  # 2. Close the project story (hygiene only -- see "The project story" above;
+  #    best-effort, never a precondition for anything below).
+  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .
+  # Ignore `.ok`/`.reason` beyond logging: `no_plan_mapping`, `story_cli_missing`,
+  # etc. are all fine to silently continue past. Only `.closed == true` means
+  # `.storyhook/` actually changed and needs to ride along in Step 4's commit.
+
+  # 3. Storyhook report
   story summary
   story handoff --since <total_duration>
 
-  # 3. Write handoff to .forge/handoffs/handoff-execute.md (NOT COMPLETION.md):
+  # 4. Write handoff to .forge/handoffs/handoff-execute.md (NOT COMPLETION.md):
     - Project summary
     - Stories completed with acceptance criteria
     - Test results
     - Notable decisions and patterns
     - Duration and session count
 
-  # 4. Commit
-  git add .forge/ && git commit -m "forge(execute): all stories complete"
+  # 5. Commit (include .storyhook/ in case Step 2 closed the project story)
+  git add .forge/ .storyhook/ && git commit -m "forge(execute): all stories complete"
 
-  # 5. Queue freshen for the NEXT step (review_validate) — do NOT cancel:
+  # 6. Queue freshen for the NEXT step (review_validate) — do NOT cancel:
   bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Execution complete — all stories done"
 
-  # 6. Update state
+  # 7. Update state
   # status stays in the same two-value space as every other exit path
   # ("running" while looping, "paused" once the loop has exited for any
   # reason). There is no third "complete" status — storyhook + forge-state.sh

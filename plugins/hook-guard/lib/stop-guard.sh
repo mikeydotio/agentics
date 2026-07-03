@@ -14,24 +14,58 @@
 
 _STOP_GUARD_WINDOW="${STOP_GUARD_WINDOW:-30}"
 _STOP_GUARD_THRESHOLD="${STOP_GUARD_THRESHOLD:-4}"
+# F048/F043: freshen's on-stop.sh AND forge's session-stop.sh both source
+# this file and call stop_guard_check on the SAME Stop event, so a naive
+# "append one tick per call" counts hook invocations, not Stop events --
+# silently halving the configured threshold (and getting worse with every
+# additional Stop hook a future plugin registers). There is no shared
+# "this is the same Stop event" identifier available here: each hook runs in
+# its own subprocess, and neither reads its stdin JSON before calling this
+# function. Dedupe on wall-clock proximity instead: multiple hooks for one
+# real Stop event run back-to-back in the same batch (same process turn,
+# typically << 1s apart); genuinely distinct Stop events are always at least
+# one full model round-trip apart (seconds). See stop_guard_check below.
+_STOP_GUARD_DEDUP_WINDOW="${STOP_GUARD_DEDUP_WINDOW:-2}"
 
 _stop_guard_file() {
   local project="${CLAUDE_PROJECT_DIR:-$PWD}"
   local hash
-  hash=$(printf '%s' "$project" | md5sum | cut -c1-8)
+  hash=$(printf '%s' "$project" | md5sum 2>/dev/null | cut -c1-8)
+  # F055: stock macOS ships no `md5sum`; fall back to BSD `md5` so the
+  # breaker's project-hash key doesn't silently go empty (which would key
+  # every project on this host to the same guard file).
+  if [ -z "$hash" ]; then
+    hash=$(printf '%s' "$project" | md5 2>/dev/null | cut -c1-8)
+  fi
+  if [ -z "$hash" ]; then
+    echo "hook-guard: WARNING no md5sum/md5 available -- using unhashed project path for guard key" >&2
+    hash=$(printf '%s' "$project" | tr -c 'A-Za-z0-9' '_' | cut -c1-40)
+  fi
   echo "/tmp/claude-stop-guard-${USER:-uid$(id -u)}-${hash}"
 }
 
 stop_guard_check() {
-  local guard_file now count cutoff window threshold
+  local guard_file now count cutoff window threshold last_ts
   guard_file="$(_stop_guard_file)"
   now=$(date +%s)
   window="${1:-$_STOP_GUARD_WINDOW}"
   threshold="${2:-$_STOP_GUARD_THRESHOLD}"
   cutoff=$((now - window))
 
-  # Append current timestamp
-  echo "$now" >> "$guard_file" 2>/dev/null || return 0
+  # F048/F043: if the most recent recorded tick is within the dedup window,
+  # this call is (almost certainly) a second hook firing for the SAME Stop
+  # event as the one that just ticked -- skip appending a new entry (the
+  # threshold check below still runs against what's already recorded).
+  last_ts=""
+  [ -f "$guard_file" ] && last_ts="$(tail -1 "$guard_file" 2>/dev/null)"
+  if [ -n "$last_ts" ] && [ "$last_ts" -ge $((now - _STOP_GUARD_DEDUP_WINDOW)) ] 2>/dev/null; then
+    : # duplicate hook call for the same Stop event -- do not append
+  elif ! echo "$now" >> "$guard_file" 2>/dev/null; then
+    # F054: fail loud, not silent. A swallowed write failure here disarms
+    # the breaker with zero indication it happened.
+    echo "hook-guard: WARNING failed to write guard file ${guard_file} -- circuit breaker inactive for this event" >&2
+    return 0
+  fi
 
   # Count events within window
   count=0

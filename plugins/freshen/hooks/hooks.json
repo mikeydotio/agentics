@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "rm -f .freshen/*.signal .freshen/.clear-pending 2>/dev/null; exit 0",
+            "command": "rm -f .freshen/*.signal .freshen/.clear-pending .freshen/.clear-consumed 2>/dev/null; exit 0",
             "timeout": 3
           }
         ]

@@ -103,14 +103,20 @@ The validator writes tests for critical gaps found during analysis:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol:
+**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/VALIDATE-REPORT.md`
-2. Commit any new tests: `git add -A && git commit -m "forge(validate): test hardening + report"`
-3. Write `.forge/handoffs/handoff-validate.md` with:
+2. Write `.forge/handoffs/handoff-validate.md`:
    - Key Decisions: test results, coverage gaps
    - Context for Next Step: report summary for triage
-4. Queue freshen unconditionally: `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Validation complete"`
-5. STOP
+3. Commit `.forge/` plus every test file written in Step 4 — pass each one explicitly as its own
+   `--extra-path`, NOT a blanket `git add -A` (which would sweep in unrelated untracked files —
+   coverage output, caches, stray build artifacts — from the user's target project):
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step validate \
+     --summary "test hardening + report" --next "/forge continue" \
+     --extra-path <test-file-1> --extra-path <test-file-2> ...
+   ```
+4. STOP
 
 **Note:** Validate never checks for `.forge/REVIEW-REPORT.md` before deciding whether to queue
 freshen — that file-presence "whoever finishes second queues" coordination previously deadlocked

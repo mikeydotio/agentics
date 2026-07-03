@@ -108,14 +108,16 @@ After all sections are approved, write `.forge/DESIGN.md`:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol:
+**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/DESIGN.md`
-2. Write `.forge/handoffs/handoff-design.md` with:
+2. Write `.forge/handoffs/handoff-design.md`:
    - Key Decisions: architecture overview, key trade-offs, per-section user approvals
    - Context for Next Step: component count and responsibilities, interface contracts, security/accessibility requirements, complexity areas, inter-component dependencies
    - Open Questions: implementation questions deferred to planning
-3. Commit: `git add .forge/ && git commit -m "forge(design): architecture design approved"`
-4. Queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/forge plan --orchestrated" --source forge --summary "Design approved — architecture finalized"`
-5. STOP
+3. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step design \
+     --summary "architecture design approved" --next "/forge plan --orchestrated"
+   ```
+4. STOP
 
 **If standalone:** Write `.forge/DESIGN.md`, report completion to user, exit.

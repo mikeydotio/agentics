@@ -16,28 +16,43 @@ Handoff files are version-controlled (committed as part of the step exit protoco
 
 ## Step Exit Protocol
 
-Every orchestrated step follows the same exit pattern:
+This is the ONE canonical description of the exit sequence — every step's own SKILL.md Exit
+section is just "write these artifacts, then run this script call," not a restatement of what
+follows. Every orchestrated step follows the same pattern:
 
 1. **Write output artifacts** to `.forge/`
-2. **Write handoff**: `.forge/handoffs/handoff-<step>.md` with full context for next step
-3. **Commit**: `git add .forge/ && git commit -m "forge(<step>): <summary>"`
-4. **Queue freshen**: `bash plugins/freshen/bin/freshen.sh queue "<next-command>" --source forge --summary "<step summary>"`
-   - Use the specific next step command when the transition is deterministic (e.g., `/forge research --orchestrated` after interrogate)
-   - Use `/forge continue` when the next step depends on runtime state (e.g., after triage, review/validate, execute completion)
-   - The `--summary` should be a brief, human-readable progress line describing what just completed
-   - If freshen fails (no tmux), fall back to manual instructions:
-     ```
-     ---
-     **Step complete.** All artifacts committed.
+2. **Write handoff**: `.forge/handoffs/handoff-<step>.md` with full context for the next step (see
+   **Handoff Format** below). Before writing it, run `bin/forge-handoff-scaffold.sh --step <step>`
+   (F039) and use its `timestamp`/`artifacts_produced`/`pipeline_state` fields for the mechanical
+   sections — compose only the judgment sections (Key Decisions, Context for Next Step, Working
+   Context, Open Questions) by hand.
+3. **Run the step-exit script** — this single call replaces hand-rolled `git commit` +
+   `freshen.sh queue` (the old pattern, which used a bare relative `plugins/freshen/bin/...` path
+   that only happened to resolve when testing from inside the agentics repo itself — it cannot
+   resolve from a real target project's cwd; see Ground Rule 5):
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step <step> --summary "<summary>" --next "<next-command>"
+   ```
+   - `--next` — the specific next step command when the transition is deterministic (e.g.,
+     `/forge research --orchestrated` after interrogate), or `/forge continue` when the next step
+     depends on runtime state (e.g., after triage, review/validate, execute completion). Deploy is
+     the one exception: it's the pipeline's terminal step, so it passes `--terminal` instead of
+     `--next` (cancels any pending signal rather than queueing one).
+   - `--extra-path <path>` (repeatable) — stage additional paths beyond `.forge/` in the same
+     commit instead of a broad `git add -A`. Use this whenever a step's commit must also capture
+     changes outside `.forge/` (decompose and execute's Complete path both need
+     `--extra-path .storyhook/`; validate needs one `--extra-path <file>` per test file it wrote).
+   - The script itself resolves its own location via `SCRIPT_DIR`, so `bash
+     ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh` is the only invocation form to use — never a
+     bare `plugins/forge/bin/forge-step-exit.sh` relative path.
+   - Parse the returned JSON: if `freshen_queued` is `false`, show the user the `fallback_message`
+     (manual `/clear` + next-command instructions — no tmux available). `committed: false` is a
+     normal, healthy outcome (nothing new to commit this step, e.g. re-running after a crash with
+     no artifact changes) — not a failure; still proceed to STOP.
+4. **STOP** — End response immediately. Do not proceed inline.
 
-     To continue with fresh context:
-     1. Run `/clear`
-     2. Run `/forge continue`
-
-     I'll pick up right where we left off.
-     ---
-     ```
-5. **STOP** — End response immediately. Do not proceed inline.
+See `bin/forge-step-exit.sh`'s own header comment for the full flag reference and JSON output
+shape.
 
 ## Handoff Format
 

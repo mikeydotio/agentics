@@ -118,15 +118,18 @@ Write `.forge/TRIAGE.md`:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol:
+**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/TRIAGE.md`
-2. Write `.forge/handoffs/handoff-triage.md` with:
+2. Write `.forge/handoffs/handoff-triage.md`:
    - Key Decisions: FIX vs ESCALATE decisions, ESCALATE story IDs
    - Context for Next Step: FIX items for plan step (if any), ESCALATE count
    - Pipeline State: fix cycle count, yolo mode
-3. Commit: `git add .forge/ .storyhook/ && git commit -m "forge(triage): [FIX count] FIX, [ESCALATE count] ESCALATE"`
-4. Queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Triage complete — [FIX count] FIX, [ESCALATE count] ESCALATE"`
-5. STOP
+3. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step triage \
+     --summary "[FIX count] FIX, [ESCALATE count] ESCALATE" --next "/forge continue" \
+     --extra-path .storyhook/
+   ```
+4. STOP
 
 The orchestrator reads TRIAGE.md on next `continue`:
 - If FIX items exist and cycle < max → archives current cycle, dispatches to plan (FIX loop)

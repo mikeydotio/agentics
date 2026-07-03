@@ -127,14 +127,16 @@ Write `.forge/IDEA.md`:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol from `references/step-handoff.md`:
+**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/IDEA.md`
-2. Write `.forge/handoffs/handoff-interrogate.md` with:
+2. Write `.forge/handoffs/handoff-interrogate.md`:
    - Key Decisions: vision statement, core problem, scope boundaries
    - Context for Next Step: top 5-7 requirements, challenged assumptions, research areas, existing solutions mentioned, user preferences/constraints
    - Open Questions: questions for research to answer, unvalidated assumptions
-3. Commit: `git add .forge/ && git commit -m "forge(interrogate): capture idea — [project name]"`
-4. Queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/forge research --orchestrated" --source forge --summary "Interrogation complete — captured idea [project name]"`
-5. STOP
+3. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step interrogate \
+     --summary "capture idea — [project name]" --next "/forge research --orchestrated"
+   ```
+4. STOP
 
 **If standalone:** Write `.forge/IDEA.md`, report completion to user, exit.

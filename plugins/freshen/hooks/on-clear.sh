@@ -2,12 +2,25 @@
 set -euo pipefail
 # freshen SessionStart(clear) hook — after /clear, process the oldest signal.
 #
-# Reads the signal file, sends the re-invocation command via tmux send-keys,
-# then deletes the signal only on success.
+# Reads the signal file, sends the re-invocation command via tmux send-keys
+# with a capture-pane read-back to confirm it was actually accepted (not
+# just typed into a possibly-wrong pane state), then deletes the signal only
+# once confirmed (F056, F041). Bounded retry on failure to confirm; if still
+# unconfirmed after every attempt, the signal is left in place for the next
+# freshen cycle to retry rather than retried indefinitely here.
 #
 # Every exit path must write to stderr to prevent Claude Code's "No stderr
 # output" feedback from creating an infinite conversation loop.
 trap '[ $? -eq 0 ] && echo "freshen: ok" >&2 || echo "freshen: error" >&2' EXIT
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# F056/F041: capture-pane confirm/retry, and F047's transition audit log.
+# shellcheck source=plugins/freshen/lib/pane-confirm.sh
+. "${PLUGIN_ROOT}/lib/pane-confirm.sh"
+# shellcheck source=plugins/freshen/lib/transition-log.sh
+. "${PLUGIN_ROOT}/lib/transition-log.sh"
 
 FRESHEN_DIR=".freshen"
 
@@ -68,11 +81,30 @@ fi
 [ -n "${TMUX:-}" ] || { consume_clear_pending; exit 0; }
 [ -n "${TMUX_PANE:-}" ] || { consume_clear_pending; exit 0; }
 
-# Send the re-invocation command (literal mode to avoid key interpretation)
-if tmux send-keys -t "$TMUX_PANE" -l "$COMMAND"; then
-  tmux send-keys -t "$TMUX_PANE" Enter
+# F056/F041: only delete the signal once BOTH send-keys calls have succeeded
+# AND a capture-pane read-back confirms the command actually left the input
+# line (was accepted) -- not merely that the literal-text send returned 0
+# (the old bug: `rm` was gated only on the FIRST of the two send-keys calls,
+# so a failing Enter still deleted the signal with the command sitting
+# typed-but-unsubmitted). Bounded retry on failure to confirm (literal mode
+# requires both sends to succeed).
+#
+# If still unconfirmed after every attempt, the signal is deliberately left
+# in place rather than retried indefinitely here: a future Stop -> on-stop.sh
+# cycle will re-detect the same still-pending signal and try a fresh
+# /clear + re-invoke from scratch.
+freshen_log_transition "on-clear: sending re-invoke '${COMMAND}'"
+if pane_send_and_confirm "$TMUX_PANE" literal "$COMMAND"; then
   rm "$SIGNAL"
+  freshen_log_transition "on-clear: re-invoke confirmed accepted, signal consumed"
+else
+  echo "freshen: WARNING re-invoke command unconfirmed after retries -- leaving signal '$(basename "$SIGNAL")' for the next freshen cycle" >&2
+  freshen_log_transition "on-clear: re-invoke unconfirmed after retries -- signal left in place for retry"
 fi
 
-# Hand off the clear-pending flag (see consume_clear_pending above).
+# Hand off the clear-pending flag (see consume_clear_pending above). This
+# runs unconditionally regardless of the re-invoke outcome above -- F052's
+# cross-plugin ordering fix depends on it firing every time a /clear was
+# freshen-initiated, independent of whether the re-invoke command itself was
+# ultimately confirmed.
 consume_clear_pending

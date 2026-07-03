@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight
+.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen
 
-test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight
+test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -56,4 +56,15 @@ test-greenlight:
 		bash plugins/greenlight/tests/run-tests.sh; \
 	else \
 		echo "bats not installed — skipping greenlight bats suite (plugins/greenlight/tests/*.bats)"; \
+	fi
+
+# freshen's bats suites (plugins/freshen/lib/*.bats, hooks/*.bats) — the
+# tmux capture-pane confirm/retry and transition-log helpers behind the
+# auto-resume cycle (F045/F041/F056/F047 regression coverage). Same
+# bats-not-installed-everywhere caveat as test-root-bats.
+test-freshen:
+	@if command -v bats >/dev/null 2>&1; then \
+		bash plugins/freshen/tests/run-tests.sh; \
+	else \
+		echo "bats not installed — skipping freshen bats suite (plugins/freshen/lib,hooks/*.bats)"; \
 	fi

@@ -2,30 +2,67 @@
 
 How consuming plugins (forge, rca, future plugins) reference and use shared agents from the `agents` plugin.
 
-## File Path Convention
+## File Path Convention (F084)
 
-Shared agents live at `plugins/agents/agents/<name>.md`. Consuming plugins reference them by path from the repository root:
+Shared agents live at `plugins/agents/agents/<name>.md`. **Do not reference them by a bare
+path from the repository root** (`plugins/agents/agents/software-architect.md`) — a consuming
+plugin's SKILL.md runs with the *target project* as cwd (not this marketplace checkout), so a
+repo-root-relative path resolves to nothing there. `${CLAUDE_PLUGIN_ROOT}` doesn't fix this either:
+inside a consuming plugin (e.g. forge) it resolves to *that plugin's own root*
+(`.../plugins/forge`), never to the sibling `agents` plugin.
 
+The portable resolution is to derive the `agents` plugin's root as a **sibling** of the consuming
+plugin's own root — every plugin in this marketplace is installed as a sibling directory under the
+same parent (see the root `CLAUDE.md`'s "Plugin pattern"):
+
+```bash
+AGENTS_PLUGIN_ROOT="$(cd "$(dirname "${CLAUDE_PLUGIN_ROOT}")/agents" && pwd)"
 ```
-plugins/agents/agents/software-architect.md
-plugins/agents/agents/generator.md
-plugins/agents/agents/evaluator.md
-```
+
+Then reference shared files as `"$AGENTS_PLUGIN_ROOT/agents/<name>.md"` and the consuming plugin's
+own override as `"${CLAUDE_PLUGIN_ROOT}/agent-overrides/<name>-context.md"` — never a bare
+`plugins/agents/agents/<name>.md`. If `$AGENTS_PLUGIN_ROOT` doesn't resolve (the `agents` plugin
+isn't installed alongside), treat the shared definition as unavailable: spawn `general-purpose`
+with only the override + dynamic context, and say plainly in the handoff that the agent ran
+without its shared role definition — don't silently proceed as if nothing were missing.
 
 ## Spawning Pattern
 
-The spawning mechanism is unchanged from the current pattern. The orchestrator (SKILL.md) reads the agent definition and inlines it into the prompt:
+Determine `subagent_type` before constructing the prompt — don't default to `general-purpose`
+out of habit, since that makes every agent's `tools:`/`read_only:` frontmatter purely cosmetic
+(the platform grants `general-purpose` the full tool set regardless of what the `.md` says).
+This is the same resolution order used by `/council-vote`
+(`plugins/council/skills/council-vote/SKILL.md`, "Dispatching members"):
+
+1. **Preferred:** if `agents:<name>` appears in the available subagent types (in Claude Code,
+   the agent-types system reminder), spawn with `subagent_type: "agents:<name>"` directly. The
+   platform then enforces that agent's own `tools:` allowlist and `read_only` frontmatter — no
+   inlining needed for the role definition itself (the pipeline-specific override and dynamic
+   context are still concatenated into the prompt, see below).
+2. **Fallback:** if no `agents:*` types are exposed, spawn `subagent_type: "general-purpose"` and
+   inline the full role definition into the prompt (steps below) — this is the only case where
+   the shared `.md` needs to be read and pasted in, and the *only* enforcement is whatever the
+   prompt asks for (i.e., not real enforcement — note this in any place that claims otherwise).
+3. **Don't guess.** If you can't tell what's available, try `agents:<name>` once; if it errors,
+   retry with `general-purpose` + injected role. Record which path was taken (e.g. in the step's
+   handoff) so it's auditable which enforcement level actually applied.
+
+When falling back to `general-purpose`, the orchestrator (SKILL.md) reads the agent definition
+and inlines it into the prompt:
 
 ```
-# In a SKILL.md orchestrator:
+# In a SKILL.md orchestrator, general-purpose fallback path:
 
-1. Read the shared agent definition:
-   Read plugins/agents/agents/generator.md
+1. Resolve the shared agents plugin root (see File Path Convention above):
+   AGENTS_PLUGIN_ROOT="$(cd "$(dirname "${CLAUDE_PLUGIN_ROOT}")/agents" && pwd)"
 
-2. Read any pipeline-specific override (if applicable):
-   Read plugins/forge/agent-overrides/generator-context.md
+2. Read the shared agent definition:
+   Read "$AGENTS_PLUGIN_ROOT/agents/generator.md"
 
-3. Construct the prompt:
+3. Read any pipeline-specific override (if applicable):
+   Read "${CLAUDE_PLUGIN_ROOT}/agent-overrides/generator-context.md"
+
+4. Construct the prompt:
    Agent(
      subagent_type: "general-purpose",
      prompt: <
@@ -36,6 +73,10 @@ The spawning mechanism is unchanged from the current pattern. The orchestrator (
      >
    )
 ```
+
+When the preferred `agents:<name>` type is used instead, the prompt still needs the
+pipeline-specific override + dynamic context (steps 3-4 above) — only step 2's inlining of the
+shared definition is skipped, since the registered agent type already carries it.
 
 ## Pipeline-Specific Overrides
 
@@ -82,27 +123,31 @@ Overrides should contain ONLY pipeline-specific information:
 
 ## Namespace Convention
 
-The `<plugin>:<agent>` notation maps to file paths:
+The `<plugin>:<agent>` notation maps to files, resolved as described above (never a bare
+repo-root-relative path):
 
-| Notation | File Path |
-|----------|-----------|
-| `agents:software-architect` | `plugins/agents/agents/software-architect.md` |
-| `agents:generator` | `plugins/agents/agents/generator.md` |
-| `agents:ux-designer-cli` | `plugins/agents/agents/ux-designer-cli.md` |
+| Notation | Resolves to |
+|----------|-------------|
+| `agents:software-architect` | `subagent_type: "agents:software-architect"` if exposed (preferred), else `$AGENTS_PLUGIN_ROOT/agents/software-architect.md` inlined under `general-purpose` |
+| `agents:generator` | `subagent_type: "agents:generator"` if exposed (preferred), else `$AGENTS_PLUGIN_ROOT/agents/generator.md` inlined under `general-purpose` |
+| `agents:ux-designer-cli` | `subagent_type: "agents:ux-designer-cli"` if exposed (preferred), else `$AGENTS_PLUGIN_ROOT/agents/ux-designer-cli.md` inlined under `general-purpose` |
 
-This is a documentation convention. The orchestrator in each SKILL.md is responsible for translating to the actual file path.
+The orchestrator in each SKILL.md is responsible for running the Preferred/Fallback/Don't-guess
+resolution above — this table is shorthand for that resolution, not a shortcut around it.
 
 ## Using General-Purpose Agents in Pipelines
 
-General-purpose agents (software-architect, investigator, etc.) can be used in any pipeline with appropriate overrides:
+General-purpose agents (software-architect, investigator, etc.) can be used in any pipeline with appropriate overrides. These examples show the `general-purpose` fallback path in full; try the
+preferred `agents:<name>` type first per "Spawning Pattern" above.
 
 ### Example: Software Architect in RCA
 
 The RCA pipeline uses the shared software-architect for remediation design:
 
 ```
-Read plugins/agents/agents/software-architect.md
-Read plugins/rca/agent-overrides/architect-rca.md
+AGENTS_PLUGIN_ROOT="$(cd "$(dirname "${CLAUDE_PLUGIN_ROOT}")/agents" && pwd)"
+Read "$AGENTS_PLUGIN_ROOT/agents/software-architect.md"
+Read "${CLAUDE_PLUGIN_ROOT}/agent-overrides/architect-rca.md"
 
 Agent(
   subagent_type: "general-purpose",
@@ -120,8 +165,9 @@ Agent(
 The RCA pipeline uses the shared investigator (which absorbed code-archaeologist + systems-analyst capabilities):
 
 ```
-Read plugins/agents/agents/investigator.md
-Read plugins/rca/agent-overrides/investigator-rca.md
+AGENTS_PLUGIN_ROOT="$(cd "$(dirname "${CLAUDE_PLUGIN_ROOT}")/agents" && pwd)"
+Read "$AGENTS_PLUGIN_ROOT/agents/investigator.md"
+Read "${CLAUDE_PLUGIN_ROOT}/agent-overrides/investigator-rca.md"
 
 Agent(
   subagent_type: "general-purpose",
@@ -138,7 +184,8 @@ Agent(
 
 When updating a consuming plugin to use shared agents:
 
-1. [ ] Replace `agents/<name>.md` references with `plugins/agents/agents/<name>.md`
+1. [ ] Replace `agents/<name>.md` references with the resolved-path convention above
+   (`$AGENTS_PLUGIN_ROOT/agents/<name>.md`, never a bare `plugins/agents/agents/<name>.md`)
 2. [ ] Extract pipeline-specific instructions into `agent-overrides/<name>-context.md`
 3. [ ] Update any hardcoded agent file paths in reference docs
 4. [ ] Verify prompt construction includes both shared definition + override

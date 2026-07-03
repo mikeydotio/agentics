@@ -25,7 +25,13 @@ tags: [subset of: design, review, implementation, testing, investigation, challe
 - `tools`: Only list tools the agent genuinely needs. Read-only agents must NOT list Write or Edit.
 - `color`: Visual differentiation in terminal output
 - `tier`: `general` (reusable), `platform-variant` (UX per platform), `pipeline-specific` (tied to forge/rca workflow)
-- `read_only`: `true` if the agent should never modify files. Enforced via tool list AND post-execution integrity checks.
+- `read_only`: `true` if the agent should never modify files. The `tools:` list is enforced by the
+  platform ONLY when a consuming plugin spawns this agent via its registered `subagent_type:
+  "<plugin>:<name>"` (e.g. `agents:evaluator`) — see `references/cross-plugin-usage.md`'s
+  "Spawning Pattern". If a consumer falls back to `subagent_type: "general-purpose"` (no such type
+  exposed), the tool list is advisory prose only and post-execution integrity checks become the
+  sole enforcement. Don't claim tool-level enforcement in a consuming plugin's docs unless that
+  plugin actually resolves to the registered type.
 - `tags`: Used for catalog filtering and team composition
 
 ## Body Structure

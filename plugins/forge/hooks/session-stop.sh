@@ -13,10 +13,17 @@
 set -uo pipefail
 trap '[ $? -eq 0 ] && echo "forge: ok" >&2 || echo "forge: error" >&2' EXIT
 
-# Circuit breaker — prevent stop hook infinite loops
-_GUARD_LIB="${CLAUDE_PLUGIN_ROOT}/../hook-guard/lib/stop-guard.sh"
-# shellcheck source=plugins/hook-guard/lib/stop-guard.sh
-[ -f "$_GUARD_LIB" ] && . "$_GUARD_LIB" && stop_guard_check || true
+# F050: the circuit-breaker check used to run here, before ANY of the
+# checkpoint work below (handoff write, status=paused, lock release). A
+# tripped breaker calls `exit 0` immediately, so every one of those steps
+# was silently skipped on a trip -- leaking .forge/lock.json (status stuck
+# at "running") and forcing the next resume to wait out the 30-minute
+# stale-heartbeat window instead of getting a paused state + handoff to act
+# on. The breaker exists to suppress a runaway RE-INVOCATION, not to
+# suppress crash-safe cleanup, so it is now checked further down (see
+# "Circuit breaker" below) -- AFTER the durable checkpoint, immediately
+# before the one thing it should actually gate: queuing the freshen
+# auto-resume signal.
 
 # Locate project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
@@ -34,16 +41,55 @@ fi
 STATE_FILE="${PROJECT_DIR}/.forge/state.json"
 [[ ! -f "$STATE_FILE" ]] && exit 0
 
-# Verify jq is available
+# Verify jq is available. This is NOT the "plugin inactive" silent-skip
+# case (state.json existing means forge IS active) -- a missing jq here is
+# a real environment defect worth surfacing (F054).
 if ! command -v jq &>/dev/null; then
+  echo "forge: session-stop: jq not found -- cannot checkpoint forge state" >&2
   exit 0
 fi
 
-# Read status — only act if running
-STATUS="$(jq -r '.status // empty' "$STATE_FILE" 2>/dev/null)" || exit 0
+# Read status — only act if running. F054: a malformed state.json used to
+# fail this jq call and exit 0 completely silently; log it instead.
+STATUS="$(jq -r '.status // empty' "$STATE_FILE")"
+JQ_STATUS=$?
+if [[ $JQ_STATUS -ne 0 ]]; then
+  echo "forge: session-stop: ${STATE_FILE} is unreadable/malformed (jq exit ${JQ_STATUS}) -- skipping checkpoint" >&2
+  exit 0
+fi
 if [[ "$STATUS" != "running" ]]; then
   exit 0
 fi
+
+# --- Portability helpers ---
+
+# F055: parse an ISO-8601 UTC timestamp into epoch seconds without GNU-only
+# `date -d` (illegal option on BSD/macOS -- Mikey's primary machine). jq's
+# own `fromdate` parses ISO-8601 identically on every platform jq runs on,
+# matching the pattern forge-lock.sh already established (see its
+# `lock_age_seconds`/`now_iso` — "All date arithmetic uses jq's
+# now/todate/fromdate builtins rather than date -d"). `try/catch empty`
+# guards against a non-ISO-8601 string reaching an unguarded `fromdate`.
+duration_since() {
+  local iso="$1"
+  jq -n -r --arg t "$iso" 'try ((now - ($t | fromdate)) | floor) catch empty' 2>/dev/null
+}
+
+# F051: bound a command by a hard wall-clock timeout so it can never eat
+# the whole 15s hook budget and truncate the checkpoint. Stock macOS ships
+# neither GNU `timeout` nor a BSD equivalent -- prefer `timeout`, fall back
+# to Homebrew coreutils' `gtimeout`, and if neither exists, signal that to
+# the caller (exit 127) rather than risk an unbounded hang.
+run_with_timeout() {
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$secs" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$secs" "$@"
+  else
+    return 127
+  fi
+}
 
 # Derive session duration from lock
 LOCK_FILE="${PROJECT_DIR}/.forge/lock.json"
@@ -51,10 +97,8 @@ DURATION="unknown"
 if [[ -f "$LOCK_FILE" ]]; then
   ACQUIRED_AT="$(jq -r '.acquired_at // empty' "$LOCK_FILE" 2>/dev/null)"
   if [[ -n "$ACQUIRED_AT" ]]; then
-    START_EPOCH="$(date -d "$ACQUIRED_AT" +%s 2>/dev/null || echo "")"
-    NOW_EPOCH="$(date +%s)"
-    if [[ -n "$START_EPOCH" ]]; then
-      DURATION_SECS=$(( NOW_EPOCH - START_EPOCH ))
+    DURATION_SECS="$(duration_since "$ACQUIRED_AT")"
+    if [[ "$DURATION_SECS" =~ ^-?[0-9]+$ ]]; then
       DURATION="${DURATION_SECS}s"
     fi
   fi
@@ -88,13 +132,11 @@ Session was terminated (Claude Code stop event). Handoff auto-saved by stop hook
 Run \`/forge resume\` to continue.
 EOF
 
-# Generate storyhook handoff if story CLI is available
-if command -v story &>/dev/null; then
-  STORY_HANDOFF="$(cd "$PROJECT_DIR" && story handoff --since "${DURATION}" 2>/dev/null || true)"
-  if [[ -n "$STORY_HANDOFF" ]]; then
-    printf '\n## Storyhook Handoff\n%s\n' "$STORY_HANDOFF" >> "$HANDOFF_FILE"
-  fi
-fi
+# F050/F051: the durable checkpoint (status=paused + increment counters +
+# lock release) runs next, UNCONDITIONALLY -- before the optional storyhook
+# narrative and before the circuit-breaker check. Neither a hung `story`
+# process nor a tripped breaker may block or skip this: it is the one thing
+# a crash-safe Stop hook must always get through.
 
 # Update state in a single jq pipeline: set paused + increment sessions_completed + pre-compute resume context
 jq --arg hf "handoffs/handoff-execute.md" \
@@ -108,6 +150,29 @@ jq --arg hf "handoffs/handoff-execute.md" \
 
 # Release lock
 rm -f "$LOCK_FILE"
+
+# Generate storyhook handoff if story CLI is available. F051: this used to
+# run BEFORE the durable checkpoint above with no timeout, so a hung/slow
+# `story` process could burn the entire 15s hook budget and get killed
+# before status=paused/lock-release ever ran. It now runs AFTER the
+# checkpoint (a hang here can no longer block it) and bounded by a hard
+# timeout well under the hook's 15s budget.
+if command -v story &>/dev/null; then
+  STORY_HANDOFF="$(cd "$PROJECT_DIR" && run_with_timeout 5 story handoff --since "${DURATION}" 2>/dev/null)"
+  STORY_STATUS=$?
+  if [[ $STORY_STATUS -eq 0 && -n "$STORY_HANDOFF" ]]; then
+    printf '\n## Storyhook Handoff\n%s\n' "$STORY_HANDOFF" >> "$HANDOFF_FILE"
+  elif [[ $STORY_STATUS -eq 127 ]]; then
+    echo "forge: session-stop: no timeout/gtimeout available -- skipped bounded story handoff call" >&2
+  fi
+fi
+
+# Circuit breaker — prevent stop hook infinite loops. Checked here, AFTER
+# the durable checkpoint above (F050), so a trip suppresses only the
+# freshen auto-resume signal below -- never the checkpoint that already ran.
+_GUARD_LIB="${CLAUDE_PLUGIN_ROOT}/../hook-guard/lib/stop-guard.sh"
+# shellcheck source=plugins/hook-guard/lib/stop-guard.sh
+[ -f "$_GUARD_LIB" ] && . "$_GUARD_LIB" && stop_guard_check || true
 
 # Best-effort freshen signal for auto-resume.
 # Write the signal file directly (bypass freshen.sh to avoid tmux validation

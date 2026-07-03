@@ -26,19 +26,33 @@ fi
 STATE_FILE="${PROJECT_DIR}/.forge/state.json"
 [[ ! -f "$STATE_FILE" ]] && exit 0
 
-# Verify jq is available
+# Verify jq is available. This is NOT the "plugin inactive" silent-skip case
+# (state.json existing means forge IS active in this project) -- a missing
+# jq here is a real environment defect, so say so (F054).
 if ! command -v jq &>/dev/null; then
+  echo "forge: session-start: jq not found -- cannot read .forge/state.json for resume context" >&2
   exit 0
 fi
 
-# Read all fields in one jq call (including pre-computed resume context if available)
+# Read all fields in one jq call (including pre-computed resume context if available).
+# F054: a malformed/partially-written state.json (e.g. a prior hook killed
+# mid-write) used to fail this jq call and exit 0 completely silently --
+# the agent then starts a fresh session on an active forge project with
+# zero hint that a resume is needed. Fail loud (stderr) and still emit a
+# minimal fallback context rather than emitting nothing at all.
 RESUME_JSON="$(jq -r '{
   status: .status,
   sessions: (.sessions_completed // 0),
   stories: (.stories_attempted // 0),
   retries: (.total_retries // 0),
   resume: (.resume // null)
-}' "$STATE_FILE" 2>/dev/null)" || exit 0
+}' "$STATE_FILE")"
+JQ_STATUS=$?
+if [[ $JQ_STATUS -ne 0 ]]; then
+  echo "forge: session-start: ${STATE_FILE} is unreadable/malformed (jq exit ${JQ_STATUS})" >&2
+  jq -n '{"additionalContext": "Forge project detected but .forge/state.json is unreadable or corrupt. Run /forge status or /forge resume to diagnose."}'
+  exit 0
+fi
 
 STATUS="$(printf '%s' "$RESUME_JSON" | jq -r '.status // empty')"
 [[ -z "$STATUS" ]] && exit 0

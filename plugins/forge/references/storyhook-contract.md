@@ -158,18 +158,25 @@ verbs (`move`, `prioritize`, `assign`, `label`, `block`) are more concise and pr
 
 ## Structured Feedback (evaluator verdicts, blocked reasons)
 
-The evaluator's structured verdict (`{"verdict":"fail","failures":[...]}`) and the generator's
-blocked-reason payload (`{"blocked_reason":"decision","description":"..."}`) are **not** valid
-`set --json` payloads — they contain keys outside the fixed field list above. Store them as a
-**comment** (the JSON serialized to text, so downstream reads get structured fields rather than
-freeform prose — this also prevents prompt injection via the evaluator-to-generator feedback
-path):
+The evaluator's structured verdict and the generator's blocked-reason payload
+(`{"blocked_reason":"decision","description":"..."}`) are **not** valid `set --json` payloads —
+they contain keys outside the fixed field list above. Store them as a **comment** (the JSON
+serialized to text, so downstream reads get structured fields rather than freeform prose — this
+also prevents prompt injection via the evaluator-to-generator feedback path):
 
 ```bash
-story comment <id> '{"verdict":"fail","failures":[{"criterion":"API returns 404","evidence":"handler returns 500","suggestion":"add NotFoundError catch"}]}'
+story comment <id> '{"verdict":"fail","failures":[{"category":"criteria","criterion":"API returns 404","evidence":"handler returns 500","suggestion":"add NotFoundError catch"}]}'
 story comment <id> '{"blocked_reason":"decision","description":"Need user input on auth strategy"}'
 story comment <id> '{"blocked_reason":"max_retries","description":"Failed 4 attempts","last_feedback":{...}}'
 ```
+
+The evaluator's verdict schema — the exact shape of the `{"verdict":...,"failures":[...]}` object
+above and where `failures[]` comes from — is defined once in `plugins/agents/agents/evaluator.md`'s
+Output Format section; this doc doesn't redefine it. That comment payload is a COMPACT projection
+of the evaluator's full response (`{verdict, failures}` only); the full response (with
+`criteria_checks`, `edge_case_findings`, `security_findings`, `design_adherence`) is logged to
+`.forge/verdicts.jsonl` instead — see `evaluator.md`'s "Storage split" for why the split exists
+(the storyhook comment has a practical size budget; the local artifact doesn't).
 
 ## Blocked: State vs. "Awaiting"
 

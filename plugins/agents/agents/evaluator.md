@@ -116,11 +116,25 @@ Detect and flag these evaluator-specific failure modes in yourself:
 
 ## Output Format
 
+**This is the single authoritative evaluator verdict schema.** Every other forge doc that
+mentions the evaluator's output (`references/verification-protocol.md`,
+`references/execution-loop.md`, `references/storyhook-contract.md`) must reference this section
+rather than redefine the shape — if you find one that redefines it, that doc has drifted; this
+schema wins.
+
 Return a JSON object (no markdown wrapping):
 
 ```json
 {
   "verdict": "pass|fail",
+  "failures": [
+    {
+      "category": "criteria|edge_case|security|design",
+      "criterion": "The exact acceptance criterion text (criteria) or a short label (other categories, e.g. the edge case category or vulnerability name)",
+      "evidence": "File path, line numbers, and specific code/behavior that proves the failure",
+      "suggestion": "Specific, actionable fix direction — the generator acts on this directly"
+    }
+  ],
   "criteria_checks": [
     {
       "criterion": "The exact text of the acceptance criterion",
@@ -156,6 +170,37 @@ Return a JSON object (no markdown wrapping):
 - Any `security_findings` with `severity: "critical"` or `"high"` → verdict is `fail`
 - `design_adherence: "drifted"` with material drift → verdict is `fail`
 - Everything else → verdict is `pass`
+
+**The `failures[]` transform (what makes this ONE schema, not three):** `failures[]` is the
+generator-facing projection of everything else in this object. When `verdict` is `fail`, populate
+it by folding in, in this order:
+1. Every `criteria_checks` entry with `status: "fail"` → `category: "criteria"`, `criterion` /
+   `evidence` / `suggestion` copied verbatim.
+2. Every `edge_case_findings` entry with `severity: "fail-worthy"` → `category: "edge_case"`,
+   `criterion` set to the edge case's `category` field (e.g. `"boundary"`), `evidence` set to
+   `description` + `location`, `suggestion` synthesized (what to change).
+3. Every `security_findings` entry with `severity: "critical"` or `"high"` → `category:
+   "security"`, `criterion` set to the `vulnerability` name, `evidence` set to `location`,
+   `suggestion` synthesized (how to remediate).
+4. If `design_adherence` is `"drifted"` with material drift → one entry with `category: "design"`,
+   `criterion` a short label for the drifted contract, `evidence` = `design_drift_details`,
+   `suggestion` = how to realign with DESIGN.md.
+
+When `verdict` is `pass`, `failures` is an empty array. This guarantees the generator's retry
+input (`generator.md`'s "On Retry" section, in this same shared library) always has a home for
+edge-case, security, and design findings — not just criteria misses — closing the gap where a
+story could fail on a security or edge-case finding with an empty `failures` array.
+
+**Storage split (resolves the 4KB-vs-comprehensive-JSON conflict):** the FULL object above (every
+field, no truncation) is what gets logged to `.forge/verdicts.jsonl` — that file is a local,
+gitignored artifact with no size constraint. Only a compact projection — `{"verdict":
+"pass|fail", "failures": [...]}` (i.e., this object with `criteria_checks` / `edge_case_findings`
+/ `security_findings` / `design_adherence` / `design_drift_details` dropped, since `failures[]`
+already folds their fail-worthy content in) — is stored as the storyhook comment for the
+generator's retry, per the pipeline-specific size budget in `evaluator-context.md`. Never truncate
+`failures[]` entries themselves to make the compact form fit; if the compact form is still too
+large, that's a signal the story has too many acceptance criteria and should have been split
+smaller, not a reason to drop evidence.
 
 ## Guardrails
 

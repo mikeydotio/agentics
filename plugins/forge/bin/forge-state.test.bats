@@ -717,3 +717,259 @@ decompose_single_task_plan() {
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state_json_exists')" = "false" ]
 }
+
+# --- category / auto_advance / transition_id (agentics#33) ---
+#
+# `category` is the router's internal classification, named instead of left
+# implicit inside `dispatch` string-matching. `auto_advance` is a pure
+# derived view (`category == "pass_through"`). Both are pure telemetry here
+# -- nothing acts on them yet (see design doc on agentics#33) -- but they
+# must be correct and present on every state, including the byte-identical-
+# dispatch trap where `fix_loop` and a plain design->plan transition share
+# the exact same `dispatch` string and only `category` (backed by `state`)
+# tells them apart.
+
+@test "category=pass_through, auto_advance=true for interrogate (fresh pipeline)" {
+  run_state
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for research" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md"
+  run_state
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for design" {
+  mkdir -p "$FORGE_DIR/research"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/research/SUMMARY.md"
+  run_state
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for plan (plain design->plan transition)" {
+  mkdir -p "$FORGE_DIR/research"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/research/SUMMARY.md" "$FORGE_DIR/DESIGN.md"
+  run_state
+  [ "$(jq_field '.state')" = "plan" ]
+  [ "$(jq_field '.dispatch')" = "plan --orchestrated" ]
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for decompose" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  run_state
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for execute" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  echo '{}' > "$FORGE_DIR/plan-mapping.json"
+  run_state
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for triage (both reports present)" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/REVIEW-REPORT.md" "$FORGE_DIR/VALIDATE-REPORT.md"
+  run_state
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for document (TRIAGE.md, no FIX items)" {
+  mkdir -p "$FORGE_DIR"
+  cat > "$FORGE_DIR/TRIAGE.md" <<'EOF'
+# Triage Report
+
+## ACCEPT
+- Accept this
+EOF
+  run_state
+  [ "$(jq_field '.state')" = "document" ]
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=pass_through, auto_advance=true for deploy" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/DEPLOY-APPROVAL.md"
+  run_state
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+@test "category=fix_loop, auto_advance=false -- distinguishes the byte-identical dispatch trap from plain plan" {
+  mkdir -p "$FORGE_DIR"
+  cat > "$FORGE_DIR/TRIAGE.md" <<'EOF'
+# Triage Report
+
+## FIX
+- Fix this bug
+EOF
+  run_state
+  [ "$(jq_field '.state')" = "fix_loop" ]
+  # Same literal dispatch string as the plain design->plan test above --
+  # category (backed by `state`, checked first) is what actually
+  # disambiguates them, not dispatch.
+  [ "$(jq_field '.dispatch')" = "plan --orchestrated" ]
+  [ "$(jq_field '.category')" = "fix_loop" ]
+  [ "$(jq_field '.auto_advance')" = "false" ]
+}
+
+@test "category=deploy_gate, auto_advance=false for pause_deploy" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/DOCUMENTATION.md"
+  run_state
+  [ "$(jq_field '.state')" = "pause_deploy" ]
+  [ "$(jq_field '.category')" = "deploy_gate" ]
+  [ "$(jq_field '.auto_advance')" = "false" ]
+}
+
+@test "category=report_complete, auto_advance=false for complete" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/COMPLETION.md"
+  run_state
+  [ "$(jq_field '.state')" = "complete" ]
+  [ "$(jq_field '.category')" = "report_complete" ]
+  [ "$(jq_field '.auto_advance')" = "false" ]
+}
+
+@test "category=blocked_review, auto_advance=false for blocked" {
+  init_storyhook
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  echo '{}' > "$FORGE_DIR/plan-mapping.json"
+  ( cd "$TEST_DIR" && \
+    story new "Task A" >/dev/null && \
+    story state add blocked --super OPEN --role active >/dev/null && \
+    story move ST-1 blocked "exhausted retries" >/dev/null )
+  run_state_in_project
+  [ "$(jq_field '.state')" = "blocked" ]
+  [ "$(jq_field '.category')" = "blocked_review" ]
+  [ "$(jq_field '.auto_advance')" = "false" ]
+}
+
+@test "category=escalate_review, auto_advance=false for pause_escalate" {
+  init_storyhook
+  register_escalate_type
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/DOCUMENTATION.md"
+  ( cd "$TEST_DIR" && story new "ESCALATE: needs a decision" --type escalate >/dev/null )
+  run_state_in_project
+  [ "$(jq_field '.state')" = "pause_escalate" ]
+  [ "$(jq_field '.category')" = "escalate_review" ]
+  [ "$(jq_field '.auto_advance')" = "false" ]
+}
+
+@test "category=pass_through for all three review_validate dispatch variants" {
+  init_storyhook
+  mkdir -p "$FORGE_DIR"
+  ( cd "$TEST_DIR" && story new "Task" >/dev/null && story move ST-1 done >/dev/null )
+  run_state_in_project
+  [ "$(jq_field '.dispatch')" = "review_validate --orchestrated" ]
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+
+  mkmd "$FORGE_DIR/REVIEW-REPORT.md"
+  run_state_in_project
+  [ "$(jq_field '.dispatch')" = "validate --orchestrated" ]
+  [ "$(jq_field '.category')" = "pass_through" ]
+  [ "$(jq_field '.auto_advance')" = "true" ]
+}
+
+# --- transition_id ---
+
+@test "transition_id is present and non-empty" {
+  run_state
+  local tid
+  tid="$(jq_field '.transition_id')"
+  [ -n "$tid" ]
+  [ "$tid" != "null" ]
+}
+
+@test "transition_id differs across two consecutive invocations" {
+  run_state
+  local first
+  first="$(jq_field '.transition_id')"
+  run_state
+  local second
+  second="$(jq_field '.transition_id')"
+  [ "$first" != "$second" ]
+}
+
+# --- --record-transition (opt-in logging to .freshen/transitions.log) ---
+
+@test "without --record-transition, no predicted line is written to transitions.log" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" "$FORGE_DIR"
+  [ "$status" -eq 0 ]
+  [ ! -f "$TEST_DIR/.freshen/transitions.log" ]
+}
+
+@test "--record-transition appends a predicted line with category, dispatch, and transition_id" {
+  cd "$TEST_DIR"
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md"
+  run bash "$SCRIPT" "$FORGE_DIR" --record-transition
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/transitions.log" ]
+  local tid
+  tid="$(jq_field '.transition_id')"
+  run grep -c "predicted category=pass_through dispatch=\"research --orchestrated\" transition_id=${tid}" "$TEST_DIR/.freshen/transitions.log"
+  [ "$output" = "1" ]
+}
+
+@test "--record-transition works regardless of flag position relative to the forge-dir argument" {
+  cd "$TEST_DIR"
+  run bash "$SCRIPT" --record-transition "$FORGE_DIR"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/transitions.log" ]
+  [ "$(jq_field '.state')" = "interrogate" ]
+}
+
+@test "--record-transition logging failure never affects forge-state.sh's JSON output or exit code" {
+  cd "$TEST_DIR"
+  mkdir -p "$(dirname "$FORGE_DIR")"
+  # Occupy the log directory's path with a plain file so mkdir -p fails --
+  # transition-log.sh's own best-effort swallow (already covered by its own
+  # bats suite) must hold at this integration level too.
+  : > "$TEST_DIR/.freshen"
+  run bash "$SCRIPT" "$FORGE_DIR" --record-transition
+  [ "$status" -eq 0 ]
+  echo "$output" | jq . >/dev/null
+  [ "$(jq_field '.state')" = "interrogate" ]
+}
+
+# --- Structural coverage guard ---
+#
+# Every `dispatch="..."` assignment inside detect_state() must have a
+# corresponding `category="..."` assignment at the same branch, so a future
+# branch added to the state machine can't silently leave category unset
+# (which would default to "unknown" -- fail-closed, never a silent
+# "pass_through" -- but should never happen in practice; this test makes an
+# omission a loud CI failure instead of a quiet gap).
+
+@test "structural coverage: every dispatch assignment in detect_state() has a matching category assignment" {
+  local fn_body
+  fn_body="$(awk '/^detect_state\(\) \{/,/^}/' "$SCRIPT")"
+  # Only count branch-level assignments (indented 4+ spaces, i.e. inside an
+  # if/elif/else body) -- this deliberately excludes the two 2-space-indent
+  # function-level lines that aren't part of the per-branch pairing: the
+  # `local dispatch=""`/`local category=""` declarations, and the
+  # fail-closed `category="unknown"` default applied after the chain.
+  local dispatch_count category_count
+  dispatch_count="$(echo "$fn_body" | grep -cE '^ {4,}dispatch="')"
+  category_count="$(echo "$fn_body" | grep -cE '^ {4,}category="')"
+  [ "$dispatch_count" -gt 0 ]
+  [ "$dispatch_count" -eq "$category_count" ]
+}

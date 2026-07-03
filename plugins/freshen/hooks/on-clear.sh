@@ -21,9 +21,33 @@ FRESHEN_DIR=".freshen"
 # If missing, this was a user-initiated /clear — skip processing.
 [ -f "$FRESHEN_DIR/.clear-pending" ] || exit 0
 
+# F052 (cross-plugin ordering hazard): hook-guard's own SessionStart(clear)
+# hook (a different plugin, unordered relative to this one per CLAUDE.md's
+# "Hook ordering" section) also reads .clear-pending, to decide whether this
+# /clear was freshen-initiated (skip resetting its breaker) or a bare user
+# /clear (reset it). If we deleted .clear-pending outright and hook-guard's
+# hook happened to run AFTER us in the same batch, it would find nothing,
+# conclude this was a bare user /clear, and wrongly reset the breaker —
+# reintroducing the exact runaway-loop bug F052 fixed, but only under this
+# specific (undocumented-as-safe) ordering.
+#
+# Fix: hand the flag off instead of destroying it. Every path below that used
+# to `rm -f .clear-pending` now renames it to .clear-consumed instead. That
+# preserves the "this /clear was freshen-initiated" fact regardless of which
+# hook runs first:
+#   - hook-guard first:  sees .clear-pending (we haven't touched it yet).
+#   - this script first: renames it to .clear-consumed; hook-guard then finds
+#     .clear-consumed instead and treats it identically. hook-guard is the
+#     sole reader/deleter of .clear-consumed, so there is no second race over
+#     its cleanup.
+consume_clear_pending() {
+  [ -f "$FRESHEN_DIR/.clear-pending" ] && mv -f "$FRESHEN_DIR/.clear-pending" "$FRESHEN_DIR/.clear-consumed"
+  return 0
+}
+
 # Find the oldest signal file (by modification time)
 SIGNAL=$(ls -tr "$FRESHEN_DIR"/*.signal 2>/dev/null | head -1) || true
-[ -n "$SIGNAL" ] || { rm -f "$FRESHEN_DIR/.clear-pending"; exit 0; }
+[ -n "$SIGNAL" ] || { consume_clear_pending; exit 0; }
 
 COMMAND=$(head -1 "$SIGNAL")
 SUMMARY=$(tail -n +2 "$SIGNAL" 2>/dev/null || true)
@@ -34,8 +58,8 @@ if [ -n "$SUMMARY" ]; then
 fi
 
 # tmux is required
-[ -n "${TMUX:-}" ] || { rm -f "$FRESHEN_DIR/.clear-pending"; exit 0; }
-[ -n "${TMUX_PANE:-}" ] || { rm -f "$FRESHEN_DIR/.clear-pending"; exit 0; }
+[ -n "${TMUX:-}" ] || { consume_clear_pending; exit 0; }
+[ -n "${TMUX_PANE:-}" ] || { consume_clear_pending; exit 0; }
 
 # Send the re-invocation command (literal mode to avoid key interpretation)
 if tmux send-keys -t "$TMUX_PANE" -l "$COMMAND"; then
@@ -43,5 +67,5 @@ if tmux send-keys -t "$TMUX_PANE" -l "$COMMAND"; then
   rm "$SIGNAL"
 fi
 
-# Clean up the clear-pending flag
-rm -f "$FRESHEN_DIR/.clear-pending"
+# Hand off the clear-pending flag (see consume_clear_pending above).
+consume_clear_pending

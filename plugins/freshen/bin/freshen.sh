@@ -128,7 +128,7 @@ cmd_disable() {
     return
   fi
   mkdir -p "$FRESHEN_DIR"
-  rm -f "$FRESHEN_DIR"/*.signal "$FRESHEN_DIR/.clear-pending" 2>/dev/null
+  rm -f "$FRESHEN_DIR"/*.signal "$FRESHEN_DIR/.clear-pending" "$FRESHEN_DIR/.clear-consumed" 2>/dev/null
   touch "$FRESHEN_DIR/.disabled"
   echo "freshen: disabled — all pending signals cancelled"
 }

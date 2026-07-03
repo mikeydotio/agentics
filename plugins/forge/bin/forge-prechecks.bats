@@ -208,13 +208,105 @@ EOF
   cat > "$TEST_DIR/multi.ts" <<'EOF'
 // HACK workaround
 throw new Error("not implemented");
-// placeholder for real logic
+// TODO: finish this
 EOF
   git -C "$TEST_DIR" add multi.ts
   run bash "$SCRIPT" --project-dir "$TEST_DIR"
   local count
   count="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .matches | length')"
   [ "$count" -ge 3 ]
+}
+
+@test "stub grep detects Python's NotImplementedError idiom" {
+  echo 'raise NotImplementedError("finish me")' > "$TEST_DIR/code.py"
+  git -C "$TEST_DIR" add code.py
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "false" ]
+}
+
+@test "stub grep detects Rust's unimplemented! macro" {
+  echo 'fn f() { unimplemented!() }' > "$TEST_DIR/lib.rs"
+  git -C "$TEST_DIR" add lib.rs
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "false" ]
+}
+
+@test "stub grep detects Swift's fatalError(\"not implemented\") idiom" {
+  echo 'func f() { fatalError("not implemented") }' > "$TEST_DIR/File.swift"
+  git -C "$TEST_DIR" add File.swift
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "false" ]
+}
+
+# --- F105 regression guard: no false positives on legitimate code ---
+#
+# The pre-fix pattern hard-failed on the bare substrings 'stub'/'placeholder'
+# anywhere in a file — directly hostile to Mikey's domain (SwiftUI/web
+# education content where form `placeholder` text is everywhere) and to any
+# codebase with a real, legitimately-named `*stub*` identifier. These guard
+# against ever reintroducing that over-broad match.
+
+@test "stub grep does NOT false-positive on a SwiftUI placeholder attribute" {
+  cat > "$TEST_DIR/ContentView.swift" <<'EOF'
+TextField("Enter your name", text: $name)
+    .placeholder(when: name.isEmpty) { Text("Enter your name") }
+EOF
+  git -C "$TEST_DIR" add ContentView.swift
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "true" ]
+}
+
+@test "stub grep does NOT false-positive on an HTML placeholder attribute" {
+  echo '<input type="text" placeholder="Search…">' > "$TEST_DIR/index.html"
+  git -C "$TEST_DIR" add index.html
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "true" ]
+}
+
+@test "stub grep does NOT false-positive on a legitimately-named *stub* function" {
+  echo 'func generate_stub_data() -> [Item] { realImplementation() }' > "$TEST_DIR/Fixtures.swift"
+  git -C "$TEST_DIR" add Fixtures.swift
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "true" ]
+}
+
+@test "stub grep does NOT false-positive on a bare XXX substring" {
+  echo 'let coordinate = "XXX-42"' > "$TEST_DIR/Model.swift"
+  git -C "$TEST_DIR" add Model.swift
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "true" ]
+}
+
+@test "stub grep does NOT false-positive on a word containing TODO as a substring (word-boundary check)" {
+  echo 'import TODOISTKit // a real third-party package name, not a marker' > "$TEST_DIR/vars.swift"
+  git -C "$TEST_DIR" add vars.swift
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "true" ]
+}
+
+@test "stub grep is case-sensitive (mixed/lower case 'hack' is not the all-caps HACK marker)" {
+  echo 'let hackathonProjectName = "Best Hack Idea Ever"' > "$TEST_DIR/vars2.swift"
+  git -C "$TEST_DIR" add vars2.swift
+  run bash "$SCRIPT" --project-dir "$TEST_DIR"
+  local passed
+  passed="$(echo "$output" | jq -r '.checks[] | select(.check == "stub_grep") | .passed')"
+  [ "$passed" = "true" ]
 }
 
 # --- Scope check ---

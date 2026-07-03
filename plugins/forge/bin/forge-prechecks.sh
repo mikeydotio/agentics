@@ -169,12 +169,23 @@ run_stub_check() {
   while IFS= read -r file; do
     [[ -f "$file" ]] || continue
     local file_matches
-    file_matches="$(grep -n \
-      -e 'TODO' -e 'FIXME' -e 'HACK' -e 'XXX' \
-      -e 'not implemented' -e 'stub' -e 'placeholder' \
-      -e 'throw new Error.*not implemented' \
-      -e 'pass  # TODO' \
+    # F105: word-boundary TODO/FIXME/HACK markers plus a handful of
+    # language-specific "this is intentionally unimplemented" idioms —
+    # NOT bare 'stub'/'placeholder'/'XXX' substrings. Those false-positived
+    # on entirely legitimate code (a form field's `placeholder` text/prop, a
+    # function or type legitimately named `*stub*` for a real domain reason,
+    # an `XXX` used as a coordinate/template name) and hard-blocked the loop
+    # with no way for the generator to "fix" a false positive. Every pattern
+    # below is either a whole-word marker (`\bTODO\b` can't match inside
+    # "TODOLIST") or a specific, high-signal stub idiom that essentially
+    # never appears outside an actual unimplemented code path.
+    file_matches="$(grep -nE \
+      -e '\bTODO\b' -e '\bFIXME\b' -e '\bHACK\b' \
+      -e 'NotImplementedError' \
       -e 'unimplemented!' \
+      -e 'throw new Error\([^)]*[Nn]ot [Ii]mplemented' \
+      -e 'fatalError\([^)]*[Nn]ot [Ii]mplemented' \
+      -e 'preconditionFailure\([^)]*[Nn]ot [Ii]mplemented' \
       "$file" 2>/dev/null || true)"
     if [[ -n "$file_matches" ]]; then
       while IFS= read -r line; do

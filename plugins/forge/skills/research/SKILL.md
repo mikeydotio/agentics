@@ -27,7 +27,10 @@ From IDEA.md, identify 1-3 research tracks:
 
 ### 2. Spawn Researchers
 
-Spawn 1-3 `domain-researcher` agents in parallel, one per research track. Each receives IDEA.md and a focused research prompt.
+Spawn 1-3 `domain-researcher` agents in parallel, one per research track. Resolve `subagent_type`
+per `references/team-roles.md`'s "Resolving subagent_type" (`agents:domain-researcher` preferred;
+`general-purpose` + inlined `domain-researcher.md` only as fallback — this agent has no forge
+override). Each receives IDEA.md and a focused research prompt.
 
 Each researcher writes findings to `.forge/research/`. File naming: `.forge/research/<topic>.md`.
 
@@ -68,22 +71,25 @@ Use AskUserQuestion for significant decision points (e.g., whether to use an exi
 
 ### 5. Recommend Team Roster
 
-Based on the project type identified in IDEA.md and research findings, write `.forge/TEAM.md`:
+Based on the project type identified in IDEA.md and research findings, write `.forge/TEAM.md`.
+Every name below must be a real file in `plugins/agents/agents/` (cross-check against
+`references/team-roles.md` if unsure — this is exactly the roster that downstream steps will try
+to spawn, so a wrong name here breaks every step that reads it):
 
 ```markdown
 # Agent Team Roster
 
 ## Project Type
-[CLI tool | Web application | Library/SDK | Data pipeline | Infrastructure | Other]
+[CLI tool | Web application | Mobile app | Library/SDK | Data pipeline | Infrastructure | Other]
 
 ## Active Agents
 ### Always Active
 - domain-researcher
 - software-architect
-- senior-engineer
+- software-engineer
 - qa-engineer
 - project-manager
-- devils-advocate
+- skeptic
 - technical-writer
 - generator
 - evaluator
@@ -92,7 +98,11 @@ Based on the project type identified in IDEA.md and research findings, write `.f
 - triager
 
 ### Conditionally Activated
-- ux-designer: [YES/NO — reason]
+- ux-designer-{cli|web|mobile}: [YES/NO — if YES, which variant and why. Match the Project Type
+  above (CLI tool → ux-designer-cli, Web application → ux-designer-web, Mobile app →
+  ux-designer-mobile). If Project Type is Library/SDK, Data pipeline, Infrastructure, or Other with
+  no user-facing surface, this is normally NO. If the project spans platforms or the type is
+  ambiguous, default to ux-designer-web and say so explicitly here.]
 - security-researcher: [YES/NO — reason]
 - accessibility-engineer: [YES/NO — reason]
 

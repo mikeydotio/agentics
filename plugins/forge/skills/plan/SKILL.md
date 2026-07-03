@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Task breakdown into waves with acceptance criteria. Produces PLAN.md. Spawns project-manager, qa-engineer, and devil's advocate agents.
+description: Task breakdown into waves with acceptance criteria. Produces PLAN.md. Spawns project-manager, qa-engineer, and skeptic agents.
 argument-hint: ""
 ---
 
@@ -14,6 +14,8 @@ You are the plan skill. Your job is to produce a detailed implementation plan or
 - `.forge/research/SUMMARY.md` (for context)
 - `.forge/TEAM.md` (for context)
 - `.forge/handoffs/handoff-design.md` (if orchestrated — for context)
+- `references/team-roles.md` (before spawning — "Resolving subagent_type" governs every spawn
+  below; none of these agents have a forge override)
 
 **When invoked as part of a FIX loop**, also read:
 - `.forge/TRIAGE.md` — for FIX items that need planning
@@ -23,9 +25,12 @@ You are the plan skill. Your job is to produce a detailed implementation plan or
 
 ### 1. Spawn Planning Team
 
+Resolve `subagent_type` per `references/team-roles.md` for each (`agents:<name>` preferred;
+`general-purpose` + inlined shared definition only as fallback):
+
 - `project-manager` — Create detailed task breakdown with dependencies, acceptance criteria, resumption points
 - `qa-engineer` — Design test strategy covering unit, integration, and production-readiness tests
-- `devils-advocate` — Stress-test the plan: are tasks too large? Missing edge cases? Unrealistic ordering?
+- `skeptic` — Stress-test the plan: are tasks too large? Missing edge cases? Unrealistic ordering?
 
 Each agent receives IDEA.md, DESIGN.md, and research/SUMMARY.md.
 
@@ -67,7 +72,7 @@ The PM produces `.forge/PLAN.md`:
 [After each wave, state is consistent and work can be paused/resumed]
 
 ## Risk Register
-[Devil's advocate findings, ranked by impact]
+[Skeptic findings, ranked by impact]
 ```
 
 ### 4. Acceptance Criteria Quality Check

@@ -17,13 +17,21 @@ You are the validate skill. Your job is to harden the test suite — run tests, 
 **New reference (read before starting):**
 - `references/severity-levels.md` — Finding severity definitions
 - `references/report-format.md` — Report structure with solution options
+- `references/team-roles.md` — "Resolving subagent_type" governs the spawns below; `validator`
+  has a forge override (`agent-overrides/validator-context.md`), `qa-engineer` doesn't
 
 ## Steps
 
 ### 1. Spawn Validation Agents
 
+Resolve `subagent_type` per `references/team-roles.md` for each (`agents:<name>` preferred;
+`general-purpose` + inlined shared definition — plus the override for `validator` — only as
+fallback):
+
 **Always spawn:**
-- `validator` — Primary test analysis and writing agent
+- `validator` — Primary test analysis and writing agent. Unlike `reviewer`/`triager`, this agent
+  is legitimately `read_only: false` (it writes tests and the report itself) — its override's
+  "write to VALIDATE-REPORT.md" instruction is correct as written, no contradiction to resolve here.
 - `qa-engineer` — Test strategy review and edge case identification
 
 Both agents receive IDEA.md, PLAN.md, DESIGN.md, and the execute handoff.

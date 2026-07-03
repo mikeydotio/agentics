@@ -1,6 +1,6 @@
 ---
 name: design
-description: Architecture design with cross-functional review driven by the team roster. Produces DESIGN.md. Spawns architect, devil's advocate, and conditional agents.
+description: Architecture design with cross-functional review driven by the team roster. Produces DESIGN.md. Spawns architect, skeptic, and conditional agents.
 argument-hint: ""
 ---
 
@@ -13,6 +13,7 @@ You are the design skill. Your job is to produce a thorough architecture design 
 - `.forge/research/SUMMARY.md` (required)
 - `.forge/TEAM.md` (required — drives agent selection)
 - `.forge/handoffs/handoff-research.md` (if orchestrated — for context)
+- `references/team-roles.md` (before spawning — "Resolving subagent_type" governs every spawn below; none of these agents have a forge override, so it's shared-definition-only, no `agent-overrides/` file to concatenate)
 
 ## Steps
 
@@ -22,20 +23,22 @@ Read `.forge/TEAM.md` to determine which agents to spawn:
 
 **Always spawn:**
 - `software-architect` — Design system architecture, component boundaries, interfaces, data flow
-- `devils-advocate` — Challenge the architect's design, find assumptions and risks
+- `skeptic` — Challenge the architect's design, find assumptions and risks
 
 **Conditionally spawn (from TEAM.md):**
-- `ux-designer` — If TEAM.md says YES for user-facing interfaces
+- `ux-designer-cli` / `ux-designer-web` / `ux-designer-mobile` — If TEAM.md says YES for user-facing interfaces. Pick the variant matching TEAM.md's recorded project type (CLI tool → `ux-designer-cli`, Web application → `ux-designer-web`, Mobile app → `ux-designer-mobile`); if TEAM.md doesn't clearly say which, default to `ux-designer-web` and note that default explicitly in the handoff.
 - `security-researcher` — If TEAM.md says YES for sensitive data/auth/external input
 - `accessibility-engineer` — If TEAM.md says YES for user-facing interfaces
 
 ### 2. Spawn Design Agents
 
-Each agent receives `.forge/IDEA.md` and `.forge/research/SUMMARY.md` as context.
+Each agent receives `.forge/IDEA.md` and `.forge/research/SUMMARY.md` as context. Resolve
+`subagent_type` per `references/team-roles.md` for each (`agents:<name>` preferred; `general-purpose`
++ inlined shared definition only as fallback).
 
 Spawn in two rounds:
-1. **Round 1:** `software-architect` produces initial design + conditional agents (ux-designer, security-researcher, accessibility-engineer) review requirements
-2. **Round 2:** `devils-advocate` reviews the architect's design + all conditional agent feedback
+1. **Round 1:** `software-architect` produces initial design + conditional agents (the selected `ux-designer-*` variant, security-researcher, accessibility-engineer) review requirements
+2. **Round 2:** `skeptic` reviews the architect's design + all conditional agent feedback
 
 ### 3. Synthesize Design Document
 
@@ -46,11 +49,11 @@ Sections to cover:
 - Component breakdown
 - Interface/API design
 - Data model (if applicable)
-- UX flows (if applicable — from ux-designer)
+- UX flows (if applicable — from the selected ux-designer-* variant)
 - Security considerations (if applicable — from security-researcher)
 - Accessibility plan (if applicable — from accessibility-engineer)
 - Key trade-offs and decisions
-- Devil's advocate findings and resolutions
+- Skeptic findings and resolutions
 
 For each section:
 - **header:** "Approve?"

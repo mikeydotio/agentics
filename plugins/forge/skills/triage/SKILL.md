@@ -16,6 +16,8 @@ You are the triage skill. Your job is to deliberate on findings from the review 
 - `.forge/config.json` (for yolo mode, when_in_doubt, max_fix_cycles)
 - `.forge/handoffs/handoff-review.md` (for context)
 - `.forge/handoffs/handoff-validate.md` (for context)
+- `references/team-roles.md` (before spawning — "Resolving subagent_type" governs every spawn
+  below; `triager` has a forge override, `qa-engineer` and `skeptic` don't)
 
 ## Steps
 
@@ -27,9 +29,15 @@ Read `.forge/config.json`:
 
 ### 2. Spawn Triage Team
 
-- `triager` — Primary deliberation agent
+Resolve `subagent_type` per `references/team-roles.md` for each (`agents:<name>` preferred;
+`general-purpose` + inlined shared definition — plus the override for `triager` — only as
+fallback):
+
+- `triager` — Primary deliberation agent. `read_only: true` — it does NOT write `.forge/TRIAGE.md`
+  itself; it returns its decisions as its response (per its Output Format), and this step
+  synthesizes the file from all three agents' returned output — see Step 6.
 - `qa-engineer` — Risk assessment perspective
-- `devils-advocate` — Challenge triage decisions
+- `skeptic` — Challenge triage decisions
 
 All agents receive both reports, IDEA.md, DESIGN.md, and config.json.
 

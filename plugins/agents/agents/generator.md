@@ -104,10 +104,15 @@ Detect and avoid these:
 
 ## On Retry (Evaluator Feedback Present)
 
-When you receive prior evaluator feedback, it will be structured JSON:
+When you receive prior evaluator feedback, it will be structured JSON — the compact projection of
+`evaluator.md`'s single verdict schema (see that file's Output Format for the full shape and the
+transform that produces this):
 ```json
-{"verdict": "fail", "failures": [{"criterion": "...", "evidence": "...", "suggestion": "..."}]}
+{"verdict": "fail", "failures": [{"category": "criteria|edge_case|security|design", "criterion": "...", "evidence": "...", "suggestion": "..."}]}
 ```
+
+`category` tells you WHERE the failure came from (an unmet acceptance criterion vs. an edge case,
+security, or design-drift finding) — every entry, regardless of category, gets the same treatment:
 
 Address each failure specifically:
 1. Read the failure evidence — understand exactly what the evaluator found wrong

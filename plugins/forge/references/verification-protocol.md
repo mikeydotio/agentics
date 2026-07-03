@@ -46,36 +46,29 @@ For each acceptance criterion listed in the story:
 
 ## Output Format
 
-```json
-{
-  "verdict": "pass|fail",
-  "failures": [
-    {
-      "criterion": "API returns 404 for missing resources",
-      "evidence": "handler at line 42 returns 500 for all errors",
-      "suggestion": "Add NotFoundError catch clause before generic error handler"
-    }
-  ],
-  "summary": "Brief overall assessment"
-}
-```
+**The evaluator's output schema is defined exactly once — in
+`plugins/agents/agents/evaluator.md`'s "Output Format" section.** Read that section for the full
+JSON shape (`verdict`, `failures[]`, `criteria_checks[]`, `edge_case_findings[]`,
+`security_findings[]`, `design_adherence`) and the `failures[]` fold-in transform. This checklist
+(above) is what the evaluator applies per-criterion; each unmet check becomes one
+`criteria_checks` entry with `status: "fail"`, which the transform then copies into `failures[]`
+with `category: "criteria"`.
 
-### Pass Verdict
-All criteria satisfied with cited evidence. `failures` array is empty.
-
-### Fail Verdict
-One or more criteria not satisfied. Each failure includes:
-- `criterion`: Which criterion failed
-- `evidence`: What was observed (cite specific lines)
-- `suggestion`: Actionable fix suggestion
+Do not redefine the schema here or anywhere else — if this section and `evaluator.md` ever
+disagree, `evaluator.md` is authoritative and this section is stale.
 
 ## Structured Feedback for Retries
 
-When the evaluator fails a story, the structured JSON verdict is stored as a storyhook comment:
+When the evaluator fails a story, the COMPACT projection of the schema above (`{"verdict":
+"fail", "failures": [...]}` — see `evaluator.md`'s "Storage split") is stored as a storyhook
+comment:
 
 ```bash
 story comment HP-N '{"verdict":"fail","failures":[...]}'
 ```
 
-On retry, the generator receives these structured fields — never raw freeform text. This prevents prompt injection via the evaluator-to-generator feedback path.
+The full verdict object (including `criteria_checks`, `edge_case_findings`, `security_findings`,
+`design_adherence`) is logged separately to `.forge/verdicts.jsonl`, not truncated to fit the
+storyhook comment. On retry, the generator receives the compact form's structured fields — never
+raw freeform text. This prevents prompt injection via the evaluator-to-generator feedback path.
 

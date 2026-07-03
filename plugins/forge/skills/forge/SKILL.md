@@ -169,9 +169,17 @@ This returns JSON with `state`, `dispatch`, `fix_cycle`, `artifacts`, `has_hando
    server) to confirm the state. If the CLI itself is unavailable or still failing, follow
    storyhook-contract.md's Consecutive Failure Tracking: log a warning and retry, then pause forge
    with a handoff ("storyhook unavailable") after 3 consecutive failures.
-4. Branch on `dispatch`:
-   - Ends in ` --orchestrated` and names one of the 11 pipeline skills (e.g. `research
-     --orchestrated`) → read that skill's SKILL.md and dispatch to it directly.
+4. Branch on **`state` first, then `dispatch`** — check `state` before falling through to the
+   generic `--orchestrated` bullet below. This ordering is load-bearing, not stylistic:
+   `fix_loop`'s `dispatch` value is the literal string `"plan --orchestrated"` — byte-for-byte
+   identical to a genuine first-time transition into `plan` from `design`. `dispatch` alone cannot
+   tell those two cases apart; only `state` can. Checking the generic bullet first would route a
+   fix-loop re-entry straight to `plan --orchestrated` and silently skip **Fix Loop Handling**
+   below (and, with it, `forge-fix-archive.sh` — the ONLY thing that increments the fix-cycle
+   counter, per F003). There is no dispatch-only shortcut here — always check `state ==
+   "fix_loop"` before anything else:
+   - `state == "fix_loop"` → follow **Fix Loop Handling** below. Do NOT fall through to the
+     generic bullet just because `dispatch` also happens to end in ` --orchestrated`.
    - `review_validate --orchestrated` → follow **Review+Validate Parallel Dispatch** below (spawns
      BOTH review's and validate's agent sets in a single message).
    - `blocked_review` → follow **Blocked Stories Pause** below.
@@ -179,16 +187,28 @@ This returns JSON with `state`, `dispatch`, `fix_cycle`, `artifacts`, `has_hando
    - `deploy_gate` → follow **Deploy Permission Gate** below.
    - `report_complete` → the pipeline previously reached `.forge/COMPLETION.md`. Report completion
      to the user; there is nothing further to dispatch.
+   - Otherwise, `dispatch` ends in ` --orchestrated` and names one of the 11 pipeline skills (e.g.
+     `research --orchestrated`) → read that skill's SKILL.md and dispatch to it directly.
 
 ### Fix Loop Handling
 
-When entering a fix loop, run the archive script first:
+`state == "fix_loop"` is the ONLY entry point that may run `plan --orchestrated` with FIX items as
+input — never dispatch to `plan` for this case any other way (see the ordering note above). The
+archive-and-increment step is mandatory and unconditional, not a suggestion to run "when
+convenient": it is the sole mechanism that advances the fix-cycle counter `forge-state.sh` gates
+`max_fix_cycles`/`max_fix_cycles_yolo` against, so skipping it defeats the runaway-fix-loop
+safeguard entirely (F003).
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-fix-archive.sh .forge
 ```
 
-Then dispatch to `plan --orchestrated` with the FIX items as input.
+Verify the JSON output has `ok: true` before proceeding — if `ok: false` (see the script's
+`error` field, e.g. `nothing_to_archive`), stop and investigate rather than dispatching to `plan`
+with a counter that did not actually advance.
+
+Only after the archive call returns `ok: true`: dispatch to `plan --orchestrated` with the FIX
+items as input.
 
 ### Review+Validate Parallel Dispatch
 

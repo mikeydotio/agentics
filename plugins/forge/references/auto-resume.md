@@ -110,14 +110,40 @@ The fix, same principle as above — don't depend on ordering: on-clear.sh never
 `.freshen/.clear-consumed`, handing the "this `/clear` was freshen-initiated" fact off rather than
 destroying it. hook-guard's hook checks for `.clear-pending` **or** `.clear-consumed` and is the
 sole reader/deleter of the latter, so whichever hook runs first, the other still finds the fact it
-needs and there's no second race over cleanup:
+needs:
 
 - hook-guard runs first: sees `.clear-pending` (on-clear.sh hasn't touched it yet) — skips the reset.
 - on-clear.sh runs first: renames `.clear-pending` → `.clear-consumed` while doing its own
-  processing; hook-guard then finds `.clear-consumed` instead, treats it identically, and deletes it.
+  processing; hook-guard then finds `.clear-consumed` instead and treats it identically.
 
-Either order — same outcome: the breaker's tick count survives the cycle, and there is exactly one
-consumer responsible for cleaning up each marker.
+#### A Narrower Regression In The "hook-guard Runs First" Order
+
+Adversarial verification of the fix above found a second, narrower ordering bug in the branch that
+looks safe: when hook-guard runs *first*, it correctly sees `.clear-pending` directly and skips the
+reset — but per the constraint above it must leave the file alone (on-clear.sh still needs its
+content), so hook-guard does not delete anything. on-clear.sh then runs second, as always, and
+renames `.clear-pending` → `.clear-consumed`. But hook-guard has already finished handling *this*
+SessionStart(clear) event and will not run again until the next one — so nothing in this cycle ever
+reads or deletes the `.clear-consumed` that on-clear.sh just created. It lingers on disk after an
+event that was already fully and correctly handled.
+
+If the very next `SessionStart(clear)` is a genuine, unrelated, bare user `/clear` (no
+`.clear-pending` ever touched for it), hook-guard's hook finds that stale `.clear-consumed`, wrongly
+treats it as evidence that *this* `/clear` was also freshen-initiated, and skips a reset that should
+happen — silently defeating the breaker's auto-recovery for an event that had nothing to do with
+freshen.
+
+The fix bounds `.clear-consumed`'s validity to a short freshness window on its mtime, rather than
+treating bare existence as proof: hooks racing for the *same* SessionStart event run back-to-back in
+the same batch (reliably well under a second apart); two genuinely distinct SessionStart(clear)
+events are always at least one full model round-trip apart (seconds, typically far more). This is
+the same "same batch vs. a later event" reasoning hook-guard's own `stop-guard.sh` already relies on
+for its `_STOP_GUARD_DEDUP_WINDOW` (see `plugins/hook-guard/lib/stop-guard.sh`). A `.clear-consumed`
+younger than the window (`CLEAR_CONSUMED_WINDOW`, default 5s) is trusted as this event's own
+hand-off; anything older is treated as a stale leftover and does **not** suppress the reset. Either
+way the marker is deleted the moment hook-guard reads it, fresh or stale, so it can never accumulate
+or be misread by a later event again — there is exactly one consumer responsible for cleaning up
+each marker, on exactly one read.
 
 ## Safety
 

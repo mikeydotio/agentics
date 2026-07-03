@@ -35,11 +35,18 @@ FRESHEN_DIR=".freshen"
 # to `rm -f .clear-pending` now renames it to .clear-consumed instead. That
 # preserves the "this /clear was freshen-initiated" fact regardless of which
 # hook runs first:
-#   - hook-guard first:  sees .clear-pending (we haven't touched it yet).
+#   - hook-guard first:  sees .clear-pending (we haven't touched it yet). We
+#     still rename it to .clear-consumed afterward (unconditionally, below) --
+#     that write has no reader in THIS event once hook-guard has already run,
+#     so it necessarily outlives this SessionStart(clear) event as a leftover
+#     file. hook-guard is the sole reader/deleter of .clear-consumed and
+#     bounds how long it trusts a marker it didn't just create itself (a
+#     short freshness window on its mtime -- see the "Residual regression"
+#     comment in hook-guard's hooks/session-start.sh) precisely to keep that
+#     leftover from being misread as live evidence by a later, unrelated
+#     SessionStart(clear) event.
 #   - this script first: renames it to .clear-consumed; hook-guard then finds
-#     .clear-consumed instead and treats it identically. hook-guard is the
-#     sole reader/deleter of .clear-consumed, so there is no second race over
-#     its cleanup.
+#     .clear-consumed instead (still fresh) and treats it identically.
 consume_clear_pending() {
   [ -f "$FRESHEN_DIR/.clear-pending" ] && mv -f "$FRESHEN_DIR/.clear-pending" "$FRESHEN_DIR/.clear-consumed"
   return 0

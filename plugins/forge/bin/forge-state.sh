@@ -222,15 +222,23 @@ check_storyhook() {
       # NOT .stories[].state / .title. Exclude project_story (if recorded) —
       # see read_project_story above for why it can never reach `done` via
       # the normal `story next` path a leaf task story does.
-      local states
-      if [ -n "$project_story" ]; then
-        states=$(echo "$story_json" | jq -r --arg ps "$project_story" \
-          '.stories[]? | select(.story.id != $ps) | .story.state' | sort -u)
-      else
-        states=$(echo "$story_json" | jq -r '.stories[]?.story.state' | sort -u)
-      fi
+      #
+      # Count with jq's `length` (as forge-close-project-story.sh does for
+      # its own analogous count), NOT a `states=$(... ) | grep -c` shell
+      # pipeline: when project_story is the only story in the whole list
+      # (a decompose run whose wave has zero checkbox items), excluding it
+      # leaves an empty selection, and `echo "" | grep -cv '^done$'` counts
+      # the one blank line `echo` still emits as a non-done entry — wedging
+      # stories_all_done false forever. jq's `length` on an empty array is
+      # unambiguously 0.
       local non_done
-      non_done=$(echo "$states" | grep -cv '^done$' || true)
+      if [ -n "$project_story" ]; then
+        non_done=$(echo "$story_json" | jq --arg ps "$project_story" \
+          '[.stories[]? | select(.story.id != $ps and .story.state != "done")] | length')
+      else
+        non_done=$(echo "$story_json" | jq \
+          '[.stories[]? | select(.story.state != "done")] | length')
+      fi
       if [ "$non_done" -eq 0 ]; then
         stories_all_done=true
       fi
@@ -240,7 +248,13 @@ check_storyhook() {
       # of silently re-dispatching execute forever.
       if [ "$non_done" -gt 0 ]; then
         local non_done_non_blocked
-        non_done_non_blocked=$(echo "$states" | grep -v '^done$' | grep -cv '^blocked$' || true)
+        if [ -n "$project_story" ]; then
+          non_done_non_blocked=$(echo "$story_json" | jq --arg ps "$project_story" \
+            '[.stories[]? | select(.story.id != $ps and .story.state != "done" and .story.state != "blocked")] | length')
+        else
+          non_done_non_blocked=$(echo "$story_json" | jq \
+            '[.stories[]? | select(.story.state != "done" and .story.state != "blocked")] | length')
+        fi
         if [ "$non_done_non_blocked" -eq 0 ]; then
           stories_blocked_only=true
         fi

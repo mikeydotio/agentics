@@ -171,13 +171,19 @@ Exercises full loop logic without API credits.
 
 ### Complete (all stories done)
 
-When all stories reach `done`:
+When all stories reach `done` (see `references/execution-loop.md`'s "The project story" note —
+this excludes `plan-mapping.json`'s `project_story`, which `story next` can never hand back and so
+never reaches `done` through the loop itself):
 1. Run full project test suite
    - If fails → set `status: "paused"`, `pause_reason: "final-test-suite-failed"`, do NOT cancel freshen
-2. Generate storyhook report: `story summary` + `story handoff`
-3. Write handoff to `.forge/handoffs/handoff-execute.md`
-4. Commit: `git add .forge/ && git commit -m "forge(execute): all stories complete"`
-5. Queue freshen for next step (review+validate): `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Execution complete — all stories done"`
-6. STOP
+2. Close the project story (hygiene only, best-effort — never a precondition for anything below):
+   `bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .` — ignore `.ok`/`.reason` beyond
+   logging; only `.closed == true` means `.storyhook/` changed and must ride along in step 5's commit.
+3. Generate storyhook report: `story summary` + `story handoff`
+4. Write handoff to `.forge/handoffs/handoff-execute.md`
+5. Commit (include `.storyhook/` in case step 2 closed the project story):
+   `git add .forge/ .storyhook/ && git commit -m "forge(execute): all stories complete"`
+6. Queue freshen for next step (review+validate): `bash plugins/freshen/bin/freshen.sh queue "/forge continue" --source forge --summary "Execution complete — all stories done"`
+7. STOP
 
 **If standalone:** Same loop, but on completion return to user instead of queuing freshen.

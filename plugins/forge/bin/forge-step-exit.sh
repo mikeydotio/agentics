@@ -1,11 +1,49 @@
 #!/usr/bin/env bash
-# forge-step-exit.sh — Post-handoff commit and freshen queue
-# Usage: forge-step-exit.sh --step <name> --summary <text> --next <command>
+# forge-step-exit.sh — the ONE canonical step-exit call every pipeline skill
+# uses: stage + commit .forge/ (plus any --extra-path), update state.json,
+# and queue (or cancel) the freshen signal.
+#
+# Usage:
+#   forge-step-exit.sh --step <name> --summary <text> --next <command> \
+#     [--extra-path <path>]...
+#   forge-step-exit.sh --step <name> --summary <text> --terminal \
+#     [--extra-path <path>]...
+#
+# Exactly one of --next / --terminal is required:
+#   --next <command>   Normal step transition. Commits, marks state.json
+#                       paused with a resume pointer, and queues freshen to
+#                       re-invoke <command> after /clear.
+#   --terminal          Pipeline-ending exit (deploy). Commits, then CANCELS
+#                       any pending forge freshen signal instead of queueing
+#                       a new one — there is no next command to resume to.
+#
+# --extra-path <path> may be repeated. Use it when a step's commit must also
+# capture changes outside .forge/ (e.g. decompose/execute committing
+# `.storyhook/`, or validate committing new test files it wrote) instead of
+# reaching for a broad `git add -A`, which sweeps in unrelated untracked
+# files. A path that doesn't exist on disk is silently skipped (e.g.
+# `.storyhook/` on a project with no storyhook data yet).
+#
+# Output (always exit 0 on a successful run — callers branch on the JSON):
+#   {ok, committed, commit_hash, freshen_queued, freshen_cancelled, fallback_message}
+#     committed         - true only if this call actually created a commit.
+#                          false means nothing was staged (F053) — this is a
+#                          normal, healthy outcome (e.g. a step whose only
+#                          change was already committed), not a failure, and
+#                          every downstream step (state update, freshen) still
+#                          runs.
+#     commit_hash        - short hash of HEAD after this call, whether or not
+#                          this call itself created the commit.
+#     freshen_queued      - true if --next was queued successfully.
+#     freshen_cancelled   - true if --terminal cancelled a pending signal.
+#     fallback_message    - manual /clear instructions when freshen_queued is
+#                          false (no tmux) — null in --terminal mode.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-step="" summary="" next_cmd=""
+step="" summary="" next_cmd="" terminal=false
+extra_paths=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -15,38 +53,80 @@ while [[ $# -gt 0 ]]; do
     --summary=*) summary="${1#*=}"; shift ;;
     --next)    next_cmd="$2"; shift 2 ;;
     --next=*)  next_cmd="${1#*=}"; shift ;;
+    --terminal) terminal=true; shift ;;
+    --extra-path) extra_paths+=("$2"); shift 2 ;;
+    --extra-path=*) extra_paths+=("${1#*=}"); shift ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
-[ -n "$step" ]     || { echo "Error: --step is required" >&2; exit 1; }
-[ -n "$summary" ]  || { echo "Error: --summary is required" >&2; exit 1; }
-[ -n "$next_cmd" ] || { echo "Error: --next is required" >&2; exit 1; }
+[ -n "$step" ]    || { echo "Error: --step is required" >&2; exit 1; }
+[ -n "$summary" ] || { echo "Error: --summary is required" >&2; exit 1; }
+if [ "$terminal" = true ]; then
+  [ -z "$next_cmd" ] || { echo "Error: --next and --terminal are mutually exclusive" >&2; exit 1; }
+else
+  [ -n "$next_cmd" ] || { echo "Error: --next is required (or pass --terminal)" >&2; exit 1; }
+fi
 
-# Commit .forge/ changes
+# --- Stage + commit ---
+#
+# F053: a plain `git commit -q -m "$msg" && git rev-parse --short HEAD` aborts
+# the whole script under `set -e` when there's nothing to commit (a benign,
+# common case — e.g. a step whose artifacts didn't change since the last
+# handoff). That silently skipped the paused-state write and the freshen
+# queue below, voiding this script's whole guarantee. Guard explicitly: only
+# commit when something is actually staged; either way, HEAD's hash is valid
+# and every step below still runs.
 commit_msg="forge(${step}): ${summary}"
 git add .forge/
-commit_hash=$(git commit -q -m "$commit_msg" && git rev-parse --short HEAD)
-committed=true
+for p in "${extra_paths[@]+"${extra_paths[@]}"}"; do
+  [ -n "$p" ] || continue
+  [ -e "$p" ] && git add "$p"
+done
 
-# Set status to paused so session-stop.sh won't overwrite the freshen signal
+committed=false
+if ! git diff --cached --quiet; then
+  git commit -q -m "$commit_msg"
+  committed=true
+fi
+commit_hash="$(git rev-parse --short HEAD 2>/dev/null || echo "")"
+
+# --- state.json ---
+#
+# handoff_file follows the universal `.forge/handoffs/handoff-<step>.md`
+# naming convention (references/step-handoff.md) — every step's exit writes
+# exactly this path, so it can be derived from --step rather than passed
+# separately. session-start.sh's resume-context injection reads
+# `.resume.handoff_file` when present (falls back gracefully when absent).
 STATE_FILE=".forge/state.json"
-if [ -f "$STATE_FILE" ] && command -v jq &>/dev/null; then
-  jq --arg cmd "$next_cmd" --arg sum "$summary" \
+if [ "$terminal" != true ] && [ -f "$STATE_FILE" ] && command -v jq &>/dev/null; then
+  jq --arg cmd "$next_cmd" --arg sum "$summary" --arg hf "handoffs/handoff-${step}.md" \
     '.status = "paused"
      | .updated_at = (now | todate)
-     | .resume = {command: $cmd, summary: $sum}' \
+     | .resume = {command: $cmd, handoff_file: $hf, summary: $sum}' \
     "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 fi
 
-# Try to queue freshen
+# --- Freshen ---
 freshen_queued=false
+freshen_cancelled=false
 fallback_message=null
 
-if bash "$SCRIPT_DIR/../../freshen/bin/freshen.sh" queue "$next_cmd" --source forge --summary "$summary" 2>/dev/null; then
-  freshen_queued=true
+if [ "$terminal" = true ]; then
+  # Best-effort — a terminal exit has nothing to resume to either way.
+  bash "$SCRIPT_DIR/../../freshen/bin/freshen.sh" cancel --source forge >/dev/null 2>&1 && freshen_cancelled=true || true
 else
-  fallback_message="Run /clear then: ${next_cmd}"
+  # Fully silence freshen.sh's own stdout/stderr — it prints a human-readable
+  # confirmation line ("freshen: queued '...'") on success, which would
+  # otherwise land BEFORE this script's own final `jq -n` JSON on stdout and
+  # corrupt the output for any caller parsing it as JSON. We already
+  # synthesize our own freshen_queued/fallback_message below, so none of
+  # freshen.sh's own text output is needed here.
+  if bash "$SCRIPT_DIR/../../freshen/bin/freshen.sh" queue "$next_cmd" --source forge --summary "$summary" >/dev/null 2>&1; then
+    freshen_queued=true
+  else
+    fallback_message="Run /clear then: ${next_cmd}"
+  fi
 fi
 
 jq -n \
@@ -54,11 +134,13 @@ jq -n \
   --argjson committed "$committed" \
   --arg commit_hash "$commit_hash" \
   --argjson freshen_queued "$freshen_queued" \
+  --argjson freshen_cancelled "$freshen_cancelled" \
   --arg fallback_msg "$fallback_message" \
   '{
     ok: $ok,
     committed: $committed,
     commit_hash: $commit_hash,
     freshen_queued: $freshen_queued,
+    freshen_cancelled: $freshen_cancelled,
     fallback_message: (if $fallback_msg == "null" then null else $fallback_msg end)
   }'

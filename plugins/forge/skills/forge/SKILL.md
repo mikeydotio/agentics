@@ -369,15 +369,21 @@ Each skill is a separate SKILL.md under `skills/<step>/`. The orchestrator dispa
 
 ## Agent Roster (15 agents)
 
+Every name below is a real file in `plugins/agents/agents/` (see
+`plugins/agents/references/agent-catalog.md` for the full library). See
+`references/team-roles.md`'s "Resolving subagent_type" for how each is actually spawned
+(`agents:<name>` preferred, `general-purpose` + inlined `.md` as fallback — never a bare
+`general-purpose` default).
+
 | Agent | Used By |
 |-------|---------|
 | `domain-researcher` | interrogate (recon), research |
 | `software-architect` | design, review, execute (drift check) |
-| `senior-engineer` | execute (available via roster) |
+| `software-engineer` | execute (available via roster) |
 | `qa-engineer` | plan, validate, triage |
-| `ux-designer` | design (conditional) |
+| `ux-designer-cli` / `ux-designer-web` / `ux-designer-mobile` | design (conditional) — pick the variant matching TEAM.md's project type |
 | `project-manager` | plan, validate, triage, decompose |
-| `devils-advocate` | design, plan, review, triage |
+| `skeptic` | design, plan, review, triage |
 | `security-researcher` | design (conditional), review (conditional) |
 | `accessibility-engineer` | design (conditional), review (conditional) |
 | `technical-writer` | document |

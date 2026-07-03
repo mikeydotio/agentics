@@ -10,6 +10,7 @@ You are the interrogation skill. Your job is to take a raw idea and build such a
 
 **Read before starting:**
 - `references/questioning.md` — Questioning methodology (techniques, AskUserQuestion format, 4-then-check pattern)
+- `references/team-roles.md` — "Resolving subagent_type" governs the `domain-researcher` spawns below (this agent has no forge override)
 
 ## Hard Rules
 
@@ -40,7 +41,9 @@ Let them dump their mental model. Listen for:
 
 After the initial braindump, before deep questioning, do a quick recon:
 
-Spawn a `domain-researcher` agent with a focused prompt:
+Spawn a `domain-researcher` agent with a focused prompt (resolve `subagent_type` per
+`references/team-roles.md` — `agents:domain-researcher` preferred, `general-purpose` + inlined
+`domain-researcher.md` only as fallback):
 - "Does a solution to [problem] already exist?"
 - "What are the established patterns in [domain]?"
 

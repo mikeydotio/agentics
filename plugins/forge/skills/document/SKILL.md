@@ -16,12 +16,16 @@ You are the document skill. Your job is to produce comprehensive project documen
 - `.forge/VALIDATE-REPORT.md` (for test coverage)
 - `.forge/TRIAGE.md` (for known issues)
 - `.forge/handoffs/handoff-triage.md` (for context)
+- `references/team-roles.md` (before spawning — "Resolving subagent_type" governs the
+  `technical-writer` spawn below; this agent has no forge override)
 
 ## Steps
 
 ### 1. Spawn Documentation Agent
 
 Spawn `technical-writer` agent with all planning artifacts and the implemented codebase as context.
+Resolve `subagent_type` per `references/team-roles.md` (`agents:technical-writer` preferred;
+`general-purpose` + inlined `technical-writer.md` only as fallback).
 
 The technical writer:
 - Reads the entire codebase

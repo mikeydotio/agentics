@@ -18,6 +18,8 @@ You are the review skill. Your job is to perform a thorough static analysis of t
 **New reference (read before starting):**
 - `references/severity-levels.md` — Finding severity definitions
 - `references/report-format.md` — Report structure with solution options
+- `references/team-roles.md` — "Resolving subagent_type" — governs every spawn below; `reviewer`
+  has a forge override (`agent-overrides/reviewer-context.md`) to concatenate in, the others don't
 
 ## Steps
 
@@ -26,9 +28,9 @@ You are the review skill. Your job is to perform a thorough static analysis of t
 Read `.forge/TEAM.md` to determine which agents to spawn:
 
 **Always spawn:**
-- `reviewer` — Primary static analysis agent
+- `reviewer` — Primary static analysis agent (has a forge override — see above)
 - `software-architect` — Architecture alignment check
-- `devils-advocate` — Challenge review findings, find what the reviewer missed
+- `skeptic` — Challenge review findings, find what the reviewer missed
 
 **Conditionally spawn (from TEAM.md):**
 - `security-researcher` — If project handles sensitive data/auth/external input
@@ -37,12 +39,21 @@ Read `.forge/TEAM.md` to determine which agents to spawn:
 ### 2. Spawn Review Agents
 
 All agents receive DESIGN.md, PLAN.md, IDEA.md, and the execute handoff for working context.
+Resolve `subagent_type` per `references/team-roles.md` for each (`agents:<name>` preferred;
+`general-purpose` + inlined shared definition — plus the override for `reviewer` — only as
+fallback).
+
+**`reviewer` is `read_only: true` — it has no Write/Edit tools and does NOT write
+`.forge/REVIEW-REPORT.md` itself.** It returns its findings as its response, in the Output Format
+`reviewer.md` specifies. This step (the orchestrator) is what writes the file, by combining every
+agent's returned findings — see Step 3.
 
 Spawn in parallel — each agent independently reviews the codebase.
 
 ### 3. Synthesize REVIEW-REPORT.md
 
-Combine all agent findings into a single report. Each finding must follow the severity and report format:
+Combine all agents' returned findings into a single report — this is the orchestrator's job, not
+any individual agent's (see Step 2's note on `reviewer` being read-only). Each finding must follow the severity and report format:
 
 ```markdown
 # Review Report

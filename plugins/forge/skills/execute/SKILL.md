@@ -54,7 +54,9 @@ before dispatch — see `skills/forge/SKILL.md`'s State Detection section):
 
 1. Verify `.forge/plan-mapping.json` exists
 2. Verify storyhook has stories in `todo` state
-3. Read or create `.forge/config.json` with defaults:
+3. Read or create `.forge/config.json` with defaults (must match `skills/forge/SKILL.md`'s
+   Settings section byte-for-byte — see that section's note on why
+   `max_total_retries` is 100, not a smaller number, per F097):
    ```json
    {
      "yolo": false,
@@ -64,11 +66,17 @@ before dispatch — see `skills/forge/SKILL.md`'s State Detection section):
      "max_retries": 4,
      "max_stories_per_session": 1,
      "max_sessions": 200,
-     "max_total_retries": 20,
+     "max_total_retries": 100,
      "heartbeat_window_minutes": 30
    }
    ```
-4. Acquire lock (see `references/session-locking.md`)
+4. Generate a session ID (e.g. `sess-$(date -u +%Y%m%dT%H%M%SZ)-$$`) and acquire the lock:
+   ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh acquire --session-id "$SESSION_ID" --forge-dir .forge
+   ```
+   If `acquired` is `false` (a fresh lock is held by another session), STOP and report:
+   "Work is already running in another session (held_by: `<held_by>`)." See
+   `references/session-locking.md` for the full protocol this script implements.
 5. Initialize `.forge/state.json`
 6. Check auto-resume capability (tmux availability)
 7. Enter execution loop
@@ -89,20 +97,23 @@ Follow `references/execution-loop.md` **completely**. High-level flow:
 
 ```
 loop:
-  0. Storyhook health check (3 consecutive failures → pause)
-  0a. Runaway safeguard check (max_sessions, max_total_retries)
+  0. Runaway & health safeguard check (forge-loop-state.sh runaway-check — max_sessions,
+     max_total_retries, persisted storyhook-failure streak, all in one call)
   1. Pick next story (story next --json)
-  2. Load just-in-time context (criteria, design section, predecessor diffs, prior feedback)
+  2. Load just-in-time context (criteria, design section, predecessor diffs via
+     forge-predecessor-diff.sh, prior feedback)
   3. Generate (spawn generator subagent)
-  3a. Post-generator integrity check (checksums)
+  3a. Post-generator integrity check (forge-integrity.sh, content-hash based)
   4. Deterministic pre-checks (tests, linter, stub grep)
   4a. Generator scope check
   5. Evaluate (spawn evaluator subagent, read-only)
-  5a. Post-evaluator integrity check (git diff)
-  5b. Log verdict to verdicts.jsonl
-  6. State management (update counters, check session limit)
-  7. Architectural drift check (every 3 stories or wave boundary)
-  retry: git checkout ., structured feedback, retry or block
+  5a. Post-evaluator integrity check (forge-integrity.sh, full-tree scope — runs BEFORE the
+      verdict is acted on)
+  5b. Log verdict to verdicts.jsonl (forge-verdict.sh)
+  6. State management (forge-loop-state.sh attempt/done — update counters, check session limit)
+  7. Architectural drift check (forge-loop-state.sh architect-check — persisted counter, every 3
+     stories or wave boundary)
+  retry: git checkout ., structured feedback, forge-loop-state.sh retry or block
   pause: write handoff (MUST include cold-start essentials), release lock, queue freshen
   complete: all stories done → transition to review+validate
 ```

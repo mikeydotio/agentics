@@ -110,10 +110,7 @@ After all sections are approved, write `.forge/DESIGN.md`:
 
 **If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/DESIGN.md`
-2. Write `.forge/handoffs/handoff-design.md`:
-   - Key Decisions: architecture overview, key trade-offs, per-section user approvals
-   - Context for Next Step: component count and responsibilities, interface contracts, security/accessibility requirements, complexity areas, inter-component dependencies
-   - Open Questions: implementation questions deferred to planning
+2. Write `.forge/handoffs/handoff-design.md` (content: see step-handoff.md's Design Handoff table)
 3. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step design \
      --summary "architecture design approved" --next "/forge plan --orchestrated"

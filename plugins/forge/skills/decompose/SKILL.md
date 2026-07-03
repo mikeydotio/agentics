@@ -163,10 +163,8 @@ introduced by resuming an existing `plan-mapping.json` (Step 1's "Continue" path
 
 **If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/plan-mapping.json`
-2. Write `.forge/handoffs/handoff-decompose.md`:
-   - Key Decisions: story count, dependency structure, DAG validation result
-   - Context for Next Step: story-to-task mapping summary, wave ordering
-   - Open Questions: any ambiguous task boundaries
+2. Write `.forge/handoffs/handoff-decompose.md` (content: see step-handoff.md's Decompose Handoff
+   table)
 3. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step decompose \
      --summary "create stories from plan" --next "/forge execute --orchestrated" \

@@ -117,11 +117,7 @@ If "Needs adjustment" — ask what to change, revise, re-present.
 
 **If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/PLAN.md`
-2. Write `.forge/handoffs/handoff-plan.md`:
-   - Key Decisions: plan approved, wave/task counts, test strategy
-   - Context for Next Step: plan structure summary, critical dependencies, risk highlights
-   - Pipeline State: fix cycle count (if in FIX loop), yolo mode
-   - Open Questions: execution preferences
+2. Write `.forge/handoffs/handoff-plan.md` (content: see step-handoff.md's Plan Handoff table)
 3. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step plan \
      --summary "implementation plan approved" --next "/forge decompose --orchestrated"

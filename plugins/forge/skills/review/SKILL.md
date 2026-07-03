@@ -98,9 +98,7 @@ If multiple agents flag the same issue, merge into a single finding with the hig
 
 **If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/REVIEW-REPORT.md`
-2. Write `.forge/handoffs/handoff-review.md`:
-   - Key Decisions: critical findings, alignment assessment
-   - Context for Next Step: report summary for triage
+2. Write `.forge/handoffs/handoff-review.md` (content: see step-handoff.md's Review Handoff table)
 3. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step review \
      --summary "static analysis complete" --next "/forge continue"

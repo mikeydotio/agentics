@@ -129,10 +129,8 @@ Write `.forge/IDEA.md`:
 
 **If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/IDEA.md`
-2. Write `.forge/handoffs/handoff-interrogate.md`:
-   - Key Decisions: vision statement, core problem, scope boundaries
-   - Context for Next Step: top 5-7 requirements, challenged assumptions, research areas, existing solutions mentioned, user preferences/constraints
-   - Open Questions: questions for research to answer, unvalidated assumptions
+2. Write `.forge/handoffs/handoff-interrogate.md` (content: see step-handoff.md's Interrogate
+   Handoff table)
 3. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step interrogate \
      --summary "capture idea — [project name]" --next "/forge research --orchestrated"

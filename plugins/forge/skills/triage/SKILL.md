@@ -120,10 +120,7 @@ Write `.forge/TRIAGE.md`:
 
 **If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/TRIAGE.md`
-2. Write `.forge/handoffs/handoff-triage.md`:
-   - Key Decisions: FIX vs ESCALATE decisions, ESCALATE story IDs
-   - Context for Next Step: FIX items for plan step (if any), ESCALATE count
-   - Pipeline State: fix cycle count, yolo mode
+2. Write `.forge/handoffs/handoff-triage.md` (content: see step-handoff.md's Triage Handoff table)
 3. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step triage \
      --summary "[FIX count] FIX, [ESCALATE count] ESCALATE" --next "/forge continue" \

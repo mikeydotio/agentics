@@ -105,9 +105,8 @@ The validator writes tests for critical gaps found during analysis:
 
 **If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/VALIDATE-REPORT.md`
-2. Write `.forge/handoffs/handoff-validate.md`:
-   - Key Decisions: test results, coverage gaps
-   - Context for Next Step: report summary for triage
+2. Write `.forge/handoffs/handoff-validate.md` (content: see step-handoff.md's Validate Handoff
+   table)
 3. Commit `.forge/` plus every test file written in Step 4 — pass each one explicitly as its own
    `--extra-path`, NOT a blanket `git add -A` (which would sweep in unrelated untracked files —
    coverage output, caches, stray build artifacts — from the user's target project):

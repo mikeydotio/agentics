@@ -119,6 +119,7 @@ shape.
 |---------|---------|
 | Key Decisions | Plan approved, wave/task counts, test strategy |
 | Context for Next Step | Plan structure summary, critical dependencies, risk highlights |
+| Pipeline State | Fix cycle count (if in FIX loop), yolo mode |
 | Open Questions | Execution preferences |
 
 ### Decompose Handoff
@@ -138,12 +139,20 @@ shape.
 | Working Context | Patterns, micro-decisions, code landmarks, test state (REQUIRED) |
 | Open Questions | Any blocked stories needing user input |
 
-### Review/Validate Handoff
+### Review Handoff
 
 | Section | Content |
 |---------|---------|
-| Key Decisions | Critical findings, gap severity assessments |
-| Context for Next Step | Report summaries, recommended FIX/ESCALATE splits |
+| Key Decisions | Critical findings, alignment assessment |
+| Context for Next Step | Report summary for triage |
+| Open Questions | Ambiguous findings needing triage |
+
+### Validate Handoff
+
+| Section | Content |
+|---------|---------|
+| Key Decisions | Test results, coverage gaps |
+| Context for Next Step | Report summary for triage |
 | Open Questions | Ambiguous findings needing triage |
 
 ### Triage Handoff

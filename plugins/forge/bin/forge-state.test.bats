@@ -21,6 +21,19 @@ jq_field() {
   echo "$output" | jq -r "$1"
 }
 
+# Helper: write minimally-valid content for one or more pipeline artifact
+# files (F102 — forge-state.sh's artifact_exists now requires non-empty
+# content with a top-level H1 for .md files, so a bare `touch` no longer
+# counts as "present"). NOT used for handoffs/*.md, which are a separate,
+# existence-only detection mechanism (detect_handoff) unaffected by F102.
+mkmd() {
+  local f
+  for f in "$@"; do
+    mkdir -p "$(dirname "$f")"
+    printf '# %s\n\nContent.\n' "$(basename "$f" .md)" > "$f"
+  done
+}
+
 # --- No .forge directory ---
 
 @test "no .forge directory returns state=interrogate" {
@@ -43,7 +56,7 @@ jq_field() {
 
 @test "IDEA.md without research/SUMMARY.md returns state=research" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/IDEA.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "research" ]
@@ -54,8 +67,8 @@ jq_field() {
 
 @test "research/SUMMARY.md without DESIGN.md returns state=design" {
   mkdir -p "$FORGE_DIR/research"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/research/SUMMARY.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/research/SUMMARY.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "design" ]
@@ -66,9 +79,9 @@ jq_field() {
 
 @test "DESIGN.md without PLAN.md returns state=plan" {
   mkdir -p "$FORGE_DIR/research"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/research/SUMMARY.md"
-  touch "$FORGE_DIR/DESIGN.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/research/SUMMARY.md"
+  mkmd "$FORGE_DIR/DESIGN.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "plan" ]
@@ -79,9 +92,9 @@ jq_field() {
 
 @test "PLAN.md without plan-mapping.json returns state=decompose" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/DESIGN.md"
-  touch "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/DESIGN.md"
+  mkmd "$FORGE_DIR/PLAN.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "decompose" ]
@@ -92,9 +105,9 @@ jq_field() {
 
 @test "plan-mapping.json with stories not done returns state=execute" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/DESIGN.md"
-  touch "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/DESIGN.md"
+  mkmd "$FORGE_DIR/PLAN.md"
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   # story CLI may not return done stories -- script should handle gracefully
   run_state
@@ -107,8 +120,8 @@ jq_field() {
 
 @test "both reports present returns state=triage" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/REVIEW-REPORT.md"
-  touch "$FORGE_DIR/VALIDATE-REPORT.md"
+  mkmd "$FORGE_DIR/REVIEW-REPORT.md"
+  mkmd "$FORGE_DIR/VALIDATE-REPORT.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "triage" ]
@@ -198,7 +211,7 @@ EOF
 
 @test "DOCUMENTATION.md without ESCALATE returns state=pause_deploy" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/DOCUMENTATION.md"
+  mkmd "$FORGE_DIR/DOCUMENTATION.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "pause_deploy" ]
@@ -212,7 +225,7 @@ EOF
 
 @test "DEPLOY-APPROVAL.md returns state=deploy" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/DEPLOY-APPROVAL.md"
+  mkmd "$FORGE_DIR/DEPLOY-APPROVAL.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "deploy" ]
@@ -223,7 +236,7 @@ EOF
 
 @test "COMPLETION.md returns state=complete" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/COMPLETION.md"
+  mkmd "$FORGE_DIR/COMPLETION.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "complete" ]
@@ -235,14 +248,78 @@ EOF
 
 @test "artifacts map reflects file presence" {
   mkdir -p "$FORGE_DIR/research"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/research/SUMMARY.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/research/SUMMARY.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.artifacts["IDEA.md"]')" = "true" ]
   [ "$(jq_field '.artifacts["research/SUMMARY.md"]')" = "true" ]
   [ "$(jq_field '.artifacts["DESIGN.md"]')" = "false" ]
   [ "$(jq_field '.artifacts["PLAN.md"]')" = "false" ]
+}
+
+# --- F102: a truncated/empty artifact must not count as "present" ---
+#
+# Before this fix, artifact_exists was a bare `[ -f ... ]` — a zero-byte or
+# mid-write file (exactly what a freshen /clear or a Stop-hook timeout can
+# leave behind) silently advanced the state machine, which is worse than a
+# missing file (a missing file at least re-runs the step).
+
+@test "F102: a zero-byte IDEA.md does not count as present (stays in interrogate)" {
+  mkdir -p "$FORGE_DIR"
+  touch "$FORGE_DIR/IDEA.md"
+  run_state
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "interrogate" ]
+  [ "$(jq_field '.artifacts["IDEA.md"]')" = "false" ]
+}
+
+@test "F102: a non-empty .md file with no top-level H1 does not count as present" {
+  mkdir -p "$FORGE_DIR"
+  printf 'some prose with no heading at all\n' > "$FORGE_DIR/IDEA.md"
+  run_state
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "interrogate" ]
+  [ "$(jq_field '.artifacts["IDEA.md"]')" = "false" ]
+}
+
+@test "F102: a .md file whose H1 is not the first line still counts (H1 anywhere at line start)" {
+  mkdir -p "$FORGE_DIR"
+  printf 'Some preamble.\n\n# Idea\n\nBody.\n' > "$FORGE_DIR/IDEA.md"
+  run_state
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "research" ]
+  [ "$(jq_field '.artifacts["IDEA.md"]')" = "true" ]
+}
+
+@test "F102: an empty plan-mapping.json does not count as present (stays in decompose)" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  touch "$FORGE_DIR/plan-mapping.json"
+  run_state
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "decompose" ]
+  [ "$(jq_field '.artifacts["plan-mapping.json"]')" = "false" ]
+}
+
+@test "F102: a plan-mapping.json with invalid JSON does not count as present" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  echo "this is not json" > "$FORGE_DIR/plan-mapping.json"
+  run_state
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "decompose" ]
+  [ "$(jq_field '.artifacts["plan-mapping.json"]')" = "false" ]
+}
+
+@test "F102: a valid-JSON plan-mapping.json counts as present" {
+  mkdir -p "$FORGE_DIR"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  echo '{}' > "$FORGE_DIR/plan-mapping.json"
+  run_state
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "execute" ]
+  [ "$(jq_field '.artifacts["plan-mapping.json"]')" = "true" ]
 }
 
 # --- Handoff detection ---
@@ -260,7 +337,7 @@ EOF
 
 @test "no handoff directory sets has_handoff=false" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/IDEA.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.has_handoff')" = "false" ]
@@ -281,13 +358,13 @@ EOF
 
 @test "COMPLETION.md overrides all other artifacts" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/DESIGN.md"
-  touch "$FORGE_DIR/PLAN.md"
-  touch "$FORGE_DIR/TRIAGE.md"
-  touch "$FORGE_DIR/DOCUMENTATION.md"
-  touch "$FORGE_DIR/DEPLOY-APPROVAL.md"
-  touch "$FORGE_DIR/COMPLETION.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/DESIGN.md"
+  mkmd "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/TRIAGE.md"
+  mkmd "$FORGE_DIR/DOCUMENTATION.md"
+  mkmd "$FORGE_DIR/DEPLOY-APPROVAL.md"
+  mkmd "$FORGE_DIR/COMPLETION.md"
   run_state
   [ "$status" -eq 0 ]
   [ "$(jq_field '.state')" = "complete" ]
@@ -347,7 +424,7 @@ run_state_in_project() {
 @test "escalate detection reads .story.title, not .title" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/DOCUMENTATION.md"
+  mkmd "$FORGE_DIR/DOCUMENTATION.md"
   ( cd "$TEST_DIR" && story new "ESCALATE: needs a decision" >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
@@ -358,7 +435,7 @@ run_state_in_project() {
 @test "a resolved (done) ESCALATE story does not block the deploy gate" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/DOCUMENTATION.md"
+  mkmd "$FORGE_DIR/DOCUMENTATION.md"
   ( cd "$TEST_DIR" && story new "ESCALATE: needs a decision" >/dev/null && story move ST-1 done >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
@@ -379,7 +456,7 @@ run_state_in_project() {
 @test "review done and validate missing dispatches validate alone" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/REVIEW-REPORT.md"
+  mkmd "$FORGE_DIR/REVIEW-REPORT.md"
   ( cd "$TEST_DIR" && story new "Task" >/dev/null && story move ST-1 done >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
@@ -390,7 +467,7 @@ run_state_in_project() {
 @test "validate done and review missing dispatches review alone" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/VALIDATE-REPORT.md"
+  mkmd "$FORGE_DIR/VALIDATE-REPORT.md"
   ( cd "$TEST_DIR" && story new "Task" >/dev/null && story move ST-1 done >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
@@ -401,7 +478,7 @@ run_state_in_project() {
 @test "all non-done stories blocked surfaces state=blocked instead of wedging in execute" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
@@ -418,7 +495,7 @@ run_state_in_project() {
 @test "a blocked story alongside an actionable todo story stays in execute" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
@@ -453,7 +530,7 @@ decompose_single_task_plan() {
 @test "a decompose-created parent story does not permanently wedge execute in the state machine" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   decompose_single_task_plan
   # ST-1 is the auto-created parent ("Task Breakdown"), ST-2 is the one real
   # task story -- confirm the fixture matches the documented decompose shape
@@ -485,7 +562,7 @@ decompose_single_task_plan() {
 @test "closing the project story via forge-close-project-story.sh keeps forge-state.sh in agreement" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   decompose_single_task_plan
   echo '{"plan_hash":"x","project_story":"ST-1","stories":{}}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && story move ST-2 in-progress >/dev/null && story move ST-2 done >/dev/null )
@@ -516,7 +593,7 @@ decompose_single_task_plan() {
   # against regressing back to that shell/grep counting idiom.
   init_storyhook
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   ( cd "$TEST_DIR" && \
     printf '## Task Breakdown\n\n### Wave 1\n\n' \
       | story decompose --stdin --json >/dev/null )
@@ -535,8 +612,8 @@ decompose_single_task_plan() {
 
 @test "expected handoff for design is research's, not just any newest file" {
   mkdir -p "$FORGE_DIR/handoffs" "$FORGE_DIR/research"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/research/SUMMARY.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/research/SUMMARY.md"
   # Only an older, unrelated handoff exists -- NOT handoff-research.md.
   touch "$FORGE_DIR/handoffs/handoff-interrogate.md"
   run_state
@@ -549,8 +626,8 @@ decompose_single_task_plan() {
 
 @test "expected_handoff_present becomes true once the specific handoff exists" {
   mkdir -p "$FORGE_DIR/handoffs" "$FORGE_DIR/research"
-  touch "$FORGE_DIR/IDEA.md"
-  touch "$FORGE_DIR/research/SUMMARY.md"
+  mkmd "$FORGE_DIR/IDEA.md"
+  mkmd "$FORGE_DIR/research/SUMMARY.md"
   touch "$FORGE_DIR/handoffs/handoff-interrogate.md"
   touch "$FORGE_DIR/handoffs/handoff-research.md"
   run_state
@@ -561,8 +638,8 @@ decompose_single_task_plan() {
 
 @test "triage requires both review's and validate's handoffs" {
   mkdir -p "$FORGE_DIR/handoffs"
-  touch "$FORGE_DIR/REVIEW-REPORT.md"
-  touch "$FORGE_DIR/VALIDATE-REPORT.md"
+  mkmd "$FORGE_DIR/REVIEW-REPORT.md"
+  mkmd "$FORGE_DIR/VALIDATE-REPORT.md"
   touch "$FORGE_DIR/handoffs/handoff-review.md"
   run_state
   [ "$(jq_field '.state')" = "triage" ]
@@ -585,7 +662,7 @@ decompose_single_task_plan() {
 
 @test "no state.json signals a fresh execute start, not a resume" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   run_state
   [ "$(jq_field '.state')" = "execute" ]
@@ -596,7 +673,7 @@ decompose_single_task_plan() {
 
 @test "an existing state.json signals execute is resuming, not starting fresh" {
   mkdir -p "$FORGE_DIR/handoffs"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   echo '{"status": "paused", "sessions_completed": 1}' > "$FORGE_DIR/state.json"
   run_state
@@ -608,7 +685,7 @@ decompose_single_task_plan() {
 
 @test "malformed state.json is treated as absent, not a crash" {
   mkdir -p "$FORGE_DIR"
-  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  mkmd "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   echo 'not valid json' > "$FORGE_DIR/state.json"
   run_state

@@ -348,7 +348,7 @@ Every name below is a real file in `plugins/agents/agents/` (see
 | `software-engineer` | execute (available via roster) |
 | `qa-engineer` | plan, validate, triage |
 | `ux-designer-cli` / `ux-designer-web` / `ux-designer-mobile` | design (conditional) — pick the variant matching TEAM.md's project type |
-| `project-manager` | plan, validate, triage, decompose |
+| `project-manager` | plan, validate, triage |
 | `skeptic` | design, plan, review, triage |
 | `security-researcher` | design (conditional), review (conditional) |
 | `accessibility-engineer` | design (conditional), review (conditional) |

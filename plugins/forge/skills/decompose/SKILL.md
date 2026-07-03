@@ -42,19 +42,15 @@ If `.forge/plan-mapping.json` exists:
 ### 2. State Setup
 
 `story init` already seeds `todo` / `in-progress` / `done`. Create the two additional states the
-execution loop needs:
+execution loop needs (see `storyhook-contract.md`'s **Custom States** for why this isn't
+idempotent and must tolerate exit 2 — do not hand-edit `.storyhook/states.toml`):
 
 ```bash
 story state add verifying --super OPEN --role active
 story state add blocked --super OPEN --role active
 ```
 
-`story state add` is **not** idempotent — it errors (exit 2, `state \`<slug>\` already exists`) if
-the slug already exists, and there is no `story state list` to check first. Tolerate that specific
-exit-2 error rather than treating it as a failure. Never hand-edit `.storyhook/states.toml`
-directly.
-
-### 3. Extract the Task Breakdown Section
+### 3. Extract and Verify the Task Breakdown Section
 
 `story decompose` treats **every** Markdown heading in its input as a story, not just wave
 headings — piping the entire PLAN.md would turn `## Test Strategy`, `## Resumption Points`, and
@@ -71,8 +67,6 @@ Do **not** separately run `story new` to create a parent story: `story decompose
 one from the first heading in its input (here, "Task Breakdown"), and calling `story new` first
 would leave two disconnected parent stories.
 
-### 4. Verify Wave Structure
-
 Verify `$TASKS_FILE` has:
 - `### Wave N` headings for sequencing (auto-creates wave dependencies)
 - `- [ ]` checkbox items for stories
@@ -81,7 +75,7 @@ Verify `$TASKS_FILE` has:
 If the wave headings use a different format, normalize them to `### Wave N` first. Error if no
 waves or no checkbox items are found.
 
-### 5. Decompose (Single Call)
+### 4. Decompose (Single Call)
 
 `story decompose` creates the parent story, every task story, and all wave `blocked-by`
 dependencies in one call — this replaces what would otherwise be 60-80+ sequential CLI calls:
@@ -106,18 +100,27 @@ dependencies in one call — this replaces what would otherwise be 60-80+ sequen
    is expected, not a defect; see `references/story-decomposition.md`'s "The project story never
    reaches `done` on its own" for how the pipeline accounts for it.
 
-### 7. Map Stories to DESIGN.md Sections
+### 5. Map Stories to DESIGN.md Sections
 
 For each story, find the relevant DESIGN.md section by matching task descriptions to section headers. **Embed the section content** (not just headers) in plan-mapping.json so the execution loop doesn't need to read DESIGN.md later.
 
-### 8. Write plan-mapping.json
+### 6. Write plan-mapping.json
 
-Write `.forge/plan-mapping.json` (version-controlled):
+Get the mechanical fields — `plan_hash` and a per-story skeleton (real IDs and titles, judgment
+fields left null) — from the scaffold script rather than hand-computing an MD5 or re-typing IDs:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-mapping-scaffold.sh --plan .forge/PLAN.md
+```
+
+Fill in each story's judgment fields (`task_ref`, `wave`, `acceptance_criteria`, `design_section`
+from Step 5, `files_expected`) onto the returned skeleton, then write the result to
+`.forge/plan-mapping.json` (version-controlled):
 
 ```json
 {
-  "plan_hash": "<md5 of PLAN.md>",
-  "project_story": "<STORY_ID>",
+  "plan_hash": "<from the scaffold script>",
+  "project_story": "<from the scaffold script>",
   "stories": {
     "<STORY_ID>": {
       "task_ref": "Task 1.1",
@@ -131,14 +134,15 @@ Write `.forge/plan-mapping.json` (version-controlled):
 }
 ```
 
-IDs come from `story new` / `story decompose` output — never assume a prefix. (The default prefix
-is `SH`, not `HP`; if a project runs `story init --prefix <X>`, IDs use `<X>` instead.)
+IDs come from the scaffold script's own `story list --json` read — never assume a prefix. (The
+default prefix is `SH`, not `HP`; if a project runs `story init --prefix <X>`, IDs use `<X>`
+instead.)
 
-### 9. Validate DAG
+### 7. Validate DAG
 
-Neither `story graph` (text or `--json`) nor `story doctor` reports `blocked-by` cycles — do not
-eyeball `story graph` output for cycles, that judgment is unreliable from rendered text (see
-`storyhook-contract.md`'s **DAG Validation** section). Instead, run the validator script:
+Neither `story graph` nor `story doctor` reports `blocked-by` cycles, and eyeballing rendered
+`story graph` output for cycles is unreliable — see `storyhook-contract.md`'s **DAG Validation**
+section for why. Instead, run the validator script:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-dag-validate.sh .
@@ -148,25 +152,26 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-dag-validate.sh .
   `storyhook-contract.md`.
 - If `.has_cycles` is `true`, **abort**: report the cycle(s) from `.cycles` to the user and do not
   proceed to `execute`.
-- If `.has_cycles` is `false`, continue.
+- If `.has_cycles` is `false`, continue and report story count and structure to the user.
 
-In practice this is low-risk here: the wave `blocked-by` edges created in Step 5 are always
+In practice this is low-risk here: the wave `blocked-by` edges created in Step 4 are always
 forward (wave N+1 blocked-by wave N), which is acyclic by construction. A cycle can only be
 introduced by resuming an existing `plan-mapping.json` (Step 1's "Continue" path) or a manual
 `story relate` call outside this decompose flow — the validator catches both.
 
-Report story count and structure to the user.
-
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol:
+**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
 1. Write `.forge/plan-mapping.json`
-2. Write `.forge/handoffs/handoff-decompose.md` with:
+2. Write `.forge/handoffs/handoff-decompose.md`:
    - Key Decisions: story count, dependency structure, DAG validation result
    - Context for Next Step: story-to-task mapping summary, wave ordering
    - Open Questions: any ambiguous task boundaries
-3. Commit: `git add .forge/ .storyhook/ && git commit -m "forge(decompose): create stories from plan"`
-4. Queue freshen: `bash plugins/freshen/bin/freshen.sh queue "/forge execute --orchestrated" --source forge --summary "Decomposition complete — stories created"`
-5. STOP
+3. ```bash
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step decompose \
+     --summary "create stories from plan" --next "/forge execute --orchestrated" \
+     --extra-path .storyhook/
+   ```
+4. STOP
 
 **If standalone:** Write outputs, report story count and structure to user, exit.

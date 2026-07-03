@@ -22,16 +22,13 @@ Before creating stories, check if `.forge/plan-mapping.json` exists:
 ### 2. State Setup
 
 `story init` already seeds `todo` / `in-progress` / `done`. Create the two additional states
-forge's execution loop needs:
+forge's execution loop needs (see `storyhook-contract.md`'s **Custom States** for the
+not-idempotent/exit-2 caveat and why `.storyhook/states.toml` must never be hand-edited):
 
 ```bash
 story state add verifying --super OPEN --role active
 story state add blocked --super OPEN --role active
 ```
-
-`story state add` is not idempotent — it errors (exit 2, `state \`<slug>\` already exists`) if the
-slug is already present. Tolerate that specific error rather than treating it as a failure; there
-is no `story state list` to check first. Never hand-edit `.storyhook/states.toml`.
 
 ### 3. Extract the Task Breakdown Section
 
@@ -110,12 +107,18 @@ loop doesn't depend on reading DESIGN.md later.
 
 ### 6. Write plan-mapping.json
 
-Write `.forge/plan-mapping.json` (version-controlled):
+`bin/forge-mapping-scaffold.sh --plan .forge/PLAN.md` computes the mechanical fields — `plan_hash`
+(portable MD5, no `md5sum`/`md5` flag differences to reconcile) and a per-story skeleton with real
+IDs and titles read back from `story list --json` (never an assumed prefix — the default is `SH`,
+not `HP`; a project that ran `story init --prefix <X>` uses `<X>` instead). Fill in each story's
+judgment fields on top of that skeleton — `task_ref`/`wave` from PLAN.md, `acceptance_criteria`,
+`design_section` from Step 5 above, `files_expected` — then write the result to
+`.forge/plan-mapping.json` (version-controlled):
 
 ```json
 {
-  "plan_hash": "<md5 of PLAN.md>",
-  "project_story": "<STORY_ID>",
+  "plan_hash": "<from the scaffold script>",
+  "project_story": "<from the scaffold script>",
   "stories": {
     "<STORY_ID>": {
       "task_ref": "Task 1.1",
@@ -128,9 +131,6 @@ Write `.forge/plan-mapping.json` (version-controlled):
   }
 }
 ```
-
-IDs come from `story new` / `story decompose` output — never assume a prefix. (The default prefix
-is `SH`, not `HP`; if a project runs `story init --prefix <X>`, IDs use `<X>` instead.)
 
 ### 7. Validate DAG
 

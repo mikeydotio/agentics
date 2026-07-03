@@ -31,13 +31,18 @@ follows. Every orchestrated step follows the same pattern:
    that only happened to resolve when testing from inside the agentics repo itself — it cannot
    resolve from a real target project's cwd; see Ground Rule 5):
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step <step> --summary "<summary>" --next "<next-command>"
+   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step <step> --summary "<summary>" --next "<next-command>" --transition-id "<transition-id>"
    ```
    - `--next` — the specific next step command when the transition is deterministic (e.g.,
      `/forge research --orchestrated` after interrogate), or `/forge continue` when the next step
      depends on runtime state (e.g., after triage, review/validate, execute completion). Deploy is
      the one exception: it's the pipeline's terminal step, so it passes `--terminal` instead of
      `--next` (cancels any pending signal rather than queueing one).
+   - `--transition-id <id>` (agentics#33, optional) — the `transition_id` from this turn's
+     `forge-state.sh --record-transition` JSON output (see `skills/forge/SKILL.md`'s State
+     Detection), so this step's logged "actual" line correlates with the "predicted" line already
+     written for it. Omit it if state detection wasn't re-run this turn (there's nothing to
+     correlate) — the logged line reads `transition_id=none` instead of failing.
    - `--extra-path <path>` (repeatable) — stage additional paths beyond `.forge/` in the same
      commit instead of a broad `git add -A`. Use this whenever a step's commit must also capture
      changes outside `.forge/` (decompose and execute's Complete path both need

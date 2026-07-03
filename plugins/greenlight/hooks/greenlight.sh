@@ -38,11 +38,29 @@ if [[ ! -f "$CONFIG_FILE" && -f "$DEFAULT_CONFIG" ]]; then
 fi
 
 # Defaults (used when config is missing or a key is absent)
+#
+# F077/F078/F082: the AI fallback used to fire automatically (ai_enabled:
+# true) on every "uncertain" command — and with the F076 fast-allowlist
+# additions above still leaving plenty of real-world commands uncertain,
+# that put a Claude API round-trip (latency + token cost) on the critical
+# path of any autonomous loop, unconditionally. It also defaulted to a
+# model (claude-sonnet-4-6) not on the structured-outputs support list this
+# feature depends on (Fable 5 / Opus 4.8 / Sonnet 5 / Haiku 4.5 + legacy
+# Opus 4.5/4.1 — see the claude-api skill's model reference), so every call
+# likely 400'd and fell through to defer anyway: pure overhead, zero
+# benefit. Fixed: default the AI tier OFF (opt-in — a user who wants the
+# extra judgment call turns it on deliberately), and when it IS enabled,
+# default to claude-haiku-4-5 (cheapest/fastest structured-outputs-capable
+# model, and the deterministic answer this feature actually needs is a
+# single boolean). ai_show_rationale now also defaults off (F082) — the
+# rationale line was injected into context on every AI-approved command
+# regardless of whether the AI tier is even in use, adding transcript noise
+# that works against the harness's own signal-to-noise goals.
 CFG_MODE="standard"
-CFG_AI_ENABLED="true"
-CFG_AI_MODEL="claude-sonnet-4-6"
+CFG_AI_ENABLED="false"
+CFG_AI_MODEL="claude-haiku-4-5"
 CFG_AI_TIMEOUT="10"
-CFG_AI_SHOW_RATIONALE="true"
+CFG_AI_SHOW_RATIONALE="false"
 CFG_CUSTOM_ALLOW=""
 CFG_CUSTOM_PASS=""
 CFG_LOG_FILE=""
@@ -153,8 +171,40 @@ if printf '%s\n' "$COMMAND" | grep -qE '<\(|>\('; then
 fi
 
 # ── Check for file-writing redirections ──
+# F075: a `>` or `->` typed INSIDE a quoted string (e.g.
+# `story comment X "a -> b"`, or a commit message `refactor: rename A -> B`)
+# has no shell meaning — it's literal text, not a redirection operator. This
+# check runs on the raw command string before the quote-aware segment
+# splitter defined later in this file, so it used to treat a quoted `>`/`->`
+# exactly like a real one. Strip quoted spans first (single- and
+# double-quoted, respecting backslash escapes inside double quotes) so the
+# grep below only ever sees characters with real shell meaning.
+strip_quoted_spans() {
+  printf '%s\n' "$1" | awk '
+  BEGIN { out = ""; in_sq = 0; in_dq = 0 }
+  {
+    n = length($0)
+    for (i = 1; i <= n; i++) {
+      c = substr($0, i, 1)
+      if (in_sq) { if (c == "\047") in_sq = 0; continue }
+      if (in_dq) {
+        if (c == "\\" && i < n) { i++; continue }
+        if (c == "\"") in_dq = 0
+        continue
+      }
+      if (c == "\\" && i < n) { i++; continue }
+      if (c == "\047") { in_sq = 1; continue }
+      if (c == "\"")   { in_dq = 1; continue }
+      out = out c
+    }
+  }
+  END { print out }
+  '
+}
+
 # Strip safe redirect patterns, then look for any remaining > or >>
-redir_stripped="$(printf '%s\n' "$COMMAND" | sed -E '
+UNQUOTED_COMMAND="$(strip_quoted_spans "$COMMAND")"
+redir_stripped="$(printf '%s\n' "$UNQUOTED_COMMAND" | sed -E '
   s/[0-9]*>&[0-9]+//g
   s/&>\/dev\/null//g
   s/[0-9]*>+\/dev\/null//g
@@ -279,6 +329,18 @@ is_always_safe() {
     json_verify|json_reformat|xml_pp|xmllint|tidy) return 0 ;;
     # Apple profiling / analysis / inspection (readonly)
     instruments|xctrace|xcresulttool|otool|nm) return 0 ;;
+    # F076/F077: storyhook's `story` CLI — forge's execute loop runs this
+    # on nearly every iteration (next/list/summary/move/comment/set/
+    # prioritize/block/unblock/relate/handoff/...). Every subcommand only
+    # mutates .storyhook/ (git-tracked per CLAUDE.md, so any change is a
+    # `git checkout` away from reverted), never touches system state,
+    # never escalates privilege, never leaves the project directory. Left
+    # off this list, EVERY one of those calls was "uncertain": either an
+    # AI round-trip per call (token/latency cost on the hot path) or a
+    # deferred user prompt that stalls the autonomous loop. Treat the whole
+    # CLI surface as safe, the same trust boundary already given to `git
+    # status`/`jq`/other project-local bookkeeping tools above.
+    story) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -418,6 +480,19 @@ is_safe_git() {
     check-ignore|check-attr|check-mailmap|check-ref-format) return 0 ;;
     var|help|version|bugreport) return 0 ;;
     cherry) return 0 ;;
+    # F076/F077: forge's inner loop stages every generator attempt with
+    # `git add` then commits it after evaluation passes (Hard Rules 2-3) —
+    # both are additive/append-only (staging never discards data; a commit
+    # is reflog-recoverable) and were "uncertain" before this fast-path,
+    # forcing an AI round-trip or a deferred prompt on nearly every story.
+    add) return 0 ;;
+    commit) return 0 ;;
+    # `git checkout .` is forge's Hard Rule 5 -- run before every generator
+    # spawn specifically to discard stray uncommitted changes and start
+    # from a clean tree. Discards uncommitted working-tree content (not
+    # reflog-recoverable, unlike a commit) but never touches history and
+    # cannot escalate beyond the working tree itself.
+    checkout) return 0 ;;
     remote)
       if printf '%s\n' "$segment" | grep -qE 'remote[[:space:]]+(add|remove|rm|rename|set-url|set-head|set-branches|prune)'; then
         return 1
@@ -538,7 +613,10 @@ is_safe_pkg_manager() {
   case "$cmd_name" in
     npm)
       case "$subcmd" in
-        list|ls|info|view|show|search|outdated|explain|why|doctor|ping|prefix|root|version|help|completion) return 0 ;;
+        # F076/F077: `npm test` (forge's/most JS-project test-running
+        # command) was "uncertain" -- add it to the deterministic fast path
+        # alongside the existing query subcommands.
+        list|ls|info|view|show|search|outdated|explain|why|doctor|ping|prefix|root|version|help|completion|test) return 0 ;;
         audit)
           if printf '%s\n' "$segment" | grep -qE 'audit[[:space:]]+fix'; then return 1; fi
           return 0 ;;
@@ -569,12 +647,16 @@ is_safe_pkg_manager() {
       esac ;;
     cargo)
       case "$subcmd" in
-        check|clippy|doc|metadata|tree|verify-project|version|help|search|info|read-manifest|pkgid) return 0 ;;
+        # F076/F077: `cargo test`/`cargo build` are forge's/most Rust
+        # projects' hot-path build+test commands -- add them to the
+        # deterministic fast path alongside the existing query subcommands.
+        check|clippy|doc|metadata|tree|verify-project|version|help|search|info|read-manifest|pkgid|test|build) return 0 ;;
         *) return 1 ;;
       esac ;;
     go)
       case "$subcmd" in
-        version|env|list|doc|vet|help) return 0 ;;
+        # F076/F077: `go test`/`go build` -- same rationale as cargo above.
+        version|env|list|doc|vet|help|test|build) return 0 ;;
         *) return 1 ;;
       esac ;;
     *) return 1 ;;
@@ -700,10 +782,19 @@ is_safe_terraform() {
   esac
 }
 
-# ── make: safe for dry-run or query flags only ──
+# ── make: safe for dry-run/query flags, or a conventional test target ──
 is_safe_make() {
   local segment="$1"
   if printf '%s\n' "$segment" | grep -qE -- '-n([[:space:]]|$)|--dry-run|--just-print|--recon|-q([[:space:]]|$)|--question|-p([[:space:]]|$)|--print-data-base'; then
+    return 0
+  fi
+  # F076/F077: `make test` (this very repo's own convention, and forge's
+  # standard test-running command) was "uncertain" like any other real
+  # target -- a Makefile recipe is arbitrary and can't be assumed safe in
+  # general, but `test`/`check` (optionally suffixed, e.g. `test-forge`)
+  # are conventional enough, and narrow enough, to treat as a deterministic
+  # fast path. Any OTHER real target remains uncertain.
+  if printf '%s\n' "$segment" | grep -qE '(^|[[:space:]])g?make[[:space:]]+(test[A-Za-z0-9_-]*|check)([[:space:]]|$)'; then
     return 0
   fi
   return 1
@@ -1293,7 +1384,19 @@ if $all_safe && $HAS_CMD_SUBSTITUTION; then
       inner_seg="${inner_seg%"${inner_seg##*[![:space:]]}"}"
       [[ -z "$inner_seg" ]] && continue
       is_safe_segment "$inner_seg"
-      if [[ $? -ne 0 ]]; then
+      inner_result=$?
+      # F081: a known-destructive command nested inside $(...) / `` was
+      # collapsed into the uncertain branch here (any nonzero -> uncertain),
+      # discarding the destructive classification and its human-readable
+      # warning — the main segment loop above already distinguishes result
+      # 2 (destructive) from 1 (uncertain); mirror that here instead of
+      # treating all non-zero results as merely uncertain.
+      if [[ $inner_result -eq 2 ]]; then
+        all_safe=false
+        any_destructive=true
+        destructive_detail="$(destructive_reason "$DESTRUCTIVE_CMD"): \`${DESTRUCTIVE_CMD}\` (inside command substitution)"
+        break 2
+      elif [[ $inner_result -ne 0 ]]; then
         all_safe=false
         any_uncertain=true
         break 2

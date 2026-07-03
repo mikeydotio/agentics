@@ -430,6 +430,80 @@ run_state_in_project() {
   [ "$(jq_field '.stories_blocked_only')" = "false" ]
 }
 
+# --- The decompose-created "project story" deadlock ---
+#
+# `story decompose` auto-creates a synthetic parent story from the input
+# markdown's top heading (see references/story-decomposition.md). storyhook's
+# `story next` permanently excludes ANY story with children from ever being
+# offered (a `has_children` filter in storyhook's src/app.rs), so once every
+# real task story reaches `done`, the parent is the only story left non-done
+# -- forever, since nothing ever hands it back to `story next` to close it.
+# Before the fix, check_storyhook() required this parent to be `done` via
+# the exact same path as a real leaf story, so `stories_all_done` could never
+# become true and forge-state.sh reported `state:"execute"` forever instead
+# of transitioning to `review_validate`. This is a live-testing find, not one
+# of the plan's 106 catalogued findings.
+
+decompose_single_task_plan() {
+  ( cd "$TEST_DIR" && \
+    printf '## Task Breakdown\n\n### Wave 1\n\n- [ ] [HIGH] Only task\n' \
+      | story decompose --stdin --json >/dev/null )
+}
+
+@test "a decompose-created parent story does not permanently wedge execute in the state machine" {
+  init_storyhook
+  mkdir -p "$FORGE_DIR"
+  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  decompose_single_task_plan
+  # ST-1 is the auto-created parent ("Task Breakdown"), ST-2 is the one real
+  # task story -- confirm the fixture matches the documented decompose shape
+  # before asserting anything about forge-state.sh's behavior on top of it.
+  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.relationships[0].relation'"
+  [ "$output" = "parent-of" ]
+
+  echo '{"plan_hash":"x","project_story":"ST-1","stories":{}}' > "$FORGE_DIR/plan-mapping.json"
+  ( cd "$TEST_DIR" && story move ST-2 in-progress >/dev/null && story move ST-2 done >/dev/null )
+
+  # Confirm the underlying storyhook bug this test guards against: `story
+  # next` really does refuse to ever hand back the parent, and it really
+  # does stay "todo" forever with no other action taken.
+  run bash -c "cd '$TEST_DIR' && story next --json | jq -r '.message'"
+  [ "$output" = "no ready stories" ]
+  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.state'"
+  [ "$output" = "todo" ]
+
+  # forge-state.sh must not be fooled by this: with plan-mapping.json's
+  # project_story excluded from the done-check, it should already report
+  # review_validate even though ST-1 (the parent) is still literally "todo"
+  # in storyhook and no explicit close has happened.
+  run_state_in_project
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "review_validate" ]
+  [ "$(jq_field '.dispatch')" = "review_validate --orchestrated" ]
+}
+
+@test "closing the project story via forge-close-project-story.sh keeps forge-state.sh in agreement" {
+  init_storyhook
+  mkdir -p "$FORGE_DIR"
+  touch "$FORGE_DIR/IDEA.md" "$FORGE_DIR/DESIGN.md" "$FORGE_DIR/PLAN.md"
+  decompose_single_task_plan
+  echo '{"plan_hash":"x","project_story":"ST-1","stories":{}}' > "$FORGE_DIR/plan-mapping.json"
+  ( cd "$TEST_DIR" && story move ST-2 in-progress >/dev/null && story move ST-2 done >/dev/null )
+
+  # Simulate the execute loop's Complete step explicitly closing the parent
+  # for hygiene (references/execution-loop.md).
+  run bash "$BATS_TEST_DIRNAME/forge-close-project-story.sh" "$TEST_DIR"
+  [ "$(echo "$output" | jq -r '.reason')" = "closed" ]
+  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.state'"
+  [ "$output" = "done" ]
+
+  # forge-state.sh's own detection is unaffected either way -- defense in
+  # depth, not a dependency on the close having run.
+  run_state_in_project
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.state')" = "review_validate" ]
+}
+
 # --- Expected handoff for the specific step being resumed ---
 
 @test "expected handoff for design is research's, not just any newest file" {

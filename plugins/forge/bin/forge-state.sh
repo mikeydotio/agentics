@@ -178,6 +178,29 @@ detect_handoff() {
 
 # --- Storyhook integration ---
 
+# `story decompose` auto-creates a synthetic "parent"/project story from
+# PLAN.md's `## Task Breakdown` heading (see references/story-decomposition.md)
+# and records its ID as `project_story` in plan-mapping.json. storyhook's
+# `story next` permanently excludes ANY story with children from ever being
+# offered (a `has_children` filter in storyhook's own app.rs, out of scope to
+# change — see HARD CONSTRAINT in the hardening plan). So once every real task
+# story reaches `done`, the project story is the only story left `todo` —
+# forever, since nothing ever hands it back to `story next` to move it along.
+# Read it here so check_storyhook can exclude it from the "are all stories
+# done" computation below; a completely separate, best-effort close of the
+# project story (for `story list`/`story summary` hygiene, not correctness)
+# happens at the execute loop's Complete step via
+# forge-close-project-story.sh — see references/execution-loop.md. This read
+# is intentionally side-effect-free: forge-state.sh is invoked from many
+# non-execute contexts (hooks, `/forge status`) and must stay a pure detector.
+read_project_story() {
+  project_story=""
+  local mapping_file="$FORGE_DIR/plan-mapping.json"
+  if [ -f "$mapping_file" ] && jq -e . "$mapping_file" >/dev/null 2>&1; then
+    project_story=$(jq -r '.project_story // ""' "$mapping_file")
+  fi
+}
+
 check_storyhook() {
   storyhook_available=false
   stories_all_done=false
@@ -194,10 +217,18 @@ check_storyhook() {
     story_count=$(echo "$story_json" | jq '.stories | length')
     if [ "$story_count" -gt 0 ]; then
       stories_exist=true
+      read_project_story
       # Real shape is double-nested: .stories[].story.state / .story.title —
-      # NOT .stories[].state / .title.
+      # NOT .stories[].state / .title. Exclude project_story (if recorded) —
+      # see read_project_story above for why it can never reach `done` via
+      # the normal `story next` path a leaf task story does.
       local states
-      states=$(echo "$story_json" | jq -r '.stories[]?.story.state' | sort -u)
+      if [ -n "$project_story" ]; then
+        states=$(echo "$story_json" | jq -r --arg ps "$project_story" \
+          '.stories[]? | select(.story.id != $ps) | .story.state' | sort -u)
+      else
+        states=$(echo "$story_json" | jq -r '.stories[]?.story.state' | sort -u)
+      fi
       local non_done
       non_done=$(echo "$states" | grep -cv '^done$' || true)
       if [ "$non_done" -eq 0 ]; then

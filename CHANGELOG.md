@@ -3,6 +3,101 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.24.0] - 2026-07-05
+
+### Added
+- add /handle-issue skill router and README (73d454e)
+- add list/dispatch helper (bin/handle-issue.sh) (aeb5159)
+- scaffold plugin manifest and marketplace registration (f6cfd0e)
+- add forge-transition-report.sh to correlate predicted/actual transitions (agentics#33) (7eb33a5)
+- thread --transition-id through step-exit for predicted/actual correlation (agentics#33) (9d9f527)
+- classify router dispatch into category/auto_advance, add transition_id (agentics#33) (b992bfa)
+- log step-exit transitions to freshen's audit log (F047) (4f14f19)
+- add capture-pane confirm and transition-log helpers (F045, F047) (e325e49)
+- add scaffold scripts for mechanical handoff and plan-mapping fields (F039, F035) (9ead005)
+- add forge-predecessor-diff.sh for mechanical diff truncation (F033) (1ab27af)
+- add forge-crash-recover.sh for one-call crash recovery (F038) (e841538)
+- add forge-integrity.sh for content-hash integrity checks (04fa044)
+- add forge-verdict.sh for deterministic verdicts.jsonl logging (F034) (4165c05)
+- add forge-lock.sh for deterministic session locking (F030) (587894a)
+- add forge-loop-state.sh for deterministic loop bookkeeping (3bfbd84)
+- add forge-close-project-story.sh to close the parent for real (8777a07)
+- add a blocked-by cycle validator; correct story graph --json claims (3f76933)
+
+### Fixed
+- confirm /clear and re-invoke are actually accepted (F045, F041, F056) (e10cd36)
+- bound .clear-consumed to a freshness window (f42d1c3)
+- make F052's SessionStart(clear) fix order-independent (9ab8638)
+- harden command classification and make the AI tier opt-in (e7e4e62)
+- scope integrity snapshots by session to prevent concurrent-run collisions (5831654)
+- detect ESCALATE via structured story_type field, not title substring (4d501b6)
+- checkpoint session-stop ahead of the breaker, bound story handoff, portable duration (f46a4be)
+- dedupe Stop-loop breaker ticks and gate reset on freshen /clear (084e48c)
+- guard forge-step-exit.sh's no-op commit and fix a freshen JSON-corruption bug (F053) (616712c)
+- reject schema-incomplete lock.json before it reaches fromdate (5466e70)
+- require minimal shape before an artifact counts as present (F102) (5393995)
+- scope prechecks' stub grep to real stub idioms (F105) (f07a5e6)
+- reconcile max_total_retries default with realistic retry volume (F097) (a2b567b)
+- make the fix-loop archive call unskippable in the router (F003) (ad1882f)
+- stop telling read-only reviewer/triager to write their own report (6d4bc3a)
+- unify the evaluator verdict schema, resolve the 4KB-vs-comprehensive conflict (5e4f3c3)
+- resolve execution-loop spawns to real subagent types, fix drift-check namespace (32e2cbc)
+- rename phantom agents to the real roster, wire subagent_type resolution (f7d5581)
+- resolve subagent_type to registered agents:<name> types, not general-purpose (2cd215c)
+- stop check_storyhook miscounting an empty non-project story list (01a9d73)
+- wire the project-story close step into execute/SKILL.md's own Complete checklist (8e7e88b)
+- stop decompose's parent story from wedging execute forever (7b5a702)
+- rewrite two dead id-first storyhook commands WS1 missed (19e08e2)
+- trim wc -l padding before using fix-cycle count in a path (c09e24d)
+- correct forge-{fix-archive,prechecks,step-exit}.bats SCRIPT paths (a87aee8)
+- make crash-path auto-resume independent of Stop-hook ordering (6b3396a)
+- stop execute from writing the terminal COMPLETION.md artifact (e2687f5)
+- eliminate the review+validate deadlock, give every state an explicit dispatch (bd9075d)
+- delegate /forge status state detection to forge-state.sh (55fa808)
+- correct forge-state.sh's story JSON path and harden the state machine (5bf393d)
+- parse UTC heartbeat timestamps as UTC on BSD date (d365299)
+- stop hard-coding HP- story IDs in decompose SKILL.md's example (925e69b)
+- stop routing storyhook state checks through a nonexistent MCP server (03e9534)
+- omit --target when the release tag already exists (f015182)
+- support a file-based notary keychain for headless deploys (656daae)
+
+### Changed
+- tier execute's reference loading and move router entry-guards on demand (F019, F026, F027) (2964ff0)
+- fix decompose's step numbering and wire in mapping-scaffold + dedup pointers (30707d9)
+- route 9 pipeline skills through forge-step-exit.sh (F020, F032, F088) (f3433b2)
+- wire the new bin/ scripts into the loop, delete the prose it replaces (4699530)
+
+### Documentation
+- record agentics#33's re-scope from supervisor to instrumentation (10a2b2a)
+- wire --record-transition and --transition-id into the router/step-exit protocol (agentics#33) (85f1bfe)
+- reflect storyhook#10's resolution in the hardening roadmap/handoff (058383a)
+- add hardening roadmap to CLAUDE.md and HANDOFF.md (da7800b)
+- remove decompose from project-manager's roster row (8c213b7)
+- document the read-back mechanism and defer F046 (7202392)
+- flag F074 as out of scope for this repo's execution loop (5bec548)
+- refresh config defaults, README, and management skill (90be0bd)
+- dedupe Exit-section handoff content against step-handoff.md tables (F020) (160b6b3)
+- dedupe deterministic-checks.md and team-roles.md against their sources (F024, F025) (25faabe)
+- document the project story's lifecycle, wire in the close step (96ee74a)
+- unify the execute handoff path on handoffs/handoff-execute.md (0f88946)
+- rewrite execution-loop storyhook mutations to verb-first (9256ee3)
+- rewrite decompose flow to the real story decompose --stdin (905cc9a)
+- rewrite storyhook-contract.md to the real verb-first CLI (c525217)
+
+### Testing
+- add bash test suite and wire into make test (2681257)
+- guard state.json writers against non-atomic regressions (agentics#33) (2b7ad5a)
+- wire freshen's bats suite into make test (44661fb)
+- wire hook-guard and greenlight bats suites into make test (a0b4b27)
+- add mock-free bats suite covering the hardening fixes (4f31550)
+- add bats coverage for the breaker dedup/reset-gating fixes (dac994b)
+- add forge-agent-alignment-check regression guard (773bec5)
+- add contract-check regression guard for storyhook CLI drift (F103) (fe54262)
+- wire forge's bats suites into make test (787e35b)
+- use correct io.mikey reverse-DNS in example bundle id (42ec99c)
+
+_[manual]_
+
 ## [v2.23.2] - 2026-06-23
 
 ### Fixed

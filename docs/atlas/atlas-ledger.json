@@ -1,5 +1,5 @@
 {
-  "baseline": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+  "baseline": "402cc2be3b8bd0ca2adce0980dfed2d6e44427ba",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/4",
@@ -66,7 +66,7 @@
         "plugins/agents/agents/ux-designer-mobile.md": "5e69aab6a0ad62ccf0b8d2b06483faee6b176eb8",
         "plugins/agents/agents/ux-designer-web.md": "47d2ee61ac977b280271bab4bb2567c765db198b"
       },
-      "summary": "Three read-only platform-specific UX reviewer agents (CLI, mobile, web) each encoding that platform's native conventions and anti-patterns.",
+      "summary": "Three read-only platform-specific UX reviewer agents (CLI, mobile, web) encoding native conventions and anti-patterns.",
       "verified": null
     },
     "modules/plugins-agents-misc.md": {
@@ -748,7 +748,7 @@
         "docs/atlas/modules/plugins-agents-agents-chunk-1.md": "26f5baa88725df5adc0e9c78de7843ff9a1042e2",
         "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "ca030670e871f62db7b140b41cb28826dbcd952b",
         "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "54aaf6c336b4983457db178c8b30c16531f13d38",
-        "docs/atlas/modules/plugins-agents-agents-ux.md": "de1f2689e899aed6961aee3abb6a93089e88d8c3",
+        "docs/atlas/modules/plugins-agents-agents-ux.md": "c01f936bc20b66925ad2801c4be17e3161d9a289",
         "docs/atlas/modules/plugins-agents-misc.md": "7a5e6483138c4c4d55a8cd49e732deeab650ee5e",
         "docs/atlas/modules/plugins-agents-references.md": "1eff07f91f67d123c4f55dee199f6c493d81c8b2",
         "docs/atlas/modules/plugins-atlas-agent-overrides.md": "4d1dad48609393ef8311cfcbc65966b1bb38febe",
@@ -786,7 +786,7 @@
         "docs/atlas/modules/plugins-semver-misc.md": "2b9bb8f05faf9b7b8f5615e24562408c78740a8c",
         "docs/atlas/modules/plugins-semver-references.md": "4b2b4070f36c31d3319e895958f0ba44217b0cd1",
         "docs/atlas/modules/plugins-semver-tests.md": "653c83e67a1af752d331a47a189fd551a46ac643",
-        "docs/atlas/modules/root-misc.md": "0832754d388ed95606eba6fbd4fecf52c9e9276d",
+        "docs/atlas/modules/root-misc.md": "d5ae862eef59cab8700c004aaf86911622581939",
         "docs/atlas/modules/tests.md": "a38143ec06d116e409beaeca5821572afa5a34a1"
       },
       "summary": "System architecture and cross-module relationships",
@@ -2051,7 +2051,7 @@
     ]
   },
   "structure": {
-    "index_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+    "index_commit": "402cc2be3b8bd0ca2adce0980dfed2d6e44427ba",
     "index_digest": "sha256:caaab586d276cf35970db7f45c641004528cdbe053ced6741d579e58d22b8f4c",
     "symbols": {
       "plugins/atlas/bin/atlas-cli": [

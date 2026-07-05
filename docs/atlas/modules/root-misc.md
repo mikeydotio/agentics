@@ -20,7 +20,7 @@ sources:
   - path: docs/forge-workflow.md
     blob: 829219590927e60d40bc6b2e7d19bbedba22613d
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: 402cc2be3b8bd0ca2adce0980dfed2d6e44427ba
 ---
 
 # Module: root (misc)
@@ -48,7 +48,7 @@ root-misc is the repo's top-level wiring layer: .claude-plugin/marketplace.json 
 - Makefile:7 — the `test` target aggregates every plugin's suite; several targets (e.g. Makefile:11-16) gate on `command -v bats` before running.
 - AGENTS.md:45-47 — `.storyhook/` is deliberately excluded from .gitignore; it is committed, version-controlled project state, not ephemeral output.
 - .semver/config.yaml:1-7 — declares this repo's semver plugin settings (auto_bump, git_tagging, target_branch: main), consumed by the semver plugin rather than enforced here.
-- README.md:19-21 — spells out the contract for adding a new plugin: a `.claude-plugin/plugin.json` manifest, `skills/`/`commands/` directories, and a marketplace.json entry.
+- README.md:19-21 — spells out the contract for adding a new plugin: a `plugins/<name>/.claude-plugin/plugin.json` manifest, `skills/`/`commands/` directories, and a marketplace.json entry.
 
 ## External deps
 

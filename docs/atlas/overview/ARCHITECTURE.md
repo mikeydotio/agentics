@@ -9,7 +9,7 @@ sources:
   - path: docs/atlas/modules/plugins-agents-agents-chunk-3.md
     blob: 54aaf6c336b4983457db178c8b30c16531f13d38
   - path: docs/atlas/modules/plugins-agents-agents-ux.md
-    blob: de1f2689e899aed6961aee3abb6a93089e88d8c3
+    blob: c01f936bc20b66925ad2801c4be17e3161d9a289
   - path: docs/atlas/modules/plugins-agents-misc.md
     blob: 7a5e6483138c4c4d55a8cd49e732deeab650ee5e
   - path: docs/atlas/modules/plugins-agents-references.md
@@ -85,7 +85,7 @@ sources:
   - path: docs/atlas/modules/plugins-semver-tests.md
     blob: 653c83e67a1af752d331a47a189fd551a46ac643
   - path: docs/atlas/modules/root-misc.md
-    blob: 0832754d388ed95606eba6fbd4fecf52c9e9276d
+    blob: d5ae862eef59cab8700c004aaf86911622581939
   - path: docs/atlas/modules/tests.md
     blob: a38143ec06d116e409beaeca5821572afa5a34a1
 scopes:
@@ -94,20 +94,20 @@ scopes:
   - tree: .semver
     sha: 7bd57a20e51cccf5a5209419e6d8ecfa3e7ca7d6
   - tree: docs
-    sha: 1e663e6fa1ae5746a419ce34053924fe67ff4979
+    sha: 5a8992f38ff6376db1e45a4c551135ef85199d18
   - tree: plugins
     sha: a9041acb3126da245e17463fd7298388e1891c2d
   - tree: tests
     sha: a8d69b27c9cffe295e1efaa3ed7186d4fb6a5260
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: 402cc2be3b8bd0ca2adce0980dfed2d6e44427ba
 ---
 
 # Architecture
 
 ## System shape
 
-Agentics is a Claude Code plugin marketplace: `.claude-plugin/marketplace.json` registers eleven independently-versioned plugins (agents, atlas, council, deployit, forge, freshen, greenlight, handle-issue, hook-guard, rca, semver), each living under `plugins/<name>/` with its own `.claude-plugin/plugin.json` manifest. Within every plugin the same layered pattern repeats: a thin-router `SKILL.md` (one `AskUserQuestion` at a time) dispatches to deterministic `bin/` scripts — bash+jq or stdlib-only python3 CLIs emitting one JSON object with an `ok`+`display` contract — for anything computable, and to `references/*.md` protocol docs for detailed procedure, so the skill itself stays a router rather than a procedure. Judgment that can't be computed (module purpose, release notes, triage verdicts) is pushed into an optional fourth layer: `agent-overrides/<name>-context.md` files that narrow a generic shared-agent role to the plugin's own state and artifact contract.
+Agentics is a Claude Code plugin marketplace: `.claude-plugin/marketplace.json` registers eleven independently-versioned plugins (agents, atlas, council, deployit, forge, freshen, greenlight, handle-issue, hook-guard, rca, semver), each living under `plugins/<name>/` with its own `plugins/<name>/.claude-plugin/plugin.json` manifest. Within every plugin the same layered pattern repeats: a thin-router `SKILL.md` (one `AskUserQuestion` at a time) dispatches to deterministic `bin/` scripts — bash+jq or stdlib-only python3 CLIs emitting one JSON object with an `ok`+`display` contract — for anything computable, and to `references/*.md` protocol docs for detailed procedure, so the skill itself stays a router rather than a procedure. Judgment that can't be computed (module purpose, release notes, triage verdicts) is pushed into an optional fourth layer: `agent-overrides/<name>-context.md` files that narrow a generic shared-agent role to the plugin's own state and artifact contract.
 
 The one real code-sharing seam is `plugins/agents/agents/`, a library of self-contained agent spawn contracts (YAML frontmatter + role body) that forge, rca, atlas, and council all inline verbatim rather than importing at runtime — a consumer concatenates the shared agent file with its own override doc into one spawn prompt. Beyond that library, plugins are deliberately independent at the runtime-code level: deployit's CLI coordinates with semver only by discovering `semver-cli` as a subprocess (never an import), and atlas, forge, and rca each own a fully self-contained deterministic backend with no cross-plugin function calls. Large module-edge counts linking atlas/deployit bin scripts to the semver module are regex-extractor artifacts from common method-name collisions (`get`/`write`/`add`), not real call edges, and should not be read as runtime dependencies.
 

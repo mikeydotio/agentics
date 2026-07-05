@@ -1,6 +1,6 @@
 ---
 module: "plugins/agents/agents/ux*"
-summary: "Three read-only platform-specific UX reviewer agents (CLI, mobile, web) each encoding that platform's native conventions and anti-patterns."
+summary: "Three read-only platform-specific UX reviewer agents (CLI, mobile, web) encoding native conventions and anti-patterns."
 read_when: "Choosing or editing a platform-specific UX reviewer (CLI, mobile, or web)"
 sources:
   - path: plugins/agents/agents/ux-designer-cli.md
@@ -10,7 +10,7 @@ sources:
   - path: plugins/agents/agents/ux-designer-web.md
     blob: 47d2ee61ac977b280271bab4bb2567c765db198b
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: 402cc2be3b8bd0ca2adce0980dfed2d6e44427ba
 ---
 
 # Module: plugins/agents/agents/ux*

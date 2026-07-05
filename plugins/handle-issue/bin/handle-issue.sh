@@ -9,12 +9,14 @@
 #                        Emits {ok, count, repo, issues:[{number,title,url,
 #                        option:{label,description}}], display}. Side-effect free.
 #
-#   dispatch <n>         Open a new tmux window in the current session, `cd` it to
-#                        the repo root, launch `claude -w <n>` (the official
-#                        --worktree switch — creates a per-issue git worktree, so
-#                        it must run from a git-tracked location), gate on claude
-#                        becoming ready, send Shift+Tab twice (plan mode), then
-#                        type + submit the prompt.
+#   dispatch <n>         Open a new tmux window (named "<repo-prefix>-<n>", e.g.
+#                        "age-42") in the current session, `cd` it to the repo
+#                        root, launch `claude -w <n> --permission-mode plan` (the
+#                        official --worktree switch creates a per-issue git
+#                        worktree, so it must run from a git-tracked location;
+#                        --permission-mode plan starts the session in plan mode
+#                        deterministically, no keystrokes), gate on claude
+#                        becoming ready, then type + submit the prompt.
 #
 # ok-vs-warning boundary (dispatch): steps 0–4 are HARD preconditions — a failure
 # emits {ok:false} and exits before ANY side effect. From step 5 (the first
@@ -34,18 +36,20 @@ set -euo pipefail
 # ---- config (all env-overridable) -------------------------------------------
 GH="${HANDLE_ISSUE_GH_BIN:-gh}"
 LIST_LIMIT="${HANDLE_ISSUE_LIST_LIMIT:-50}"
-LAUNCH_TPL="${HANDLE_ISSUE_LAUNCH_CMD:-claude -w <n>}"
-PROMPT_TPL="${HANDLE_ISSUE_PROMPT:-/plan and propose a solution to close github issue #<n> in this repo}"
+LAUNCH_TPL="${HANDLE_ISSUE_LAUNCH_CMD:-claude -w <n> --permission-mode plan}"
+PROMPT_TPL="${HANDLE_ISSUE_PROMPT:-propose a solution to close github issue #<n> in this repo}"
+# New-window name. Default (computed in cmd_dispatch): first 3 alphanumerics of
+# the repo name, lowercased, + "-<n>" (e.g. "age-42"). Set this to override in
+# full; supports the <n> placeholder.
+WINDOW_NAME_TPL="${HANDLE_ISSUE_WINDOW_NAME:-}"
 BACKGROUND="${HANDLE_ISSUE_BACKGROUND:-}"
-# Readiness gate before Shift+Tab. Claude's TUI text is a version-specific
+# Readiness gate before typing the prompt. Claude's TUI text is a version-specific
 # implementation detail, so READY_PATTERN is permissive and overridable; the
 # fallback delay covers the case where the marker never matches.
 READY_PATTERN="${HANDLE_ISSUE_READY_PATTERN:-for shortcuts}"
 READY_ATTEMPTS="${HANDLE_ISSUE_READY_ATTEMPTS:-40}"
 READY_DELAY="${HANDLE_ISSUE_READY_DELAY:-0.25}"
 READY_FALLBACK_DELAY="${HANDLE_ISSUE_READY_FALLBACK_DELAY:-3}"
-# Settle after the two Shift+Tabs before typing the prompt.
-MODE_DELAY="${HANDLE_ISSUE_MODE_DELAY:-0.4}"
 # Prompt-submission confirm/resend bounds (freshen semantics).
 CONFIRM_ATTEMPTS="${HANDLE_ISSUE_CONFIRM_ATTEMPTS:-8}"
 CONFIRM_DELAY="${HANDLE_ISSUE_CONFIRM_DELAY:-0.3}"
@@ -205,25 +209,39 @@ cmd_dispatch() {
     fail "issue #$n is closed on $repo (set HANDLE_ISSUE_ALLOW_CLOSED=1 to dispatch anyway)."
   fi
 
+  # Compute the new-window name: "<repo-prefix>-<n>" (e.g. "age-42"), where the
+  # prefix is the first 3 alphanumerics of the repo name, lowercased. Fully
+  # overridable via HANDLE_ISSUE_WINDOW_NAME (supports the <n> placeholder).
+  local wname
+  if [ -n "$WINDOW_NAME_TPL" ]; then
+    wname=$(render_template "$WINDOW_NAME_TPL" "$n")
+  else
+    local repo_name pfx
+    repo_name="${repo##*/}"
+    pfx=$(printf '%s' "$repo_name" | tr -cd '[:alnum:]' | cut -c1-3 | tr '[:upper:]' '[:lower:]')
+    wname="${pfx}-${n}"
+  fi
+
   # Dry-run: all read-only checks above ran for real; emit the planned commands
   # and stop before any side effect.
   if [ -n "$DRY_RUN" ]; then
     jq -n \
       --arg issue "$n" --arg title "$title" --arg repo "$repo" --arg dir "$dir" \
-      --arg launch "$launch_cmd" --arg prompt "$prompt" '
+      --arg wname "$wname" --arg launch "$launch_cmd" --arg prompt "$prompt" '
       {
         ok: true, dry_run: true,
         issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
+        window_name: $wname,
         commands: [
-          ("tmux new-window -c " + $dir + " -P -F #{pane_id}"),
+          ("tmux new-window -c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
-          "tmux send-keys -t <pane> BTab BTab",
           ("tmux send-keys -t <pane> -l " + $prompt),
           "tmux send-keys -t <pane> Enter"
         ],
         display: ("[handle-issue] DRY RUN for #" + $issue + " (" + $title
-                  + "): would open a new tmux window in " + $dir + " and run the listed commands.")
+                  + "): would open a new tmux window named " + $wname + " in " + $dir
+                  + " and run the listed commands.")
       }'
     return 0
   fi
@@ -231,20 +249,29 @@ cmd_dispatch() {
   # Step 5: open the window (first side effect). Hard-fail is still safe here —
   # window creation is atomic; a failure leaves nothing to clean up.
   local new_window_args pane window
-  new_window_args=(-c "$dir" -P -F '#{pane_id}')
+  new_window_args=(-c "$dir" -n "$wname" -P -F '#{pane_id}')
   [ -n "$BACKGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
   if ! pane=$(tmux new-window "${new_window_args[@]}" 2>/dev/null) || [ -z "$pane" ]; then
     fail "failed to open a new tmux window."
   fi
   window=$(tmux display-message -p -t "$pane" '#{window_id}' 2>/dev/null || printf '')
 
+  # Pin the name: disable tmux's automatic-rename AND program-driven renames so
+  # "<repo-prefix>-<n>" survives claude setting its own terminal title. Do this
+  # before launching claude, so an early title escape can't win the race.
+  if [ -n "$window" ]; then
+    tmux set-window-option -t "$window" automatic-rename off 2>/dev/null || true
+    tmux set-window-option -t "$window" allow-rename off 2>/dev/null || true
+  fi
+
   # Step 6: launch claude (literal mode — the space/flag must not be key-interpreted).
   tmux send-keys -t "$pane" -l "$launch_cmd" 2>/dev/null || true
   tmux send-keys -t "$pane" Enter 2>/dev/null || true
 
-  # Step 7: readiness gate before Shift+Tab (claude -w also builds the worktree
-  # before its TUI renders, so this wait matters). One-shot — no retry cycle, so
-  # on miss we settle a fixed amount and proceed best-effort.
+  # Step 7: readiness gate before typing the prompt (claude -w also builds the
+  # worktree before its TUI renders, so this wait matters). One-shot — no retry
+  # cycle, so on miss we settle a fixed amount and proceed best-effort. Plan mode
+  # itself needs no gate: it's set by the --permission-mode plan launch flag.
   local readiness_confirmed=false
   if wait_ready "$pane" "$launch_cmd"; then
     readiness_confirmed=true
@@ -252,11 +279,7 @@ cmd_dispatch() {
     sleep "$READY_FALLBACK_DELAY"
   fi
 
-  # Step 8: plan mode — Shift+Tab twice (tmux key name BTab, sent key-interpreted).
-  tmux send-keys -t "$pane" BTab BTab 2>/dev/null || true
-  sleep "$MODE_DELAY"
-
-  # Step 9: type + submit the prompt, confirmed.
+  # Step 8: type + submit the prompt, confirmed.
   local prompt_confirmed=false
   if send_prompt_confirmed "$pane" "$prompt"; then
     prompt_confirmed=true
@@ -265,25 +288,27 @@ cmd_dispatch() {
   # Result. ok:true from here on; warn on any unconfirmed step.
   local warning="" display
   if [ "$readiness_confirmed" = true ] && [ "$prompt_confirmed" = true ]; then
-    display="[handle-issue] #$n ($title) → opened a new tmux window, launched \`$launch_cmd\`, switched to plan mode, and submitted the prompt."
+    display="[handle-issue] #$n ($title) → opened tmux window \`$wname\`, launched \`$launch_cmd\` (plan mode), and submitted the prompt."
   else
     if [ "$readiness_confirmed" = false ] && [ "$prompt_confirmed" = false ]; then
-      warning="Couldn't confirm claude finished starting, nor that the prompt submitted — check the new window."
+      warning="Couldn't confirm claude finished starting, nor that the prompt submitted — check window \`$wname\`."
     elif [ "$readiness_confirmed" = false ]; then
-      warning="Couldn't confirm claude finished starting before the plan-mode keys were sent, but the prompt did submit — verify plan mode is on in the new window."
+      warning="Couldn't confirm claude finished starting before the prompt was sent, but the prompt did submit — glance at window \`$wname\`."
     else
-      warning="claude started, but couldn't confirm the prompt submitted — check the new window."
+      warning="claude started, but couldn't confirm the prompt submitted — check window \`$wname\`."
     fi
-    display="[handle-issue] #$n ($title) → window opened, but I couldn't fully confirm the handoff. $warning"
+    display="[handle-issue] #$n ($title) → window \`$wname\` opened, but I couldn't fully confirm the handoff. $warning"
   fi
 
   jq -n \
-    --arg issue "$n" --arg title "$title" --arg window "$window" --arg pane "$pane" \
+    --arg issue "$n" --arg title "$title" --arg window "$window" --arg wname "$wname" \
+    --arg pane "$pane" \
     --argjson ready "$readiness_confirmed" --argjson pconf "$prompt_confirmed" \
     --arg warning "$warning" --arg display "$display" '
     {
       ok: true,
-      issue: ($issue | tonumber), title: $title, window: $window, pane: $pane,
+      issue: ($issue | tonumber), title: $title,
+      window: $window, window_name: $wname, pane: $pane,
       readiness_confirmed: $ready, prompt_confirmed: $pconf
     }
     + (if $warning == "" then {} else {warning: $warning} end)

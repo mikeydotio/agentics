@@ -65,15 +65,18 @@ Parse `ARGUMENTS` (everything after `/handle-issue`) and dispatch:
      was opened but the handoff (claude readiness and/or prompt submission) couldn't be fully
      confirmed, so the user should glance at the new window.
 
-On success the new window is now running `claude -w <number>` in a fresh worktree, in plan mode, with
-the prompt already submitted. Nothing further is needed from you.
+On success the new window (named `<repo-prefix>-<number>`, e.g. `age-42`) is now running
+`claude -w <number> --permission-mode plan` in a fresh worktree — in plan mode, with the prompt
+already submitted. Nothing further is needed from you.
 
 ## Notes
 
 - **Requires tmux** (the helper hard-fails with a clear `display` otherwise) and an **authenticated
   `gh`** CLI.
-- `claude -w <n>` and the `/plan …` prompt are sent verbatim and are overridable via
-  `HANDLE_ISSUE_LAUNCH_CMD` / `HANDLE_ISSUE_PROMPT` (see the README for all env knobs). Don't rewrite
-  them here — the helper owns that.
+- The launch command (`claude -w <n> --permission-mode plan`) and the prompt are sent verbatim and
+  overridable via `HANDLE_ISSUE_LAUNCH_CMD` / `HANDLE_ISSUE_PROMPT`; the window name is
+  `HANDLE_ISSUE_WINDOW_NAME` (see the README for all env knobs). Plan mode comes from the
+  `--permission-mode plan` flag — **not** a `/plan` prompt prefix (that would route to a `/plan`
+  skill like forge's planner). Don't rewrite these here — the helper owns them.
 - To preview what a dispatch *would* do without opening a window, the helper supports
   `HANDLE_ISSUE_DRY_RUN=1` (used by the tests); you generally won't need it interactively.

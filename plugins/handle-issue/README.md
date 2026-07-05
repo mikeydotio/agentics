@@ -2,9 +2,9 @@
 
 Turn "I want to work on issue #N" into a running, **plan-mode** Claude session in a **new tmux
 window**, launched inside a per-issue git **worktree** (`claude -w <n>`). Pick an issue by number
-or interactively from the repo's open issues; the plugin opens the window, `cd`s it to the repo
-root, launches Claude in a worktree, drops it into plan mode, and submits a prompt asking it to
-plan a fix — all in one command.
+or interactively from the repo's open issues; the plugin opens a window named `<repo-prefix>-<n>`
+(e.g. `age-42`), `cd`s it to the repo root, launches Claude in a worktree **directly in plan mode**
+(`--permission-mode plan`), and submits a prompt asking it to plan a fix — all in one command.
 
 ## When to use
 
@@ -48,11 +48,14 @@ With no number, you get a single question listing open issues (newest first). Pi
 2. **Dispatch** — `bin/handle-issue.sh dispatch <n>` runs a strict, ordered sequence:
    - Hard preconditions first (tmux present, inside a git repo, `gh` authenticated, the issue
      exists and is open) — any failure stops **before** anything is opened.
-   - `tmux new-window -c <repo-root>` — open the window and capture its pane id.
-   - Launch `claude -w <n>` (literal send + Enter).
+   - `tmux new-window -c <repo-root> -n <repo-prefix>-<n>` — open the window with a stable name
+     (`age-42`-style) and capture its pane id. tmux's `automatic-rename` and program-driven
+     `allow-rename` are turned **off** on the window so the name sticks even though Claude sets its
+     own terminal title.
+   - Launch `claude -w <n> --permission-mode plan` (literal send + Enter) — the `--permission-mode
+     plan` flag opens the session **in plan mode deterministically**, with no keystrokes.
    - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
-     worktree first), with a bounded fallback delay, so the next keystrokes aren't lost.
-   - `Shift+Tab` ×2 (`BTab BTab`) → **plan mode**.
+     worktree first), with a bounded fallback delay, so the prompt keystrokes aren't lost.
    - Type and submit the prompt, confirmed via a `capture-pane` read-back (resend if it never lands).
 3. The original pane shows a one-line status. If the handoff couldn't be fully confirmed, you get a
    `warning` telling you to glance at the new window.
@@ -66,8 +69,9 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `HANDLE_ISSUE_LAUNCH_CMD` | `claude -w <n>` | Command typed into the new window. `<n>` → issue number. |
-| `HANDLE_ISSUE_PROMPT` | `/plan and propose a solution to close github issue #<n> in this repo` | Prompt typed + submitted after plan mode. `<n>` → issue number. |
+| `HANDLE_ISSUE_LAUNCH_CMD` | `claude -w <n> --permission-mode plan` | Command typed into the new window. `<n>` → issue number. `--permission-mode plan` is what forces plan mode. |
+| `HANDLE_ISSUE_PROMPT` | `propose a solution to close github issue #<n> in this repo` | Prompt typed + submitted once Claude is ready. `<n>` → issue number. Deliberately has no `/plan` prefix. |
+| `HANDLE_ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window name. Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
 | `HANDLE_ISSUE_BACKGROUND` | _(unset)_ | Set to `1` to open the window with `-d` (don't switch focus to it). |
 | `HANDLE_ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
 | `HANDLE_ISSUE_LIST_LIMIT` | `50` | Max open issues fetched for the picker. |
@@ -75,14 +79,16 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `HANDLE_ISSUE_READY_PATTERN` | `for shortcuts` | Regex marking Claude's TUI as ready. TUI text is version-specific — override if it changes. |
 | `HANDLE_ISSUE_READY_ATTEMPTS` / `_READY_DELAY` | `40` / `0.25` | Readiness poll bound (≈10s). |
 | `HANDLE_ISSUE_READY_FALLBACK_DELAY` | `3` | Extra settle (seconds) if readiness never confirms. |
-| `HANDLE_ISSUE_MODE_DELAY` | `0.4` | Settle (seconds) after the two Shift+Tabs, before the prompt. |
 | `HANDLE_ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt-submission confirm/resend bounds. |
 | `HANDLE_ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 
-> **`claude -w <n>` and the `/plan …` prompt are sent verbatim.** `-w` is Claude Code's official
-> `--worktree` switch (creates a named per-issue worktree; only valid from a git-tracked location).
-> After the two Shift+Tabs the session is already in plan mode, so the leading `/plan` in the prompt
-> is largely cosmetic — drop it with `HANDLE_ISSUE_PROMPT` if you prefer.
+> **Plan mode is forced by the `--permission-mode plan` launch flag, not keystrokes.** `-w` is
+> Claude Code's official `--worktree` switch (creates a named per-issue worktree; only valid from a
+> git-tracked location), and `--permission-mode plan` opens the session in plan mode with no
+> `Shift+Tab` guesswork. That flag sets the *initial* mode only — you can still `Shift+Tab` out of
+> plan mode once you've approved the plan. The prompt intentionally does **not** begin with `/plan`:
+> that is a slash command that routes to a registered `/plan` skill (e.g. forge's planner), not
+> Claude's built-in plan mode.
 
 See `skills/handle-issue/SKILL.md` for the routing logic and `bin/handle-issue.sh` for the full
 dispatch sequence.

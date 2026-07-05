@@ -1,10 +1,10 @@
 ---
 module: plugins/council
-summary: "3-member sub-agent voting council that settles delegated judgment calls with a full audit trail"
-read_when: "Touching /council-vote, the council protocol, voting/IRV mechanics, or panel selection"
+summary: "Runs a 3-member sub-agent council — propose, vote, deliberate, IRV runoff — to decide judgment calls without the user."
+read_when: "Touching /council-vote, its protocol, voting/IRV mechanics, or panel rubric"
 sources:
   - path: plugins/council/.claude-plugin/plugin.json
-    blob: 95156c7eb1d88d3ec7cc6797b29c0dfc89913576
+    blob: 003228fc3037ddb7171323261c1ccc67754b0a96
   - path: plugins/council/README.md
     blob: 6fc77ba8523cf7262b3d0a8f9f79586464cefc62
   - path: plugins/council/references/archetypes.md
@@ -19,65 +19,35 @@ sources:
     blob: 43a7b337af2839fd895be747bc53d4b770be55e9
   - path: plugins/council/skills/council-vote/evals/evals.json
     blob: 1023d8902ccef3f0bbefb50eedbb9e92debe984d
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-ux, plugins-agents-references]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/council
 
 ## Purpose
 
-Settles delegated judgment calls so a mid-task agent need not guess silently or block on the user.
-The chair seats 3 shared archetypes: blind proposals, a vote, one deliberation round, IRV runoff.
-Every phase has a bounded exit; decisions persist to `.council/<slug>/` for later user override.
+The council plugin gives an agent a structured way to make an autonomous, defensible judgment call when the user is unavailable rather than guessing silently or blocking on AskUserQuestion (plugins/council/README.md:10-12). Its organizing idea is real deliberation at small scale: 3 archetypes drawn from the shared agent library propose independently, cast a single-choice vote, deliberate once if not unanimous, then run a ranked-choice (IRV) runoff with a chair tiebreaker used only when IRV cannot resolve (plugins/council/README.md:3-6; plugins/council/references/voting-mechanics.md:99-101). Without it, an orchestrating agent facing a genuine expertise tradeoff (interaction design, schema choices, dependency acceptance) has no bounded fallback short of interrupting the user or picking silently.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `council` | plugin manifest | `plugins/council/.claude-plugin/plugin.json:2` | Marketplace identity; declares the propose → vote → deliberate → ranked-runoff pipeline |
-| `council-vote` | skill | `plugins/council/skills/council-vote/SKILL.md:2` | Chair entry point, args `<question> [-- <context summary>]`; returns the fixed Phase-6 decision block plus the `.council/<slug>/DECISION.md` audit path |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `Council Protocol` | reference doc | `plugins/council/references/council-protocol.md:1` | Phase 0–6 runbook: every member prompt template, JSON reply shape, artifact format, and the exact caller-return template |
-| `Member response failures` | protocol | `plugins/council/references/council-protocol.md:410` | Lenient parse → one retry → abstain; two abstentions in one phase write `ABORT.md` and error out, never inventing a decision |
-| `Voting Mechanics` | reference doc | `plugins/council/references/voting-mechanics.md:1` | Round-1 plurality where only 3-0-0 ends early, then IRV with Borda-then-alphabetical elimination tiebreaks |
-| `Chair tiebreaker` | heuristic | `plugins/council/references/voting-mechanics.md:97` | Last resort when IRV stalls: reversibility cost → aggregate confidence → smallest scope → alphabetical |
-| `Team Composition` | reference doc | `plugins/council/references/team-composition.md:1` | Specialist + generalist + challenger seating rubric, worked example panels, council-stacking anti-patterns |
-| `Archetypes` | reference doc | `plugins/council/references/archetypes.md:1` | Members are shared-library archetypes, optionally focused per council via injected domain nuance |
-| `evals` | eval suite | `plugins/council/skills/council-vote/evals/evals.json:3` | Scenarios pin the unanimous short-circuit, forced deliberation + IRV, chair-tiebreak splits, and open questions |
 
 ## Relationships
 
-- `plugins-council.council-vote -> plugins-agents-references.agent-catalog.md (reads)`
-- `plugins-council.council-vote -> plugins-agents-agents-chunk-1.api-designer (calls)`
-- `plugins-council.council-vote -> plugins-agents-agents-chunk-2.skeptic (calls)`
-- `plugins-council.council-vote -> plugins-agents-agents-chunk-2.software-architect (calls)`
-- `plugins-council.council-vote -> plugins-agents-agents-ux.ux-designer-mobile (calls)`
-
 ## Type notes
 
-- Members reply in JSON only, one shape per phase: plugins/council/references/council-protocol.md:90
-- A/B/C proposal labels are stable across rounds: plugins/council/references/voting-mechanics.md:34
-- Members are read-only; they propose, never edit: plugins/council/references/archetypes.md:73
-- The chair tabulates and tiebreaks but never votes: plugins/council/skills/council-vote/SKILL.md:36
-- Dispatch fallback: general-purpose + pasted role: plugins/council/skills/council-vote/SKILL.md:118
-- `.council/<slug>/` collisions get -2/-3 suffix: plugins/council/skills/council-vote/SKILL.md:83
-- `.council/` is project-local and suggested for `.gitignore`: plugins/council/README.md:54
+The chair (the orchestrator skill) owns the entire .council/<slug>/ artifact directory end-to-end; it is created once, in Phase 0, and is never overwritten — a slug collision appends -2, -3, etc. until a free directory is found (plugins/council/references/council-protocol.md:13-14). Panel size is a hard invariant of exactly 3 seats, never resized up or down (plugins/council/skills/council-vote/SKILL.md:25-26). The chair never casts a ballot for the whole run — it only tabulates votes and applies a documented tiebreaker when IRV cannot resolve (plugins/council/references/voting-mechanics.md:4-6; plugins/council/skills/council-vote/SKILL.md:36-37). A member's abstention is a terminal per-phase state, not a retryable one: after one retry, a still-malformed response marks that seat abstaining for the rest of the phase (plugins/council/references/council-protocol.md:441-453), and two or more abstentions in a single phase terminates the whole council via ABORT.md instead of producing a decision (plugins/council/references/council-protocol.md:470-475).
 
 ## External deps
 
-- Claude Code `Agent` tool — sole member-dispatch mechanism; the council aborts without it
-- No third-party packages — the plugin is pure markdown and JSON
 
 ## Gotchas
 
-- Councils cannot nest — members are subagents: plugins/council/skills/council-vote/SKILL.md:58
-- Never dispatch members with `run_in_background`: plugins/council/skills/council-vote/SKILL.md:29
-- No Agent tool → ABORT.md, never a sequential fake: plugins/council/skills/council-vote/SKILL.md:53
-- Round-1 members never learn who else is seated: plugins/council/skills/council-vote/SKILL.md:139
+Council members cannot spawn their own sub-councils: a member is itself a subagent, so the Agent tool it would need typically isn't available to it, and it must decline (write ABORT.md) rather than fake a council with sequential self-reasoning (plugins/council/skills/council-vote/SKILL.md:53-58). The chair must never dispatch members with run_in_background — it needs all 3 responses in hand before it can tally a vote or write a round's artifact, so backgrounding would silently break phase sequencing (plugins/council/skills/council-vote/SKILL.md:27-30).

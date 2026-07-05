@@ -1,81 +1,47 @@
 ---
 module: "plugins/deployit (misc)"
-summary: "Plugin manifest plus the /deployit orchestrator skill that routes every command through the bin router"
-read_when: "Changing /deployit command surface, deploy/semver protocol, or router invocation rules"
+summary: "Deployit's plugin manifest and orchestrator skill: routes /deployit commands to the CLI and authors release notes."
+read_when: "Changing /deployit's command surface or router invocation rules"
 sources:
   - path: plugins/deployit/.claude-plugin/plugin.json
-    blob: 3a91c808b94584bbdad0de0e9a980992708382d5
+    blob: 2eff049c6c93c412c8eb5e408c858d53119bfd13
   - path: plugins/deployit/skills/deployit/SKILL.md
-    blob: 6f5e4ed5786f3753ad932aa63bfb154c7d09a060
-references_modules: [plugins-deployit-bin, plugins-deployit-references]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+    blob: 61ac326fd6cb8ef2020cec7f05b0a81db14896e4
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/deployit (misc)
 
 ## Purpose
 
-User-facing entry of the deployit plugin: `plugin.json` registers it in the marketplace, and the
-`/deployit` skill turns bootstrap/deploy/list/url/status/gc/redeploy into `deployit-router.sh`
-calls whose JSON verdicts it renders. The design idea is zero deploy logic in this layer; the
-skill only enforces protocol (router-only access, halt on `ok: false`, semver preflight before
-deploy, question replay via AskUserQuestion) and defers mechanics to the bin layer and platform
-detail to the references docs.
+This is deployit's front door: the plugin manifest declares its marketplace identity, and the SKILL.md orchestrator is the single entry point that routes every /deployit subcommand through bin/deployit-router.sh, never calling the CLI directly. Its purpose is to keep judgment that a deterministic CLI can't produce — authoring GitHub release notes from commit/issue history, walking the AskUserQuestion scheme/version-bump loops, deciding which repo layout won — in the LLM layer, while all deterministic work (archiving, signing, index writes, publishing) stays in the CLI it dispatches to. If this module vanished, /deployit would have no discoverable command surface, and the hard rules guarding destructive operations (never push the index repo from here, never call gh/deployit-release directly, require qualified gc/rm flags) would go unenforced at the orchestration layer.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `deployit` | plugin manifest | `plugins/deployit/.claude-plugin/plugin.json:2` | Marketplace-facing name; description advertises tailnet OTA deploys with semver awareness |
-| `deployit` | skill | `plugins/deployit/skills/deployit/SKILL.md:2` | `/deployit <cmd>` entry; every subcommand goes through the router and halts on `ok: false` |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `Hard rules` | protocol section | `plugins/deployit/skills/deployit/SKILL.md:17` | Routing, no-index-push, and version-ownership invariants binding every command |
-| `Question loop` | protocol section | `plugins/deployit/skills/deployit/SKILL.md:92` | Maps CLI `questions` through `flag_mapping`/`command_mapping`, then re-runs the router |
-| `Semver-aware deploy` | protocol section | `plugins/deployit/skills/deployit/SKILL.md:65` | Orders preflight, optional bump, then deploy so builds stay version-correct |
 
 ## Relationships
 
-- `plugins-deployit-misc.deployit -> plugins-deployit-bin.deployit-router.sh (calls)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.bootstrap.md (reads)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.ios.md (reads)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.macos.md (reads)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.sparkle.md (reads)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.semver.md (reads)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.tailscale-serve.md (reads)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.troubleshooting.md (reads)`
-- `plugins-deployit-misc.deployit -> plugins-deployit-references.visionos.md (reads)`
-
 ## Type notes
 
-- Show router `display` and stop when `ok` is false (plugins/deployit/skills/deployit/SKILL.md:20)
-- Only the CLI pushes to the index repo (plugins/deployit/skills/deployit/SKILL.md:21)
-- `preflight`/`bump` are internal to `deploy` only (plugins/deployit/skills/deployit/SKILL.md:88)
-- A failed `bump` halts deploy; no stale versions (plugins/deployit/skills/deployit/SKILL.md:84)
-- Builds archive from the fresh release commit (plugins/deployit/skills/deployit/SKILL.md:89)
-- Semver gate: host `tracking: true` + `VERSION` file (plugins/deployit/skills/deployit/SKILL.md:27)
-- Semver display never edits `MARKETING_VERSION` (plugins/deployit/skills/deployit/SKILL.md:29)
-- `CFBundleVersion` bumping is the host repo's job (plugins/deployit/skills/deployit/SKILL.md:22-24)
-- Apps-layout beats single-app when both match (plugins/deployit/skills/deployit/SKILL.md:45)
-- `redeploy` calls `deployit-router.sh`, which internally runs `plugins/deployit/tests/verify-live.sh`; the skill never calls verify-live.sh directly (plugins/deployit/skills/deployit/SKILL.md:61)
+- Ownership boundary: the orchestrator only routes and authors prose; it must never call deployit-cli directly and never pushes to the index repo itself — both are the CLI's job (plugins/deployit/skills/deployit/SKILL.md:21-23).
+- Release ownership split: for macOS, the orchestrator's only job is authoring release notes text passed via --release-notes-file; it must never call gh or bin/deployit-release, or create tags/releases directly — the CLI owns publishing (plugins/deployit/skills/deployit/SKILL.md:33-36).
+- Destructive-op invariants: gc requires --keep N or --older-than D, and rm requires --build ID or --product BUNDLE_ID --platform P — neither may run unqualified (plugins/deployit/skills/deployit/SKILL.md:63-68).
+- redeploy's lifecycle role: it is the only command that refreshes the daemon's stable symlinks and verifies the live endpoint via tests/verify-live.sh, and must be re-run after every change to plugins/deployit/ since _healthz alone doesn't confirm new code is live (plugins/deployit/skills/deployit/SKILL.md:69-74).
+- Deploy sequencing invariant: preflight, bump, and release-context are internal sub-steps of deploy, run in a fixed order and never invoked directly by users (plugins/deployit/skills/deployit/SKILL.md:114-117).
 
 ## External deps
 
-- Xcode — archive/export of signed builds (performed by the CLI layer, not the skill)
-- Tailscale Serve — serves staged builds; every deploy ends at a tailnet URL
-- launchd — daemon plist rewrite + kickstart during bootstrap and redeploy
-- GitHub repo `mikeydotio/deployit-index` — shared cross-machine deploy listing
-- AskUserQuestion (Claude Code tool) — one question per call for bump and scheme picks
 
 ## Gotchas
 
-- `gc` requires `--keep N` or `--older-than D` (plugins/deployit/skills/deployit/SKILL.md:57)
-- Layout-detect failure usually means wrong cwd (plugins/deployit/skills/deployit/SKILL.md:54)
-- Re-run `bootstrap` after plugin version changes (plugins/deployit/skills/deployit/SKILL.md:41)
-- Run `redeploy` after every change to this plugin (plugins/deployit/skills/deployit/SKILL.md:62)
-- `_healthz` alone doesn't prove new code is live (plugins/deployit/skills/deployit/SKILL.md:63)
+- Hard rule 4 hardcodes a specific host app in an otherwise generic plugin: build-number bumping stays "the host repo's responsibility," naming Lillist's `Tools/Deploy/bump-build-number.sh` Archive pre-action as the mechanism the plugin depends on but doesn't own (plugins/deployit/skills/deployit/SKILL.md:24-26).
+- Layout detection is not surfaced to the user: when both Apps-layout and single-app-layout signals are present in a repo, Apps-layout silently wins with no warning (plugins/deployit/skills/deployit/SKILL.md:51).
+- `MARKETING_VERSION`/`PRODUCT_BUNDLE_IDENTIFIER` parsing must tolerate both quoted and unquoted forms in project.yml, an explicit compatibility carve-out in the orchestrator's own detection notes (plugins/deployit/skills/deployit/SKILL.md:58-59).

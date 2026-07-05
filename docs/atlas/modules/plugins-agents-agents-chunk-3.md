@@ -1,78 +1,41 @@
 ---
 module: "plugins/agents/agents (chunk 3)"
-summary: "Forge quality-gate tail of the shared agent library — validator hardens tests, triager routes findings"
+summary: "Forge's triager (FIX/ESCALATE/DEFER triage) and validator (no-mock test hardening) agent definitions."
 read_when: "Touching forge triage/validate steps or the triager/validator agent contracts"
 sources:
   - path: plugins/agents/agents/triager.md
     blob: 4b91a0e95e560c1a4e48e6bee8d3ddd3ad2561d7
   - path: plugins/agents/agents/validator.md
     blob: e85b72f785ded4cdb4b1965161c2dd2abad5047f
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2]
-generator: cartographer/2
-baseline: 65c6f5e8e65713af63741fbe8d498384f530200e
-verified: true
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/agents/agents (chunk 3)
 
 ## Purpose
 
-Alphabetical tail of the shared agent library: the two forge quality-gate agents that close the
-pipeline's review/validate → triage loop. validator hardens the implemented codebase's test suite
-to production readiness; triager adjudicates every reviewer/validator finding into FIX, ESCALATE,
-or DEFER so the orchestrator knows what to auto-fix versus hand to a human. Both are
-`pipeline-specific` tier distillations of general-purpose agents, wired by declared lineage.
+This module defines forge's two decision-quality gate agents: triager (plugins/agents/agents/triager.md) turns reviewer and validator findings into calibrated FIX, ESCALATE, or DEFER verdicts through severity re-calibration, scope checking, systemic-impact assessment, and mandatory security elevation; validator (plugins/agents/agents/validator.md) hardens the test suite itself, enforcing a no-mock policy, an 11-category edge-case taxonomy, and requirement-to-test coverage mapping. Together they form forge's final quality gate before deploy — validator raises the bar the implementation must clear, and triager decides which remaining gaps the pipeline may auto-fix versus which need a human decision. Without them, forge's fix loop would have no systematic way to separate a trivial auto-fixable finding from one needing human judgment, and no mechanism for closing test-coverage or no-mock gaps beyond ad hoc test writing.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `triager` | agent | `plugins/agents/agents/triager.md:2` | Read-only adjudicator; emits TRIAGE.md with a FIX/ESCALATE/DEFER verdict plus rationale for every finding; decides, never implements (`plugins/agents/agents/triager.md:195`) |
-| `validator` | agent | `plugins/agents/agents/validator.md:2` | Write-capable test hardener; emits VALIDATE-REPORT.md plus new tests (`plugins/agents/agents/validator.md:23`); reports implementation bugs as findings, never fixes them |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `Batch Consolidation` | triage protocol | `plugins/agents/agents/triager.md:129` | Findings sharing a root cause merge into one verdict; TRIAGE.md consumers must expect a Consolidations section |
-| `Decision Rules` | decision matrix | `plugins/agents/agents/triager.md:78` | Severity × fix-scope × config matrix; CRITICAL security always ESCALATEs; `when_in_doubt`/`yolo_mode` read from `.forge/config.json` (`plugins/agents/agents/triager.md:31`) shift thresholds |
-| `Edge Case Taxonomy` | checklist | `plugins/agents/agents/validator.md:67` | 11 edge-case categories swept per tested component, prioritized by relevance, not applied exhaustively |
-| `No-Mock Policy` | testing protocol | `plugins/agents/agents/validator.md:53` | Mocking the system under test is itself a finding; only external services may be mocked, fakes preferred |
 
 ## Relationships
 
-- `plugins-agents-agents-chunk-3.triager -> plugins-agents-agents-chunk-2.reviewer (reads)`
-- `plugins-agents-agents-chunk-3.triager -> plugins-agents-agents-chunk-3.validator (reads)`
-- `plugins-agents-agents-chunk-3.triager -> plugins-agents-agents-chunk-2.project-manager (extends)`
-- `plugins-agents-agents-chunk-3.triager -> plugins-agents-agents-chunk-2.security-researcher (extends)`
-- `plugins-agents-agents-chunk-3.triager -> plugins-agents-agents-chunk-2.skeptic (extends)`
-- `plugins-agents-agents-chunk-3.triager -> plugins-agents-agents-chunk-2.software-architect (extends)`
-- `plugins-agents-agents-chunk-3.validator -> plugins-agents-agents-chunk-1.accessibility-engineer (extends)`
-- `plugins-agents-agents-chunk-3.validator -> plugins-agents-agents-chunk-1.data-engineer (extends)`
-- `plugins-agents-agents-chunk-3.validator -> plugins-agents-agents-chunk-2.performance-engineer (extends)`
-- `plugins-agents-agents-chunk-3.validator -> plugins-agents-agents-chunk-2.qa-engineer (extends)`
-- `plugins-agents-agents-chunk-3.validator -> plugins-agents-agents-chunk-2.security-researcher (extends)`
-- `plugins-forge-skills.triage -> plugins-agents-agents-chunk-3.triager (calls)`
-- `plugins-forge-skills.validate -> plugins-agents-agents-chunk-3.validator (calls)`
-- `plugins-forge-agent-overrides.triager-context -> plugins-agents-agents-chunk-3.triager (extends)`
-- `plugins-forge-agent-overrides.validator-context -> plugins-agents-agents-chunk-3.validator (extends)`
-
 ## Type notes
 
-- Both pin `tier: pipeline-specific` and `pipeline: forge` (`plugins/agents/agents/triager.md:6`).
-- Mirrored pins for validator (`plugins/agents/agents/validator.md:6`).
-- triager tools are Read, Grep, Glob — read-only by grant (`plugins/agents/agents/triager.md:4`).
-- validator adds Write, Edit, Bash to write and run tests (`plugins/agents/agents/validator.md:4`).
-- Both Read every `<files_to_read>` file before any action (`plugins/agents/agents/triager.md:19`).
-- Guardrails: 2000-line output cap, 3-retry tool cap (`plugins/agents/agents/triager.md:196`).
-- validator must rerun the full suite after adding tests (`plugins/agents/agents/validator.md:210`).
+triager is read-only (plugins/agents/agents/triager.md:8) with tools limited to Read, Grep, Glob (plugins/agents/agents/triager.md:4) and explicitly no Write/Edit access (plugins/agents/agents/triager.md:195) — TRIAGE.md is persisted by the orchestrator from its returned verdict, not by the agent. validator is read-write (plugins/agents/agents/validator.md:8) with Write, Edit, and Bash access (plugins/agents/agents/validator.md:4) and both writes tests and edits its own report directly. Both carry tier: pipeline-specific, pipeline: forge (plugins/agents/agents/triager.md:6-7, plugins/agents/agents/validator.md:6-7), i.e. each is spawned once per pipeline run at forge's respective triage and validate steps, not general-purpose. triager's decision framework is config-driven rather than a static rule table: it branches on `.forge/config.json`'s when_in_doubt and yolo_mode fields (plugins/agents/agents/triager.md:31, plugins/agents/agents/triager.md:96-100), so the same finding can route to FIX or ESCALATE differently across runs depending on pipeline configuration. validator's write scope is bounded by an explicit invariant: never delete existing tests unless truly worthless — assertion-free or testing deleted code (plugins/agents/agents/validator.md:216) — and never fix implementation bugs, only report them as findings (plugins/agents/agents/validator.md:203).
 
 ## External deps
 
-- None. Both files are markdown agent prompts; no packages or frameworks are touched.
 
 ## Gotchas
 
-- Verdicts are tri-state: ADVISORY can DEFER (`plugins/agents/agents/triager.md:94`).
-- `yolo_mode` flips triage to FIX-everything (`plugins/agents/agents/triager.md:99`).
-- validator never fixes bugs it finds — findings only (`plugins/agents/agents/validator.md:203`).
+triager's Mission says it must "Produce a TRIAGE.md" (plugins/agents/agents/triager.md:23), but its Guardrails state "You have NO Write or Edit tools" (plugins/agents/agents/triager.md:195) — it never writes the file itself; the orchestrator persists TRIAGE.md from the agent's returned decision. validator's "No test skipping" guardrail (plugins/agents/agents/validator.md:205) coexists with an explicit env-var skip mechanism for its own new tests (plugins/agents/agents/validator.md:147-149) — the ban targets skipping existing tests to force a pass, not gating new tests on missing credentials.

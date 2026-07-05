@@ -1,7 +1,7 @@
 ---
 module: plugins/semver/tests
-summary: "Mock-free bash harness driving semver's real hook runner, CLI, and router in throwaway /tmp git repos"
-read_when: "Adding or debugging semver tests, or reusing the source-and-discover bash harness"
+summary: "Bats-free bash test harness exercising semver-cli, semver-router.sh, and run-user-hooks.sh against throwaway git repos."
+read_when: "Adding or debugging semver tests, or reusing the bash test harness"
 sources:
   - path: plugins/semver/tests/helpers/setup.sh
     blob: 087a4482effea86118a5f541d909d1cd5bef1045
@@ -27,77 +27,35 @@ sources:
     blob: ce9972d43cf214b0de434a2bc86094b05c1ecbef
   - path: plugins/semver/tests/test-router.sh
     blob: 9981ff4600c847f5fdafc76be727dd5375d49606
-references_modules: [plugins-semver-hooks, plugins-semver-misc]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/semver/tests
 
 ## Purpose
 
-Mock-free suite for the semver plugin: every test builds a throwaway git repo under /tmp and
-drives the real hook runner, Python CLI, and router, asserting on JSON output and on-disk
-effects. The harness is framework-free bash — test files are sourced, `test_*` functions are
-discovered and run in isolated subshells — and `simulate_bump` re-enacts the skill's bump flow
-against the real runner.
+This is the semver plugin's own automated test suite: a self-rolled, bats-free bash harness (helpers/setup.sh + run-tests.sh) that discovers and runs `test_*` functions from each test-*.sh file against throwaway git repos built in /tmp. It exercises every executable surface of the semver plugin end-to-end — bin/semver-cli's JSON commands (current, validate, bump gather/execute/run/first-version, tracking start/stop-gather/stop-execute/restore-tags, auto-bump start/stop, repair diagnose/execute, recommend), bin/semver-router.sh's argument routing, and hooks/run-user-hooks.sh's pre-bump/post-bump discovery, ordering, failure handling, PROMPT_HOOK.md passthrough, and reentrancy guard. Losing this module would remove the only verification that the semver JSON contract (ok/executed/questions/display fields) and the hook lifecycle actually behave as documented, leaving regressions to surface only against a real user's repo.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `add_feature_commit` | function | `plugins/semver/tests/helpers/setup.sh:66` | Commits one file to a fixture repo; message arg optional |
-| `assert_eq` | function | `plugins/semver/tests/helpers/setup.sh:173` | Equality assertion |
-| `assert_exit_code` | function | `plugins/semver/tests/helpers/setup.sh:251` | Exit-code equality assertion |
-| `assert_file_contains` | function | `plugins/semver/tests/helpers/setup.sh:201` | Asserts the pattern greps in the file |
-| `assert_file_exists` | function | `plugins/semver/tests/helpers/setup.sh:227` | Asserts the path is a regular file |
-| `assert_file_not_contains` | function | `plugins/semver/tests/helpers/setup.sh:214` | Inverse of `assert_file_contains` |
-| `assert_file_not_exists` | function | `plugins/semver/tests/helpers/setup.sh:239` | Inverse of `assert_file_exists` |
-| `assert_json_field` | function | `plugins/semver/tests/helpers/setup.sh:264` | Asserts `jq -r <field>` of a JSON string equals expected |
-| `assert_ne` | function | `plugins/semver/tests/helpers/setup.sh:188` | Inequality assertion |
-| `cleanup_test_repo` | function | `plugins/semver/tests/helpers/setup.sh:101` | `rm -rf` of a fixture repo; refuses paths outside `/tmp/semver-test-*` |
-| `create_hook_script` | function | `plugins/semver/tests/helpers/setup.sh:74` | Writes an executable user hook into the fixture's `.semver/hooks/<phase>/` |
-| `create_prompt_hook` | function | `plugins/semver/tests/helpers/setup.sh:91` | Writes the fixture's `.semver/hooks/<phase>/PROMPT_HOOK.md` verbatim |
-| `create_test_repo` | function | `plugins/semver/tests/helpers/setup.sh:27` | Hook-suite fixture: seeded repo (config, VERSION, CHANGELOG, tag); echoes its path |
-| `run-tests.sh` | script | `plugins/semver/tests/run-tests.sh:1` | Entry point; optional arg substring-filters test files; exit code is the failure count |
-| `sed_inplace` | function | `plugins/semver/tests/helpers/setup.sh:19` | BSD/GNU-portable in-place sed via a temp file |
-| `simulate_bump` | function | `plugins/semver/tests/helpers/setup.sh:114` | Re-enacts the skill's bump flow; reports via `SIM_EXIT_CODE` and `SIM_RESULT_*` globals |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `run_test_file` | function | `plugins/semver/tests/run-tests.sh:26` | Harness core: sources a file, finds `test_*` via `declare -F`, runs each in a `set -e` subshell, unsets after |
-| `create_semver_repo` | function | `plugins/semver/tests/test-cli.sh:9` | CLI-grade fixture (main branch, `git_tagging: true`); duplicated in the display-questions and router test files |
-| `_make_tracked_repo` | function | `plugins/semver/tests/test-bump-run.sh:12` | Self-contained copy of the CLI fixture so the file is independent of source order |
-| `RUNNER` | variable | `plugins/semver/tests/helpers/setup.sh:6` | Path to the hook runner under test; hook tests invoke `bash "$RUNNER" <phase> <type> <old> <new> <repo>` |
 
 ## Relationships
 
-- `plugins-semver-tests.RUNNER -> plugins-semver-hooks.run-user-hooks.sh (calls)`
-- `plugins-semver-tests.CLI -> plugins-semver-misc.semver-cli (calls)`
-- `plugins-semver-tests.ROUTER -> plugins-semver-misc.semver-router.sh (calls)`
-- `plugins-semver-tests.run-tests.sh -> plugins-semver-tests.setup.sh (calls)`
-
 ## Type notes
 
-- Pass = exit 0 from a `set -e` subshell (plugins/semver/tests/run-tests.sh:47)
-- Fixtures live in `/tmp/semver-test-*` mktemp dirs (plugins/semver/tests/helpers/setup.sh:29)
-- Each test frees its repo via a RETURN trap (plugins/semver/tests/test-cli.sh:63)
-- Assertions print FAIL detail and return 1 (plugins/semver/tests/helpers/setup.sh:181)
-- `simulate_bump` returns 0; check `SIM_EXIT_CODE` (plugins/semver/tests/helpers/setup.sh:144)
-- `simulate_bump` clears `SEMVER_BUMP_IN_PROGRESS` (plugins/semver/tests/helpers/setup.sh:138)
+Fixture repos are ephemeral: create_test_repo/create_semver_repo mktemp a fresh /tmp/semver-test-XXXXXX git repo per test (plugins/semver/tests/helpers/setup.sh:27-29, duplicated per test file), and each test_* function installs `trap "cleanup_test_repo '$repo'" RETURN` so the repo is deleted when the function returns regardless of pass or fail. Global counters PASS_COUNT/FAIL_COUNT/FAIL_NAMES are declared in helpers/setup.sh:10-12 but never incremented anywhere in this module — the real pass/fail bookkeeping lives in run-tests.sh's own TOTAL_PASS/TOTAL_FAIL/ALL_FAILURES (plugins/semver/tests/run-tests.sh:17-20), so those setup.sh globals are vestigial. Each test_* function is executed in its own subshell for isolation (`output=$( set -e; "$func" 2>&1 )`, plugins/semver/tests/run-tests.sh:44-49), but the test file itself is sourced straight into the runner's process, so any non-test_ helper it defines is shared, mutable, process-lifetime state across the whole run (see gotchas). SEMVER_BUMP_IN_PROGRESS is the reentrancy invariant this module verifies throughout: hooks/run-user-hooks.sh must exit 2 with status "blocked" when it is already set (plugins/semver/tests/test-hook-reentrancy.sh:4-19, plugins/semver/tests/test-integration.sh:136-162), and helpers/setup.sh's simulate_bump clears it before each real invocation (plugins/semver/tests/helpers/setup.sh:138,163) so the harness's own environment can't false-positive that guard.
 
 ## External deps
 
-- jq — parses all JSON assertions; required (plugins/semver/tests/run-tests.sh:79)
-- git — fixture repos, commits, tags; required (plugins/semver/tests/run-tests.sh:84)
 
 ## Gotchas
 
-- Test files are sourced — top-level code runs at load (plugins/semver/tests/run-tests.sh:37)
-- Only functions are unset between files; variables persist (plugins/semver/tests/run-tests.sh:66)
-- Duplicated `create_semver_repo` defs: last sourced wins (plugins/semver/tests/test-router.sh:10)
-- `PASS_COUNT`/`FAIL_NAMES` are never read (plugins/semver/tests/helpers/setup.sh:10)
-- Fixture creators `cd` and rely on subshell isolation (plugins/semver/tests/helpers/setup.sh:31)
+sed_inplace() (plugins/semver/tests/helpers/setup.sh:19-23) edits through a temp file instead of `sed -i` specifically to dodge the BSD-vs-GNU `-i` flag incompatibility (comment at plugins/semver/tests/helpers/setup.sh:16-18). cleanup_test_repo() (plugins/semver/tests/helpers/setup.sh:101-106) refuses to `rm -rf` unless the path matches `/tmp/semver-test-*`, a deliberate guard against deleting an unrelated directory if a caller passes a bad `$repo`. simulate_bump() explicitly clears `SEMVER_BUMP_IN_PROGRESS=""` before invoking the real runner (plugins/semver/tests/helpers/setup.sh:138 and :163) so the harness's own shell env can never leak a stale reentrancy guard into the simulated flow. run-tests.sh sources every test-*.sh file directly into its own process (plugins/semver/tests/run-tests.sh:37) and afterward unsets only the discovered `test_*` functions (plugins/semver/tests/run-tests.sh:64-67) — any other helper a test file defines persists into later files, and the assumption that every file's copy is kept identical has already slipped: `create_semver_repo` is independently redefined in test-cli.sh:9, test-display-questions.sh:9, and test-router.sh:10, and test-router.sh's copy diverges — it omits the `# Initial commit` and `# Initialize semver config` comments the other two carry immediately before the same commands (test-cli.sh:18,23 and test-display-questions.sh:18,23; the corresponding commands sit at test-router.sh:19,23 with no preceding comment). The drift is currently inert only because `test-router.sh` sorts last among run-tests.sh's alphabetically-globbed test-*.sh files (plugins/semver/tests/run-tests.sh:90) and nothing sourced afterward calls `create_semver_repo`; a new test file that sorted after "router" and called it would silently inherit the drifted, comment-stripped body instead of the two files' matching one. test-router.sh also recomputes its own `PLUGIN_ROOT`/`ROUTER` at file scope (plugins/semver/tests/test-router.sh:5-6), silently overwriting the `PLUGIN_ROOT` global helpers/setup.sh already set (plugins/semver/tests/helpers/setup.sh:5) — harmless only because both resolve to the same plugin directory from their respective depths.

@@ -1,102 +1,47 @@
 ---
 module: plugins/atlas/references
-summary: "Normative canon for atlas — design rationale, map file format, full-map and update orchestration, CLAUDE.md delivery"
-read_when: "Changing atlas behavior, map format, orchestration steps, or the CLAUDE.md block"
+summary: "Normative design record, map/doc format spec, and orchestration protocols for atlas v2's structure/judgment projection."
+read_when: "Changing atlas's map format, protocols, or the CLAUDE.md injection contract"
 sources:
   - path: plugins/atlas/references/claude-md-injection.md
     blob: fb192f9f878111762ca863b12091dfe9036eeef8
-  - path: plugins/atlas/references/design.md
-    blob: 1118f1110cc0a449eade71b70e89bee7c8920669
+  - path: plugins/atlas/references/design-v2.md
+    blob: 78893a72badc8b26aec2ad2e7a20582a0e91a73b
   - path: plugins/atlas/references/map-format.md
     blob: 180d8e724e10e9bfe42a4a9b314fb2c15eb6c9ee
   - path: plugins/atlas/references/mapping-protocol.md
-    blob: f30f8a4c53ebc6b4998ade19b59e99d545010e3e
+    blob: 574b60d5b22e025b7bc34f165cbdb2fadc0b74c4
   - path: plugins/atlas/references/update-protocol.md
-    blob: e4ea365fd75652c4dd8a1e782f2e16042c728cd4
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-chunk-2, plugins-atlas-agent-overrides]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+    blob: 7fbd5134f7bb12ed427d613759adb4ed0c593213
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/atlas/references
 
 ## Purpose
 
-The atlas plugin's written constitution, split by authority: design.md records the locked
-decisions and their rationale, map-format.md prescribes the exact shape of every file atlas
-writes, mapping-protocol.md sequences the full-map run, update-protocol.md sequences the
-incremental update and verify flows, and claude-md-injection.md specifies
-delivery into a project's CLAUDE.md. Agents receive these docs by reference in
-`<files_to_read>` at spawn time, so editing this module changes mapper behavior without
-touching any code. Without it the pipeline has no normative format, no step ordering, and no
-injection contract.
+This is atlas's normative rulebook: design-v2.md is the authoritative design record justifying every architectural decision (extraction, judgment keying, projection, staleness tiers), while map-format.md, mapping-protocol.md, update-protocol.md, and claude-md-injection.md are the executable specs the /atlas skill dispatches to and that lint, cartographer, and map-verifier are held accountable against. The one idea holding it together: the skill stays a thin router precisely because these docs carry every detailed procedure and format rule out of it. If this module vanished, the orchestrator would have no step-by-step protocol to follow, cartographers would have no format contract to write cells against, and the rationale behind judgment-key derivation and staleness tiers would be lost.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `Atlas Design Record` | doc | `plugins/atlas/references/design.md:1` | Locked decisions, invalidation rationale, staleness tiers, atlas-cli surface, partitioning + new-file assignment specs |
-| `Atlas Map Format` | doc | `plugins/atlas/references/map-format.md:1` | Normative shape of everything atlas writes; wins over agent instinct when they disagree |
-| `CLAUDE.md Managed Block` | doc | `plugins/atlas/references/claude-md-injection.md:1` | Marker-delimited block carrying the `@docs/atlas/INDEX.md` import; inject/remove are idempotent |
-| `Full-Map Protocol` | doc | `plugins/atlas/references/mapping-protocol.md:1` | Step-ordered `/atlas map` run: agents write docs, the CLI does the deterministic work |
-| `Incremental Update Protocol` | doc | `plugins/atlas/references/update-protocol.md:1` | Step-ordered `/atlas update` run; unchanged docs never reach an LLM; includes the read-only `/atlas verify` and surgical `/atlas repair` flows |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `<!-- atlas:index-facts -->` | marker | `plugins/atlas/references/map-format.md:201` | Overview block extracted verbatim into the INDEX; spends the INDEX's 7,000-char budget |
-| `<!-- atlas:start -->` | marker | `plugins/atlas/references/claude-md-injection.md:11` | Managed-block delimiter; `init` and `remove` key on the exact marker pair |
-| `Failure discipline` | section | `plugins/atlas/references/mapping-protocol.md:140` | Every abort path releases the lock; a map that fails lint is never committed; never `git add -A` |
-| `Generator fingerprint` | section | `plugins/atlas/references/map-format.md:234` | Prompt-version + model stamp; a bump marks every doc fingerprint-stale on the next ledger diff |
-| `Partitioning algorithm` | section | `plugins/atlas/references/design.md:170` | Deterministic partitioning keeps module identity — and therefore doc identity — stable |
-| `Staleness tiers` | section | `plugins/atlas/references/design.md:108` | T0–T3 trust ladder; the T3 "disregard the imported INDEX" suppression is load-bearing, not polish |
-| `Step order is load-bearing` | rule | `plugins/atlas/references/update-protocol.md:10` | Verify before overview, wave A before ripple wave B, every mutation before the final finalize |
 
 ## Relationships
 
-- `plugins-atlas-references.claude-md-injection -> plugins-atlas-chunk-2.atlas-cli (reads)`
-- `plugins-atlas-references.mapping-protocol -> plugins-agents-agents-chunk-1.cartographer (reads)`
-- `plugins-atlas-references.mapping-protocol -> plugins-agents-agents-chunk-2.map-verifier (reads)`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-chunk-2.atlas-router.sh (calls)`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-agent-overrides.cartographer-context (reads)`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-agent-overrides.map-verifier-context (reads)`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-references.map-format (reads)`
-- `plugins-atlas-references.update-protocol -> plugins-agents-agents-chunk-1.cartographer (reads)`
-- `plugins-atlas-references.update-protocol -> plugins-agents-agents-chunk-2.map-verifier (reads)`
-- `plugins-atlas-references.update-protocol -> plugins-agents-agents-chunk-2.map-repairer (reads)`
-- `plugins-atlas-references.update-protocol -> plugins-atlas-agent-overrides.map-repairer-context (reads)`
-- `plugins-atlas-references.update-protocol -> plugins-atlas-references.mapping-protocol (reads)`
-
 ## Type notes
 
-Authority is asymmetric by design. For map content, map-format.md wins over agent instinct
-(plugins/atlas/references/map-format.md:6); for the managed block, `CLAUDE_MD_BLOCK` inside
-the CLI is canonical and the doc only records it
-(plugins/atlas/references/claude-md-injection.md:25).
-Frontmatter ownership is split: cartographers write `module`, `summary`, `read_when`,
-`sources` (paths only), and `references_modules`; `ledger finalize` adds `blob`, `baseline`,
-`verified`, and normalizes `generator` (plugins/atlas/references/map-format.md:38).
-Full-map step order is load-bearing: verification precedes the overview pass because
-`ledger set-verified` rewrites module-doc frontmatter that the overview's ledger entries hash
-(plugins/atlas/references/mapping-protocol.md:8).
-The repair flow (update-protocol.md §R0–R8) differs from update: driven by verify findings,
-not the ledger diff; uses map-repairer (targeted Edit) instead of cartographer (full
-re-derivation); `ledger finalize --except <drift-ids>` keeps drift docs flagged after body
-fixes (plugins/atlas/references/update-protocol.md:314).
-Design lineage: the no-PID heartbeat lock adopts the forge plugin's session-locking rationale
-(plugins/atlas/references/design.md:29); the marker-block pattern follows the semver plugin
-(plugins/atlas/references/claude-md-injection.md:4).
+design-v2.md is authoritative over the retired v1 design.md, whose content is folded into its own 'v1 base' section rather than kept as a separate file (plugins/atlas/references/design-v2.md:499-501). map-format.md declares itself normative over an agent's own instinct when the two disagree (plugins/atlas/references/map-format.md:5-6). claude-md-injection.md defers ownership of the literal block text to bin/atlas-cli's CLAUDE_MD_BLOCK constant, treating itself as descriptive only (plugins/atlas/references/claude-md-injection.md:25-26). Both orchestration protocols encode a load-bearing step order rather than free ordering: /atlas map requires project before finalize before index rebuild, with init before finalize whenever CLAUDE.md or .gitignore is a mapped source (plugins/atlas/references/mapping-protocol.md:9-13), and /atlas update repeats the identical constraint (plugins/atlas/references/update-protocol.md:10-11).
 
 ## External deps
 
-- git plumbing — blob-SHA invalidation (`ls-tree`, `hash-object`) that the design record relies on
-- Claude Code `@import` — INDEX delivery uses the native CLAUDE.md import; readers need no plugin
 
 ## Gotchas
 
-- Changing map-format.md or the cartographer prompt without a generator-version bump freezes
-  stale docs in place (plugins/atlas/references/map-format.md:239)
-- INDEX.md and atlas-ledger.json conflicts are resolved by rebuilding, never hand-merged;
-  `merge=union` corrupts map files (plugins/atlas/references/map-format.md:230)
+claude-md-injection.md documents bin/atlas-cli's CLAUDE_MD_BLOCK constant but is not itself the source of truth: 'If they ever diverge, the CLI is authoritative' (plugins/atlas/references/claude-md-injection.md:25-26) — editing this doc alone never changes injected content. design-v2.md notes an explicit `--backend treesitter` request with no helper installed does NOT error; it still produces a valid index with `degraded: true`, 'a tested, first-class mode, not an error' (plugins/atlas/references/design-v2.md:106-108).

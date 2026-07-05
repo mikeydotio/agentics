@@ -1,75 +1,46 @@
 ---
 module: "plugins/agents (misc)"
-summary: "Operational shell of the agent library — plugin manifest, /agents skill, structural validator"
-read_when: "Adding agents, changing the agent frontmatter contract, or wiring /agents commands"
+summary: "Plugin manifest, /agents command router, and structural validator for the shared agent library."
+read_when: "Changing the /agents command, plugin manifest, or agent validation script"
 sources:
   - path: plugins/agents/.claude-plugin/plugin.json
-    blob: 8fa7bcc60a0b4c3dd5f7c74cb556a69f1a97a76d
+    blob: 6d447cb61fd79ef91e025f9122558b0a2225a4d4
   - path: plugins/agents/bin/validate-agents.sh
     blob: ce55f55b8ac86af01f2fde7f9cad4ee9e6f7c9f6
   - path: plugins/agents/skills/agents/SKILL.md
     blob: a124fbbf7f5ad088ee35819abd2a57d151497678
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-agents-agents-ux, plugins-agents-references]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/agents (misc)
 
 ## Purpose
 
-Operational shell for the shared agent library: plugin manifest, `/agents` skill, and validator.
-Agent definitions are data; this module is the machinery that publishes and polices them.
-Remove it and the library is uninstallable and its frontmatter contract goes unenforced.
+This is the agents plugin's own housekeeping layer, not the agent definitions themselves: the plugin.json manifest that registers the shared library as an installable plugin (plugins/agents/.claude-plugin/plugin.json), the /agents skill that lets a user list, describe, or validate the catalog (plugins/agents/skills/agents/SKILL.md), and validate-agents.sh, the structural linter that enforces the shared agent frontmatter contract (required fields, name/filename match, no duplicate names, read-only/tool consistency) across plugins/agents/agents/. Without it the shared library would have no plugin identity, no user-facing entry point, and no automated guard against frontmatter drift in the agent definitions other plugins depend on.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `agents` | plugin manifest | `plugins/agents/.claude-plugin/plugin.json:2` | Declares the `agents` plugin; description is the marketplace-facing summary of the library |
-| `agents` | skill | `plugins/agents/skills/agents/SKILL.md:2` | User entry `/agents`; routes `list`, `describe <name>`, and `validate` subcommands |
-| `validate-agents.sh` | bash script | `plugins/agents/bin/validate-agents.sh:2` | Structural gate for agent definitions; run from repo root; exits 1 on any failed check |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `AGENTS_DIR` | variable | `plugins/agents/bin/validate-agents.sh:7` | Scan root (`plugins/agents/agents`) — the validator's whole scope in one assignment |
-| `ERRORS` | variable | `plugins/agents/bin/validate-agents.sh:8` | Failure accumulator; non-zero forces exit 1 at `plugins/agents/bin/validate-agents.sh:139` |
-| `SEEN_NAMES` | variable | `plugins/agents/bin/validate-agents.sh:29` | Newline-separated registry behind the duplicate-name check; bash-3.2-safe by design |
-| `fail` | function | `plugins/agents/bin/validate-agents.sh:15` | Sole `ERRORS` increment; every fatal check funnels through it |
-| `yellow` | function | `plugins/agents/bin/validate-agents.sh:13` | WARN channel — prints without touching `ERRORS`, so warn checks never fail the run |
 
 ## Relationships
 
-- `plugins-agents-misc.agents -> plugins-agents-misc.validate-agents.sh (calls)`
-- `plugins-agents-misc.agents -> plugins-agents-references.agent-catalog.md (reads)`
-- `plugins-agents-misc.validate-agents.sh -> plugins-agents-agents-chunk-1.api-designer (reads)`
-- `plugins-agents-misc.validate-agents.sh -> plugins-agents-agents-chunk-2.investigator (reads)`
-- `plugins-agents-misc.validate-agents.sh -> plugins-agents-agents-chunk-3.triager (reads)`
-- `plugins-agents-misc.validate-agents.sh -> plugins-agents-agents-ux.ux-designer-cli (reads)`
-
 ## Type notes
 
-The validator globs every `plugins/agents/agents/*.md` (plugins/agents/bin/validate-agents.sh:31).
-Chunk edges above name one representative each; the scan covers the whole agent library.
-`/agents describe <name>` reads agent files directly, per plugins/agents/skills/agents/SKILL.md:19.
-The required-field check at plugins/agents/bin/validate-agents.sh:52 makes missing fields fatal.
-Fields: name, description, tools, color, tier, read_only, tags.
-`read_only: true` forbids Write/Edit in tools (plugins/agents/bin/validate-agents.sh:78).
-Also fatal: name=filename, unique names, `<role>` tags, Guardrails, Mandatory Initial Read.
-Missing Anti-Patterns or Output Format only warns (plugins/agents/bin/validate-agents.sh:113).
-Underscore-prefixed files are skipped, not validated (plugins/agents/bin/validate-agents.sh:35).
+- This module owns the plugin's identity, entry command, and lint tooling only — the agent definitions it validates and describes live in the sibling plugins/agents/agents/ directory, not here; validate-agents.sh sets AGENTS_DIR to that sibling path rather than owning the files itself (plugins/agents/bin/validate-agents.sh:7).
+- Files in plugins/agents/agents/ named with a leading underscore (templates, shared guardrails) are structurally excluded from the per-agent checks, not just skipped by convention (plugins/agents/bin/validate-agents.sh:34-35).
+- The frontmatter contract this module enforces requires exactly name, description, tools, color, tier, read_only, and tags on every non-underscore agent file (plugins/agents/bin/validate-agents.sh:52).
+- read_only: true is a cross-checked invariant, not just documentation: the validator fails any read-only agent whose tools still lists Write or Edit (plugins/agents/bin/validate-agents.sh:74-86).
 
 ## External deps
 
-- bash — kept bash-3.2 compatible (macOS system bash); runs under `set -euo pipefail`
-- BSD/GNU text tools — grep, sed, head, basename via portable flags only
 
 ## Gotchas
 
-- No associative arrays: macOS ships bash 3.2 (comment at plugins/agents/bin/validate-agents.sh:28).
-- `head -n -1` is avoided as GNU-only (comment at plugins/agents/bin/validate-agents.sh:49).
-- The opening `---` must be line 1 of an agent file (plugins/agents/bin/validate-agents.sh:42).
-- The check summary at plugins/agents/skills/agents/SKILL.md:25 is a subset; trust the script.
+validate-agents.sh deliberately avoids two GNU/bash-4+ conveniences for macOS portability: it dedupes agent names with a newline-separated string instead of an associative array because macOS ships bash 3.2 (plugins/agents/bin/validate-agents.sh:28), and it strips the frontmatter's closing `---` with `sed '$d'` instead of `head -n -1`, which is GNU-only (plugins/agents/bin/validate-agents.sh:48).

@@ -1,89 +1,60 @@
 ---
 module: "root (misc)"
-summary: "Repo wiring layer — marketplace plugin registry, agent instructions, pre-push test gate, artifact conventions"
+summary: "Root-level scaffolding: marketplace registry, semver version-sync hook, storyhook workflow, and the Makefile test gate."
 read_when: "Registering/installing plugins, changing root agent instructions, or wiring make test"
 sources:
   - path: .claude-plugin/marketplace.json
-    blob: 974cf2ed0e780503f38268b18bdc85848a2105be
-  - path: .gitignore
-    blob: a9bf4882e230d3761b915e566cecfb49630a25af
+    blob: 8983722750c9678a0bf735be6b5ee0d125346978
   - path: .semver/config.yaml
     blob: 34a5c2bfa206393f2256834b5bd999e9aec3f077
+  - path: .semver/hooks/post-bump/01-sync-plugin-versions.sh
+    blob: 29c1f99416d5f42410c2da7ea59165ed979b2c80
   - path: AGENTS.md
     blob: 04fef50d2517e57a411f7f23a09af90a44b24dba
-  - path: CLAUDE.md
-    blob: 370157c29cb3943526846444e4b0fa46dbef6e56
+  - path: HANDOFF.md
+    blob: 907df53e9f7c3f6e449693c13adab0e710396e13
   - path: Makefile
-    blob: b183c37836c8dbbcc10676db66113d62dad41652
+    blob: 86d01957167ef956d6163991028118168240dc2b
   - path: README.md
     blob: 5f28be43c59b3bb49b0976dc3199d42abfee9fea
   - path: docs/forge-workflow.md
     blob: 829219590927e60d40bc6b2e7d19bbedba22613d
-references_modules: [plugins-agents-misc, plugins-atlas-chunk-1, plugins-atlas-tests-chunk-1, plugins-council, plugins-deployit-misc, plugins-deployit-tests-chunk-1, plugins-forge-misc, plugins-freshen, plugins-greenlight, plugins-hook-guard, plugins-rca, plugins-semver-misc, plugins-semver-tests, tests]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: root (misc)
 
 ## Purpose
 
-Declarative wiring — the files that bind independently developed plugins into one marketplace.
-marketplace.json is the sole registry; CLAUDE.md and AGENTS.md are the agent instruction surface.
-The Makefile is the lone pre-push test gate; .gitignore splits ephemeral from committed artifacts.
+root-misc is the repo's top-level wiring layer: .claude-plugin/marketplace.json is the sole registry binding independently developed plugins into one installable marketplace, while .semver/config.yaml plus its post-bump sync hook keep every plugin manifest's version field in lockstep with the single repo VERSION. AGENTS.md mandates the storyhook task-tracking workflow every agent must follow, the Makefile is the sole pre-push test-aggregation gate, and HANDOFF.md/docs/forge-workflow.md carry cross-cutting project status and the forge autonomous-pipeline narrative. If these files vanished, plugins would stop being discoverable/installable, manifest versions would drift silently apart, and there would be no single test gate or shared task-tracking discipline tying the plugins together.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `plugins` | JSON array | `.claude-plugin/marketplace.json:8` | Registry of installable plugins; each entry binds a name and description to a `plugins/` source dir |
-| `test` | make target | `Makefile:7` | Aggregate gate the global pre-push hook runs; must cover every headless plugin suite (`Makefile:2`) |
-| `test-atlas` | make target | `Makefile:24` | Runs `plugins/atlas/tests/run-tests.sh` |
-| `test-deployit` | make target | `Makefile:21` | Runs `plugins/deployit/tests/run-tests.sh` |
-| `test-root-bats` | make target | `Makefile:11` | Runs `tests/run-tests.sh` when bats-core is installed; otherwise skips with a notice |
-| `test-semver` | make target | `Makefile:18` | Runs `plugins/semver/tests/run-tests.sh` |
 
 ## Load-bearing internals
 
-None — declarative JSON/YAML/markdown with no internal symbols that clear the ranking bar.
+| Symbol | Kind | Location | Why it matters |
+| --- | --- | --- | --- |
 
 ## Relationships
 
-- `root-misc.marketplace.json -> plugins-agents-misc.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-atlas-chunk-1.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-council.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-deployit-misc.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-forge-misc.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-freshen.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-greenlight.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-hook-guard.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-rca.plugin.json (owns)`
-- `root-misc.marketplace.json -> plugins-semver-misc.plugin.json (owns)`
-- `root-misc.test-atlas -> plugins-atlas-tests-chunk-1.run-tests.sh (calls)`
-- `root-misc.test-deployit -> plugins-deployit-tests-chunk-1.run-tests.sh (calls)`
-- `root-misc.test-root-bats -> tests.run-tests.sh (calls)`
-- `root-misc.test-semver -> plugins-semver-tests.run-tests.sh (calls)`
-
 ## Type notes
 
-- Adding a plugin requires registering it in marketplace.json (checklist at `CLAUDE.md:41-46`).
-- Installs resolve via `/plugin install <name>@agentics` against this manifest (`README.md:8-14`).
-- Ephemeral plugin state is gitignored: .freshen/, .rca/, .forge/ runtime files (`.gitignore:13-23`).
-- .storyhook/ and .planning/ are version-controlled project data — never ignore them (`.gitignore:10`).
-- .forge/config.json, plan-mapping.json, handoffs/, and fix-cycles/ stay committed (`.gitignore:22`).
-- .semver/config.yaml carries the semver plugin's settings (auto_bump, git_tagging, target_branch).
-- `CLAUDE.md:76` forbids editing .semver/config.yaml unless the user explicitly asks.
-- `AGENTS.md:5-27` mandates the storyhook loop for every agent: context, next, done, handoff.
+- .claude-plugin/marketplace.json:3-4 — the top-level `version` field is the marketplace-wide source of truth; every plugin.json's `version` is derived one-way from it and never read back (.semver/hooks/post-bump/01-sync-plugin-versions.sh:12-14).
+- .semver/hooks/post-bump/01-sync-plugin-versions.sh:13-24,103 — runs in two auto-detected modes (bump vs standalone) keyed off the `SEMVER_BUMP_IN_PROGRESS`/`NEW_VERSION` env vars; only bump mode touches git history.
+- Makefile:7 — the `test` target aggregates every plugin's suite; several targets (e.g. Makefile:11-16) gate on `command -v bats` before running.
+- AGENTS.md:45-47 — `.storyhook/` is deliberately excluded from .gitignore; it is committed, version-controlled project state, not ephemeral output.
+- .semver/config.yaml:1-7 — declares this repo's semver plugin settings (auto_bump, git_tagging, target_branch: main), consumed by the semver plugin rather than enforced here.
+- README.md:19-21 — spells out the contract for adding a new plugin: a `.claude-plugin/plugin.json` manifest, `skills/`/`commands/` directories, and a marketplace.json entry.
 
 ## External deps
 
-- storyhook — `story` CLI and MCP server for task tracking; the workflow is mandated by `AGENTS.md:3`
-- bats-core — optional runner for the root bats suite; absence skips it (`Makefile:12-16`)
-- tmux — hard requirement for freshen and all hook-based context clearing (`CLAUDE.md:37`)
 
 ## Gotchas
 
-- `CLAUDE.md:48-77` is a `<!-- semver:start -->` managed block — change it via /semver, not by hand.
-- `docs/forge-workflow.md:145-156` and `CLAUDE.md:31` describe different forge pipelines — verify first.
-- `make test` passes even without bats: the root suite skips with a notice (`Makefile:12-16`).
+- .semver/hooks/post-bump/01-sync-plugin-versions.sh:107-115 (safety rationale at 18-20) — in bump mode the hook amends the just-created release commit and force-moves its tag (`git tag -f`); safe only because that tag was created seconds earlier in the same run and has not yet been pushed.
+- Makefile:12-16, and the same pattern repeated at 41-45, 51-55, 61-65, 72-76 — every bats-based suite silently degrades to a printed skip notice when bats-core isn't installed, so a green `make test` doesn't guarantee those suites actually ran.
+- AGENTS.md:45-47 — explicitly instructs NOT to gitignore `.storyhook/`; a deliberate exception to typical ephemeral-state-directory hygiene that's easy to violate out of habit.

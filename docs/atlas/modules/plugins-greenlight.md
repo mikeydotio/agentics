@@ -1,89 +1,53 @@
 ---
 module: plugins/greenlight
-summary: "PreToolUse safety hook — three-tier Bash triage (deterministic allow/warn, AI fallback), per-mode disable"
-read_when: "Touching tool-call safety gating, greenlight.sh, its config schema, or /greenlight"
+summary: "PreToolUse safety hook: deterministic allow/pass classification for Bash commands, plus opt-in AI fallback."
+read_when: "Touching greenlight's Bash safety classification, config, or AI fallback"
 sources:
   - path: plugins/greenlight/.claude-plugin/plugin.json
-    blob: 39246c09c4ec5c21d786408baba172052a1ad9a3
+    blob: f516a7786908f799018609019e9d0d443d168cc9
   - path: plugins/greenlight/README.md
-    blob: fe1fff6a447754c8f4ff1e3b567c65571a36490d
+    blob: f930f291dc43f3be2ed0c5e0f98ea7e0b5980f09
   - path: plugins/greenlight/hooks/greenlight.sh
-    blob: 72653a429b3e20e77fb1d40d892faa5388aa960b
+    blob: 5a77823c3f947ef5d5dac09ef16812c5d6a4a5a3
   - path: plugins/greenlight/hooks/hooks.json
     blob: 20cc2c86286ac87e52943958af770264e327a86c
   - path: plugins/greenlight/references/default-config.yaml
-    blob: e11bc45103e37cde5cf05ffa1f95aa0e5763c30e
+    blob: 1c182fe5713da064d5dbc48c3025f7a62d47b23f
   - path: plugins/greenlight/skills/greenlight/SKILL.md
-    blob: 248805d9ec6de9e782e2b43f02d02ba0018640a4
-references_modules: []
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+    blob: 19c7e050709dc297261ce74a7f43fb9c744f6600
+  - path: plugins/greenlight/tests/greenlight.bats
+    blob: 7a121dd25715b00fa222ce3e59a12ce93ecc75a0
+  - path: plugins/greenlight/tests/run-tests.sh
+    blob: fb724aa07154a6df7e529601a4e6374ee0eed7ce
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/greenlight
 
 ## Purpose
 
-Advisory safety triage for every Bash tool call, evaluated before Claude Code's permission prompt.
-Tiers: deterministic allow (known readonly), warn-and-pass (known destructive), AI for the rest.
-Fail-open by design — it can allow or defer but never deny; every failure path is a silent exit 0.
+greenlight is a PreToolUse hook that gates every Bash tool call through a three-tier decision pipeline (plugins/greenlight/hooks/greenlight.sh:1-20): deterministic allow for 150+ known-safe commands (plugins/greenlight/hooks/greenlight.sh:253-346), deterministic pass-with-warning for known-destructive ones (plugins/greenlight/hooks/greenlight.sh:353-406), and an opt-in Claude Haiku fallback for genuinely uncertain commands (plugins/greenlight/hooks/greenlight.sh:1151-1258). It exists so an autonomous inner loop (e.g. forge's execute step, called out by name in plugins/greenlight/README.md:5 and the story/git fast-path comments at plugins/greenlight/hooks/greenlight.sh:332-343) can run git/test/build commands without a human present for every call, while still surfacing genuine destructiveness (rm, sudo, chmod) for confirmation. Config is a flat YAML file bootstrapped from references/default-config.yaml on first run and re-read on every invocation, so behavior changes take effect without restarting Claude Code (plugins/greenlight/hooks/greenlight.sh:29-38, 70-87).
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `/greenlight` | skill | `plugins/greenlight/skills/greenlight/SKILL.md:2` | Config manager: status, enable/disable per mode, mode, ai, model, allow/block/unallow/unblock, test, log, reset |
-| `PreToolUse` | hook registration | `plugins/greenlight/hooks/hooks.json:4` | Runs greenlight.sh on every tool call; its 20s timeout bounds the run, AI call included |
-| `config.yaml` | config schema | `plugins/greenlight/references/default-config.yaml:2` | Flat `key: value` contract at `~/.config/greenlight/config.yaml`, re-read per call; seeded from this template on first run and reset |
-| `greenlight` | plugin manifest | `plugins/greenlight/.claude-plugin/plugin.json:2` | Marketplace identity for the deterministic-parse + AI-fallback safety hook |
-| `greenlight` | hook script | `plugins/greenlight/hooks/greenlight.sh:3` | stdin tool-call JSON → `permissionDecision: allow` JSON, `additionalContext` warning, or silent exit 0 — never deny |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `ai_check` | function | `plugins/greenlight/hooks/greenlight.sh:1060` | Anthropic API fallback returning `{answer, rationale}`; true → warn, false → allow (rationale surfaced); failure → silent pass |
-| `allow` | function | `plugins/greenlight/hooks/greenlight.sh:83` | Terminal emitter trio with `pass_with_context` and `pass_silent`; every decision exits through one |
-| `extract_cmd_subs` | function | `plugins/greenlight/hooks/greenlight.sh:1219` | Pulls inner commands out of `$()`/backticks (nested-paren aware) so substitutions get analyzed instead of blanket-passed |
-| `get_cmd_name` | function | `plugins/greenlight/hooks/greenlight.sh:170` | Base-command extraction — strips `env`/`time` prefixes, `VAR=val` assignments, and path prefixes before lookup |
-| `is_always_safe` | function | `plugins/greenlight/hooks/greenlight.sh:203` | Case-statement database of unconditionally readonly commands; the deterministic ALLOW tier |
-| `is_known_destructive` | function | `plugins/greenlight/hooks/greenlight.sh:291` | Always-destructive database; `destructive_reason` (plugins/greenlight/hooks/greenlight.sh:330) supplies the warning text |
-| `is_safe_segment` | function | `plugins/greenlight/hooks/greenlight.sh:935` | Tri-state classifier (safe/uncertain/destructive): custom lists, then databases, then the per-tool `is_safe_*` family dispatched at plugins/greenlight/hooks/greenlight.sh:989 |
-| `read_config` | function | `plugins/greenlight/hooks/greenlight.sh:52` | grep+sed flat-YAML reader; the whole config contract rests on single-line `key: value` pairs |
-| `split_segments` | function | `plugins/greenlight/hooks/greenlight.sh:1175` | Quote-aware awk splitter on `\|\|` `&&` `\|` `;` — makes the segment, not the command, the unit of analysis |
 
 ## Relationships
 
-- `plugins-greenlight.hooks.json -> plugins-greenlight.greenlight.sh (calls)`
-- `plugins-greenlight.greenlight.sh -> plugins-greenlight.default-config.yaml (reads)`
-- `plugins-greenlight.SKILL.md -> plugins-greenlight.greenlight.sh (calls)`
-- `plugins-greenlight.SKILL.md -> plugins-greenlight.default-config.yaml (reads)`
-
 ## Type notes
 
-- Disabled-mode gate runs before all analysis: plugins/greenlight/hooks/greenlight.sh:111
-- Ships disabled only in bypassPermissions: plugins/greenlight/references/default-config.yaml:8
-- Read/Glob/Grep/WebFetch/WebSearch auto-allow: plugins/greenlight/hooks/greenlight.sh:125
-- Only Bash is analyzed; Write/Edit untouched: plugins/greenlight/skills/greenlight/SKILL.md:168
-- File-write redirections short-circuit to silent pass: plugins/greenlight/hooks/greenlight.sh:162
-- custom_allow wins first; custom_pass forces warn: plugins/greenlight/hooks/greenlight.sh:944
-- Any destructive segment → warn; AI never consulted: plugins/greenlight/hooks/greenlight.sh:1319
-- strict mode never calls AI; uncertain defers: plugins/greenlight/hooks/greenlight.sh:1327
-- Unset ANTHROPIC_API_KEY skips AI → silent pass: plugins/greenlight/hooks/greenlight.sh:1064
-- Process substitution stays blanket-uncertain: plugins/greenlight/hooks/greenlight.sh:1306
+Stateless per-invocation: the hook is a fresh bash process for every PreToolUse event, reading all input from stdin once with no persistent state across calls (plugins/greenlight/hooks/greenlight.sh:22). User config at ~/.config/greenlight/config.yaml is auto-initialized by copying the bundled references/default-config.yaml only when absent, then never overwritten by the hook itself (plugins/greenlight/hooks/greenlight.sh:35-38). The three-way verdict of is_safe_segment (0=safe, 1=uncertain, 2=known-destructive) travels as the function's bash exit code, but the offending command name travels separately through a shared mutable global, DESTRUCTIVE_CMD, set inside is_safe_segment and read by the caller after the call returns (plugins/greenlight/hooks/greenlight.sh:1024, 1045, 1055-1071). The decision helpers allow/pass_with_context/pass_silent each call exit 0 directly (plugins/greenlight/hooks/greenlight.sh:101-120), so the unconditional 'pass to normal permission system' at the script's tail (plugins/greenlight/hooks/greenlight.sh:1444-1445) is reached only when no earlier helper fired.
 
 ## External deps
 
-- jq — all JSON parsing and decision emission: plugins/greenlight/README.md:56
-- curl — carries the AI fallback HTTP call: plugins/greenlight/README.md:57
-- awk — quote-aware splitting and per-tool subcommand extraction
-- Anthropic Messages API — json_schema verdict call: plugins/greenlight/hooks/greenlight.sh:1094
 
 ## Gotchas
 
-- `permissive` = `standard`; CFG_MODE only read at plugins/greenlight/hooks/greenlight.sh:1326
-- Lenient checks promised at plugins/greenlight/references/default-config.yaml:13 do not exist
-- `terraform state` always safe — dead guard arm at plugins/greenlight/hooks/greenlight.sh:696
-- `helm repo` likewise always safe — dead guard at plugins/greenlight/hooks/greenlight.sh:727
-- Skill snippets use GNU-only `sed -i` syntax: plugins/greenlight/skills/greenlight/SKILL.md:52
+A quoted '>' or '->' inside a string argument (e.g. a commit message 'refactor: rename A -> B') used to be misdetected as real shell redirection; strip_quoted_spans() now strips quoted spans before the redirection grep runs (plugins/greenlight/hooks/greenlight.sh:174-213). A known-destructive command nested inside $(...) or backticks used to collapse into the generic 'uncertain' bucket, losing its destructive warning; the command-substitution loop now checks each inner segment's exit code for the destructive value (2) explicitly rather than treating any nonzero result as merely uncertain (plugins/greenlight/hooks/greenlight.sh:1388-1398). Config-file edits use a mktemp+sed+mv rewrite instead of `sed -i`, because BSD sed's `-i` requires a backup-suffix argument and silently misparses the GNU-style invocation (plugins/greenlight/skills/greenlight/SKILL.md:51-56, 70-75). The bats test helper builds hook input JSON with `jq -n` rather than string-interpolating into an unquoted heredoc, because an earlier draft's heredoc re-expanded a test payload's own $(...) and actually executed a destructive rm -rf instead of merely describing it to the hook (plugins/greenlight/tests/greenlight.bats:24-33).

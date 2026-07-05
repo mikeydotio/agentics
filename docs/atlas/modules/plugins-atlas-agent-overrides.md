@@ -1,71 +1,48 @@
 ---
 module: plugins/atlas/agent-overrides
-summary: "Atlas-specific overlays narrowing shared agents (cartographer, map-verifier, map-repairer) to atlas pipeline rules"
-read_when: "Changing atlas agent behavior, spawn constraints, or repair/verify protocols"
+summary: "Atlas-specific constraint docs inlined into the shared cartographer, map-repairer, and map-verifier agent prompts."
+read_when: "Changing atlas agent spawn constraints or repair/verify protocols"
 sources:
   - path: plugins/atlas/agent-overrides/cartographer-context.md
-    blob: ef2975f57a95977b1c47f8c18566ccb38bb0d0ed
+    blob: fc4f2dac45212adc185ba26bb90a67669edd8244
   - path: plugins/atlas/agent-overrides/map-repairer-context.md
     blob: 36b934944b5b80ae623280af602c4f7bed9a241a
   - path: plugins/atlas/agent-overrides/map-verifier-context.md
-    blob: 7233cde0eb20367f4f0bd64eed2858d387df7839
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-atlas-references]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+    blob: 1c84c8d01c0082d460cd0676e51d252d3bea628e
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/atlas/agent-overrides
 
 ## Purpose
 
-This module holds the atlas-specific constraint overlays that are prepended to shared agent
-definitions when the atlas orchestrator spawns cartographer, map-verifier, and map-repairer.
-Each file narrows a general-purpose agent role to the atlas pipeline's exact write targets,
-frontmatter contracts, and return formats. Without these overrides the shared agents would
-lack atlas-specific invariants (e.g., never write blob/sha, keep untouched lines byte-identical,
-emit only JSON verdicts under 4KB).
+This module holds the three atlas-specific override docs (plugins/atlas/agent-overrides/cartographer-context.md, map-repairer-context.md, map-verifier-context.md) that get inlined at spawn time into the shared cartographer, map-repairer, and map-verifier agent definitions, narrowing each generic role into atlas v2's judgment-cell contract — the annotator emits content-addressed cells instead of markdown (cartographer-context.md:6-9), the repairer edits exactly one existing doc within a lint-finding scope (map-repairer-context.md:8-16), and the verifier adversarially refutes a single cell rather than a whole doc (map-verifier-context.md:3-9). Without these docs the shared agents would default to full-doc authoring and whole-module re-reads, defeating atlas's incremental hash-gated pipeline that skips unchanged content.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `cartographer-context.md` | override doc | `plugins/atlas/agent-overrides/cartographer-context.md:1` | Constrains cartographer: write target, frontmatter fields, budget limits, allowed relationship verbs, incremental discipline |
-| `map-repairer-context.md` | override doc | `plugins/atlas/agent-overrides/map-repairer-context.md:1` | Constrains map-repairer: findings-only scope, fields it may/may not touch, drift-doc handling, byte-identical discipline |
-| `map-verifier-context.md` | override doc | `plugins/atlas/agent-overrides/map-verifier-context.md:1` | Constrains map-verifier: verdict routing, persistent-failure behavior, sources-list completeness check, no-file-modify rule |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `Relationship verbs` | constraint block | `plugins/atlas/agent-overrides/cartographer-context.md:31` | Enumerates the only allowed edge verbs; lint L13 enforces this; both cartographer and map-repairer contexts repeat it |
-| `Frontmatter contract` | constraint block | `plugins/atlas/agent-overrides/cartographer-context.md:8` | Defines the exact fields a cartographer writes and explicitly forbids blob/sha/baseline/verified — critical for ledger correctness |
-| `Incremental discipline` | constraint block | `plugins/atlas/agent-overrides/map-repairer-context.md:39` | Byte-identical untouched-line rule prevents hash churn that defeats the ledger's purpose |
 
 ## Relationships
 
-- `plugins-atlas-agent-overrides.cartographer-context.md -> plugins-agents-agents-chunk-1.cartographer (extends)` — override is injected alongside the shared cartographer role per `plugins/atlas/references/mapping-protocol.md:65`
-- `plugins-atlas-agent-overrides.map-verifier-context.md -> plugins-agents-agents-chunk-2.map-verifier (extends)` — override is injected alongside the shared map-verifier role per `plugins/atlas/references/mapping-protocol.md:96`
-- `plugins-atlas-agent-overrides.map-repairer-context.md -> plugins-agents-agents-chunk-2.map-repairer (extends)` — override is injected alongside the shared map-repairer role per `plugins/atlas/references/update-protocol.md:305`
-- `plugins-atlas-references.update-protocol -> plugins-atlas-agent-overrides.map-repairer-context.md (reads)` — update-protocol names this file in the fixer-wave prompt assembly at `plugins/atlas/references/update-protocol.md:305`
-- `plugins-atlas-references.mapping-protocol -> plugins-atlas-agent-overrides.cartographer-context.md (reads)` — mapping-protocol names this file in the cartographer `<files_to_read>` block at `plugins/atlas/references/mapping-protocol.md:66`
-
 ## Type notes
 
-Each override file is a pure markdown document with no frontmatter; it is concatenated into
-an agent spawn prompt, not executed. The cartographer-context and map-repairer-context both
-carry the relationship-verb constraint (`calls, implements, conforms-to, extends, emits, owns,
-reads, writes`) because both agents write or repair Relationships edges. The map-verifier-context
-does not carry a write-target rule because verifiers never modify files
-(`plugins/atlas/agent-overrides/map-verifier-context.md:18`). The `summary` and `read_when`
-budget caps (≤120 and ≤90 chars respectively) are stated only in cartographer-context, not
-map-repairer-context, because repair never re-derives frontmatter from scratch.
+- map-repairer-context.md:8-11 — the repairer owns exactly one write target per invocation (the module doc or ARCHITECTURE.md named in its prompt); the orchestrator diffs the worktree afterward and discards any other modified file.
+- map-repairer-context.md:18-23 — the repairer's frontmatter write access is a narrow whitelist (summary, read_when, references_modules); sources, blob, baseline, verified, and generator are orchestrator-owned and immutable to this agent.
+- map-verifier-context.md:33-40 — a cell's fail lifecycle is bounded: a fail triggers exactly one re-judgment, and a second fail on an already-re-judged cell is terminal, shipping as verify.verdict: fail rather than looping.
+- cartographer-context.md:76-79 — cells are keyed by the structure they describe so an unchanged symbol or edge reuses prior cell prose verbatim across builds; these three docs define that content-addressing contract for atlas's judgment-producing and judgment-consuming agents.
 
 ## External deps
 
-None — these are plain markdown files consumed by atlas CLI orchestration at spawn time.
 
 ## Gotchas
 
-- `map-repairer-context.md:20` forbids touching `sources` paths during repair; adding/removing a source is re-derivation, which belongs to `/atlas update` not repair.
-- `cartographer-context.md:27` sets a `read_when` aim of ≤70 chars in practice, stricter than the ≤90 char hard limit, because long module ids consume the INDEX routing row budget.
+- map-verifier-context.md:28-29 — a "pass" verdict means the claim survived adversarial refutation, not that it was proven true; the default posture is fail for any citation the verifier cannot confirm.
+- map-repairer-context.md:13-16 — the repairer is explicitly barred from re-reading the whole module to fix a finding (that's /atlas update's job), a narrower search scope than the shared cartographer/investigator norm of reading everything.
+- cartographer-context.md:63-64 — an edge.semantic verb outside the allowed grammar isn't rejected; the projector silently falls back to rendering the plain (calls) edge.

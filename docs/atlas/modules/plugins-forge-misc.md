@@ -1,58 +1,43 @@
 ---
 module: "plugins/forge (misc)"
-summary: "Forge's plugin manifest and README — plugin identity plus the user-facing contract for the idea-to-deployment pipeline"
-read_when: "Changing forge's marketplace identity or updating the README pipeline overview"
+summary: "Forge plugin identity manifest, README pipeline overview, and the bats test-suite entrypoint for bin/ and hooks/."
+read_when: "Changing forge's marketplace identity, README pipeline overview, or bats test runner"
 sources:
   - path: plugins/forge/.claude-plugin/plugin.json
-    blob: 332a69faf8c603a9f032ee7765befc874b534aca
+    blob: 39650806aeec547873c043902a97521e45f0ebf4
   - path: plugins/forge/README.md
     blob: 1ce02e4c6294d5613a305d8487b42132d669a063
-references_modules: [root-misc]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+  - path: plugins/forge/tests/run-tests.sh
+    blob: ec21a7688fb6712b2f89b69aaa176c1bde7999b7
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/forge (misc)
 
 ## Purpose
 
-Forge's identity layer: `plugin.json` declares the name and one-line description under which
-Claude Code loads the plugin, and `README.md` is the user-facing contract for the pipeline —
-command surface, per-step artifact I/O, architecture, and safety bounds. The README's design
-claim is the load-bearing one: pipeline state derives entirely from `.forge/` artifacts on
-disk, never from conversation (plugins/forge/README.md:54-57). Forge unifies the formerly
-separate ideate and forge plugins into a single pipeline (plugins/forge/README.md:7).
+This module holds forge's non-code identity and entrypoint artifacts rather than pipeline logic: the marketplace manifest that names and versions the plugin (plugins/forge/.claude-plugin/plugin.json), the README that is the only human-facing description of the 11-step pipeline and its state-machine/step-exit architecture (plugins/forge/README.md), and the bats test runner that is the sole invocation path for forge's bin/ and hooks/ suites (plugins/forge/tests/run-tests.sh). Without it, forge would have no marketplace-visible identity, no external documentation of its pipeline shape, and no command to run its own tests.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `Forge Plugin` | README | `plugins/forge/README.md:1` | Pipeline overview: commands, step artifact I/O, FIX/ESCALATE loop, safety rules |
-| `forge` | plugin manifest | `plugins/forge/.claude-plugin/plugin.json:2` | Marketplace-facing name; description advertises the unified idea-to-deployment pipeline |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `FIX/ESCALATE Loop` | README section | `plugins/forge/README.md:74` | FIX items re-enter the Plan -> ... -> Triage loop; ESCALATE items wait for user review |
-| `Pipeline Steps (11)` | README section | `plugins/forge/README.md:36` | Maps every step to its input and output artifacts, `IDEA.md` through `COMPLETION.md` |
-| `State Machine Router` | README section | `plugins/forge/README.md:54` | Resume-anywhere design: the orchestrator re-derives the current step from `.forge/` contents |
-| `Step Exit Protocol` | README section | `plugins/forge/README.md:59` | Uniform exit every step follows: write artifacts, write handoff, commit, queue freshen, stop |
 
 ## Relationships
 
-- `root-misc.marketplace.json -> plugins-forge-misc.plugin.json (reads)`
-
 ## Type notes
 
-- Pipeline state derives from `.forge/` artifacts, never conversation (plugins/forge/README.md:56)
-- Each step exits: write artifacts, handoff, commit, queue freshen (plugins/forge/README.md:59-65)
-- Handoffs land at `.forge/handoffs/handoff-<step>.md` (plugins/forge/README.md:63)
-- Fix cycles are bounded: 3 normally, 10 under `--yolo` (plugins/forge/README.md:77)
-- Deploy never runs without explicit user permission (plugins/forge/README.md:83)
-- The pipeline always pauses after Document for user review (plugins/forge/README.md:84)
+run-tests.sh resolves PLUGIN_DIR from its own location via cd/dirname rather than the caller's cwd, then invokes bats directly against the bin/ and hooks/ subdirectories in place of a dedicated tests/ directory (plugins/forge/tests/run-tests.sh:13-21). plugin.json's version field (plugins/forge/.claude-plugin/plugin.json:3) is a plain static string in this module with no in-file indication of how it is kept in sync with anything else.
 
 ## External deps
 
-- None — manifest JSON and markdown documentation; no third-party packages touched
+
+## Gotchas
+
+The test-runner's own header comment flags a deliberate deviation: unlike semver/deployit/atlas's custom test_*-function discovery harness, forge's bats suites live alongside the scripts they test in bin/ and hooks/ rather than a dedicated tests/ directory, so run-tests.sh just points bats at both (plugins/forge/tests/run-tests.sh:4-8).

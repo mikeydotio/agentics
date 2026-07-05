@@ -4,75 +4,47 @@ summary: "Contract docs for the shared agent library — roster catalog, design 
 read_when: "Choosing/staffing shared agents, writing agent-overrides, or auditing plugin tool design"
 sources:
   - path: plugins/agents/references/agent-catalog.md
-    blob: 9e433b3006aa9f81c3e7ecb912c4adeca7b62d6c
+    blob: f93292a997df80ef3a018c3b1471854af9ec9cb1
   - path: plugins/agents/references/agent-design-principles.md
     blob: 5403c125a741fe7f632141b408ed8605da796133
   - path: plugins/agents/references/cross-plugin-usage.md
-    blob: ce6e63ac20b5e43778b1dee78955d334d6bb3b1b
+    blob: 0085451323188046cb2513c52c2f0d3a500d48d3
   - path: plugins/agents/references/tool-audit.md
     blob: b16db34d0e9301d6a9177aab1bb9a49cd664549c
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-agents-agents-ux, plugins-forge-references, plugins-forge-skills, plugins-freshen, plugins-greenlight, plugins-rca, plugins-semver-misc]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/agents/references
 
 ## Purpose
 
-These docs are the agent library's contract surface: how plugins discover, vet, and spawn agents.
-The catalog indexes the roster and staffing matrix; the design principles gate what may exist.
-The usage guide pins the inline-spawn and override-layering protocol that forge and rca follow;
-the tool audit records five-principle findings across the plugin ecosystem.
+These four references form the shared agent library's contract surface: the catalog indexes the roster and per-project-type staffing matrix, the design principles set the existence bar (at least 2 of 5 value dimensions) and canonical failure-mode mitigations every library agent must satisfy, and the cross-plugin usage guide pins the spawn-resolution order (`agents:<name>` preferred, `general-purpose` plus inlined definition as fallback) and override-layering contract that forge, rca, and other consumers concatenate into their prompts. The tool audit closes the loop by scoring the ecosystem's actual tool surfaces (storyhook, freshen, greenlight, semver, forge) against those same five design principles. Without this module, consuming plugins would have no shared definition of how to safely resolve, spawn, and layer context onto shared agents, and each pipeline's SKILL.md would have to reinvent the spawn protocol independently.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `Agent Design Principles` | doc | `plugins/agents/references/agent-design-principles.md:1` | Quality bar and orchestration patterns every library agent definition must satisfy |
-| `Cross-Plugin Usage Guide` | doc | `plugins/agents/references/cross-plugin-usage.md:1` | Spawn contract: path convention, override layering, namespace notation, migration checklist |
-| `Shared Agent Catalog` | doc | `plugins/agents/references/agent-catalog.md:1` | Roster index — tools, read-only flag, tags per agent — plus team matrix by project type |
-| `Tool Design Audit` | doc | `plugins/agents/references/tool-audit.md:1` | Five-principle audit of storyhook, freshen, greenlight, semver, and forge with priorities |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `Agent Definition Quality Bar` | section | `plugins/agents/references/agent-design-principles.md:100` | Existence gate — an agent must show at least 2 of 5 value dimensions or it should not exist |
-| `Cross-Pollination Principle` | section | `plugins/agents/references/agent-design-principles.md:113` | Pipeline agents must name the general-purpose lineage their methodology draws from |
-| `Migration Checklist` | section | `plugins/agents/references/cross-plugin-usage.md:137` | Six-step port of a consuming plugin onto shared agents; ends by deleting its local agents/ dir |
-| `Override Layering` | section | `plugins/agents/references/cross-plugin-usage.md:58` | Prompt = shared definition + pipeline override + dynamic context; concatenation, not inheritance |
-| `Preventing Failure Modes` | section | `plugins/agents/references/agent-design-principles.md:71` | Canonical mitigations: deadlock, runaway loops, denial-of-wallet, feedback amplification |
-| `Team Composition by Project Type` | section | `plugins/agents/references/agent-catalog.md:61` | Staffing matrix; Skeptic and Investigator recommended for every project type |
 
 ## Relationships
 
-- `plugins-agents-references.agent-catalog -> plugins-agents-agents-chunk-1.generator (reads)`
-- `plugins-agents-references.agent-catalog -> plugins-agents-agents-chunk-2.skeptic (reads)`
-- `plugins-agents-references.agent-catalog -> plugins-agents-agents-chunk-3.triager (reads)`
-- `plugins-agents-references.agent-catalog -> plugins-agents-agents-ux.ux-designer-cli (reads)`
-- `plugins-agents-references.cross-plugin-usage -> plugins-rca.investigator-rca (reads)`
-- `plugins-agents-references.tool-audit -> plugins-forge-references.storyhook-contract (reads)`
-- `plugins-agents-references.tool-audit -> plugins-forge-skills.SKILL.md (reads)`
-- `plugins-agents-references.tool-audit -> plugins-freshen.freshen.sh (reads)`
-- `plugins-agents-references.tool-audit -> plugins-greenlight.greenlight.sh (reads)`
-- `plugins-agents-references.tool-audit -> plugins-semver-misc.SKILL.md (reads)`
-
 ## Type notes
 
-- Spawning is inlining (`plugins/agents/references/cross-plugin-usage.md:17`); no registry.
-- Overrides add, never replace (`plugins/agents/references/cross-plugin-usage.md:66`).
-- Overrides carry pipeline-only content (`plugins/agents/references/cross-plugin-usage.md:70`).
-- `<plugin>:<agent>` is docs notation only (`plugins/agents/references/cross-plugin-usage.md:93`).
-- Plugins use Anthropic patterns 4-7 (`plugins/agents/references/agent-design-principles.md:24`).
+- Spawn resolution is preference-ordered: try `agents:<name>` as `subagent_type` first (`plugins/agents/references/cross-plugin-usage.md:37`), falling back to `general-purpose` with the shared role definition inlined into the prompt only in that fallback case (`plugins/agents/references/cross-plugin-usage.md:42`).
+- `AGENTS_PLUGIN_ROOT` must be derived as a sibling of the consuming plugin's own root; `${CLAUDE_PLUGIN_ROOT}` resolves to the consumer's own directory, never to the shared `agents` plugin (`plugins/agents/references/cross-plugin-usage.md:10`).
+- Override layering is transparent concatenation, not inheritance — a pipeline override adds to the shared role definition and never replaces it (`plugins/agents/references/cross-plugin-usage.md:107`).
+- The `<plugin>:<agent>` notation (e.g. `agents:software-architect`) is documentation shorthand for the Preferred/Fallback/Don't-guess resolution, not a literal path or a shortcut around it (`plugins/agents/references/cross-plugin-usage.md:135`).
+- An agent may only exist in the library if it demonstrates value across at least 2 of 5 dimensions (domain expertise, methodology, output contract, defensive constraints, anti-pattern detection); otherwise it shouldn't exist as a dedicated agent (`plugins/agents/references/agent-design-principles.md:111`).
 
 ## External deps
 
-- storyhook — external story tracker (`story` CLI + MCP tools); chief subject of the tool audit
-- Anthropic "Building Effective Agents" + Agentailor article — sources for the principles
 
 ## Gotchas
 
-- Audit flags forge's storyhook contract as stale (`plugins/agents/references/tool-audit.md:316`).
-- rca override names vary from -context.md (`plugins/agents/references/cross-plugin-usage.md:54`).
+- tool-audit.md flags forge's `storyhook-contract.md` "Commands That DO NOT Exist" section as actively stale/misleading — it claims tools that actually exist do not (`plugins/agents/references/tool-audit.md:316`).
+- cross-plugin-usage.md's own example override directory breaks its own `<name>-context.md` naming convention: the RCA listing includes `investigator-rca.md` and `architect-rca.md` instead of `investigator-context.md`/`architect-context.md` (`plugins/agents/references/cross-plugin-usage.md:95`).

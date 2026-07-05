@@ -1,82 +1,45 @@
 ---
 module: plugins/forge/hooks
-summary: "Forge session-lifecycle hooks — inject resume context on SessionStart, checkpoint a running pipeline on Stop"
-read_when: "Touching forge session resume, stop checkpointing, or .forge state hook behavior"
+summary: "SessionStart/Stop hooks that inject forge resume context and durably checkpoint state on session end."
+read_when: "Editing forge's SessionStart/Stop hooks or .forge checkpoint behavior"
 sources:
   - path: plugins/forge/hooks/hooks.json
     blob: f92d8253799e799123a9e1506de7aa2e1bffcc0d
   - path: plugins/forge/hooks/session-start.sh
-    blob: 69f94721d7d3818330a5c3216c15be763051cb4b
+    blob: 55e528f206411f02c75004d42c7e3495a58f9776
+  - path: plugins/forge/hooks/session-stop.bats
+    blob: becc594025fde02ddff419447a2f7bb0d629853d
   - path: plugins/forge/hooks/session-stop.sh
-    blob: fd33f5ce7ea769d4d07a3814bc85887d2281b5f5
-references_modules: [plugins-forge-skills, plugins-freshen, plugins-hook-guard]
-generator: cartographer/2
-baseline: 196666767b8fade32abd318c56691df49659c729
-verified: true
+    blob: f5819abc3450df0cdb6aa8824209a3461e70c7d9
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/forge/hooks
 
 ## Purpose
 
-Session-boundary survival for the forge pipeline; inert unless `.forge/state.json` exists.
-`session-start.sh` re-orients a session by injecting resume context distilled from forge state.
-`session-stop.sh` turns an abrupt stop into a checkpoint: handoff, pause, lock release, signal.
-Without it, an interrupted run loses its place; with it, `/forge resume` continues from handoff.
+hooks.json wires two Claude Code lifecycle hooks — SessionStart and Stop — that let a forge pipeline session survive an interrupted or crashed conversation without losing state or leaking its lock. SessionStart reads .forge/state.json and injects a compact additionalContext resume summary (status, session/story counts, and either a pre-computed resume object or a bare handoff filename) so a fresh session immediately knows a resume is needed. Stop performs a crash-safe, strictly-ordered checkpoint — write a degraded handoff, flip status to paused, release the lock — before any optional or bounded work (storyhook narrative, circuit breaker, freshen auto-resume signal), so a hung external command or a tripped breaker can never leave forge's on-disk state inconsistent.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `SessionStart` | hook binding | `plugins/forge/hooks/hooks.json:4` | Binds every session start (matcher `*`) to session-start.sh with a 10s timeout |
-| `Stop` | hook binding | `plugins/forge/hooks/hooks.json:16` | Binds every Stop event (matcher `*`) to session-stop.sh with a 15s timeout |
-| `session-start.sh` | bash hook script | `plugins/forge/hooks/session-start.sh:71` | Prints `{additionalContext}` resume summary JSON, or nothing when forge is inactive |
-| `session-stop.sh` | bash hook script | `plugins/forge/hooks/session-stop.sh:99` | Checkpoints a running pipeline to paused; guarantees stderr output on every exit |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `FRESHEN_DIR` | variable | `plugins/forge/hooks/session-stop.sh:115` | Auto-resume signal target `.freshen/`; written only inside tmux with no foreign signal pending |
-| `HANDOFF_FILE` | variable | `plugins/forge/hooks/session-stop.sh:65` | Fixed degraded-handoff path `.forge/handoffs/handoff-execute.md`, echoed into state `.resume` |
-| `RESUME_JSON` | variable | `plugins/forge/hooks/session-start.sh:35` | One-call jq state read: status, counters, optional `.resume` {summary, command, handoff_file} |
-| `STATE_FILE` | variable | `plugins/forge/hooks/session-start.sh:26` | Activation gate in both scripts — absent `.forge/state.json` means immediate silent exit |
-| `_GUARD_LIB` | variable | `plugins/forge/hooks/session-stop.sh:17` | Sources hook-guard's stop-guard circuit breaker before any work; a missing lib is tolerated |
 
 ## Relationships
 
-- `plugins-forge-hooks.session-start.sh -> plugins-forge-skills.execute (reads)`
-- `plugins-forge-hooks.session-stop.sh -> plugins-forge-skills.execute (writes)`
-- `plugins-forge-hooks.session-stop.sh -> plugins-freshen.forge.signal (writes)`
-- `plugins-forge-hooks.session-stop.sh -> plugins-hook-guard.stop_guard_check (calls)`
-
 ## Type notes
 
-- All JSON is built with jq, never printf escaping (plugins/forge/hooks/session-start.sh:9).
-- Project dir: `CLAUDE_PROJECT_DIR`, else stdin `.cwd` (plugins/forge/hooks/session-start.sh:14).
-- Start injects for `running` or `paused` status (plugins/forge/hooks/session-start.sh:45).
-- Stop acts only when status is `running` (plugins/forge/hooks/session-stop.sh:44).
-- The `.resume` object is the stop→start handshake (plugins/forge/hooks/session-stop.sh:106).
-- Start prefers it over the handoff-scan fallback (plugins/forge/hooks/session-start.sh:56).
-- Fallback emits newest handoff filename, never content (plugins/forge/hooks/session-start.sh:63).
-- One jq pipeline rewrites state via tmp+mv (plugins/forge/hooks/session-stop.sh:100).
-- It flips status to paused and bumps sessions_completed (plugins/forge/hooks/session-stop.sh:103).
-- Duration derives from `.forge/lock.json` `acquired_at` (plugins/forge/hooks/session-stop.sh:52).
-- The lock is deleted once the checkpoint lands (plugins/forge/hooks/session-stop.sh:110).
-- `/forge resume` appears in session-stop.sh only as string content written into the state `.resume.command` and the `.freshen/forge.signal` file (plugins/forge/hooks/session-stop.sh:102,129); stop never invokes forge directly.
-- session-stop.sh bypasses freshen.sh and writes `.freshen/forge.signal` directly to avoid tmux validation in the hook context (plugins/forge/hooks/session-stop.sh:113); the freshen Stop hook reads this file independently.
+The durable checkpoint (status=paused, sessions_completed increment, resume-object write, then lock release) is unconditional and must complete before any optional or bounded work runs — plugins/forge/hooks/session-stop.sh:135-152. .forge/lock.json's presence while status is "running" is the session's exclusivity marker; session-stop.sh always removes it once the checkpoint lands, independent of circuit-breaker state — plugins/forge/hooks/session-stop.sh:95-105,152. The hook-guard circuit breaker (stop_guard_check) is consulted only after the checkpoint and gates solely the freshen auto-resume signal, never the checkpoint itself — plugins/forge/hooks/session-stop.sh:170-175. Both hooks are one-shot processes invoked per Claude Code lifecycle event (no persistent state/threading); session-start.sh treats a missing jq as a real environment defect rather than a silent "plugin inactive" skip, because .forge/state.json existing means forge is already active — plugins/forge/hooks/session-start.sh:29-35. Cross-plugin coordination is self-contained: session-stop.sh writes its own .freshen/forge.signal and sends /clear via tmux directly rather than depending on freshen's on-stop.sh observing the signal in the same Stop-hook batch, coordinating via the shared .freshen/.clear-pending marker to avoid a double /clear — plugins/forge/hooks/session-stop.sh:177-214.
 
 ## External deps
 
-- jq — sole JSON reader/builder; both hooks exit silently when it is missing
-- storyhook — optional `story handoff --since` appendix in the degraded handoff
-- tmux — `TMUX`/`TMUX_PANE` env vars gate the freshen auto-resume signal write
 
 ## Gotchas
 
-- EXIT trap forces stderr output to avert a feedback loop (plugins/forge/hooks/session-stop.sh:14).
-- Registration metadata still says "Conductor plugin", not forge (plugins/forge/hooks/hooks.json:2).
-- `date -d` is GNU-only; on BSD duration stays unknown (plugins/forge/hooks/session-stop.sh:54).
-- Guard lib path assumes sibling `../hook-guard` layout (plugins/forge/hooks/session-stop.sh:17).
-- Any non-forge `*.signal` pending blocks the write (plugins/forge/hooks/session-stop.sh:119).
-- Signal bypasses freshen.sh to dodge tmux validation (plugins/forge/hooks/session-stop.sh:113).
+F050: the circuit-breaker check used to run before any checkpoint work, so a tripped breaker's `exit 0` silently skipped the handoff write, status flip, and lock release; it now runs after the durable checkpoint and gates only the freshen signal — plugins/forge/hooks/session-stop.sh:16-26,170-175. F051: the storyhook `story handoff` call used to run before the checkpoint with no timeout, so a hung `story` process could burn the whole 15s hook budget; it now runs after the checkpoint, bounded by a 5s run_with_timeout (falling back to gtimeout, or exit 127 if neither exists) — plugins/forge/hooks/session-stop.sh:78-92,154-168. F054: a malformed/partially-written state.json used to fail the jq read and exit 0 completely silently, leaving the agent with zero resume hint; both hooks now log to stderr, and session-start.sh additionally emits a fallback additionalContext pointing at /forge status — plugins/forge/hooks/session-start.sh:38-55, plugins/forge/hooks/session-stop.sh:52-59. F055: session duration is computed via jq's fromdate/now (never GNU-only `date -d`, which errors on BSD/macOS), with try/catch degrading an unparseable timestamp to "unknown" rather than crashing — plugins/forge/hooks/session-stop.sh:64-76. Every exit path is wrapped in an EXIT trap that always writes to stderr, specifically to avoid Claude Code's "No stderr output" feedback creating an infinite Stop-hook conversation loop — plugins/forge/hooks/session-stop.sh:10-14. session-stop.sh sends /clear itself instead of relying on freshen's on-stop.sh to notice its signal file in the same Stop event, because Claude Code does not guarantee hook execution order across plugins; the .freshen/.clear-pending marker prevents both hooks from double-sending when they do run in the same batch — plugins/forge/hooks/session-stop.sh:196-214.

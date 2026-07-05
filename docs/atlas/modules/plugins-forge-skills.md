@@ -1,108 +1,67 @@
 ---
 module: plugins/forge/skills
-summary: "Forge skill layer — /forge state-machine router plus 11 step skills driving idea-to-deploy via .forge/ artifacts"
+summary: "forge's router plus its 11 pipeline-step skills, each reading/writing .forge/ artifacts via step-exit."
 read_when: "Changing forge pipeline steps, .forge/ artifacts, routing, or freshen/step-exit handoffs"
 sources:
   - path: plugins/forge/skills/decompose/SKILL.md
-    blob: 3249c4147869ea1f2d6db65ccf0794236280e491
+    blob: bf231703a5952d58db5b29f25f312b2914627d37
   - path: plugins/forge/skills/deploy/SKILL.md
-    blob: 7edc7603ad97eeb10ef3d6d832e75fb1aa4080c9
+    blob: 634d5102104ff39ba5e771ad87ad9cc1a46e44cb
   - path: plugins/forge/skills/design/SKILL.md
-    blob: 7fbb4a709f5ce22a3a1a180e9145112530614088
+    blob: a0e70ce969959d259e0b91763f3da940add731e1
   - path: plugins/forge/skills/document/SKILL.md
-    blob: 4047df8107d7a86c2e1d74e03dc1097a7ecb00d2
+    blob: 1972c3cb49f7f7538cba45aff731b5b6a3b79107
   - path: plugins/forge/skills/execute/SKILL.md
-    blob: 281bcfd7a2fcf4e4fd4a145558c7bdc2416c3eec
+    blob: bdc9663d1248481670e738ce7ab25263e6b1a6da
   - path: plugins/forge/skills/forge/SKILL.md
-    blob: cc8b1715710e2d20c14e785a99fb46df714c5673
+    blob: 2c7e8bf9ad86f93bcc33364bd0f2d2e4b6a39312
   - path: plugins/forge/skills/interrogate/SKILL.md
-    blob: f7d7b94f1cc5cf6adfa7b6f7f1f7a1156c7e1eb6
+    blob: 2f9400424fad44a9209cbba2ceeedfda24686f5d
   - path: plugins/forge/skills/plan/SKILL.md
-    blob: d9cf6c05ef00ad0f90b9a7cefd6f41c789cf4e0a
+    blob: 7840a189a85b400a7ac27c3a557aeb3944d207f5
   - path: plugins/forge/skills/research/SKILL.md
-    blob: b8f37ff44dbf23e6809e6388d990ac6c67b00ce2
+    blob: 3621f665f9766495d3c55384fc3a494806bd7381
   - path: plugins/forge/skills/review/SKILL.md
-    blob: 7c9a3c691da2e92cecb2ca0543f70a1b974f9c84
+    blob: b697fc5b2e8841baa33fdc5ecd621320a5cbd21b
   - path: plugins/forge/skills/triage/SKILL.md
-    blob: f4a3a022b00861b0d73d7ca04555bf842f188e59
+    blob: 25701944d6de9a8232f933e47980eec0a283b3cd
   - path: plugins/forge/skills/validate/SKILL.md
-    blob: 85336f6fd87b68c30526b9ef28a39da2e0c1c464
-references_modules: [plugins-agents-agents-chunk-1, plugins-agents-agents-chunk-2, plugins-agents-agents-chunk-3, plugins-forge-agent-overrides, plugins-forge-bin, plugins-forge-references, plugins-freshen]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+    blob: e0f031e79e1edae5370dcdc2b245dc619456a1e5
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/forge/skills
 
 ## Purpose
 
-A thin state-machine router (`forge`) plus 11 step skills. The router derives pipeline position
-from which `.forge/` artifacts exist and dispatches the next step with `--orchestrated`; each step
-spawns agents, writes one artifact plus a handoff, commits, queues freshen, and stops — so every
-step starts in cleared context and the pipeline resumes from artifacts alone.
+This directory is forge's entire step vocabulary: the state-machine router (skills/forge/SKILL.md) that detects pipeline state from .forge/ artifacts and storyhook and dispatches, plus the 11 pipeline-step skills (interrogate through deploy) it dispatches to. Each step skill is a self-contained, stateless prompt — it reads its own inputs from .forge/, does its work (often by spawning specialist subagents from the shared agent library), writes its outputs, and exits through the shared Step Exit Protocol (handoff, commit, queue freshen, STOP) so no state has to survive in conversation context between steps. Without this module the router has a state machine but nothing to dispatch to — these files are the actual behavior of the idea-to-deployment pipeline, not just its shape.
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `decompose` | skill | `plugins/forge/skills/decompose/SKILL.md:2` | PLAN.md waves → storyhook stories; writes `.forge/plan-mapping.json` |
-| `deploy` | skill | `plugins/forge/skills/deploy/SKILL.md:2` | Gated on `.forge/DEPLOY-APPROVAL.md`; writes `.forge/COMPLETION.md` |
-| `design` | skill | `plugins/forge/skills/design/SKILL.md:2` | Architecture review by roster team; writes `.forge/DESIGN.md` |
-| `document` | skill | `plugins/forge/skills/document/SKILL.md:2` | Runs even with ESCALATEs pending, then mandatory pause; writes `.forge/DOCUMENTATION.md` |
-| `execute` | skill | `plugins/forge/skills/execute/SKILL.md:2` | Generator-evaluator loop; commits only on pass verdict |
-| `forge` | skill | `plugins/forge/skills/forge/SKILL.md:2` | Detects state from artifacts; dispatches steps with `--orchestrated` |
-| `interrogate` | skill | `plugins/forge/skills/interrogate/SKILL.md:2` | Questions a raw idea; writes `.forge/IDEA.md` |
-| `plan` | skill | `plugins/forge/skills/plan/SKILL.md:2` | Waves + machine-evaluable criteria; writes `.forge/PLAN.md` |
-| `research` | skill | `plugins/forge/skills/research/SKILL.md:2` | Writes `.forge/research/SUMMARY.md` and `.forge/TEAM.md` |
-| `review` | skill | `plugins/forge/skills/review/SKILL.md:2` | Static analysis vs DESIGN.md; writes `.forge/REVIEW-REPORT.md` |
-| `triage` | skill | `plugins/forge/skills/triage/SKILL.md:2` | FIX or ESCALATE per finding; writes `.forge/TRIAGE.md` |
-| `validate` | skill | `plugins/forge/skills/validate/SKILL.md:2` | Tests + gap-filling; writes `.forge/VALIDATE-REPORT.md` |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `--orchestrated` | flag | `plugins/forge/skills/forge/SKILL.md:143` | Selects step-exit protocol vs clean standalone return |
-| `Step Exit Protocol` | protocol | `plugins/forge/skills/forge/SKILL.md:212` | Write artifact + handoff, commit, queue freshen, STOP |
-| `config.json` | config | `plugins/forge/skills/forge/SKILL.md:258` | yolo, max_fix_cycles, retry/session caps |
-| `plan_hash` | guard | `plugins/forge/skills/decompose/SKILL.md:26` | MD5 of PLAN.md; mismatch forces continue/recreate/cancel |
 
 ## Relationships
 
-- `plugins-forge-skills.forge -> plugins-forge-bin.forge-state.sh (calls)`
-- `plugins-forge-skills.forge -> plugins-forge-bin.forge-step-exit.sh (calls)`
-- `plugins-forge-skills.forge -> plugins-freshen.freshen.sh (calls)`
-- `plugins-forge-skills.execute -> plugins-freshen.freshen.sh (calls)`
-- `plugins-forge-skills.execute -> plugins-forge-references.execution-loop.md (reads)`
-- `plugins-forge-skills.execute -> plugins-forge-agent-overrides.generator (calls)`
-- `plugins-forge-skills.execute -> plugins-forge-agent-overrides.evaluator (calls)`
-- `plugins-forge-skills.research -> plugins-agents-agents-chunk-1.domain-researcher (calls)`
-- `plugins-forge-skills.design -> plugins-agents-agents-chunk-2.software-architect (calls)`
-- `plugins-forge-skills.plan -> plugins-agents-agents-chunk-2.project-manager (calls)`
-- `plugins-forge-skills.review -> plugins-agents-agents-chunk-2.reviewer (calls)`
-- `plugins-forge-skills.document -> plugins-agents-agents-chunk-2.technical-writer (calls)`
-- `plugins-forge-skills.validate -> plugins-agents-agents-chunk-3.validator (calls)`
-- `plugins-forge-skills.triage -> plugins-agents-agents-chunk-3.triager (calls)`
-
 ## Type notes
 
-- `.forge/` artifact presence is the sole routing state (`plugins/forge/skills/forge/SKILL.md:152`).
-- Review and validate: later finisher queues freshen (`plugins/forge/skills/review/SKILL.md:94`).
-- FIX items re-enter plan; at cap they become ESCALATE (`plugins/forge/skills/triage/SKILL.md:70`).
-- Generator never commits; evaluator cannot edit (`plugins/forge/skills/execute/SKILL.md:31`).
-- TEAM.md gates conditional agents in design and review (`plugins/forge/skills/design/SKILL.md:28`).
-- Generator and evaluator spawn as `general-purpose` subagents (`plugins/forge/skills/execute/SKILL.md:101`).
-- DEPLOY-APPROVAL.md is written only by the orchestrator's deploy-permission gate, never by a step skill (`plugins/forge/skills/forge/SKILL.md:194`).
+- Steps are stateless single-shot prompts, not persistent objects: state lives in .forge/ artifacts and storyhook, re-read from disk on every invocation — execute's Fresh-Start-vs-Resume branch is decided by reading `state_json_exists` from forge-state.sh's output, never inferred from conversation context (plugins/forge/skills/execute/SKILL.md:48-59).
+- review and validate are mutually unaware siblings: neither's Exit checks whether the other's report exists before queuing freshen; forge-state.sh alone owns deciding whether review, validate, or both still need to run (plugins/forge/skills/review/SKILL.md:108-116; plugins/forge/skills/validate/SKILL.md:120-126).
+- `reviewer` and `triager` are read_only:true subagents that return findings/decisions as their response; the orchestrating skill (review/triage), not the subagent, owns writing the synthesized report file (plugins/forge/skills/review/SKILL.md:46-49; plugins/forge/skills/triage/SKILL.md:36-38). `validator` is the sole exception, legitimately read_only:false, writing tests and VALIDATE-REPORT.md itself (plugins/forge/skills/validate/SKILL.md:32-34).
+- decompose's auto-created parent story (plan-mapping.json's `project_story`) can never reach `done` through the normal execution loop — storyhook refuses to hand a story with children back to `story next` — so execute's Complete check explicitly excludes it from "all stories done" (plugins/forge/skills/decompose/SKILL.md:107-114; plugins/forge/skills/execute/SKILL.md:183-185).
 
 ## External deps
 
-- storyhook — `story` CLI + `storyhook_decompose_spec` MCP tool; owns story state
-- jq — mandated for all shell JSON construction
-- tmux — auto-resume capability gate in execute
 
 ## Gotchas
 
-- `devils-advocate` is a role, not a shared agent file (`plugins/forge/skills/design/SKILL.md:25`).
-- Same applies to `senior-engineer` and `ux-designer` (`plugins/forge/skills/forge/SKILL.md:304`).
-- Role docs: `plugins/forge/references/team-roles.md` (`plugins/forge/skills/forge/SKILL.md:19`).
+- `story decompose` treats every Markdown heading in its input as a story, not just wave headings — piping the whole PLAN.md would turn `## Test Strategy`/`## Risk Register` into spurious stories, so decompose extracts only the `## Task Breakdown` section first (plugins/forge/skills/decompose/SKILL.md:68-77).
+- The custom states/type decompose needs (`verifying`, `blocked`, the `escalate` story type) aren't idempotent to register — re-running errors with exit 2 on an already-registered slug, and that specific error must be tolerated rather than treated as failure (plugins/forge/skills/decompose/SKILL.md:42-64).
+- The router's `dispatch` value for a fix-loop re-entry into plan (`"plan --orchestrated"`) is byte-for-byte identical to a genuine first-time transition from design to plan; only checking `state == "fix_loop"` first (never `dispatch` alone) avoids silently skipping the mandatory fix-cycle-counter archive call (plugins/forge/skills/forge/SKILL.md:103-113).
+- Deploy is the pipeline's only terminal step exit: its orchestrated exit passes `--terminal` to cancel any pending freshen signal instead of queuing a next command, since there is no next step (plugins/forge/skills/deploy/SKILL.md:96-102).

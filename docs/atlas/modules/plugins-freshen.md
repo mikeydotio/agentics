@@ -1,74 +1,73 @@
 ---
 module: plugins/freshen
-summary: "Automatic context clearing — queues /clear + re-invocation between workflow phases via tmux send-keys"
+summary: "Automatic /clear + re-invocation via tmux: Stop/SessionStart hooks consume confirmed .freshen/ signal files."
 read_when: "Touching context clearing, .freshen signal files, or /clear re-invocation automation"
 sources:
   - path: plugins/freshen/.claude-plugin/plugin.json
-    blob: 030bbad689a442a32a0bc77ac38a14b1ab01e6ef
+    blob: 969c07e7087b63ae5c4fe77caa8bbb17a60f7c8d
   - path: plugins/freshen/bin/freshen.sh
-    blob: 99de1df3d5a354cc0834464078f31e276bdaff61
+    blob: 58f1e47f2d10aa68f58dafac3a83351d8ff0caa6
   - path: plugins/freshen/hooks/hooks.json
-    blob: 685850a8d3fb5d3f11d059086fffbdecd8ea1739
+    blob: d6b0145c08230b99b9be1f9dbf838455b2dad6b6
+  - path: plugins/freshen/hooks/on-clear.bats
+    blob: 477bcb483c51d61cf8e530d55323521a02ef14dd
   - path: plugins/freshen/hooks/on-clear.sh
-    blob: 7247b0c06e0734e2a7768f41460e46c8244cc50f
+    blob: 449fc22a901badfd0ae570e2c40f05a7d0cdff89
+  - path: plugins/freshen/hooks/on-stop.bats
+    blob: 9f2a3a68b35afdfa56bece1c665f19f6630f2a78
   - path: plugins/freshen/hooks/on-stop.sh
-    blob: 49804b1a6f98b8e1e9af3b59f13d1e50105ed627
+    blob: 2b3f0ea3c0e9970852515592e63f3914ba2153cf
+  - path: plugins/freshen/lib/pane-confirm.bats
+    blob: c72c718d038ec710b63b8331ed01c8f360d01dd3
+  - path: plugins/freshen/lib/pane-confirm.sh
+    blob: 1ecd72ee498b7780380dc165b59c52f1c9e90987
+  - path: plugins/freshen/lib/transition-log.bats
+    blob: 7d96e1d6cbc66cda0a061fb8539620ba563ce732
+  - path: plugins/freshen/lib/transition-log.sh
+    blob: 15e6ec4c59506fc0d075645bf0aab75fa38ab3f2
   - path: plugins/freshen/skills/freshen/SKILL.md
-    blob: 2f8f3decc4a8cae565bc1833ddab55e249d81abd
-references_modules: [plugins-hook-guard, plugins-forge-skills]
-generator: cartographer/2
-baseline: b4cedefaba8df96ee167877bf2ee9c3143ef0b08
-verified: true
+    blob: b2fcfca147d49c8eb04a5b2084f187b791977466
+  - path: plugins/freshen/tests/run-tests.sh
+    blob: 626c549707b88e4917d53ddecd4a9fb50e2ad075
+generator: cartographer/4
+baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
 ---
 
 # Module: plugins/freshen
 
 ## Purpose
 
-Freshen provides a signal-file mechanism that lets other plugins (primarily forge) trigger `/clear` and re-invoke a command between workflow phases without human interaction. The design rests on a two-file handshake: a `.freshen/<source>.signal` file written before Claude's turn ends causes the Stop hook to send `/clear` via tmux, and the subsequent SessionStart(clear) hook reads the signal, deletes it, and fires the re-invocation command. Without freshen, plugins that need a clean context window between steps must instruct the user to `/clear` manually.
+Freshen is the tmux mechanics behind automatic context clearing: a plugin queues a /clear + re-invocation command as a signal file under .freshen/ (plugins/freshen/bin/freshen.sh:37-81), and the Stop and SessionStart(clear) hooks send /clear and the re-invocation via tmux send-keys, each confirmed by a bounded capture-pane read-back rather than fired blind (plugins/freshen/hooks/on-stop.sh, plugins/freshen/hooks/on-clear.sh, plugins/freshen/lib/pane-confirm.sh). The idea holding it together is confirmed, retryable delivery keyed off one durable signal file, so no other plugin needs to own its own tmux-clearing logic. Without it, phase-boundary context clearing (e.g. forge's) would lose its tmux automation and fall back to manual /clear instructions (plugins/freshen/skills/freshen/SKILL.md).
 
 ## Public API
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `cmd_cancel` | bash function | `plugins/freshen/bin/freshen.sh:96` | `cancel --source <name>` or `cancel --all` removes pending signal files |
-| `cmd_disable` | bash function | `plugins/freshen/bin/freshen.sh:125` | Cancels all signals, creates `.freshen/.disabled`; human-only per skill Hard Rule |
-| `cmd_enable` | bash function | `plugins/freshen/bin/freshen.sh:136` | Removes `.freshen/.disabled`; human-only per skill Hard Rule |
-| `cmd_queue` | bash function | `plugins/freshen/bin/freshen.sh:37` | Writes `<source>.signal`; requires tmux; rejects cross-source conflicts |
-| `cmd_status` | bash function | `plugins/freshen/bin/freshen.sh:83` | Prints each pending signal as `source: command` |
-| `freshen` | skill | `plugins/freshen/skills/freshen/SKILL.md:1` | `/freshen <subcommand>` delegates to `plugins/freshen/bin/freshen.sh`; enable/disable are human-only |
-| `on-clear.sh` | hook (SessionStart:clear) | `plugins/freshen/hooks/hooks.json:22` | After freshen-initiated clear: echoes summary, tmux-sends queued command, deletes signal |
-| `on-stop.sh` | hook (Stop) | `plugins/freshen/hooks/hooks.json:7` | If a signal is pending at turn end: touches `.clear-pending`, tmux-sends `/clear` |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `.clear-pending` | flag file | `plugins/freshen/hooks/on-stop.sh:38` | Marks the clear as freshen-initiated; `on-clear.sh` exits without consuming signals when absent |
-| `require_enabled` | bash function | `plugins/freshen/bin/freshen.sh:30` | Gates queue/status/cancel on absence of `.freshen/.disabled` — kill switch every command obeys |
-| `require_tmux` | bash function | `plugins/freshen/bin/freshen.sh:21` | `queue` dies unless `$TMUX` and `$TMUX_PANE` are set; send-keys is the only delivery channel |
 
 ## Relationships
 
-- `plugins-freshen.on-stop.sh -> plugins-hook-guard.stop_guard_check (calls)` — `plugins/freshen/hooks/on-stop.sh:16` sources `hook-guard/lib/stop-guard.sh` to prevent Stop-hook infinite loops
-- `plugins-forge-skills.step-skills -> plugins-freshen.cmd_queue (calls)` — forge step skills invoke `freshen.sh queue` to register re-invocation; evidence at `plugins/forge/skills/execute/SKILL.md`
-
 ## Type notes
 
-- Signal file format: line 1 = command to re-invoke, optional remaining lines = progress summary (`plugins/freshen/bin/freshen.sh:75`)
-- Oldest signal wins each clear cycle; at most one signal is consumed per `/clear` (`plugins/freshen/hooks/on-clear.sh:25`)
-- A signal is deleted only after its `tmux send-keys` succeeds (`plugins/freshen/hooks/on-clear.sh:43`)
-- User-initiated `/clear` leaves signals intact because `.clear-pending` is absent (`plugins/freshen/hooks/on-clear.sh:22`)
-- Stop hook reaps signals older than 120 minutes before checking for pending ones (`plugins/freshen/hooks/on-stop.sh:27`)
-- On `startup`, `resume`, or `compact` SessionStart events, all relay state is wiped (`plugins/freshen/hooks/hooks.json:28`)
-- `.freshen/` is gitignored and ephemeral (`plugins/freshen/bin/freshen.sh:11`)
+Freshen has no application types — its state lives entirely in flat files under the gitignored, ephemeral .freshen/ directory, and its 'objects' are shell function libraries.
+- Signal files (.freshen/<source>.signal): one per source, created by `freshen.sh queue` (plugins/freshen/bin/freshen.sh:60-80), enforced single-pending-source across sources (plugins/freshen/bin/freshen.sh:64-73), consumed and deleted exactly once by on-clear.sh on confirmed send (plugins/freshen/hooks/on-clear.sh:97-99) — or left in place for the next Stop/clear cycle to retry when the send can't be confirmed (plugins/freshen/hooks/on-stop.sh:78-81, plugins/freshen/hooks/on-clear.sh:100-103).
+- .clear-pending / .clear-consumed flags: at most one exists during a freshen-initiated clear window. on-stop.sh sets .clear-pending only after a confirmed /clear send (plugins/freshen/hooks/on-stop.sh:76); on-clear.sh hands it off by renaming (never deleting outright) to .clear-consumed (plugins/freshen/hooks/on-clear.sh:63-66) so a same-batch, unordered hook-guard hook still observes the flag regardless of run order.
+- .disabled flag: a persistent kill switch toggled only by `freshen.sh enable`/`disable` (plugins/freshen/bin/freshen.sh:125-143); every hook and CLI subcommand checks it first and no-ops or warns if set.
+- lib/pane-confirm.sh and lib/transition-log.sh own no state of their own — they are stateless function libraries sourced by both hooks; transition-log.sh does own .freshen/transitions.log, an append-only diagnostic log it self-trims to FRESHEN_LOG_MAX_LINES (default 500) on every append (plugins/freshen/lib/transition-log.sh:36-49).
+- No in-process threading or shared memory; all coordination is cross-process via the filesystem, and ordering between different plugins' hooks on the same event is explicitly unguaranteed (plugins/freshen/hooks/on-clear.sh:37-45).
 
 ## External deps
 
-- tmux — `send-keys -t $TMUX_PANE` is the sole delivery channel for both `/clear` and re-invocation commands; no fallback exists
 
 ## Gotchas
 
-- Every hook exit path must write to stderr (`plugins/freshen/hooks/on-stop.sh:11`); silent exits cause Claude Code to inject "No stderr output" conversation feedback, which triggers another Stop event and an infinite loop.
-- Only one source may be pending at a time; a second cross-source `queue` call is a hard error (`plugins/freshen/bin/freshen.sh:64`).
-- `enable` and `disable` are explicitly reserved for human use; the SKILL.md Hard Rules section (`plugins/freshen/skills/freshen/SKILL.md:13`) forbids autonomous invocation.
+- Only one source may have a pending signal at a time; queuing from a second source while another's signal is unconsumed is a hard error, not a queue (plugins/freshen/bin/freshen.sh:64-73).
+- Every hook exit path must write to stderr — a silent exit makes Claude Code report "No stderr output", which can otherwise trigger an infinite Stop-hook loop (plugins/freshen/hooks/on-stop.sh:13-16, plugins/freshen/hooks/on-clear.sh:12-14).
+- .clear-pending is renamed to .clear-consumed rather than deleted outright, solely to survive an unspecified cross-plugin ordering race with hook-guard's own SessionStart(clear) hook reading the same flag (plugins/freshen/hooks/on-clear.sh:37-66).
+- A capture-pane call that itself fails is treated as "still pending" (not confirmed) — an unobservable pane must never be assumed to have accepted input (plugins/freshen/lib/pane-confirm.sh:49-58).
+- Literal-mode sends require both the literal-text send-keys call AND a separate Enter call to succeed before a signal counts as delivered; a failing Enter alone must not delete the signal (plugins/freshen/lib/pane-confirm.sh:88-105, plugins/freshen/hooks/on-clear.sh:84-103).
+- Signals older than 2 hours are swept and deleted before dispatch on every Stop hook run (plugins/freshen/hooks/on-stop.sh:41).

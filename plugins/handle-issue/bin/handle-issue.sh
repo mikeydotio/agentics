@@ -1,0 +1,298 @@
+#!/usr/bin/env bash
+# handle-issue.sh — deterministic helper for the /handle-issue skill.
+#
+# Two subcommands, each emitting exactly ONE JSON object on stdout with an `ok`
+# boolean and a human-readable `display`. The SKILL is a thin router: it reads
+# `ok`/`display` and halts (showing `display`) on `ok:false`.
+#
+#   list                 Preconditions + open-issue enumeration for the picker.
+#                        Emits {ok, count, repo, issues:[{number,title,url,
+#                        option:{label,description}}], display}. Side-effect free.
+#
+#   dispatch <n>         Open a new tmux window in the current session, `cd` it to
+#                        the repo root, launch `claude -w <n>` (the official
+#                        --worktree switch — creates a per-issue git worktree, so
+#                        it must run from a git-tracked location), gate on claude
+#                        becoming ready, send Shift+Tab twice (plan mode), then
+#                        type + submit the prompt.
+#
+# ok-vs-warning boundary (dispatch): steps 0–4 are HARD preconditions — a failure
+# emits {ok:false} and exits before ANY side effect. From step 5 (the first
+# `tmux new-window`) onward the window already exists, so a failure to confirm
+# readiness or prompt submission degrades to {ok:true, warning, ...} rather than
+# ok:false — reporting ok:false there would falsely imply nothing happened.
+#
+# All timing/behaviour is env-overridable (see the config block) so the flow is
+# testable headlessly (HANDLE_ISSUE_DRY_RUN, HANDLE_ISSUE_GH_BIN) and the
+# launch command / prompt are escape-hatchable without editing code.
+#
+# tmux send/confirm logic is modelled on plugins/freshen/lib/pane-confirm.sh
+# (send-keys keys/literal modes + capture-pane read-back). It is INLINED here
+# rather than sourced because freshen may not be installed alongside this plugin.
+set -euo pipefail
+
+# ---- config (all env-overridable) -------------------------------------------
+GH="${HANDLE_ISSUE_GH_BIN:-gh}"
+LIST_LIMIT="${HANDLE_ISSUE_LIST_LIMIT:-50}"
+LAUNCH_TPL="${HANDLE_ISSUE_LAUNCH_CMD:-claude -w <n>}"
+PROMPT_TPL="${HANDLE_ISSUE_PROMPT:-/plan and propose a solution to close github issue #<n> in this repo}"
+BACKGROUND="${HANDLE_ISSUE_BACKGROUND:-}"
+# Readiness gate before Shift+Tab. Claude's TUI text is a version-specific
+# implementation detail, so READY_PATTERN is permissive and overridable; the
+# fallback delay covers the case where the marker never matches.
+READY_PATTERN="${HANDLE_ISSUE_READY_PATTERN:-for shortcuts}"
+READY_ATTEMPTS="${HANDLE_ISSUE_READY_ATTEMPTS:-40}"
+READY_DELAY="${HANDLE_ISSUE_READY_DELAY:-0.25}"
+READY_FALLBACK_DELAY="${HANDLE_ISSUE_READY_FALLBACK_DELAY:-3}"
+# Settle after the two Shift+Tabs before typing the prompt.
+MODE_DELAY="${HANDLE_ISSUE_MODE_DELAY:-0.4}"
+# Prompt-submission confirm/resend bounds (freshen semantics).
+CONFIRM_ATTEMPTS="${HANDLE_ISSUE_CONFIRM_ATTEMPTS:-8}"
+CONFIRM_DELAY="${HANDLE_ISSUE_CONFIRM_DELAY:-0.3}"
+SEND_RETRIES="${HANDLE_ISSUE_SEND_RETRIES:-2}"
+DRY_RUN="${HANDLE_ISSUE_DRY_RUN:-}"
+ALLOW_CLOSED="${HANDLE_ISSUE_ALLOW_CLOSED:-}"
+
+# ---- JSON emitters ----------------------------------------------------------
+# fail <message> — emit {ok:false, display} and exit non-zero. The skill halts
+# and shows `display`.
+fail() {
+  jq -n --arg d "$1" '{ok:false, display:$d}'
+  exit 1
+}
+
+# ---- helpers ----------------------------------------------------------------
+render_template() {  # render_template <template-with-<n>> <number>
+  local tpl="$1" n="$2"
+  printf '%s' "${tpl//<n>/$n}"
+}
+
+require_gh() {
+  command -v "$GH" >/dev/null 2>&1 \
+    || fail "gh CLI not found — install GitHub CLI (https://cli.github.com)."
+  "$GH" auth status >/dev/null 2>&1 \
+    || fail "gh is not authenticated — run: gh auth login (or set GH_TOKEN)."
+}
+
+# origin_owner_repo — echo "<owner>/<repo>" derived from the origin remote, or
+# return non-zero. Handles git@host:owner/repo(.git) and https://host/owner/repo(.git).
+origin_owner_repo() {
+  local url
+  url=$(git remote get-url origin 2>/dev/null) || return 1
+  url="${url%.git}"
+  url="${url%/}"
+  if [[ "$url" =~ [:/]([^/:]+)/([^/]+)$ ]]; then
+    printf '%s/%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    return 0
+  fi
+  return 1
+}
+
+# text_still_pending <pane> <text> — true if <text> still sits, unsubmitted, as
+# the trailing content of the pane's last non-blank line. A failed capture-pane
+# counts as "still pending" (never a false confirmation).
+text_still_pending() {
+  local pane="$1" text="$2" content last_line
+  content=$(tmux capture-pane -p -t "$pane" 2>/dev/null) || return 0
+  last_line=$(printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -1 || true)
+  case "$last_line" in
+    *"$text") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# wait_ready <pane> <launch-cmd> — poll until the launch command has left the
+# input line AND the readiness marker appears, bounded by READY_ATTEMPTS.
+wait_ready() {
+  local pane="$1" launch="$2" attempt=0 content last_line
+  while [ "$attempt" -lt "$READY_ATTEMPTS" ]; do
+    if content=$(tmux capture-pane -p -t "$pane" 2>/dev/null); then
+      last_line=$(printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -1 || true)
+      if [[ "$last_line" != *"$launch" ]] \
+         && printf '%s' "$content" | grep -Eq -- "$READY_PATTERN"; then
+        return 0
+      fi
+    fi
+    sleep "$READY_DELAY"
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
+# send_prompt_confirmed <pane> <text> — literal-send <text> + Enter, then poll
+# for it to leave the input line; resend up to SEND_RETRIES times.
+send_prompt_confirmed() {
+  local pane="$1" text="$2" resend=0 attempt
+  while [ "$resend" -le "$SEND_RETRIES" ]; do
+    if tmux send-keys -t "$pane" -l "$text" 2>/dev/null \
+       && tmux send-keys -t "$pane" Enter 2>/dev/null; then
+      attempt=0
+      while [ "$attempt" -lt "$CONFIRM_ATTEMPTS" ]; do
+        text_still_pending "$pane" "$text" || return 0
+        sleep "$CONFIRM_DELAY"
+        attempt=$((attempt + 1))
+      done
+    fi
+    resend=$((resend + 1))
+  done
+  return 1
+}
+
+# ---- subcommand: list -------------------------------------------------------
+cmd_list() {
+  require_gh
+  git rev-parse --show-toplevel >/dev/null 2>&1 || fail "not inside a git repository."
+  local repo issues_json
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+  if ! issues_json=$("$GH" issue list --repo "$repo" --state open --limit "$LIST_LIMIT" \
+                       --json number,title,url 2>/dev/null); then
+    fail "failed to list open issues for $repo (gh issue list)."
+  fi
+  printf '%s' "$issues_json" | jq --arg repo "$repo" '
+    {
+      ok: true,
+      count: length,
+      repo: $repo,
+      issues: [ .[] | {
+        number, title, url,
+        option: {
+          label: ("#" + (.number | tostring)),
+          description: (.title // "(no title)")
+        }
+      } ],
+      display: (
+        if length == 0
+        then ("No open issues on " + $repo + ".")
+        else ("[handle-issue] " + (length | tostring) + " open issue(s) on " + $repo)
+        end
+      )
+    }'
+}
+
+# ---- subcommand: dispatch ---------------------------------------------------
+cmd_dispatch() {
+  local n="${1:-}"
+  [ -n "$n" ] || fail "usage: handle-issue.sh dispatch <issue-number>"
+  [[ "$n" =~ ^[0-9]+$ ]] || fail "issue number must be a positive integer (got: $n)."
+
+  local launch_cmd prompt
+  launch_cmd=$(render_template "$LAUNCH_TPL" "$n")
+  prompt=$(render_template "$PROMPT_TPL" "$n")
+
+  # Step 1: tmux precondition (relaxed under dry-run so it runs headlessly).
+  if [ -z "$DRY_RUN" ]; then
+    [ -n "${TMUX:-}" ] || fail "handle-issue requires tmux — run Claude inside a tmux session."
+    [ -n "${TMUX_PANE:-}" ] || fail "handle-issue requires \$TMUX_PANE — run Claude inside a tmux pane."
+  fi
+
+  # Step 2: repo dir (also satisfies claude -w's git-tracked-location requirement).
+  local dir
+  dir=$(git rev-parse --show-toplevel 2>/dev/null) || fail "not inside a git repository."
+
+  # Step 3: gh present + authed.
+  require_gh
+
+  # Step 4: issue exists and is open.
+  local repo issue_json title state
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+  if ! issue_json=$("$GH" issue view "$n" --repo "$repo" \
+                      --json number,title,state,url 2>/dev/null); then
+    fail "issue #$n not found on $repo."
+  fi
+  title=$(printf '%s' "$issue_json" | jq -r '.title // ""')
+  state=$(printf '%s' "$issue_json" | jq -r '.state // ""')
+  if [ "$state" = "CLOSED" ] && [ -z "$ALLOW_CLOSED" ]; then
+    fail "issue #$n is closed on $repo (set HANDLE_ISSUE_ALLOW_CLOSED=1 to dispatch anyway)."
+  fi
+
+  # Dry-run: all read-only checks above ran for real; emit the planned commands
+  # and stop before any side effect.
+  if [ -n "$DRY_RUN" ]; then
+    jq -n \
+      --arg issue "$n" --arg title "$title" --arg repo "$repo" --arg dir "$dir" \
+      --arg launch "$launch_cmd" --arg prompt "$prompt" '
+      {
+        ok: true, dry_run: true,
+        issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
+        commands: [
+          ("tmux new-window -c " + $dir + " -P -F #{pane_id}"),
+          ("tmux send-keys -t <pane> -l " + $launch),
+          "tmux send-keys -t <pane> Enter",
+          "tmux send-keys -t <pane> BTab BTab",
+          ("tmux send-keys -t <pane> -l " + $prompt),
+          "tmux send-keys -t <pane> Enter"
+        ],
+        display: ("[handle-issue] DRY RUN for #" + $issue + " (" + $title
+                  + "): would open a new tmux window in " + $dir + " and run the listed commands.")
+      }'
+    return 0
+  fi
+
+  # Step 5: open the window (first side effect). Hard-fail is still safe here —
+  # window creation is atomic; a failure leaves nothing to clean up.
+  local new_window_args pane window
+  new_window_args=(-c "$dir" -P -F '#{pane_id}')
+  [ -n "$BACKGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
+  if ! pane=$(tmux new-window "${new_window_args[@]}" 2>/dev/null) || [ -z "$pane" ]; then
+    fail "failed to open a new tmux window."
+  fi
+  window=$(tmux display-message -p -t "$pane" '#{window_id}' 2>/dev/null || printf '')
+
+  # Step 6: launch claude (literal mode — the space/flag must not be key-interpreted).
+  tmux send-keys -t "$pane" -l "$launch_cmd" 2>/dev/null || true
+  tmux send-keys -t "$pane" Enter 2>/dev/null || true
+
+  # Step 7: readiness gate before Shift+Tab (claude -w also builds the worktree
+  # before its TUI renders, so this wait matters). One-shot — no retry cycle, so
+  # on miss we settle a fixed amount and proceed best-effort.
+  local readiness_confirmed=false
+  if wait_ready "$pane" "$launch_cmd"; then
+    readiness_confirmed=true
+  else
+    sleep "$READY_FALLBACK_DELAY"
+  fi
+
+  # Step 8: plan mode — Shift+Tab twice (tmux key name BTab, sent key-interpreted).
+  tmux send-keys -t "$pane" BTab BTab 2>/dev/null || true
+  sleep "$MODE_DELAY"
+
+  # Step 9: type + submit the prompt, confirmed.
+  local prompt_confirmed=false
+  if send_prompt_confirmed "$pane" "$prompt"; then
+    prompt_confirmed=true
+  fi
+
+  # Result. ok:true from here on; warn on any unconfirmed step.
+  local warning="" display
+  if [ "$readiness_confirmed" = true ] && [ "$prompt_confirmed" = true ]; then
+    display="[handle-issue] #$n ($title) → opened a new tmux window, launched \`$launch_cmd\`, switched to plan mode, and submitted the prompt."
+  else
+    if [ "$readiness_confirmed" = false ] && [ "$prompt_confirmed" = false ]; then
+      warning="Couldn't confirm claude finished starting, nor that the prompt submitted — check the new window."
+    elif [ "$readiness_confirmed" = false ]; then
+      warning="Couldn't confirm claude finished starting before the plan-mode keys were sent, but the prompt did submit — verify plan mode is on in the new window."
+    else
+      warning="claude started, but couldn't confirm the prompt submitted — check the new window."
+    fi
+    display="[handle-issue] #$n ($title) → window opened, but I couldn't fully confirm the handoff. $warning"
+  fi
+
+  jq -n \
+    --arg issue "$n" --arg title "$title" --arg window "$window" --arg pane "$pane" \
+    --argjson ready "$readiness_confirmed" --argjson pconf "$prompt_confirmed" \
+    --arg warning "$warning" --arg display "$display" '
+    {
+      ok: true,
+      issue: ($issue | tonumber), title: $title, window: $window, pane: $pane,
+      readiness_confirmed: $ready, prompt_confirmed: $pconf
+    }
+    + (if $warning == "" then {} else {warning: $warning} end)
+    + {display: $display}'
+}
+
+# ---- router -----------------------------------------------------------------
+case "${1:-}" in
+  list)     shift; cmd_list "$@" ;;
+  dispatch) shift; cmd_dispatch "$@" ;;
+  *)        fail "usage: handle-issue.sh <list | dispatch <issue-number>>" ;;
+esac

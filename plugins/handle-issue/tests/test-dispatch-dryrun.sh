@@ -12,9 +12,15 @@ assert_eq "$(jqf "$out" .ok)" "true" "dryrun ok:true"
 assert_eq "$(jqf "$out" .dry_run)" "true" "dryrun flag"
 assert_eq "$(jqf "$out" .issue)" "42" "dryrun issue number"
 cmds="$(jqf "$out" '.commands | join("\n")')"
-assert_contains "$cmds" "claude -w 42" "default launch substituted"
+assert_contains "$cmds" "claude -w 42 --permission-mode plan" "default launch forces plan mode via flag"
 assert_contains "$cmds" "issue #42 in this repo" "default prompt substituted"
-assert_contains "$cmds" "BTab BTab" "shift-tab keys present"
+# Plan mode is now the launch flag, not keystrokes: no Shift+Tab, and the prompt
+# must NOT start with /plan (that routes to a /plan skill, e.g. forge's planner).
+assert_not_contains "$cmds" "BTab" "no shift-tab keystrokes (plan mode via flag)"
+assert_not_contains "$cmds" "/plan" "prompt no longer routes through the /plan skill"
+# Window is named "<repo-prefix>-<n>": origin fake/repo -> "rep-42".
+assert_eq "$(jqf "$out" .window_name)" "rep-42" "window_name is <repo-prefix>-<n>"
+assert_contains "$cmds" "-n rep-42" "new-window carries the -n <name> flag"
 # The helper uses git's resolved toplevel (on macOS /tmp -> /private/tmp), which
 # it also reports as .dir — assert the new-window targets exactly that.
 reported_dir="$(jqf "$out" .dir)"
@@ -28,6 +34,13 @@ out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
 cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_contains "$cmds" "claude -w feature-9" "custom launch substituted"
 assert_contains "$cmds" "fix 9 now" "custom prompt substituted"
+
+# custom window name override substitutes <n>
+out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
+      HANDLE_ISSUE_WINDOW_NAME="wip-<n>" \
+      bash "$SCRIPT" dispatch 7 2>&1)
+assert_eq "$(jqf "$out" .window_name)" "wip-7" "custom window name override"
+assert_contains "$(jqf "$out" '.commands | join("\n")')" "-n wip-7" "custom window name in new-window"
 
 # closed issue -> ok:false (dry-run still validates state)
 out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED bash "$SCRIPT" dispatch 42 2>&1)

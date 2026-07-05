@@ -53,6 +53,14 @@ assert_contains() {
   esac
 }
 
+# assert_not_contains <haystack> <needle> <label>
+assert_not_contains() {
+  case "$1" in
+    *"$2"*) fail_test "$3 — [$1] unexpectedly contains [$2]" ;;
+    *) : ;;
+  esac
+}
+
 # jqf <json> <filter> — run a jq filter, echo the raw result.
 jqf() { printf '%s' "$1" | jq -r "$2"; }
 

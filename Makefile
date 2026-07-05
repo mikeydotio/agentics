@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen
+.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue
 
-test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen
+test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -25,6 +25,12 @@ test-semver:
 
 test-deployit:
 	bash plugins/deployit/tests/run-tests.sh
+
+# handle-issue's plain-bash suite (plugins/handle-issue/tests/test-*.sh) — the
+# list/dispatch JSON contract, owner/repo parsing, and dry-run tmux sequencing
+# (driven by a fake gh on PATH; no live tmux/claude). Always runs (no bats).
+test-handle-issue:
+	bash plugins/handle-issue/tests/run-tests.sh
 
 test-atlas:
 	bash plugins/atlas/tests/run-tests.sh

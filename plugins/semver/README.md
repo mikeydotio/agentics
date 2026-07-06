@@ -9,6 +9,8 @@ Lifecycle management for semantic versioning in Claude Code projects. Tracks ver
 | `/semver current` | Show current version, commit count since last tag, and config status |
 | `/semver bump <major\|minor\|patch>` | Increment version, generate changelog entry from git log, commit and tag |
 | `/semver bump <type> --force` | Bump even with no commits since last tag (e.g., consolidating versions) |
+| `/semver set <vX.Y.Z>` | Assign an explicit version instead of incrementing — writes VERSION + changelog, commits, tags |
+| `/semver init [vX.Y.Z]` | One-shot setup: enable tracking + auto-bump and initialize at a version (default `v0.1.0`) |
 | `/semver tracking start` | Initialize version tracking — creates VERSION, CHANGELOG, config, and CLAUDE.md injection |
 | `/semver tracking stop` | Archive version data and disable tracking |
 | `/semver auto-bump start` | Enable automatic version bumps when pushing to the target branch |

@@ -268,6 +268,62 @@ test_route_auto_bump_stop() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 6b. set / init routing
+# ═══════════════════════════════════════════════════════════════════════════
+
+test_route_set_runs_set_run() {
+    local dir
+    dir=$(create_semver_repo)
+    cd "$dir"
+
+    local result
+    result=$(bash "$ROUTER" set 2.0.0)
+    assert_json_field "$result" ".ok" "true"
+    assert_json_field "$result" ".executed" "true"
+    assert_json_field "$result" ".new_version" "v2.0.0"
+
+    rm -rf "$dir"
+}
+
+test_route_set_no_version_returns_usage() {
+    local result
+    result=$(bash "$ROUTER" set)
+    assert_json_field "$result" ".ok" "false"
+    assert_json_field "$result" ".error" "usage"
+}
+
+test_route_init_runs_init_run() {
+    # On an already-tracked repo, init routes through and returns the read-only
+    # assessment (proving --plugin-root threading + argument passthrough work).
+    local dir
+    dir=$(create_semver_repo)
+    cd "$dir"
+
+    local result
+    result=$(bash "$ROUTER" init)
+    assert_json_field "$result" ".ok" "true"
+    assert_json_field "$result" ".executed" "false"
+    local has_q
+    has_q=$(echo "$result" | jq '.questions_needed | index("init_existing") != null')
+    assert_eq "true" "$has_q" "init returns the assessment question"
+
+    rm -rf "$dir"
+}
+
+test_route_init_with_optional_version() {
+    local dir
+    dir=$(create_semver_repo)
+    cd "$dir"
+
+    local result
+    result=$(bash "$ROUTER" init v9.9.9)
+    assert_json_field "$result" ".ok" "true"
+    assert_json_field "$result" ".reinit_needs_version" "false"
+
+    rm -rf "$dir"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # 7. Unknown command produces usage JSON
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -282,6 +338,8 @@ test_unknown_command_returns_usage_json() {
     display=$(echo "$result" | jq -r '.display')
     echo "$display" | grep -q "/semver current" || { echo "FAIL: missing /semver current in usage"; return 1; }
     echo "$display" | grep -q "/semver bump" || { echo "FAIL: missing /semver bump in usage"; return 1; }
+    echo "$display" | grep -q "/semver set" || { echo "FAIL: missing /semver set in usage"; return 1; }
+    echo "$display" | grep -q "/semver init" || { echo "FAIL: missing /semver init in usage"; return 1; }
     echo "$display" | grep -q "/semver validate" || { echo "FAIL: missing /semver validate in usage"; return 1; }
     echo "$display" | grep -q "/semver repair" || { echo "FAIL: missing /semver repair in usage"; return 1; }
     echo "$display" | grep -q "/semver tracking" || { echo "FAIL: missing /semver tracking in usage"; return 1; }

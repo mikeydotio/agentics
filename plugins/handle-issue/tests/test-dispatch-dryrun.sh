@@ -12,7 +12,7 @@ assert_eq "$(jqf "$out" .ok)" "true" "dryrun ok:true"
 assert_eq "$(jqf "$out" .dry_run)" "true" "dryrun flag"
 assert_eq "$(jqf "$out" .issue)" "42" "dryrun issue number"
 cmds="$(jqf "$out" '.commands | join("\n")')"
-assert_contains "$cmds" "claude -w 42 --permission-mode plan" "default launch forces plan mode via flag"
+assert_contains "$cmds" "claude -w rep-42 --permission-mode plan" "default launch names worktree like the window (<repo-prefix>-<n>), plan mode via flag"
 assert_contains "$cmds" "issue #42 in this repo" "default prompt substituted"
 # Plan mode is now the launch flag, not keystrokes: no Shift+Tab, and the prompt
 # must NOT start with /plan (that routes to a /plan skill, e.g. forge's planner).
@@ -21,6 +21,8 @@ assert_not_contains "$cmds" "/plan" "prompt no longer routes through the /plan s
 # Window is named "<repo-prefix>-<n>": origin fake/repo -> "rep-42".
 assert_eq "$(jqf "$out" .window_name)" "rep-42" "window_name is <repo-prefix>-<n>"
 assert_contains "$cmds" "-n rep-42" "new-window carries the -n <name> flag"
+# The core of issue #52: the worktree (claude -w <name>) arg IS the window name.
+assert_contains "$cmds" "claude -w $(jqf "$out" .window_name)" "worktree arg equals window_name"
 # The helper uses git's resolved toplevel (on macOS /tmp -> /private/tmp), which
 # it also reports as .dir — assert the new-window targets exactly that.
 reported_dir="$(jqf "$out" .dir)"
@@ -67,7 +69,11 @@ out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
       HANDLE_ISSUE_WINDOW_NAME="wip-<n>" \
       bash "$SCRIPT" dispatch 7 2>&1)
 assert_eq "$(jqf "$out" .window_name)" "wip-7" "custom window name override"
-assert_contains "$(jqf "$out" '.commands | join("\n")')" "-n wip-7" "custom window name in new-window"
+ovr_cmds="$(jqf "$out" '.commands | join("\n")')"
+assert_contains "$ovr_cmds" "-n wip-7" "custom window name in new-window"
+# The window-name override flows into the default launch's <name>, renaming the
+# worktree too — window and worktree stay in sync.
+assert_contains "$ovr_cmds" "claude -w wip-7 --permission-mode plan" "window-name override renames the worktree too"
 
 # closed issue -> ok:false (dry-run still validates state)
 out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED bash "$SCRIPT" dispatch 42 2>&1)

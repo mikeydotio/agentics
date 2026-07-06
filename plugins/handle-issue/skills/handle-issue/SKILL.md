@@ -7,7 +7,8 @@ argument-hint: "[issue-number]"
 # Handle Issue
 
 Turn "I want to work on issue #N" into a running, **plan-mode** Claude session in a **new tmux
-window**, launched inside a per-issue git worktree (`claude -w <n>`). You are a thin router: the
+window**, launched inside a per-issue git worktree named like the window (`claude -w <repo-prefix>-<n>`,
+e.g. `age-42`). You are a thin router: the
 deterministic work (GitHub lookups, tmux window lifecycle, keystroke sequencing, capture-pane
 confirmation) lives in `bin/handle-issue.sh`, which emits one JSON object with `ok` + `display`.
 **Your job is to route and render — never call `tmux` or `gh` yourself.**
@@ -66,18 +67,21 @@ Parse `ARGUMENTS` (everything after `/handle-issue`) and dispatch:
      confirmed, so the user should glance at the new window.
 
 On success the new window (named `<repo-prefix>-<number>`, e.g. `age-42`) is now running
-`claude -w <number> --permission-mode plan` in a fresh worktree — in plan mode, with the prompt
-already submitted. The helper also **marks the issue `in-progress`** on GitHub (creating the label
-in the repo if it's missing) — this is best-effort, so if it can't, dispatch still succeeds with a
-`warning` rather than `ok:false`. Nothing further is needed from you.
+`claude -w <repo-prefix>-<number> --permission-mode plan` in a fresh worktree named the **same** as
+the window (`.claude/worktrees/age-42`) — in plan mode, with the prompt already submitted. The helper
+also **marks the issue `in-progress`** on GitHub (creating the label in the repo if it's missing) —
+this is best-effort, so if it can't, dispatch still succeeds with a `warning` rather than `ok:false`.
+Nothing further is needed from you.
 
 ## Notes
 
 - **Requires tmux** (the helper hard-fails with a clear `display` otherwise) and an **authenticated
   `gh`** CLI.
-- The launch command (`claude -w <n> --permission-mode plan`) and the prompt are sent verbatim and
-  overridable via `HANDLE_ISSUE_LAUNCH_CMD` / `HANDLE_ISSUE_PROMPT`; the window name is
-  `HANDLE_ISSUE_WINDOW_NAME` (see the README for all env knobs). Plan mode comes from the
+- The launch command (`claude -w <name> --permission-mode plan`, where `<name>` resolves to the
+  `<repo-prefix>-<n>` window name so the worktree matches the window) and the prompt are sent
+  verbatim and overridable via `HANDLE_ISSUE_LAUNCH_CMD` / `HANDLE_ISSUE_PROMPT`; the window/worktree
+  name is `HANDLE_ISSUE_WINDOW_NAME` — overriding it renames both (see the README for all env knobs).
+  `<n>` (the issue number) is still available in the launch template. Plan mode comes from the
   `--permission-mode plan` flag — **not** a `/plan` prompt prefix (that would route to a `/plan`
   skill like forge's planner). Don't rewrite these here — the helper owns them.
 - **GitHub write-backs (all in the helper — never call `gh` yourself):** the default prompt tells

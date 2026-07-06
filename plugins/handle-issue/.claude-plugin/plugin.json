@@ -1,6 +1,6 @@
 {
   "name": "handle-issue",
-  "version": "2.24.0",
+  "version": "2.24.1",
   "description": "Dispatch a GitHub issue to a fresh, plan-mode Claude session in a new tmux window and per-issue git worktree — pick an issue by number or from open issues, then auto-launch claude -w <n> and prompt it to plan a fix",
   "author": {
     "name": "mikeydotio"

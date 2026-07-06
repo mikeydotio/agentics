@@ -1,6 +1,6 @@
 {
   "name": "council",
-  "version": "2.24.0",
+  "version": "2.24.1",
   "description": "Convene a 3-member sub-agent council to deliberate and vote on a decision when the user is unavailable — independent proposals, single-choice vote, one deliberation round, ranked-choice runoff",
   "author": {
     "name": "mikeydotio"

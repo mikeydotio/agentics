@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.24.1] - 2026-07-05
+
+### Fixed
+- force plan mode via --permission-mode flag; name the tmux window (36f4797)
+
+### Documentation
+- fix 3 lint warnings (ux summary length, 2 unresolvable plugin.json path citations) (6d6dd3e)
+- update map to 50c998d (44 docs re-projected, 809 cells judged + verified, 4 stale docs removed) (402cc2b)
+
+_[manual]_
+
 ## [v2.24.0] - 2026-07-05
 
 ### Added

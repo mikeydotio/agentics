@@ -24,6 +24,10 @@
 # readiness or prompt submission degrades to {ok:true, warning, ...} rather than
 # ok:false — reporting ok:false there would falsely imply nothing happened.
 #
+# The step-5.5 `.gitignore` write for the per-issue worktree dir (issue #55) is a
+# best-effort, idempotent hygiene write that runs AFTER the window opens; it can
+# never flip ok to false (a failure just reports gitignore:"add-failed").
+#
 # All timing/behaviour is env-overridable (see the config block) so the flow is
 # testable headlessly (HANDLE_ISSUE_DRY_RUN, HANDLE_ISSUE_GH_BIN) and the
 # launch command / prompt are escape-hatchable without editing code.
@@ -56,6 +60,13 @@ LABEL_DESC="${HANDLE_ISSUE_LABEL_DESC:-Actively being worked on}"
 # full; supports the <n> placeholder.
 WINDOW_NAME_TPL="${HANDLE_ISSUE_WINDOW_NAME:-}"
 BACKGROUND="${HANDLE_ISSUE_BACKGROUND:-}"
+# Per-issue git-worktree hygiene (issue #55). `claude -w <n>` (the launch flag)
+# creates a worktree under this path; dispatch idempotently ensures the path is
+# gitignored so it never dirties the parent repo's `git status`. The CONTAINER
+# dir is ignored (not a per-issue `<n>` leaf), so the rule stays correct
+# regardless of how the worktree leaf is named.
+WORKTREE_IGNORE_PATH="${HANDLE_ISSUE_WORKTREE_IGNORE_PATH:-.claude/worktrees/}"
+WORKTREE_IGNORE_COMMENT="# handle-issue per-issue git worktrees (ephemeral — never commit)"
 # Readiness gate before typing the prompt. Claude's TUI text is a version-specific
 # implementation detail, so READY_PATTERN is permissive and overridable; the
 # fallback delay covers the case where the marker never matches.
@@ -170,6 +181,53 @@ send_prompt_confirmed() {
   return 1
 }
 
+# worktree_ignore_status <dir> — READ-ONLY. Echo "already-ignored" when a git
+# ignore rule already covers the worktree dir — the exact rule OR a broader one
+# such as `.claude/` — else "not-ignored". `git check-ignore -q` returns 0 when a
+# path is ignored and 1 when it is not; 1 is a legitimate answer here, NOT an
+# error, so the call MUST be wrapped in `if` (a bare invocation would trip the
+# `set -e` at the top of this script). check-ignore reads ignore files only
+# (independent of HEAD/index), so it works in a fresh repo with no commits and no
+# .gitignore. Probe a child path so a directory rule (trailing `/`) matches.
+worktree_ignore_status() {
+  local dir="$1" base
+  base="${WORKTREE_IGNORE_PATH%/}"
+  if git -C "$dir" check-ignore -q "$base/probe" 2>/dev/null; then
+    printf 'already-ignored'
+  else
+    printf 'not-ignored'
+  fi
+}
+
+# append_worktree_ignore <dir> — idempotent, BEST-EFFORT write of the worktree
+# ignore rule to <dir>/.gitignore. Mirrors the canonical pattern in
+# plugins/atlas/bin/atlas-cli (trailing-newline fix, blank separator, comment,
+# rule). Echoes "added" on success, "already-ignored" if the exact rule is
+# already present, or "add-failed" on any write error — and NEVER aborts the
+# caller (a failure degrades the dispatch to the pre-fix status quo, an untracked
+# worktree dir, not a hard failure).
+append_worktree_ignore() {
+  local dir="$1" gi base rule lead=""
+  gi="$dir/.gitignore"
+  base="${WORKTREE_IGNORE_PATH%/}"
+  rule="$base/"
+  # Self-idempotent exact-line guard. The caller already gates on check-ignore
+  # (which also honors a broader rule); this keeps the writer safe on its own.
+  if [ -f "$gi" ] && grep -qxF "$rule" "$gi" 2>/dev/null; then
+    printf 'already-ignored'
+    return 0
+  fi
+  if [ -s "$gi" ]; then
+    # Terminate an unterminated final line first ($(...) strips the trailing
+    # newline, so a non-empty last byte means the file does NOT end in one)...
+    [ -n "$(tail -c1 "$gi" 2>/dev/null)" ] && lead=$'\n'
+    # ...then add a blank separator only when the last line is non-blank.
+    [ -n "$(tail -n1 "$gi" 2>/dev/null)" ] && lead="${lead}"$'\n'
+  fi
+  { printf '%s%s\n%s\n' "$lead" "$WORKTREE_IGNORE_COMMENT" "$rule" >>"$gi"; } 2>/dev/null \
+    && printf 'added' || printf 'add-failed'
+}
+
 # ---- subcommand: list -------------------------------------------------------
 cmd_list() {
   require_gh
@@ -250,17 +308,24 @@ cmd_dispatch() {
     wname="${pfx}-${n}"
   fi
 
+  # Read-only: is the per-issue worktree dir already gitignored (issue #55)?
+  # Computed here so both the dry-run preview and the real write can report it.
+  local ignore_status
+  ignore_status=$(worktree_ignore_status "$dir")
+
   # Dry-run: all read-only checks above ran for real; emit the planned commands
   # and stop before any side effect.
   if [ -n "$DRY_RUN" ]; then
     jq -n \
       --arg issue "$n" --arg title "$title" --arg repo "$repo" --arg dir "$dir" \
       --arg wname "$wname" --arg launch "$launch_cmd" --arg prompt "$prompt" \
-      --arg label "$LABEL" --arg color "$LABEL_COLOR" --arg desc "$LABEL_DESC" '
+      --arg label "$LABEL" --arg color "$LABEL_COLOR" --arg desc "$LABEL_DESC" \
+      --arg ignore_status "$ignore_status" '
       {
         ok: true, dry_run: true,
         issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
         window_name: $wname, label: $label,
+        gitignore: (if $ignore_status == "already-ignored" then "already-ignored" else "would-add" end),
         commands: ([
           ("tmux new-window -c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
@@ -296,6 +361,17 @@ cmd_dispatch() {
   if [ -n "$window" ]; then
     tmux set-window-option -t "$window" automatic-rename off 2>/dev/null || true
     tmux set-window-option -t "$window" allow-rename off 2>/dev/null || true
+  fi
+
+  # Step 5.5: idempotently gitignore the per-issue worktree dir (issue #55) so
+  # `claude -w` (Step 6, which actually creates .claude/worktrees/<n>) doesn't
+  # dirty the parent repo's `git status`. Best-effort — a write failure NEVER
+  # flips dispatch to ok:false (worst case is the pre-fix status quo). Runs AFTER
+  # the window opens (so `tmux new-window` stays the "first side effect") but
+  # before the worktree materializes.
+  local gitignore_result="already-ignored"
+  if [ "$ignore_status" = "not-ignored" ]; then
+    gitignore_result=$(append_worktree_ignore "$dir")
   fi
 
   # Step 6: launch claude (literal mode — the space/flag must not be key-interpreted).
@@ -361,7 +437,7 @@ cmd_dispatch() {
 
   jq -n \
     --arg issue "$n" --arg title "$title" --arg window "$window" --arg wname "$wname" \
-    --arg pane "$pane" --arg label "$LABEL" \
+    --arg pane "$pane" --arg label "$LABEL" --arg gitignore "$gitignore_result" \
     --argjson ready "$readiness_confirmed" --argjson pconf "$prompt_confirmed" \
     --argjson lapplied "$label_applied" \
     --arg warning "$warning" --arg display "$display" '
@@ -370,7 +446,7 @@ cmd_dispatch() {
       issue: ($issue | tonumber), title: $title,
       window: $window, window_name: $wname, pane: $pane,
       readiness_confirmed: $ready, prompt_confirmed: $pconf,
-      label: $label, label_applied: $lapplied
+      label: $label, label_applied: $lapplied, gitignore: $gitignore
     }
     + (if $warning == "" then {} else {warning: $warning} end)
     + {display: $display}'

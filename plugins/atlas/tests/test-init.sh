@@ -15,6 +15,8 @@ test_init_creates_claude_md_when_missing() {
         || { echo "    FAIL: start marker missing"; return 1; }
     grep -q "@docs/atlas/INDEX.md" "$repo/CLAUDE.md" \
         || { echo "    FAIL: INDEX import missing"; return 1; }
+    grep -q "Prefer the map to rediscovery" "$repo/CLAUDE.md" \
+        || { echo "    FAIL: prefer-the-map steering missing"; return 1; }
     grep -q "^\.atlas/$" "$repo/.gitignore" \
         || { echo "    FAIL: .atlas/ gitignore entry missing"; return 1; }
 

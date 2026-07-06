@@ -978,6 +978,86 @@ def cmd_recommend(args):
     })
 
 
+# ─── Shared question builders ────────────────────────────────────────────────
+# These produce the exact structured-question dicts the SKILL Question Loop
+# consumes (id/header/options/cancel_option/flag_mapping). They are shared by the
+# bump gather path and the set path so both stay in lockstep. The `verb`/`gerund`
+# params only affect user-facing wording; the defaults reproduce the original
+# bump strings byte-for-byte.
+
+def _q_dirty_tree(dirty, verb="bump"):
+    file_list = ", ".join(dirty[:10])
+    if len(dirty) > 10:
+        file_list += f" (+{len(dirty) - 10} more)"
+    return {
+        "id": "dirty_tree",
+        "header": "Dirty tree",
+        "question": f"You have uncommitted changes: {file_list}. What would you like to do?",
+        "options": [
+            {"label": f"Include all in {verb} commit"},
+            {"label": f"Stash and {verb} clean"},
+            {"label": "Cancel"}
+        ],
+        "cancel_option": 2,
+        "flag_mapping": {
+            "0": "--dirty-action include",
+            "1": "--dirty-action stash",
+        },
+    }
+
+
+def _q_wrong_branch(current, target, gerund="Bumping"):
+    return {
+        "id": "wrong_branch",
+        "header": "Branch",
+        "question": f"You're on branch `{current}`, not `{target}`. {gerund} from a non-target branch means the tag may not be reachable from the target branch until merged. Proceed?",
+        "options": [
+            {"label": "Proceed anyway"},
+            {"label": "Cancel"}
+        ],
+        "cancel_option": 1,
+        "flag_mapping": {},
+    }
+
+
+def _q_validation_failed(gerund="Bumping", verb="Bump"):
+    return {
+        "id": "validation_failed",
+        "header": "Sync issue",
+        "question": f"Validation found issues. {gerund} on top of broken sync may compound the problem.",
+        "options": [
+            {"label": "Run repair first"},
+            {"label": f"{verb} anyway"},
+            {"label": "Cancel"}
+        ],
+        "cancel_option": 2,
+        "flag_mapping": {
+            "1": "--skip-validation",
+        },
+        "special_actions": {
+            "0": "run_repair_then_retry",
+        },
+    }
+
+
+def _q_tag_conflict(version, detail=""):
+    return {
+        "id": "tag_conflict",
+        "header": "Tag conflict",
+        "question": f"Tag `{version}` already exists{detail}. What should happen?",
+        "options": [
+            {"label": "Overwrite existing tag"},
+            {"label": "Skip tag creation"},
+            {"label": "Cancel"}
+        ],
+        "cancel_option": 2,
+        "flag_mapping": {
+            "0": "--overwrite-tag",
+            "1": "--skip-tag",
+        },
+    }
+
+
 def cmd_bump_gather(args):
     """Gather all pre-check state for a bump without modifying anything."""
     output(_gather_bump_state(args))
@@ -1113,76 +1193,20 @@ def _gather_bump_state(args):
     if result["has_post_bump_prompt_hook"]:
         result["post_bump_prompt_hook_path"] = post_hook
 
-    # Build structured questions for the LLM
+    # Build structured questions for the LLM (shared builders keep the shape in
+    # lockstep with the set path).
     questions = []
     if "dirty_tree" in result["questions_needed"]:
-        file_list = ", ".join(result["dirty_files"][:10])
-        if len(result["dirty_files"]) > 10:
-            file_list += f" (+{len(result['dirty_files']) - 10} more)"
-        questions.append({
-            "id": "dirty_tree",
-            "header": "Dirty tree",
-            "question": f"You have uncommitted changes: {file_list}. What would you like to do?",
-            "options": [
-                {"label": "Include all in bump commit"},
-                {"label": "Stash and bump clean"},
-                {"label": "Cancel"}
-            ],
-            "cancel_option": 2,
-            "flag_mapping": {
-                "0": "--dirty-action include",
-                "1": "--dirty-action stash",
-            },
-        })
+        questions.append(_q_dirty_tree(result["dirty_files"]))
 
     if "wrong_branch" in result["questions_needed"]:
-        questions.append({
-            "id": "wrong_branch",
-            "header": "Branch",
-            "question": f"You're on branch `{result['current_branch']}`, not `{result['target_branch']}`. Bumping from a non-target branch means the tag may not be reachable from the target branch until merged. Proceed?",
-            "options": [
-                {"label": "Proceed anyway"},
-                {"label": "Cancel"}
-            ],
-            "cancel_option": 1,
-            "flag_mapping": {},
-        })
+        questions.append(_q_wrong_branch(result["current_branch"], result["target_branch"]))
 
     if "validation_failed" in result["questions_needed"]:
-        questions.append({
-            "id": "validation_failed",
-            "header": "Sync issue",
-            "question": "Validation found issues. Bumping on top of broken sync may compound the problem.",
-            "options": [
-                {"label": "Run repair first"},
-                {"label": "Bump anyway"},
-                {"label": "Cancel"}
-            ],
-            "cancel_option": 2,
-            "flag_mapping": {
-                "1": "--skip-validation",
-            },
-            "special_actions": {
-                "0": "run_repair_then_retry",
-            },
-        })
+        questions.append(_q_validation_failed())
 
     if result.get("tag_conflict"):
-        questions.append({
-            "id": "tag_conflict",
-            "header": "Tag conflict",
-            "question": f"Tag `{result['new_version']}` already exists. What should happen?",
-            "options": [
-                {"label": "Overwrite existing tag"},
-                {"label": "Skip tag creation"},
-                {"label": "Cancel"}
-            ],
-            "cancel_option": 2,
-            "flag_mapping": {
-                "0": "--overwrite-tag",
-                "1": "--skip-tag",
-            },
-        })
+        questions.append(_q_tag_conflict(result["new_version"]))
 
     result["questions"] = questions
 
@@ -1242,6 +1266,67 @@ def cmd_bump_run(args):
 
     # Happy path: nothing to ask — execute straight through (outputs + exits).
     cmd_bump_execute(args)
+
+
+def _apply_tag(new_version, tagging, skip_tag, overwrite_tag, result):
+    """Create / overwrite / skip the version tag, recording the outcome in result.
+
+    Must run inside the FileLock critical section (it invokes `git tag`). Shared
+    by the bump and set execute paths so tag-conflict handling is identical.
+    """
+    result["tag_created"] = False
+    result["tag_skipped"] = False
+    if not tagging or skip_tag:
+        result["tag_skipped"] = True
+    else:
+        if tag_exists(new_version):
+            if overwrite_tag:
+                git("tag", "-d", new_version)
+                git("tag", new_version)
+                result["tag_created"] = True
+                result["tag_overwritten"] = True
+            else:
+                result["tag_skipped"] = True
+                result["tag_conflict"] = True
+        else:
+            git("tag", new_version)
+            result["tag_created"] = True
+
+
+def _run_post_bump_and_verify(bump_type, old_version, new_version, tagging, skip_tag,
+                              project_dir, plugin_root, pre_hooks_result, result):
+    """Run post-bump user hooks and populate result['pre_hooks'/'post_hooks'/'verification'].
+
+    Shared by bump and set. Runs outside the FileLock (matching bump's original
+    ordering). Returns the post-hooks result dict.
+    """
+    post_hooks_result = {"hooks_run": 0, "prompt_hook": None, "warnings": []}
+    if plugin_root:
+        post_hooks_result = run_user_hooks(
+            "post-bump", bump_type, old_version, new_version, project_dir, plugin_root)
+
+    result["pre_hooks"] = {
+        "hooks_run": pre_hooks_result.get("hooks_run", 0),
+        "prompt_hook": pre_hooks_result.get("prompt_hook"),
+    }
+    result["post_hooks"] = {
+        "hooks_run": post_hooks_result.get("hooks_run", 0),
+        "prompt_hook": post_hooks_result.get("prompt_hook"),
+        "warnings": post_hooks_result.get("warnings", []),
+    }
+
+    # Post-bump verification
+    verification = {}
+    v = read_version_file(project_dir)
+    verification["version_matches"] = v == new_version
+    if tagging and not skip_tag:
+        verification["tag_exists"] = tag_exists(new_version)
+    changelog_path = os.path.join(project_dir, "CHANGELOG.md")
+    if os.path.isfile(changelog_path):
+        with open(changelog_path) as f:
+            verification["changelog_has_entry"] = f"## [{new_version}]" in f.read()
+    result["verification"] = verification
+    return post_hooks_result
 
 
 def cmd_bump_execute(args):
@@ -1334,23 +1419,7 @@ def cmd_bump_execute(args):
             result["commit_hash"] = commit_hash
 
             # Tag
-            result["tag_created"] = False
-            result["tag_skipped"] = False
-            if not tagging or skip_tag:
-                result["tag_skipped"] = True
-            else:
-                if tag_exists(new_version):
-                    if overwrite_tag:
-                        git("tag", "-d", new_version)
-                        git("tag", new_version)
-                        result["tag_created"] = True
-                        result["tag_overwritten"] = True
-                    else:
-                        result["tag_skipped"] = True
-                        result["tag_conflict"] = True
-                else:
-                    git("tag", new_version)
-                    result["tag_created"] = True
+            _apply_tag(new_version, tagging, skip_tag, overwrite_tag, result)
 
     except RuntimeError as e:
         # Clean up partial changes
@@ -1369,33 +1438,9 @@ def cmd_bump_execute(args):
         git("stash", "pop")
         result["stash_applied"] = True
 
-    # Run post-bump hooks
-    post_hooks_result = {"hooks_run": 0, "prompt_hook": None, "warnings": []}
-    if plugin_root:
-        post_hooks_result = run_user_hooks(
-            "post-bump", bump_type, old_version, new_version, project_dir, plugin_root)
-
-    result["pre_hooks"] = {
-        "hooks_run": pre_hooks_result.get("hooks_run", 0),
-        "prompt_hook": pre_hooks_result.get("prompt_hook"),
-    }
-    result["post_hooks"] = {
-        "hooks_run": post_hooks_result.get("hooks_run", 0),
-        "prompt_hook": post_hooks_result.get("prompt_hook"),
-        "warnings": post_hooks_result.get("warnings", []),
-    }
-
-    # Post-bump verification
-    verification = {}
-    v = read_version_file(project_dir)
-    verification["version_matches"] = v == new_version
-    if tagging and not skip_tag:
-        verification["tag_exists"] = tag_exists(new_version)
-    changelog_path = os.path.join(project_dir, "CHANGELOG.md")
-    if os.path.isfile(changelog_path):
-        with open(changelog_path) as f:
-            verification["changelog_has_entry"] = f"## [{new_version}]" in f.read()
-    result["verification"] = verification
+    # Run post-bump hooks + verification (shared with set)
+    _run_post_bump_and_verify(bump_type, old_version, new_version, tagging, skip_tag,
+                              project_dir, plugin_root, pre_hooks_result, result)
 
     # Build display
     lines = [f"[semver] Bumped {result['old_version']} → {result['new_version']} ({bump_type})"]
@@ -1483,6 +1528,326 @@ def cmd_bump_first_version(args):
     })
 
 
+# ─── set (assign an explicit version) ────────────────────────────────────────
+
+def _changelog_has_heading(changelog_path, version):
+    """True if CHANGELOG.md already contains a `## [<version>]` section."""
+    if not os.path.isfile(changelog_path):
+        return False
+    with open(changelog_path) as f:
+        return f"## [{version}]" in f.read()
+
+
+def _set_recut(project_dir, config, version, tagging):
+    """Coherent re-cut when the target equals the CURRENT version.
+
+    Never creates an empty commit (that would break `/semver validate` check 4,
+    since an empty commit shares its parent's tree and never becomes VERSION's
+    last-touch commit). Instead: if tagging is on and the version tag is missing
+    or points off the commit that last set VERSION, (re)place it there; otherwise
+    it is a clean no-op. Outputs and exits.
+    """
+    result = {"ok": True, "executed": True, "operation": "set", "recut": True,
+              "old_version": version, "new_version": version}
+
+    if not tagging:
+        result["tag_action"] = "none"
+        result["display"] = build_display(
+            [f"[semver] Already at {version}. Git tagging is disabled — nothing to do."])
+        output(result)
+
+    lvc = last_version_commit()
+    if not lvc:
+        result["tag_action"] = "none"
+        result["display"] = build_display(
+            [f"[semver] Already at {version}, but VERSION has no commit yet — "
+             "run /semver bump or commit VERSION first."])
+        output(result)
+
+    if not tag_exists(version):
+        git("tag", version, lvc)
+        result["tag_action"] = "created"
+        result["display"] = build_display(
+            [f"[semver] Already at {version}; tag was missing — created it on {lvc[:7]}."])
+        output(result)
+
+    if tag_commit(version) != lvc:
+        git("tag", "-d", version)
+        git("tag", version, lvc)
+        result["tag_action"] = "moved"
+        result["display"] = build_display(
+            [f"[semver] Already at {version}; moved tag onto the VERSION commit ({lvc[:7]})."])
+        output(result)
+
+    result["tag_action"] = "noop"
+    result["display"] = build_display(
+        [f"[semver] Already at {version}; tag already correct. Nothing to do."])
+    output(result)
+
+
+def cmd_set_run(args):
+    """Assign an explicit version. Gather state, then execute when no interaction
+    is needed (mirrors cmd_bump_run). Returns the same question shapes for the
+    SKILL Question Loop, or executes straight through on the happy path.
+    """
+    project_dir = os.getcwd()
+    config_path = os.path.join(project_dir, ".semver", "config.yaml")
+    config = Config(config_path)
+
+    # Re-entrancy guard
+    if os.environ.get("SEMVER_BUMP_IN_PROGRESS") == "1":
+        output_error("reentrancy",
+                     "A version operation is already in progress. Nested operations are not allowed.")
+
+    # Tracking check
+    if not config.exists or not config.get_bool("tracking"):
+        output_error("tracking_inactive",
+                     "Version tracking is not active. Run /semver init first.")
+
+    prefix = config.get("version_prefix")
+    tagging = config.get_bool("git_tagging")
+    target_branch = config.get("target_branch")
+
+    # Resolve + validate target
+    raw = args.version.strip()
+    target = prefix + raw if prefix and not raw.startswith(prefix) else raw
+    parsed_target = parse_version(target, prefix)
+    if parsed_target is None:
+        output_error("invalid_version",
+                     f"Invalid version format: '{target}'. Expected: {prefix}MAJOR.MINOR.PATCH")
+
+    old = read_version_file(project_dir)
+    has_prior = old is not None
+
+    # Same-version re-cut — coherent no-op / re-tag, never an empty commit.
+    if has_prior and target == old:
+        _set_recut(project_dir, config, target, tagging)  # outputs + exits
+
+    result = {
+        "ok": True,
+        "executed": False,
+        "operation": "set",
+        "version_prefix": prefix,
+        "git_tagging": tagging,
+        "target_branch": target_branch,
+        "old_version": old,
+        "new_version": target,
+        "questions_needed": [],
+    }
+    questions = []
+
+    # Backward / non-increasing version (only when a prior version exists).
+    if has_prior:
+        parsed_old = parse_version(old, prefix)
+        if parsed_old is not None and parsed_target <= parsed_old:
+            result["questions_needed"].append("backward_version")
+            questions.append({
+                "id": "backward_version",
+                "header": "Lower version",
+                "question": f"Target `{target}` is not higher than the current version `{old}`. Assign it anyway?",
+                "options": [
+                    {"label": "Proceed with the lower version"},
+                    {"label": "Cancel"}
+                ],
+                "cancel_option": 1,
+                "flag_mapping": {"0": "--allow-backward"},
+            })
+
+    # Dirty tree
+    d_files = dirty_files()
+    result["dirty_tree"] = len(d_files) > 0
+    result["dirty_files"] = d_files
+    if d_files:
+        result["questions_needed"].append("dirty_tree")
+        questions.append(_q_dirty_tree(d_files, verb="set"))
+
+    # Branch check
+    branch = current_branch()
+    result["current_branch"] = branch
+    result["on_target_branch"] = branch == target_branch
+    if branch != target_branch:
+        result["questions_needed"].append("wrong_branch")
+        questions.append(_q_wrong_branch(branch, target_branch, gerund="Setting a version"))
+
+    # Validation (only meaningful once a version exists)
+    if has_prior:
+        checks = run_validation_checks(project_dir, config)
+        summary = {"pass": 0, "fail": 0, "warn": 0, "skip": 0}
+        for c in checks:
+            k = c["status"].lower()
+            if k in summary:
+                summary[k] += 1
+        result["validation"] = {"checks": checks, "all_pass": summary["fail"] == 0, "summary": summary}
+        if summary["fail"] > 0:
+            result["questions_needed"].append("validation_failed")
+            questions.append(_q_validation_failed(gerund="Setting", verb="Set"))
+
+    # Tag conflict (target tag already exists — common for set)
+    if tagging and tag_exists(target):
+        result["tag_conflict"] = True
+        result["questions_needed"].append("tag_conflict")
+        questions.append(_q_tag_conflict(target, detail=" (setting moves it off its current commit)"))
+    else:
+        result["tag_conflict"] = False
+
+    result["questions"] = questions
+
+    # Post-bump PROMPT_HOOK presence
+    post_hook = os.path.join(project_dir, ".semver", "hooks", "post-bump", "PROMPT_HOOK.md")
+    result["has_post_bump_prompt_hook"] = os.path.isfile(post_hook)
+    if result["has_post_bump_prompt_hook"]:
+        result["post_bump_prompt_hook_path"] = post_hook
+
+    # Blockers → hand back (or abort when non-interactive)
+    blockers = list(result["questions_needed"])
+    if blockers:
+        if getattr(args, "non_interactive", False):
+            result["ok"] = False
+            result["error"] = "non_interactive_blocked"
+            result["message"] = "Cannot set non-interactively; open questions: " + ", ".join(blockers)
+            result["display"] = build_display(
+                ["[semver] Set aborted — manual attention needed:"]
+                + [f"  - {b}" for b in blockers])
+        else:
+            lines = [f"[semver] Preparing to set version: {old or '(none)'} → {target}"]
+            lines.append(f"  Questions to resolve: {', '.join(blockers)}")
+            result["display"] = build_display(lines)
+        output(result)
+
+    # Happy path — execute straight through (outputs + exits).
+    cmd_set_execute(args)
+
+
+def cmd_set_execute(args):
+    """Execute an explicit version assignment: lock, write, commit, tag, hooks."""
+    project_dir = os.getcwd()
+    config_path = os.path.join(project_dir, ".semver", "config.yaml")
+    config = Config(config_path)
+
+    if not config.exists or not config.get_bool("tracking"):
+        output_error("tracking_inactive", "Version tracking is not active.")
+
+    prefix = config.get("version_prefix")
+    tagging = config.get_bool("git_tagging")
+    fmt = config.get("changelog_format")
+    dirty_action = args.dirty_action
+    skip_tag = args.skip_tag
+    overwrite_tag = args.overwrite_tag
+    plugin_root = args.plugin_root
+
+    raw = args.version.strip()
+    new_version = prefix + raw if prefix and not raw.startswith(prefix) else raw
+    if parse_version(new_version, prefix) is None:
+        output_error("invalid_version",
+                     f"Invalid version format: '{new_version}'. Expected: {prefix}MAJOR.MINOR.PATCH")
+
+    old_version = read_version_file(project_dir)
+    has_prior = old_version is not None
+    today = datetime.date.today().isoformat()
+
+    # Re-cut safety net (normally resolved by cmd_set_run before reaching here).
+    if has_prior and new_version == old_version:
+        _set_recut(project_dir, config, new_version, tagging)  # outputs + exits
+
+    lock = FileLock(project_dir)
+    stashed = False
+    result = {"ok": True, "executed": True, "operation": "set",
+              "old_version": old_version, "new_version": new_version}
+
+    try:
+        with lock:
+            # Handle dirty tree
+            if dirty_action == "include":
+                git("add", "-A")
+            elif dirty_action == "stash":
+                git("stash", "push", "-m", "semver: pre-set stash")
+                stashed = True
+
+            changelog_path = os.path.join(project_dir, "CHANGELOG.md")
+            if has_prior:
+                lvc = last_version_commit()
+                raw_commits = commits_since(lvc) if lvc else commits_since(None)
+                result["commits_included"] = len([c for c in raw_commits
+                                                  if not c["subject"].startswith("chore(release):")])
+                entry = generate_changelog_entry(raw_commits, new_version, today, fmt, "manual", force=False)
+                result["changelog_preview"] = entry.split("\n\n", 1)[1][:500] if "\n\n" in entry else entry[:500]
+            else:
+                result["commits_included"] = 0
+
+            # Write VERSION
+            version_path = os.path.join(project_dir, "VERSION")
+            with open(version_path, "w") as f:
+                f.write(new_version + "\n")
+
+            # Write CHANGELOG (skip a duplicate heading, e.g. re-assigning a
+            # previously released version)
+            if has_prior:
+                if not _changelog_has_heading(changelog_path, new_version):
+                    prepend_changelog_entry(changelog_path, entry)
+                    result["changelog_updated"] = True
+                else:
+                    result["changelog_updated"] = False
+            else:
+                create_initial_changelog(changelog_path, new_version, today, fmt)
+                result["changelog_updated"] = True
+
+            # Commit
+            git("add", "VERSION", "CHANGELOG.md")
+            rc, _, err = git("commit", "-m", f"chore(release): {new_version}")
+            if rc != 0:
+                raise RuntimeError(f"git commit failed: {err}")
+
+            _, commit_hash, _ = git("rev-parse", "--short", "HEAD")
+            result["commit_hash"] = commit_hash
+
+            # Tag
+            _apply_tag(new_version, tagging, skip_tag, overwrite_tag, result)
+
+    except RuntimeError as e:
+        git("checkout", "VERSION", "CHANGELOG.md")
+        if stashed:
+            git("stash", "pop")
+        output_error("set_failed", str(e))
+    except Exception as e:
+        git("checkout", "VERSION", "CHANGELOG.md")
+        if stashed:
+            git("stash", "pop")
+        output_error("set_failed", f"Unexpected error: {e}")
+
+    if stashed:
+        git("stash", "pop")
+        result["stash_applied"] = True
+
+    # Post-bump hooks + verification (source sentinel "set"; set runs no pre-hooks)
+    _run_post_bump_and_verify("set", old_version, new_version, tagging, skip_tag,
+                              project_dir, plugin_root,
+                              {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+
+    # Build display
+    lines = [f"[semver] Set version → {new_version}"]
+    if has_prior:
+        lines.append(f"  Previous: {old_version} | Commits included: {result.get('commits_included', 0)}")
+    else:
+        lines.append("  Initial version (no prior VERSION)")
+    if result.get("tag_created"):
+        tag_note = f"Tag: {new_version} created"
+        if result.get("tag_overwritten"):
+            tag_note += " (moved off its previous commit)"
+        lines.append(f"  {tag_note}")
+    elif result.get("tag_skipped"):
+        if result.get("tag_conflict"):
+            lines.append("  Tag: skipped (conflict)")
+        elif not tagging:
+            lines.append("  Tag: disabled")
+        else:
+            lines.append("  Tag: skipped")
+    if result.get("stash_applied"):
+        lines.append("  Stash: restored")
+    result["display"] = build_display(lines)
+
+    output(result)
+
+
 def cmd_tracking_start(args):
     """Initialize version tracking."""
     project_dir = os.getcwd()
@@ -1508,18 +1873,21 @@ def cmd_tracking_start(args):
     return _tracking_start_fresh(project_dir, config_path, args)
 
 
-def _tracking_start_fresh(project_dir, config_path, args):
-    """Fresh tracking start with no archive."""
-    # Resolve options
-    prefix = "v"
-    if args.prefix:
-        prefix = "" if args.prefix == "none" else args.prefix
-    tagging = not args.no_tags
-    fmt = args.changelog or "grouped"
-    branch = args.branch or detect_default_branch()
+def _init_fresh_core(project_dir, config_path, *, version, prefix, tagging, fmt, branch,
+                     commit_message="chore: initialize semver tracking",
+                     raise_on_commit_fail=False):
+    """Write config + optional VERSION/CHANGELOG + CLAUDE.md, commit, and tag.
+
+    Shared by `tracking start` (version may be None) and `init` (version always
+    set). Returns a result dict; does NOT call output(). Enables tracking +
+    auto-bump. On invalid version it calls output_error (exits). On commit failure
+    it raises RuntimeError when raise_on_commit_fail is set (so `init` can roll
+    back the just-created files) or calls output_error otherwise (tracking start's
+    original behavior).
+    """
     today = datetime.date.today().isoformat()
 
-    # Create config
+    # Create config (tracking + auto-bump enabled)
     config = Config(config_path)
     config.set("tracking", "true")
     config.set("auto_bump", "true")
@@ -1535,19 +1903,19 @@ def _tracking_start_fresh(project_dir, config_path, args):
     # Optional starting version
     version_set = False
     tag_created = False
-    if args.version:
-        raw = args.version.strip()
-        version = prefix + raw if prefix and not raw.startswith(prefix) else raw
-        if parse_version(version, prefix) is None:
-            output_error("invalid_version", f"Invalid version: '{version}'")
+    if version:
+        raw = version.strip()
+        resolved = prefix + raw if prefix and not raw.startswith(prefix) else raw
+        if parse_version(resolved, prefix) is None:
+            output_error("invalid_version", f"Invalid version: '{resolved}'")
 
         version_path = os.path.join(project_dir, "VERSION")
         with open(version_path, "w") as f:
-            f.write(version + "\n")
+            f.write(resolved + "\n")
         files_created.append("VERSION")
 
         changelog_path = os.path.join(project_dir, "CHANGELOG.md")
-        create_initial_changelog(changelog_path, version, today, fmt)
+        create_initial_changelog(changelog_path, resolved, today, fmt)
         files_created.append("CHANGELOG.md")
         version_set = True
 
@@ -1557,22 +1925,49 @@ def _tracking_start_fresh(project_dir, config_path, args):
 
     # Commit
     git("add", *files_created)
-    rc, _, err = git("commit", "-m", "chore: initialize semver tracking")
+    rc, _, err = git("commit", "-m", commit_message)
     if rc != 0:
+        if raise_on_commit_fail:
+            raise RuntimeError(f"git commit failed: {err}")
         output_error("commit_failed", f"git commit failed: {err}")
 
     _, commit_hash, _ = git("rev-parse", "--short", "HEAD")
 
     # Tag if version was set and tagging enabled
     if version_set and tagging:
-        version = read_version_file(project_dir)
-        git("tag", version)
+        git("tag", read_version_file(project_dir))
         tag_created = True
+
+    return {
+        "version_prefix": prefix,
+        "git_tagging": tagging,
+        "changelog_format": fmt,
+        "target_branch": branch,
+        "version_set": version_set,
+        "version": read_version_file(project_dir),
+        "tag_created": tag_created,
+        "files_created": files_created,
+        "commit_hash": commit_hash,
+    }
+
+
+def _tracking_start_fresh(project_dir, config_path, args):
+    """Fresh tracking start with no archive."""
+    # Resolve options
+    prefix = "v"
+    if args.prefix:
+        prefix = "" if args.prefix == "none" else args.prefix
+    tagging = not args.no_tags
+    fmt = args.changelog or "grouped"
+    branch = args.branch or detect_default_branch()
+
+    core = _init_fresh_core(project_dir, config_path, version=args.version, prefix=prefix,
+                            tagging=tagging, fmt=fmt, branch=branch)
 
     display_lines = ["[semver] Tracking initialized"]
     display_lines.append(f"  Branch: {branch} | Tags: {'on' if tagging else 'off'} | Changelog: {fmt}")
-    if version_set:
-        display_lines.append(f"  Version: {read_version_file(project_dir)}")
+    if core["version_set"]:
+        display_lines.append(f"  Version: {core['version']}")
 
     output({
         "ok": True,
@@ -1581,11 +1976,11 @@ def _tracking_start_fresh(project_dir, config_path, args):
         "git_tagging": tagging,
         "changelog_format": fmt,
         "version_prefix": prefix,
-        "version_set": version_set,
-        "version": read_version_file(project_dir),
-        "tag_created": tag_created,
-        "files_created": files_created,
-        "commit_hash": commit_hash,
+        "version_set": core["version_set"],
+        "version": core["version"],
+        "tag_created": core["tag_created"],
+        "files_created": core["files_created"],
+        "commit_hash": core["commit_hash"],
         "display": build_display(display_lines),
     })
 
@@ -1879,6 +2274,377 @@ def cmd_tracking_stop_execute(args):
         "commit_hash": commit_hash,
         "display": build_display(display_lines),
     })
+
+
+# ─── init (one-shot adoption) ────────────────────────────────────────────────
+
+def _detect_prefix(version, tags, arg_prefix):
+    """Resolve the version prefix from an explicit arg, else infer from an
+    existing version/tag ('v' when it starts with v<digit>, otherwise '')."""
+    if arg_prefix is not None:
+        return "" if arg_prefix == "none" else arg_prefix
+    sample = version or (tags[0] if tags else None)
+    if sample and re.match(r"^v\d", sample):
+        return "v"
+    if sample:
+        return ""
+    return "v"
+
+
+def _init_cleanup(project_dir):
+    """Best-effort removal of files created by a failed fresh init.
+
+    Only called on the no-artifacts path, where VERSION/CHANGELOG.md/config did
+    not exist beforehand, so removing them fully reverts the attempt. CLAUDE.md
+    may have pre-existed, so only the injected block is stripped.
+    """
+    for rel in ("VERSION", "CHANGELOG.md", os.path.join(".semver", "config.yaml")):
+        p = os.path.join(project_dir, rel)
+        try:
+            if os.path.isfile(p):
+                os.remove(p)
+        except OSError:
+            pass
+    remove_claude_md(project_dir)
+    git("reset", "-q")  # best-effort unstage; harmless if it fails
+
+
+def _init_snapshot(project_dir, args):
+    """Read-only snapshot of existing semver artifacts."""
+    config_path = os.path.join(project_dir, ".semver", "config.yaml")
+    config = Config(config_path)
+    version = read_version_file(project_dir)
+    changelog_exists = os.path.isfile(os.path.join(project_dir, "CHANGELOG.md"))
+    prefix = config.get("version_prefix") if config.exists else _detect_prefix(version, [], args.prefix)
+    tags = all_version_tags(prefix)
+    archive_exists = os.path.isfile(os.path.join(project_dir, "VERSIONING_ARCHIVE.md"))
+    claude_block = False
+    cmd_path = os.path.join(project_dir, "CLAUDE.md")
+    if os.path.isfile(cmd_path):
+        with open(cmd_path) as f:
+            claude_block = CLAUDE_MD_START in f.read()
+    has_artifacts = bool(config.exists or version is not None or changelog_exists
+                         or tags or archive_exists)
+    return {
+        "config_exists": config.exists,
+        "tracking_active": config.exists and config.get_bool("tracking"),
+        "auto_bump_on": config.exists and config.get_bool("auto_bump"),
+        "version": version,
+        "changelog_exists": changelog_exists,
+        "prefix": prefix,
+        "tags": tags,
+        "archive_exists": archive_exists,
+        "claude_block": claude_block,
+        "has_artifacts": has_artifacts,
+    }
+
+
+def _init_do_fresh(project_dir, config_path, args):
+    """Clean init: enable tracking + auto-bump, seed version (arg or v0.1.0),
+    initialize changelog + tag on the new init commit. Outputs and exits."""
+    prefix = "" if args.prefix == "none" else (args.prefix or "v")
+    tagging = not args.no_tags
+    fmt = args.changelog or "grouped"
+    branch = args.branch or detect_default_branch()
+    raw = (args.version or "0.1.0").strip()
+    resolved = prefix + raw if prefix and not raw.startswith(prefix) else raw
+    if parse_version(resolved, prefix) is None:
+        output_error("invalid_version",
+                     f"Invalid version: '{resolved}'. Expected: {prefix}MAJOR.MINOR.PATCH")
+
+    result = {"ok": True, "executed": True, "operation": "init", "action": "fresh_init"}
+    lock = FileLock(project_dir)
+    try:
+        with lock:
+            core = _init_fresh_core(
+                project_dir, config_path, version=raw, prefix=prefix, tagging=tagging,
+                fmt=fmt, branch=branch,
+                commit_message=f"chore: initialize semver tracking at {resolved}",
+                raise_on_commit_fail=True)
+    except RuntimeError as e:
+        _init_cleanup(project_dir)
+        output_error("init_failed", str(e))
+
+    result.update({
+        "version": core["version"],
+        "version_set": core["version_set"],
+        "tag_created": core["tag_created"],
+        "target_branch": core["target_branch"],
+        "git_tagging": core["git_tagging"],
+        "changelog_format": core["changelog_format"],
+        "version_prefix": core["version_prefix"],
+        "files_created": core["files_created"],
+        "commit_hash": core["commit_hash"],
+    })
+    _run_post_bump_and_verify("init", None, core["version"], tagging, False,
+                              project_dir, args.plugin_root,
+                              {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+    lines = [f"[semver] Initialized semver tracking at {core['version']}"]
+    lines.append(f"  Auto-bump: on | Branch: {branch} | Tags: {'on' if tagging else 'off'} | Changelog: {fmt}")
+    result["display"] = build_display(lines)
+    output(result)
+
+
+def _init_assess(project_dir, args, snap):
+    """Artifacts present — return a read-only assessment + tailored options."""
+    coherent = snap["tracking_active"] and snap["version"] is not None
+    requested = args.version
+
+    options = []
+    command_mapping = {}
+    idx = 0
+
+    if snap["config_exists"] and (not snap["tracking_active"] or not snap["auto_bump_on"]):
+        options.append({"label": "Enable tracking + auto-bump"})
+        command_mapping[str(idx)] = "init execute --mode enable"
+        idx += 1
+
+    if not snap["config_exists"] and (snap["version"] is not None or snap["tags"]):
+        options.append({"label": "Adopt existing setup (write config)"})
+        command_mapping[str(idx)] = "init execute --mode adopt"
+        idx += 1
+
+    reinit_cmd = "init execute --mode reinit"
+    if requested:
+        reinit_cmd += f" --version {requested}"
+        options.append({"label": f"Re-initialize at {requested}"})
+    else:
+        options.append({"label": "Re-initialize at a version"})
+    command_mapping[str(idx)] = reinit_cmd
+    idx += 1
+
+    options.append({"label": "Check integrity (validate)"})
+    command_mapping[str(idx)] = "validate"
+    idx += 1
+
+    if not coherent:
+        options.append({"label": "Repair sync issues"})
+        command_mapping[str(idx)] = "repair"
+        idx += 1
+
+    options.append({"label": "Cancel"})
+    cancel_option = idx
+
+    parts = []
+    if snap["tracking_active"]:
+        parts.append("tracking active")
+    elif snap["config_exists"]:
+        parts.append("config present (tracking off)")
+    if snap["version"]:
+        parts.append(f"VERSION={snap['version']}")
+    if snap["tags"]:
+        parts.append(f"{len(snap['tags'])} version tag(s)")
+    if snap["changelog_exists"]:
+        parts.append("CHANGELOG present")
+    if snap["archive_exists"]:
+        parts.append("archive present")
+    assessment = "; ".join(parts) if parts else "existing semver artifacts"
+
+    output({
+        "ok": True,
+        "executed": False,
+        "operation": "init",
+        "artifacts": {
+            "config_exists": snap["config_exists"],
+            "tracking_active": snap["tracking_active"],
+            "auto_bump_on": snap["auto_bump_on"],
+            "version": snap["version"],
+            "changelog_exists": snap["changelog_exists"],
+            "tags": snap["tags"],
+            "tag_count": len(snap["tags"]),
+            "archive_exists": snap["archive_exists"],
+        },
+        "reinit_needs_version": requested is None,
+        "questions_needed": ["init_existing"],
+        "questions": [{
+            "id": "init_existing",
+            "header": "Already set up",
+            "question": f"This repo already has semver artifacts ({assessment}). How do you want to proceed?",
+            "options": options,
+            "cancel_option": cancel_option,
+            "command_mapping": command_mapping,
+        }],
+        "display": build_display([
+            f"[semver] Already initialized — {assessment}.",
+            "  Choose how to proceed (nothing has changed yet)."]),
+    })
+
+
+def cmd_init_run(args):
+    """Detect existing artifacts. With none, run a clean init in one call; with
+    any, return a read-only assessment + tailored options (no writes)."""
+    project_dir = os.getcwd()
+    ensure_git_root()
+    config_path = os.path.join(project_dir, ".semver", "config.yaml")
+
+    if os.environ.get("SEMVER_BUMP_IN_PROGRESS") == "1":
+        output_error("reentrancy",
+                     "A version operation is already in progress. Nested operations are not allowed.")
+
+    snap = _init_snapshot(project_dir, args)
+    if not snap["has_artifacts"]:
+        _init_do_fresh(project_dir, config_path, args)  # outputs + exits
+    _init_assess(project_dir, args, snap)  # outputs + exits
+
+
+def _init_enable(project_dir, config_path, args):
+    """Flip tracking + auto-bump on for an existing config; keep version/tags."""
+    config = Config(config_path)
+    if not config.exists:
+        output_error("no_config", "No .semver/config.yaml found. Use --mode fresh or adopt.")
+    config.set("tracking", "true")
+    config.set("auto_bump", "true")
+    config.write()
+    inject_claude_md(project_dir)
+    git("add", ".semver/config.yaml", "CLAUDE.md")
+    # git diff --cached --quiet: rc 0 == no staged change, rc 1 == changes staged
+    rc, _, _ = git("diff", "--cached", "--quiet")
+    committed = False
+    commit_hash = None
+    if rc != 0:
+        rc2, _, err = git("commit", "-m", "chore: enable semver tracking + auto-bump")
+        if rc2 != 0:
+            output_error("commit_failed", f"git commit failed: {err}")
+        _, commit_hash, _ = git("rev-parse", "--short", "HEAD")
+        committed = True
+    output({
+        "ok": True, "executed": True, "operation": "init", "action": "enable",
+        "tracking": True, "auto_bump": True, "committed": committed, "commit_hash": commit_hash,
+        "display": build_display([
+            "[semver] Tracking + auto-bump enabled."
+            + ("" if committed else " (no changes to commit)")]),
+    })
+
+
+def _init_adopt(project_dir, config_path, args):
+    """Write a config over an existing VERSION/tags without changing them."""
+    if os.path.isfile(config_path):
+        output_error("config_exists", "Config already exists. Use --mode enable or reinit.")
+    version = read_version_file(project_dir)
+    prefix = _detect_prefix(version, all_version_tags(_detect_prefix(version, [], args.prefix)), args.prefix)
+    tags = all_version_tags(prefix)
+    tagging = not args.no_tags
+    fmt = args.changelog or "grouped"
+    branch = args.branch or detect_default_branch()
+
+    config = Config(config_path)
+    config.set("tracking", "true")
+    config.set("auto_bump", "true")
+    config.set("auto_bump_confirm", "true")
+    config.set("version_prefix", prefix)
+    config.set("git_tagging", str(tagging).lower())
+    config.set("changelog_format", fmt)
+    config.set("target_branch", branch)
+    config.write()
+    inject_claude_md(project_dir)
+    git("add", ".semver/config.yaml", "CLAUDE.md")
+    rc, _, err = git("commit", "-m", "chore: adopt existing version under semver tracking")
+    if rc != 0:
+        output_error("commit_failed", f"git commit failed: {err}")
+    _, commit_hash, _ = git("rev-parse", "--short", "HEAD")
+    output({
+        "ok": True, "executed": True, "operation": "init", "action": "adopt",
+        "version": version, "version_prefix": prefix, "tag_count": len(tags),
+        "commit_hash": commit_hash,
+        "display": build_display([
+            f"[semver] Adopted existing setup under semver tracking (version: {version or 'unset'}).",
+            f"  Prefix: '{prefix}' | Tags kept: {len(tags)} | Auto-bump: on"]),
+    })
+
+
+def _init_reinit(project_dir, config_path, args):
+    """Reset config + VERSION + tag to an explicit version, keeping git history."""
+    if not args.version:
+        output_error("missing_version", "--mode reinit requires --version.")
+
+    existing = Config(config_path)
+    if existing.exists:
+        prefix = existing.get("version_prefix")
+        tagging = existing.get_bool("git_tagging")
+        fmt = existing.get("changelog_format")
+        branch = existing.get("target_branch")
+    else:
+        cur = read_version_file(project_dir)
+        prefix = _detect_prefix(cur, all_version_tags(_detect_prefix(cur, [], args.prefix)), args.prefix)
+        tagging = not args.no_tags
+        fmt = args.changelog or "grouped"
+        branch = args.branch or detect_default_branch()
+    # explicit overrides
+    if args.prefix is not None:
+        prefix = "" if args.prefix == "none" else args.prefix
+    if args.no_tags:
+        tagging = False
+    if args.changelog:
+        fmt = args.changelog
+    if args.branch:
+        branch = args.branch
+
+    raw = args.version.strip()
+    resolved = prefix + raw if prefix and not raw.startswith(prefix) else raw
+    if parse_version(resolved, prefix) is None:
+        output_error("invalid_version", f"Invalid version: '{resolved}'. Expected: {prefix}MAJOR.MINOR.PATCH")
+
+    today = datetime.date.today().isoformat()
+    result = {"ok": True, "executed": True, "operation": "init", "action": "reinit",
+              "version": resolved}
+    lock = FileLock(project_dir)
+    with lock:
+        config = Config(config_path)
+        config.set("tracking", "true")
+        config.set("auto_bump", "true")
+        config.set("auto_bump_confirm", "true")
+        config.set("version_prefix", prefix)
+        config.set("git_tagging", str(tagging).lower())
+        config.set("changelog_format", fmt)
+        config.set("target_branch", branch)
+        config.write()
+
+        with open(os.path.join(project_dir, "VERSION"), "w") as f:
+            f.write(resolved + "\n")
+
+        changelog_path = os.path.join(project_dir, "CHANGELOG.md")
+        if not os.path.isfile(changelog_path):
+            create_initial_changelog(changelog_path, resolved, today, fmt)
+        elif not _changelog_has_heading(changelog_path, resolved):
+            entry = f"## [{resolved}] - {today}\n\n- Re-initialized version tracking\n\n_[manual]_\n"
+            prepend_changelog_entry(changelog_path, entry)
+
+        inject_claude_md(project_dir)
+        git("add", ".semver/config.yaml", "VERSION", "CHANGELOG.md", "CLAUDE.md")
+        rc, _, err = git("commit", "-m", f"chore: re-initialize semver at {resolved}")
+        if rc != 0:
+            output_error("commit_failed", f"git commit failed: {err}")
+        _, commit_hash, _ = git("rev-parse", "--short", "HEAD")
+        result["commit_hash"] = commit_hash
+        # Overwrite an existing tag — reinit is a deliberate reset.
+        _apply_tag(resolved, tagging, False, True, result)
+
+    _run_post_bump_and_verify("init", None, resolved, tagging, False,
+                              project_dir, args.plugin_root,
+                              {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+    lines = [f"[semver] Re-initialized semver at {resolved}"]
+    if result.get("tag_created"):
+        lines.append(f"  Tag: {resolved} " + ("moved" if result.get("tag_overwritten") else "created"))
+    result["display"] = build_display(lines)
+    output(result)
+
+
+def cmd_init_execute(args):
+    """Apply a chosen init mode selected from the assessment."""
+    project_dir = os.getcwd()
+    ensure_git_root()
+    config_path = os.path.join(project_dir, ".semver", "config.yaml")
+    mode = args.mode
+    if mode == "fresh":
+        _init_do_fresh(project_dir, config_path, args)
+    elif mode == "enable":
+        _init_enable(project_dir, config_path, args)
+    elif mode == "adopt":
+        _init_adopt(project_dir, config_path, args)
+    elif mode == "reinit":
+        _init_reinit(project_dir, config_path, args)
+    else:
+        output_error("usage", f"Unknown init mode: {mode}")
 
 
 def cmd_auto_bump(args):
@@ -2235,6 +3001,41 @@ def main():
     first_v = bump_sub.add_parser("first-version", help="Set initial version")
     first_v.add_argument("version", help="Version string (e.g., 0.1.0)")
 
+    # set (assign an explicit version)
+    set_parser = subparsers.add_parser("set", help="Assign an explicit version")
+    set_sub = set_parser.add_subparsers(dest="set_command")
+    for _name in ("run", "execute"):
+        _p = set_sub.add_parser(_name)
+        _p.add_argument("version", help="Target version (e.g., 2.0.0)")
+        _p.add_argument("--source", default="set")
+        _p.add_argument("--dirty-action", choices=["include", "stash", "none"], default="none")
+        _p.add_argument("--skip-tag", action="store_true")
+        _p.add_argument("--overwrite-tag", action="store_true")
+        _p.add_argument("--skip-validation", action="store_true")
+        _p.add_argument("--allow-backward", action="store_true")
+        _p.add_argument("--plugin-root", default=None)
+        if _name == "run":
+            _p.add_argument("--non-interactive", action="store_true")
+
+    # init (one-shot adoption)
+    init_parser = subparsers.add_parser("init", help="Enable tracking + auto-bump and initialize")
+    init_sub = init_parser.add_subparsers(dest="init_command")
+    init_run = init_sub.add_parser("run")
+    init_run.add_argument("version", nargs="?", default=None)
+    init_run.add_argument("--prefix", default=None)
+    init_run.add_argument("--no-tags", action="store_true")
+    init_run.add_argument("--changelog", choices=["grouped", "flat"], default=None)
+    init_run.add_argument("--branch", default=None)
+    init_run.add_argument("--plugin-root", default=None)
+    init_exec = init_sub.add_parser("execute")
+    init_exec.add_argument("--mode", choices=["fresh", "enable", "adopt", "reinit"], required=True)
+    init_exec.add_argument("--version", dest="version", default=None)
+    init_exec.add_argument("--prefix", default=None)
+    init_exec.add_argument("--no-tags", action="store_true")
+    init_exec.add_argument("--changelog", choices=["grouped", "flat"], default=None)
+    init_exec.add_argument("--branch", default=None)
+    init_exec.add_argument("--plugin-root", default=None)
+
     # tracking
     tracking_parser = subparsers.add_parser("tracking", help="Tracking operations")
     tracking_sub = tracking_parser.add_subparsers(dest="tracking_command")
@@ -2306,6 +3107,24 @@ def main():
         else:
             print(json.dumps({"ok": False, "error": "usage",
                                "message": "Usage: semver-cli bump <run|gather|execute|first-version>"}))
+            sys.exit(2)
+    elif args.command == "set":
+        if args.set_command == "run":
+            cmd_set_run(args)
+        elif args.set_command == "execute":
+            cmd_set_execute(args)
+        else:
+            print(json.dumps({"ok": False, "error": "usage",
+                               "message": "Usage: semver-cli set <run|execute> <version>"}))
+            sys.exit(2)
+    elif args.command == "init":
+        if args.init_command == "run":
+            cmd_init_run(args)
+        elif args.init_command == "execute":
+            cmd_init_execute(args)
+        else:
+            print(json.dumps({"ok": False, "error": "usage",
+                               "message": "Usage: semver-cli init <run|execute> [version]"}))
             sys.exit(2)
     elif args.command == "tracking":
         if args.tracking_command == "start":

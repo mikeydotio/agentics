@@ -57,6 +57,12 @@ With no number, you get a single question listing open issues (newest first). Pi
      (`age-42`-style) and capture its pane id. tmux's `automatic-rename` and program-driven
      `allow-rename` are turned **off** on the window so the name sticks even though Claude sets its
      own terminal title.
+   - **Worktree hygiene** — before launching Claude, idempotently ensure `.claude/worktrees/` is
+     gitignored (the container dir `claude -w <n>` builds its per-issue worktree under), so the
+     ephemeral worktrees never dirty the parent repo's `git status`. It respects a broader existing
+     rule (e.g. `.claude/`) and is a no-op when already ignored. Best-effort: a write failure only
+     leaves the pre-fix status quo (an untracked worktree dir), never an `ok:false`. Override the
+     ignored path with `HANDLE_ISSUE_WORKTREE_IGNORE_PATH`.
    - Launch `claude -w <n> --permission-mode plan` (literal send + Enter) — the `--permission-mode
      plan` flag opens the session **in plan mode deterministically**, with no keystrokes.
    - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
@@ -86,6 +92,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `HANDLE_ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
 | `HANDLE_ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
 | `HANDLE_ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window name. Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
+| `HANDLE_ISSUE_WORKTREE_IGNORE_PATH` | `.claude/worktrees/` | Path idempotently added to the repo's root `.gitignore` at dispatch so `claude -w`'s per-issue worktrees don't dirty `git status`. No-op if already ignored (respects a broader rule like `.claude/`). |
 | `HANDLE_ISSUE_BACKGROUND` | _(unset)_ | Set to `1` to open the window with `-d` (don't switch focus to it). |
 | `HANDLE_ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
 | `HANDLE_ISSUE_LIST_LIMIT` | `50` | Max open issues fetched for the picker. |

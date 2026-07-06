@@ -87,5 +87,10 @@ in the repo if it's missing) — this is best-effort, so if it can't, dispatch s
   helper has already returned. The `in-progress` label is configurable via `HANDLE_ISSUE_LABEL`
   (set it to empty to disable labeling); `HANDLE_ISSUE_LABEL_COLOR` / `HANDLE_ISSUE_LABEL_DESC`
   style it on first creation.
+- **Worktree hygiene (automatic):** dispatch idempotently gitignores `.claude/worktrees/` — the
+  container dir `claude -w <n>` builds each per-issue worktree under — so the ephemeral worktrees
+  never dirty the parent repo's `git status`. Best-effort and reported in the `gitignore` result
+  field (`added` / `already-ignored` / `add-failed`); it never affects `ok`. The helper owns this —
+  don't add gitignore rules yourself.
 - To preview what a dispatch *would* do without opening a window, the helper supports
   `HANDLE_ISSUE_DRY_RUN=1` (used by the tests); you generally won't need it interactively.

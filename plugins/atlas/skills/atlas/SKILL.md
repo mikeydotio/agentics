@@ -45,6 +45,7 @@ never write a doc or a cell yourself.
 | Command | Flow |
 |---|---|
 | `/atlas` or `/atlas status` | Run `status` via the router; present tier, affected docs, and the suggested action (T0: nothing; T1/T2: `/atlas update`; T3: explain why the map is untrustworthy). |
+| `/atlas covers <path>...` | Run `covers` via the router — a per-file analogue of `status`. For each path, report whether it is owned by a module doc, which doc, and whether that coverage is fresh (recorded blob == current blob). Use before exploring specific files: `mapped` + `fresh` means read the routed doc instead of re-deriving; `mapped` + not `fresh`, or unmapped, means the map won't fully answer for that file. Pure ledger read — no regeneration. |
 | `/atlas map` | Full map. Read `references/mapping-protocol.md` and `references/map-format.md`, then follow the protocol exactly — step order is load-bearing. |
 | `/atlas update` | Incremental update. Read `references/update-protocol.md` and `references/map-format.md`, then follow the protocol exactly. |
 | `/atlas verify` | Lint + verification sweep without regeneration. Read `references/update-protocol.md` (Verify flow section). |

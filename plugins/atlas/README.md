@@ -33,6 +33,7 @@ a SessionStart hook warns agents when the map drifts from the code.
 | `/atlas map` | Full map: scan, partition, spawn cartographer agents, verify, lint — on an `atlas/*` branch, checkpointed per wave, final commit gated on lint |
 | `/atlas update` | Incremental: regenerate only stale/affected docs; mechanical rename rewrites; orphan removal — same branch + checkpoint flow |
 | `/atlas status` | Mapped? How stale? Current tier and which docs drifted |
+| `/atlas covers <path>...` | Per-file analogue of `status`: is this file owned by a module doc, which one, and is that coverage fresh? Check before exploring a specific file — mapped + fresh means read the doc instead of re-deriving |
 | `/atlas verify` | Read-only diagnostic: full lint + sampled claim verification, report only — no map writes (refreshes a gitignored verify cache for `/atlas repair`) |
 | `/atlas repair` | Verify-then-fix: correct the specific claims verify flagged (wrong line, path, verb, relationship, dead link) without re-exploring; reuses a prior `/atlas verify`; defers drift to `/atlas update` |
 | `/atlas init` | (Re)inject the managed CLAUDE.md block and the `.atlas/` gitignore entry |

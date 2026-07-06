@@ -15,10 +15,15 @@ never edits CLAUDE.md by hand.
 
 - The imported INDEX above is this project's codebase map. Use its routing
   table: read the listed module doc before working in that area.
+- Prefer the map to rediscovery. A module doc already captures its area's
+  purpose, API, load-bearing symbols, relationships, and gotchas — the
+  orientation you would otherwise rebuild by exploring. Read the routed doc
+  first; explore further only for task-specific detail it doesn't cover.
 - The map covers code structure only; build/test/workflow guidance lives in
   the rest of this file.
 - After committing changes to mapped source files, suggest running
-  `/atlas update`.
+  `/atlas update` — including when exploration surfaced a durable, map-worthy
+  fact (a gotcha, a load-bearing symbol) the map was missing.
 <!-- atlas:end -->
 ```
 

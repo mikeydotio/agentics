@@ -23,6 +23,10 @@ test_index_rebuild_creates_index() {
         || { echo "    FAIL: module routing row missing"; return 1; }
     echo "$index" | grep -q "docs/atlas/modules/<id>.md" \
         || { echo "    FAIL: id-to-path rule missing from header"; return 1; }
+    echo "$index" | grep -q "instead of rediscovering it" \
+        || { echo "    FAIL: prefer-the-map header steering missing"; return 1; }
+    echo "$index" | grep -q "replaces first-principles rediscovery" \
+        || { echo "    FAIL: prefer-the-map reminder steering missing"; return 1; }
 
     cleanup_fixture_repo "$repo"
 }

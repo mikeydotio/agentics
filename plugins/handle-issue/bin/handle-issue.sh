@@ -10,7 +10,8 @@
 #                        option:{label,description}}], display}. Side-effect free.
 #
 #   dispatch <n>         Open a new tmux window (named "<repo-prefix>-<n>", e.g.
-#                        "age-42") in the current session, `cd` it to the repo
+#                        "age-42") in the current session — DETACHED by default so
+#                        the caller's focus stays put — `cd` it to the repo
 #                        root, launch `claude -w <n> --permission-mode plan` (the
 #                        official --worktree switch creates a per-issue git
 #                        worktree, so it must run from a git-tracked location;
@@ -55,7 +56,12 @@ LABEL_DESC="${HANDLE_ISSUE_LABEL_DESC:-Actively being worked on}"
 # the repo name, lowercased, + "-<n>" (e.g. "age-42"). Set this to override in
 # full; supports the <n> placeholder.
 WINDOW_NAME_TPL="${HANDLE_ISSUE_WINDOW_NAME:-}"
-BACKGROUND="${HANDLE_ISSUE_BACKGROUND:-}"
+# Focus policy: the new window is created DETACHED (-d) by default so the user's
+# focus stays on their current window. Every follow-up send-keys/capture-pane
+# targets the new pane by its captured id (not "the current window"), so the
+# handoff still lands in the right window without stealing focus. Set
+# HANDLE_ISSUE_FOREGROUND=1 to switch focus to the new window instead.
+FOREGROUND="${HANDLE_ISSUE_FOREGROUND:-}"
 # Readiness gate before typing the prompt. Claude's TUI text is a version-specific
 # implementation detail, so READY_PATTERN is permissive and overridable; the
 # fallback delay covers the case where the marker never matches.
@@ -250,19 +256,25 @@ cmd_dispatch() {
     wname="${pfx}-${n}"
   fi
 
+  # Detached by default (keeps the caller's focus); "-d " unless FOREGROUND is set.
+  # Kept in sync with the real new-window invocation in Step 5 below.
+  local detach="-d "
+  [ -n "$FOREGROUND" ] && detach=""
+
   # Dry-run: all read-only checks above ran for real; emit the planned commands
   # and stop before any side effect.
   if [ -n "$DRY_RUN" ]; then
     jq -n \
       --arg issue "$n" --arg title "$title" --arg repo "$repo" --arg dir "$dir" \
       --arg wname "$wname" --arg launch "$launch_cmd" --arg prompt "$prompt" \
-      --arg label "$LABEL" --arg color "$LABEL_COLOR" --arg desc "$LABEL_DESC" '
+      --arg label "$LABEL" --arg color "$LABEL_COLOR" --arg desc "$LABEL_DESC" \
+      --arg detach "$detach" '
       {
         ok: true, dry_run: true,
         issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
         window_name: $wname, label: $label,
         commands: ([
-          ("tmux new-window -c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
+          ("tmux new-window " + $detach + "-c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
           ("tmux send-keys -t <pane> -l " + $prompt),
@@ -284,7 +296,9 @@ cmd_dispatch() {
   # window creation is atomic; a failure leaves nothing to clean up.
   local new_window_args pane window
   new_window_args=(-c "$dir" -n "$wname" -P -F '#{pane_id}')
-  [ -n "$BACKGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
+  # Detached by default so the caller's focus stays put; opt in to focus-follow
+  # with HANDLE_ISSUE_FOREGROUND=1. Keystrokes below target $pane by id regardless.
+  [ -z "$FOREGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
   if ! pane=$(tmux new-window "${new_window_args[@]}" 2>/dev/null) || [ -z "$pane" ]; then
     fail "failed to open a new tmux window."
   fi

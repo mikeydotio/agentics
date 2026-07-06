@@ -3,8 +3,9 @@
 Turn "I want to work on issue #N" into a running, **plan-mode** Claude session in a **new tmux
 window**, launched inside a per-issue git **worktree** (`claude -w <n>`). Pick an issue by number
 or interactively from the repo's open issues; the plugin opens a window named `<repo-prefix>-<n>`
-(e.g. `age-42`), `cd`s it to the repo root, launches Claude in a worktree **directly in plan mode**
-(`--permission-mode plan`), and submits a prompt asking it to plan a fix — all in one command.
+(e.g. `age-42`) **without stealing your focus**, `cd`s it to the repo root, launches Claude in a
+worktree **directly in plan mode** (`--permission-mode plan`), and submits a prompt asking it to
+plan a fix — all in one command.
 
 It also keeps GitHub in sync: dispatch **marks the issue `in-progress`** (creating the label if the
 repo doesn't have it), and the handoff prompt briefs the child session to **comment its finalized
@@ -53,10 +54,12 @@ With no number, you get a single question listing open issues (newest first). Pi
 2. **Dispatch** — `bin/handle-issue.sh dispatch <n>` runs a strict, ordered sequence:
    - Hard preconditions first (tmux present, inside a git repo, `gh` authenticated, the issue
      exists and is open) — any failure stops **before** anything is opened.
-   - `tmux new-window -c <repo-root> -n <repo-prefix>-<n>` — open the window with a stable name
-     (`age-42`-style) and capture its pane id. tmux's `automatic-rename` and program-driven
+   - `tmux new-window -d -c <repo-root> -n <repo-prefix>-<n>` — open the window **detached** (`-d`),
+     so **your focus stays on the current window**, with a stable name (`age-42`-style), and capture
+     its pane id. Every later keystroke targets that pane **by id**, so the handoff still lands in
+     the new window without stealing focus. tmux's `automatic-rename` and program-driven
      `allow-rename` are turned **off** on the window so the name sticks even though Claude sets its
-     own terminal title.
+     own terminal title. (Set `HANDLE_ISSUE_FOREGROUND=1` to switch focus to the new window instead.)
    - Launch `claude -w <n> --permission-mode plan` (literal send + Enter) — the `--permission-mode
      plan` flag opens the session **in plan mode deterministically**, with no keystrokes.
    - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
@@ -86,7 +89,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `HANDLE_ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
 | `HANDLE_ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
 | `HANDLE_ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window name. Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
-| `HANDLE_ISSUE_BACKGROUND` | _(unset)_ | Set to `1` to open the window with `-d` (don't switch focus to it). |
+| `HANDLE_ISSUE_FOREGROUND` | _(unset)_ | By default the new window opens **detached** (`-d`), so your focus stays on the current window. Set to `1` to switch focus to the new window instead. |
 | `HANDLE_ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
 | `HANDLE_ISSUE_LIST_LIMIT` | `50` | Max open issues fetched for the picker. |
 | `HANDLE_ISSUE_GH_BIN` | `gh` | Path to the `gh` binary (tests inject a fake). |

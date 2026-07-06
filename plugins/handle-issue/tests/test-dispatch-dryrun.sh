@@ -24,7 +24,9 @@ assert_contains "$cmds" "-n rep-42" "new-window carries the -n <name> flag"
 # The helper uses git's resolved toplevel (on macOS /tmp -> /private/tmp), which
 # it also reports as .dir — assert the new-window targets exactly that.
 reported_dir="$(jqf "$out" .dir)"
-assert_contains "$cmds" "new-window -c $reported_dir" "new-window targets reported repo root"
+assert_contains "$cmds" "new-window -d -c $reported_dir" "new-window targets reported repo root (detached)"
+# Default is DETACHED (-d) so the caller's focus stays on the current window (#54).
+assert_contains "$cmds" "new-window -d" "default opens the window detached (keeps focus)"
 
 # issue #50: dispatch marks the issue in-progress. The dry-run lists the two gh
 # writes it WOULD run (create-if-missing label, then add it to the issue).
@@ -37,6 +39,13 @@ assert_contains "$(jqf "$out" .display)" "mark the issue in-progress" "display m
 assert_contains "$cmds" "Closes #42" "prompt words PRs to close the issue"
 assert_contains "$cmds" "post the full plan as a Markdown comment on issue #42" "prompt asks child to comment the plan"
 assert_contains "$cmds" "comment a link to each PR on issue #42" "prompt asks child to comment PR links"
+
+# foreground opt-out (#54): HANDLE_ISSUE_FOREGROUND=1 drops -d so focus follows the window.
+# Runs after the default-run assertions above, which rely on this run's $out/$cmds.
+out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 HANDLE_ISSUE_FOREGROUND=1 bash "$SCRIPT" dispatch 42 2>&1)
+fg_cmds="$(jqf "$out" '.commands | join("\n")')"
+assert_not_contains "$fg_cmds" "new-window -d" "foreground opt-out drops -d (focus follows)"
+assert_contains "$fg_cmds" "new-window -c $reported_dir" "foreground opt-out uses plain new-window"
 
 # custom launch/prompt templates substitute <n>
 out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \

@@ -6,6 +6,11 @@ or interactively from the repo's open issues; the plugin opens a window named `<
 (e.g. `age-42`), `cd`s it to the repo root, launches Claude in a worktree **directly in plan mode**
 (`--permission-mode plan`), and submits a prompt asking it to plan a fix — all in one command.
 
+It also keeps GitHub in sync: dispatch **marks the issue `in-progress`** (creating the label if the
+repo doesn't have it), and the handoff prompt briefs the child session to **comment its finalized
+plan** on the issue, **word every PR to close the issue** (`Closes #N`), and **comment a link to
+each PR** it pushes.
+
 ## When to use
 
 `/handle-issue` is for kicking off work on a GitHub issue in an **isolated context** without the
@@ -57,8 +62,14 @@ With no number, you get a single question listing open issues (newest first). Pi
    - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
      worktree first), with a bounded fallback delay, so the prompt keystrokes aren't lost.
    - Type and submit the prompt, confirmed via a `capture-pane` read-back (resend if it never lands).
-3. The original pane shows a one-line status. If the handoff couldn't be fully confirmed, you get a
-   `warning` telling you to glance at the new window.
+     The default prompt briefs the child session to comment its finalized plan on the issue, word
+     PRs to close it (`Closes #<n>`), and comment each PR link — those steps happen later, inside
+     that session, so the prompt is the only place they can be requested.
+   - **Mark the issue `in-progress`** — `gh label create` (create-if-missing, existing styling left
+     alone) then `gh issue edit --add-label`. Best-effort: a failure adds a `warning`, never an
+     `ok:false`. Disable with `HANDLE_ISSUE_LABEL=`.
+3. The original pane shows a one-line status. If the handoff or the label couldn't be fully
+   confirmed, you get a `warning` telling you to glance at the new window.
 
 Once a side effect has happened (the window exists), the helper reports `ok:true` with a `warning`
 rather than a hard failure — so a status line never falsely implies "nothing happened."
@@ -70,7 +81,10 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `HANDLE_ISSUE_LAUNCH_CMD` | `claude -w <n> --permission-mode plan` | Command typed into the new window. `<n>` → issue number. `--permission-mode plan` is what forces plan mode. |
-| `HANDLE_ISSUE_PROMPT` | `propose a solution to close github issue #<n> in this repo` | Prompt typed + submitted once Claude is ready. `<n>` → issue number. Deliberately has no `/plan` prefix. |
+| `HANDLE_ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), and comment each PR link. `<n>` → issue number. Deliberately has no `/plan` prefix. |
+| `HANDLE_ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`HANDLE_ISSUE_LABEL=`) to disable labeling entirely. |
+| `HANDLE_ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
+| `HANDLE_ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
 | `HANDLE_ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window name. Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
 | `HANDLE_ISSUE_BACKGROUND` | _(unset)_ | Set to `1` to open the window with `-d` (don't switch focus to it). |
 | `HANDLE_ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |

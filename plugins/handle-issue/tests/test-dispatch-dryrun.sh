@@ -26,6 +26,18 @@ assert_contains "$cmds" "-n rep-42" "new-window carries the -n <name> flag"
 reported_dir="$(jqf "$out" .dir)"
 assert_contains "$cmds" "new-window -c $reported_dir" "new-window targets reported repo root"
 
+# issue #50: dispatch marks the issue in-progress. The dry-run lists the two gh
+# writes it WOULD run (create-if-missing label, then add it to the issue).
+assert_eq "$(jqf "$out" .label)" "in-progress" "default label is in-progress"
+assert_contains "$cmds" "gh label create in-progress --repo fake/repo" "dry-run lists label create"
+assert_contains "$cmds" "gh issue edit 42 --repo fake/repo --add-label in-progress" "dry-run lists add-label to issue"
+assert_contains "$(jqf "$out" .display)" "mark the issue in-progress" "display mentions the label"
+# issue #50: the enriched handoff prompt carries the GitHub self-reporting
+# contract for the child session (plan comment, closing keyword, PR link).
+assert_contains "$cmds" "Closes #42" "prompt words PRs to close the issue"
+assert_contains "$cmds" "post the full plan as a Markdown comment on issue #42" "prompt asks child to comment the plan"
+assert_contains "$cmds" "comment a link to each PR on issue #42" "prompt asks child to comment PR links"
+
 # custom launch/prompt templates substitute <n>
 out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
       HANDLE_ISSUE_LAUNCH_CMD="claude -w feature-<n>" \
@@ -56,5 +68,19 @@ assert_eq "$(jqf "$out" .ok)" "true" "allow-closed ok:true"
 out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 FAKE_GH_VIEW_FAIL=1 bash "$SCRIPT" dispatch 999 2>&1)
 assert_eq "$(jqf "$out" .ok)" "false" "nonexistent ok:false"
 assert_contains "$(jqf "$out" .display)" "not found" "nonexistent display"
+
+# issue #50: labeling opts out with an explicit empty HANDLE_ISSUE_LABEL (uses
+# `-` not `:-`, so "" disables while unset defaults). No gh label commands appear.
+out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 HANDLE_ISSUE_LABEL="" bash "$SCRIPT" dispatch 42 2>&1)
+assert_eq "$(jqf "$out" .label)" "" "empty label field when disabled"
+assert_eq "$(jqf "$out" '[.commands[]|select(startswith("gh"))]|length')" "0" "no gh commands when label disabled"
+assert_not_contains "$(jqf "$out" .display)" "mark the issue" "display omits label clause when disabled"
+
+# issue #50: a custom label name flows through to both gh writes.
+out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 HANDLE_ISSUE_LABEL="wip" bash "$SCRIPT" dispatch 42 2>&1)
+cmds="$(jqf "$out" '.commands | join("\n")')"
+assert_eq "$(jqf "$out" .label)" "wip" "custom label field"
+assert_contains "$cmds" "gh label create wip --repo fake/repo" "custom label in create"
+assert_contains "$cmds" "--add-label wip" "custom label in add-label"
 
 finish

@@ -1,11 +1,12 @@
 # handle-issue
 
 Turn "I want to work on issue #N" into a running, **plan-mode** Claude session in a **new tmux
-window**, launched inside a per-issue git **worktree** (`claude -w <n>`). Pick an issue by number
-or interactively from the repo's open issues; the plugin opens a window named `<repo-prefix>-<n>`
-(e.g. `age-42`) **without stealing your focus**, `cd`s it to the repo root, launches Claude in a
-worktree **directly in plan mode** (`--permission-mode plan`), and submits a prompt asking it to
-plan a fix — all in one command.
+window**, launched inside a per-issue git **worktree named the same as the window** (`claude -w
+<repo-prefix>-<n>`). Pick an issue by number or interactively from the repo's open issues; the
+plugin opens a window named `<repo-prefix>-<n>` (e.g. `age-42`) **without stealing your focus**,
+`cd`s it to the repo root, launches Claude in a worktree of the same name
+(`.claude/worktrees/age-42`) **directly in plan mode** (`--permission-mode plan`), and submits a
+prompt asking it to plan a fix — all in one command.
 
 It also keeps GitHub in sync: dispatch **marks the issue `in-progress`** (creating the label if the
 repo doesn't have it), and the handoff prompt briefs the child session to **comment its finalized
@@ -61,13 +62,15 @@ With no number, you get a single question listing open issues (newest first). Pi
      `allow-rename` are turned **off** on the window so the name sticks even though Claude sets its
      own terminal title. (Set `HANDLE_ISSUE_FOREGROUND=1` to switch focus to the new window instead.)
    - **Worktree hygiene** — before launching Claude, idempotently ensure `.claude/worktrees/` is
-     gitignored (the container dir `claude -w <n>` builds its per-issue worktree under), so the
-     ephemeral worktrees never dirty the parent repo's `git status`. It respects a broader existing
-     rule (e.g. `.claude/`) and is a no-op when already ignored. Best-effort: a write failure only
-     leaves the pre-fix status quo (an untracked worktree dir), never an `ok:false`. Override the
-     ignored path with `HANDLE_ISSUE_WORKTREE_IGNORE_PATH`.
-   - Launch `claude -w <n> --permission-mode plan` (literal send + Enter) — the `--permission-mode
-     plan` flag opens the session **in plan mode deterministically**, with no keystrokes.
+     gitignored (the container dir `claude -w <repo-prefix>-<n>` builds its per-issue worktree
+     under), so the ephemeral worktrees never dirty the parent repo's `git status`. It respects a
+     broader existing rule (e.g. `.claude/`) and is a no-op when already ignored. Best-effort: a
+     write failure only leaves the pre-fix status quo (an untracked worktree dir), never an
+     `ok:false`. Override the ignored path with `HANDLE_ISSUE_WORKTREE_IGNORE_PATH`.
+   - Launch `claude -w <repo-prefix>-<n> --permission-mode plan` (literal send + Enter) — the `-w`
+     argument matches the window name, so the worktree is `.claude/worktrees/<repo-prefix>-<n>`; the
+     `--permission-mode plan` flag opens the session **in plan mode deterministically**, with no
+     keystrokes.
    - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
      worktree first), with a bounded fallback delay, so the prompt keystrokes aren't lost.
    - Type and submit the prompt, confirmed via a `capture-pane` read-back (resend if it never lands).
@@ -89,12 +92,12 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `HANDLE_ISSUE_LAUNCH_CMD` | `claude -w <n> --permission-mode plan` | Command typed into the new window. `<n>` → issue number. `--permission-mode plan` is what forces plan mode. |
+| `HANDLE_ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode. |
 | `HANDLE_ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), and comment each PR link. `<n>` → issue number. Deliberately has no `/plan` prefix. |
 | `HANDLE_ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`HANDLE_ISSUE_LABEL=`) to disable labeling entirely. |
 | `HANDLE_ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
 | `HANDLE_ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
-| `HANDLE_ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window name. Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
+| `HANDLE_ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window **and worktree** name (the default launch renders `<name>` from this). Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
 | `HANDLE_ISSUE_WORKTREE_IGNORE_PATH` | `.claude/worktrees/` | Path idempotently added to the repo's root `.gitignore` at dispatch so `claude -w`'s per-issue worktrees don't dirty `git status`. No-op if already ignored (respects a broader rule like `.claude/`). |
 | `HANDLE_ISSUE_FOREGROUND` | _(unset)_ | By default the new window opens **detached** (`-d`), so your focus stays on the current window. Set to `1` to switch focus to the new window instead. |
 | `HANDLE_ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
@@ -107,8 +110,10 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `HANDLE_ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 
 > **Plan mode is forced by the `--permission-mode plan` launch flag, not keystrokes.** `-w` is
-> Claude Code's official `--worktree` switch (creates a named per-issue worktree; only valid from a
-> git-tracked location), and `--permission-mode plan` opens the session in plan mode with no
+> Claude Code's official `--worktree` switch (creates a named per-issue worktree — here named with
+> the same `<repo-prefix>-<n>` formula as the window, e.g. worktree `.claude/worktrees/age-42` on
+> branch `worktree-age-42`; only valid from a git-tracked location), and `--permission-mode plan`
+> opens the session in plan mode with no
 > `Shift+Tab` guesswork. That flag sets the *initial* mode only — you can still `Shift+Tab` out of
 > plan mode once you've approved the plan. The prompt intentionally does **not** begin with `/plan`:
 > that is a slash command that routes to a registered `/plan` skill (e.g. forge's planner), not

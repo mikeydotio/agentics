@@ -12,12 +12,13 @@
 #   dispatch <n>         Open a new tmux window (named "<repo-prefix>-<n>", e.g.
 #                        "age-42") in the current session — DETACHED by default so
 #                        the caller's focus stays put — `cd` it to the repo
-#                        root, launch `claude -w <n> --permission-mode plan` (the
-#                        official --worktree switch creates a per-issue git
-#                        worktree, so it must run from a git-tracked location;
-#                        --permission-mode plan starts the session in plan mode
-#                        deterministically, no keystrokes), gate on claude
-#                        becoming ready, then type + submit the prompt.
+#                        root, launch `claude -w <name> --permission-mode plan`
+#                        (the official --worktree switch creates a per-issue git
+#                        worktree named the SAME as the window, so it must run
+#                        from a git-tracked location; --permission-mode plan
+#                        starts the session in plan mode deterministically, no
+#                        keystrokes), gate on claude becoming ready, then type +
+#                        submit the prompt.
 #
 # ok-vs-warning boundary (dispatch): steps 0–4 are HARD preconditions — a failure
 # emits {ok:false} and exits before ANY side effect. From step 5 (the first
@@ -41,7 +42,11 @@ set -euo pipefail
 # ---- config (all env-overridable) -------------------------------------------
 GH="${HANDLE_ISSUE_GH_BIN:-gh}"
 LIST_LIMIT="${HANDLE_ISSUE_LIST_LIMIT:-50}"
-LAUNCH_TPL="${HANDLE_ISSUE_LAUNCH_CMD:-claude -w <n> --permission-mode plan}"
+# Launch command. <name> renders to the resolved window/worktree name (see
+# WINDOW_NAME_TPL below), so `claude -w <name>` names the worktree the SAME as
+# the tmux window (e.g. "age-42") rather than the bare issue number. <n> (the
+# issue number) is still substituted, so a custom override may use either.
+LAUNCH_TPL="${HANDLE_ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # The handoff prompt is the ONLY lever the dispatcher has over the child session,
 # which is what actually plans, implements, and opens PRs. So it carries the
 # GitHub self-reporting contract (issue #50): comment the finalized plan, word
@@ -56,9 +61,10 @@ PROMPT_TPL="${HANDLE_ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #
 LABEL="${HANDLE_ISSUE_LABEL-in-progress}"
 LABEL_COLOR="${HANDLE_ISSUE_LABEL_COLOR:-fbca04}"
 LABEL_DESC="${HANDLE_ISSUE_LABEL_DESC:-Actively being worked on}"
-# New-window name. Default (computed in cmd_dispatch): first 3 alphanumerics of
-# the repo name, lowercased, + "-<n>" (e.g. "age-42"). Set this to override in
-# full; supports the <n> placeholder.
+# New-window (and worktree) name. Default (computed in cmd_dispatch): first 3
+# alphanumerics of the repo name, lowercased, + "-<n>" (e.g. "age-42"). Set this
+# to override in full; supports the <n> placeholder. Because the default launch
+# command renders <name> from this value, overriding it renames the worktree too.
 WINDOW_NAME_TPL="${HANDLE_ISSUE_WINDOW_NAME:-}"
 # Focus policy: the new window is created DETACHED (-d) by default so the user's
 # focus stays on their current window. Every follow-up send-keys/capture-pane
@@ -96,8 +102,11 @@ fail() {
 }
 
 # ---- helpers ----------------------------------------------------------------
-render_template() {  # render_template <template-with-<n>> <number>
-  local tpl="$1" n="$2"
+render_template() {  # render_template <template> <number> [<name>]
+  # <n>    -> the issue number
+  # <name> -> the resolved window/worktree name (wname); empty when not passed.
+  local tpl="$1" n="$2" name="${3:-}"
+  tpl="${tpl//<name>/$name}"
   printf '%s' "${tpl//<n>/$n}"
 }
 
@@ -271,9 +280,9 @@ cmd_dispatch() {
   [ -n "$n" ] || fail "usage: handle-issue.sh dispatch <issue-number>"
   [[ "$n" =~ ^[0-9]+$ ]] || fail "issue number must be a positive integer (got: $n)."
 
+  # launch_cmd/prompt are rendered AFTER wname is resolved (below), since the
+  # default launch command interpolates <name> = wname.
   local launch_cmd prompt
-  launch_cmd=$(render_template "$LAUNCH_TPL" "$n")
-  prompt=$(render_template "$PROMPT_TPL" "$n")
 
   # Step 1: tmux precondition (relaxed under dry-run so it runs headlessly).
   if [ -z "$DRY_RUN" ]; then
@@ -301,9 +310,10 @@ cmd_dispatch() {
     fail "issue #$n is closed on $repo (set HANDLE_ISSUE_ALLOW_CLOSED=1 to dispatch anyway)."
   fi
 
-  # Compute the new-window name: "<repo-prefix>-<n>" (e.g. "age-42"), where the
-  # prefix is the first 3 alphanumerics of the repo name, lowercased. Fully
-  # overridable via HANDLE_ISSUE_WINDOW_NAME (supports the <n> placeholder).
+  # Compute the name used for BOTH the tmux window and the git worktree:
+  # "<repo-prefix>-<n>" (e.g. "age-42"), where the prefix is the first 3
+  # alphanumerics of the repo name, lowercased. Fully overridable via
+  # HANDLE_ISSUE_WINDOW_NAME (supports the <n> placeholder).
   local wname
   if [ -n "$WINDOW_NAME_TPL" ]; then
     wname=$(render_template "$WINDOW_NAME_TPL" "$n")
@@ -313,6 +323,13 @@ cmd_dispatch() {
     pfx=$(printf '%s' "$repo_name" | tr -cd '[:alnum:]' | cut -c1-3 | tr '[:upper:]' '[:lower:]')
     wname="${pfx}-${n}"
   fi
+
+  # Render launch/prompt now that wname is known. The default launch command
+  # resolves <name> -> wname, so `claude -w <name>` names the worktree the same
+  # as the window. (A pathological override yielding an empty prefix would make
+  # wname start with "-", producing a leading-dash launch arg — see WINDOW_NAME_TPL.)
+  launch_cmd=$(render_template "$LAUNCH_TPL" "$n" "$wname")
+  prompt=$(render_template "$PROMPT_TPL" "$n" "$wname")
 
   # Read-only: is the per-issue worktree dir already gitignored (issue #55)?
   # Computed here so both the dry-run preview and the real write can report it.

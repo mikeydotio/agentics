@@ -38,6 +38,12 @@ assert_contains "$cmds" "Closes #42" "prompt words PRs to close the issue"
 assert_contains "$cmds" "post the full plan as a Markdown comment on issue #42" "prompt asks child to comment the plan"
 assert_contains "$cmds" "comment a link to each PR on issue #42" "prompt asks child to comment PR links"
 
+# issue #55: the dry-run previews the worktree gitignore decision. A fresh mk_repo
+# has no .gitignore, so it reports "would-add" — and the write is NOT a tmux
+# command, so it must not appear in the (asserted-verbatim) commands array.
+assert_eq "$(jqf "$out" .gitignore)" "would-add" "fresh repo previews gitignore would-add"
+assert_eq "$(jqf "$out" '[.commands[]|select(test("gitignore"))]|length')" "0" "gitignore write is not a tmux command"
+
 # custom launch/prompt templates substitute <n>
 out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
       HANDLE_ISSUE_LAUNCH_CMD="claude -w feature-<n>" \
@@ -82,5 +88,18 @@ cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_eq "$(jqf "$out" .label)" "wip" "custom label field"
 assert_contains "$cmds" "gh label create wip --repo fake/repo" "custom label in create"
 assert_contains "$cmds" "--add-label wip" "custom label in add-label"
+
+# issue #55: when the worktree dir is already ignored, the dry-run reports
+# "already-ignored" and (in the real path) would write nothing. Use a fresh repo
+# per case so a stray .gitignore can't leak between assertions.
+ig_exact=$(mk_repo)
+printf 'node_modules/\n.claude/worktrees/\n' > "$ig_exact/.gitignore"
+out=$(cd "$ig_exact" && HANDLE_ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
+assert_eq "$(jqf "$out" .gitignore)" "already-ignored" "exact .claude/worktrees/ rule -> already-ignored"
+
+ig_broad=$(mk_repo)
+printf '.claude/\n' > "$ig_broad/.gitignore"
+out=$(cd "$ig_broad" && HANDLE_ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
+assert_eq "$(jqf "$out" .gitignore)" "already-ignored" "broad .claude/ rule also counts as already-ignored"
 
 finish

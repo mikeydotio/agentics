@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Fake `tmux` for handle-issue's real-dispatch (non-dry-run) tests. Implements
+# only the five subcommands cmd_dispatch drives in Steps 5–8, enough to let the
+# helper run to completion headlessly without a live tmux server:
+#
+#   new-window        -> print a pane id  (%1), exit 0
+#   display-message   -> print a window id (@1), exit 0
+#   set-window-option -> no-op, exit 0
+#   send-keys         -> no-op, exit 0
+#   capture-pane      -> print a line containing the readiness marker so both
+#                        wait_ready() and text_still_pending() resolve on the
+#                        first attempt (the last non-blank line ends in
+#                        "for shortcuts", which is neither the launch command
+#                        nor the prompt -> ready == true, pending == false).
+#
+# Anything else is a harmless no-op (exit 0), so an added tmux call never breaks
+# the test — it just isn't asserted on.
+case "${1:-}" in
+  new-window)        printf '%%1\n' ;;
+  display-message)   printf '@1\n' ;;
+  capture-pane)      printf '  ? for shortcuts\n' ;;
+  set-window-option) : ;;
+  send-keys)         : ;;
+  *)                 : ;;
+esac
+exit 0

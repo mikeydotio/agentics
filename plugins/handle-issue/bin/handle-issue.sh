@@ -37,7 +37,20 @@ set -euo pipefail
 GH="${HANDLE_ISSUE_GH_BIN:-gh}"
 LIST_LIMIT="${HANDLE_ISSUE_LIST_LIMIT:-50}"
 LAUNCH_TPL="${HANDLE_ISSUE_LAUNCH_CMD:-claude -w <n> --permission-mode plan}"
-PROMPT_TPL="${HANDLE_ISSUE_PROMPT:-propose a solution to close github issue #<n> in this repo}"
+# The handoff prompt is the ONLY lever the dispatcher has over the child session,
+# which is what actually plans, implements, and opens PRs. So it carries the
+# GitHub self-reporting contract (issue #50): comment the finalized plan, word
+# PRs to close the issue, comment PR links. Kept single-line + ASCII (no
+# backticks) so `tmux send-keys -l` types it verbatim without key-interpretation.
+PROMPT_TPL="${HANDLE_ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it.}"
+# The "picked up" label applied to the issue at dispatch (issue #50). Set
+# HANDLE_ISSUE_LABEL="" to disable labeling entirely. Color/description are used
+# only when the label doesn't yet exist in the repo (create-if-missing). Uses
+# `-` (not `:-`) so an explicit empty string opts out; only an unset var
+# defaults to "in-progress".
+LABEL="${HANDLE_ISSUE_LABEL-in-progress}"
+LABEL_COLOR="${HANDLE_ISSUE_LABEL_COLOR:-fbca04}"
+LABEL_DESC="${HANDLE_ISSUE_LABEL_DESC:-Actively being worked on}"
 # New-window name. Default (computed in cmd_dispatch): first 3 alphanumerics of
 # the repo name, lowercased, + "-<n>" (e.g. "age-42"). Set this to override in
 # full; supports the <n> placeholder.
@@ -90,6 +103,21 @@ origin_owner_repo() {
     return 0
   fi
   return 1
+}
+
+# apply_in_progress_label <repo> <n> — best-effort: ensure the $LABEL label
+# exists in <repo> (create-if-missing; existing color/description untouched — no
+# --force), then add it to issue <n>. Returns non-zero only if the add fails, so
+# the caller can degrade to a warning. Never called when $LABEL is empty.
+apply_in_progress_label() {
+  local repo="$1" n="$2"
+  # Create-if-missing. A failure here is fine: either the label already exists
+  # (so add-label below still works) or we lack permission (add-label will then
+  # surface the real failure). Deliberately no --force, to preserve any existing
+  # styling the repo already gave this label.
+  "$GH" label create "$LABEL" --repo "$repo" \
+    --color "$LABEL_COLOR" --description "$LABEL_DESC" >/dev/null 2>&1 || true
+  "$GH" issue edit "$n" --repo "$repo" --add-label "$LABEL" >/dev/null 2>&1
 }
 
 # text_still_pending <pane> <text> — true if <text> still sits, unsubmitted, as
@@ -227,20 +255,26 @@ cmd_dispatch() {
   if [ -n "$DRY_RUN" ]; then
     jq -n \
       --arg issue "$n" --arg title "$title" --arg repo "$repo" --arg dir "$dir" \
-      --arg wname "$wname" --arg launch "$launch_cmd" --arg prompt "$prompt" '
+      --arg wname "$wname" --arg launch "$launch_cmd" --arg prompt "$prompt" \
+      --arg label "$LABEL" --arg color "$LABEL_COLOR" --arg desc "$LABEL_DESC" '
       {
         ok: true, dry_run: true,
         issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
-        window_name: $wname,
-        commands: [
+        window_name: $wname, label: $label,
+        commands: ([
           ("tmux new-window -c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
           ("tmux send-keys -t <pane> -l " + $prompt),
           "tmux send-keys -t <pane> Enter"
-        ],
+        ] + (if $label == "" then [] else [
+          ("gh label create " + $label + " --repo " + $repo + " --color " + $color
+           + " --description " + $desc),
+          ("gh issue edit " + $issue + " --repo " + $repo + " --add-label " + $label)
+        ] end)),
         display: ("[handle-issue] DRY RUN for #" + $issue + " (" + $title
                   + "): would open a new tmux window named " + $wname + " in " + $dir
+                  + (if $label == "" then "" else ", mark the issue " + $label end)
                   + " and run the listed commands.")
       }'
     return 0
@@ -285,10 +319,24 @@ cmd_dispatch() {
     prompt_confirmed=true
   fi
 
+  # Step 9: mark the issue in-progress on GitHub (issue #50). Done last so the
+  # two gh round-trips don't delay the interactive handoff above. Best-effort —
+  # a failure here only adds a warning, never flips dispatch to ok:false — and
+  # skipped entirely when labeling is disabled ($LABEL empty).
+  local label_applied=false label_note="" label_ok_note=""
+  if [ -n "$LABEL" ]; then
+    if apply_in_progress_label "$repo" "$n"; then
+      label_applied=true
+      label_ok_note=" and marked it \`$LABEL\`"
+    else
+      label_note="couldn't apply the \`$LABEL\` label to #$n (check gh permissions/repo access)"
+    fi
+  fi
+
   # Result. ok:true from here on; warn on any unconfirmed step.
-  local warning="" display
+  local warning="" display base
   if [ "$readiness_confirmed" = true ] && [ "$prompt_confirmed" = true ]; then
-    display="[handle-issue] #$n ($title) → opened tmux window \`$wname\`, launched \`$launch_cmd\` (plan mode), and submitted the prompt."
+    base="[handle-issue] #$n ($title) → opened tmux window \`$wname\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
   else
     if [ "$readiness_confirmed" = false ] && [ "$prompt_confirmed" = false ]; then
       warning="Couldn't confirm claude finished starting, nor that the prompt submitted — check window \`$wname\`."
@@ -297,19 +345,32 @@ cmd_dispatch() {
     else
       warning="claude started, but couldn't confirm the prompt submitted — check window \`$wname\`."
     fi
-    display="[handle-issue] #$n ($title) → window \`$wname\` opened, but I couldn't fully confirm the handoff. $warning"
+    base="[handle-issue] #$n ($title) → window \`$wname\` opened, but I couldn't fully confirm the handoff."
+  fi
+
+  # Fold a label failure into the warning (best-effort — never ok:false).
+  if [ -n "$label_note" ]; then
+    warning="${warning:+$warning }$label_note."
+  fi
+
+  if [ -n "$warning" ]; then
+    display="$base $warning"
+  else
+    display="$base"
   fi
 
   jq -n \
     --arg issue "$n" --arg title "$title" --arg window "$window" --arg wname "$wname" \
-    --arg pane "$pane" \
+    --arg pane "$pane" --arg label "$LABEL" \
     --argjson ready "$readiness_confirmed" --argjson pconf "$prompt_confirmed" \
+    --argjson lapplied "$label_applied" \
     --arg warning "$warning" --arg display "$display" '
     {
       ok: true,
       issue: ($issue | tonumber), title: $title,
       window: $window, window_name: $wname, pane: $pane,
-      readiness_confirmed: $ready, prompt_confirmed: $pconf
+      readiness_confirmed: $ready, prompt_confirmed: $pconf,
+      label: $label, label_applied: $lapplied
     }
     + (if $warning == "" then {} else {warning: $warning} end)
     + {display: $display}'

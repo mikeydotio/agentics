@@ -20,6 +20,16 @@ case "${1:-} ${2:-}" in
     printf '{"number":%s,"title":"%s","state":"%s","url":"https://github.com/fake/repo/issues/%s"}' \
       "$n" "${FAKE_GH_VIEW_TITLE:-Fake issue $n}" "${FAKE_GH_STATE:-OPEN}" "$n"
     exit 0 ;;
+  "label create")
+    # Idempotent create-if-missing in the real gh; the fake just succeeds unless
+    # FAKE_GH_LABEL_CREATE_FAIL is set (used to prove add-label still runs).
+    if [ -n "${FAKE_GH_LABEL_CREATE_FAIL:-}" ]; then echo "label already exists" >&2; exit 1; fi
+    exit 0 ;;
+  "issue edit")
+    # `gh issue edit <n> --add-label <label>`. Fails on FAKE_GH_EDIT_FAIL so the
+    # helper's non-fatal warning path can be exercised.
+    if [ -n "${FAKE_GH_EDIT_FAIL:-}" ]; then echo "could not add label" >&2; exit 1; fi
+    exit 0 ;;
   *)
     echo "fake-gh: unhandled: $*" >&2; exit 0 ;;
 esac

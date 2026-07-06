@@ -1,6 +1,6 @@
 ---
 name: handle-issue
-description: Address a GitHub issue by spinning up a fresh, plan-mode Claude session in a new tmux window and per-issue git worktree. Pass an issue number to target it directly, or omit the number to pick from the repo's open issues. Use when the user says "handle issue N", "work on issue N", "let's tackle #N", or wants to start on a GitHub issue in an isolated context. Requires tmux and an authenticated gh CLI.
+description: Address a GitHub issue by spinning up a fresh, plan-mode Claude session in a new tmux window and per-issue git worktree. Marks the issue in-progress on GitHub at dispatch and hands the child session a prompt that reports its plan and PRs back to the issue. Pass an issue number to target it directly, or omit the number to pick from the repo's open issues. Use when the user says "handle issue N", "work on issue N", "let's tackle #N", or wants to start on a GitHub issue in an isolated context. Requires tmux and an authenticated gh CLI.
 argument-hint: "[issue-number]"
 ---
 
@@ -67,7 +67,9 @@ Parse `ARGUMENTS` (everything after `/handle-issue`) and dispatch:
 
 On success the new window (named `<repo-prefix>-<number>`, e.g. `age-42`) is now running
 `claude -w <number> --permission-mode plan` in a fresh worktree — in plan mode, with the prompt
-already submitted. Nothing further is needed from you.
+already submitted. The helper also **marks the issue `in-progress`** on GitHub (creating the label
+in the repo if it's missing) — this is best-effort, so if it can't, dispatch still succeeds with a
+`warning` rather than `ok:false`. Nothing further is needed from you.
 
 ## Notes
 
@@ -78,5 +80,12 @@ already submitted. Nothing further is needed from you.
   `HANDLE_ISSUE_WINDOW_NAME` (see the README for all env knobs). Plan mode comes from the
   `--permission-mode plan` flag — **not** a `/plan` prompt prefix (that would route to a `/plan`
   skill like forge's planner). Don't rewrite these here — the helper owns them.
+- **GitHub write-backs (all in the helper — never call `gh` yourself):** the default prompt tells
+  the child session to comment its finalized plan on the issue, word every PR to close the issue
+  (`Closes #<n>` in the body), and comment a link to each PR it pushes. Requirement #2–#4 of the
+  child's contract live in the prompt because they happen later, inside that session, after the
+  helper has already returned. The `in-progress` label is configurable via `HANDLE_ISSUE_LABEL`
+  (set it to empty to disable labeling); `HANDLE_ISSUE_LABEL_COLOR` / `HANDLE_ISSUE_LABEL_DESC`
+  style it on first creation.
 - To preview what a dispatch *would* do without opening a window, the helper supports
   `HANDLE_ISSUE_DRY_RUN=1` (used by the tests); you generally won't need it interactively.

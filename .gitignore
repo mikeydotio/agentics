@@ -27,3 +27,6 @@ Thumbs.db
 
 # Atlas runtime state (ephemeral, never committed)
 .atlas/
+
+# handle-issue per-issue git worktrees (working state, never committed)
+.claude/worktrees/

@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.25.1] - 2026-07-07
+
+### Fixed
+- name-resolve calls to types only; drop method-name guesses (#65) (240a859)
+
+### Testing
+- type-only resolution fixtures + #65 regression tests (2ef348a)
+
+_[manual]_
+
 ## [v2.25.0] - 2026-07-07
 
 ### Added

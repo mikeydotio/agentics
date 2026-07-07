@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue
+.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
 
-test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue
+test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -31,6 +31,13 @@ test-deployit:
 # (driven by a fake gh on PATH; no live tmux/claude). Always runs (no bats).
 test-handle-issue:
 	bash plugins/handle-issue/tests/run-tests.sh
+
+# reconcile-pr's plain-bash suite (plugins/reconcile-pr/tests/test-*.sh) — the
+# state-machine JSON contract, non-inverted conflict labeling, the force-push
+# safety gate (protected/leased/stale), and the test gate. Driven by a fake gh
+# and a local bare-origin repo; no live network. Always runs (no bats).
+test-reconcile-pr:
+	bash plugins/reconcile-pr/tests/run-tests.sh
 
 test-atlas:
 	bash plugins/atlas/tests/run-tests.sh

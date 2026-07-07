@@ -4,14 +4,13 @@ summary: "Standalone tree-sitter Swift extractor — atlas's optional resolved-e
 read_when: "Changing the tree-sitter Swift extractor or its stdout JSON contract"
 sources:
   - path: plugins/atlas/helpers/ts-helper/README.md
-    blob: 4b0494993097d7e42c31a0a4c9bc5c5f6a0bce82
+    blob: 510c6654b7aeec889822f3dd4b512de6f30a7f31
   - path: plugins/atlas/helpers/ts-helper/atlas_ts_helper.py
-    blob: 5e42c2ec711b1971253834d0621cc8e261f0154a
+    blob: c59bc22a16028ef22993c9eadfecd26ee8d0aa85
   - path: plugins/atlas/helpers/ts-helper/pyproject.toml
     blob: 0cb6343334d59ae18c94e50501788a1a20a60be9
-references_modules: [plugins-semver-misc]
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/atlas/helpers/ts-helper
@@ -24,23 +23,19 @@ This package is atlas's optional "parser ceiling": a standalone, pipx-installabl
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `extract` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:295` | Two-pass corpus scan of `paths`; returns the {version, files} contract dict with per-file symbols/calls; silently skips unparseable files. |
-| `main` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:342` | CLI entry: reads newline-delimited stdin paths, prints extract()'s JSON + trailing newline to stdout; returns 2 on a bad subcommand. |
-| `visit` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:146` | Recursive closure in _collect_symbols walking the AST, appending type/func declarations it finds to `result.symbols`. |
-| `visit` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:211` | Recursive closure in _local_var_types walking one function body, building the local `var -> TypeName` map it returns. |
-| `visit` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:281` | Recursive closure in _collect_calls walking the AST, invoking _emit_call per call_expression while threading local var types. |
+| `extract` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:307` | Two-pass corpus scan of `paths`; returns the {version, files} contract dict with per-file symbols/calls; silently skips unparseable files. |
+| `main` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:351` | CLI entry: reads newline-delimited stdin paths, prints extract()'s JSON + trailing newline to stdout; returns 2 on a bad subcommand. |
+| `visit` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:154` | Recursive closure in _collect_symbols walking the AST, appending type/func declarations it finds to `result.symbols`. |
+| `visit` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:222` | Recursive closure in _local_var_types walking one function body, building the local `var -> TypeName` map it returns. |
+| `visit` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:293` | Recursive closure in _collect_calls walking the AST, invoking _emit_call per call_expression while threading local var types. |
 
 ## Load-bearing internals
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
+| `_line` | def | `plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:82` | Single funnel for the 1-indexed declaration line: feeds symbol start_line (plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:163,172), the type_members/free_funcs resolution tables (plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:177,180), and call-site line (plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:277). The docstring at plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:150-153 states these must agree so atlas's loc_to_id join lands even when a leading attribute/modifier sits on its own line — every call site routing through this one function is what keeps that invariant true. |
 
 ## Relationships
-
-- `plugins-atlas-helpers-ts-helper._decl_keyword -> plugins-semver-misc.get (calls)`
-- `plugins-atlas-helpers-ts-helper._emit_call -> plugins-semver-misc.get (calls)`
-- `plugins-atlas-helpers-ts-helper.extract -> plugins-semver-misc.get (calls)`
-- `plugins-atlas-helpers-ts-helper.main -> plugins-semver-misc.write (calls)`
 
 ## Type notes
 

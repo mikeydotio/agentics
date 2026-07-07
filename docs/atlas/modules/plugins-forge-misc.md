@@ -4,13 +4,13 @@ summary: "Forge plugin identity manifest, README pipeline overview, and the bats
 read_when: "Changing forge's marketplace identity, README pipeline overview, or bats test runner"
 sources:
   - path: plugins/forge/.claude-plugin/plugin.json
-    blob: 39650806aeec547873c043902a97521e45f0ebf4
+    blob: b41aedecee76836d3f8664014d7ef80c01c7c7e1
   - path: plugins/forge/README.md
     blob: 1ce02e4c6294d5613a305d8487b42132d669a063
   - path: plugins/forge/tests/run-tests.sh
     blob: ec21a7688fb6712b2f89b69aaa176c1bde7999b7
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/forge (misc)

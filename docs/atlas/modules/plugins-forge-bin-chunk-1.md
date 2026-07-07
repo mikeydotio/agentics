@@ -33,9 +33,8 @@ sources:
     blob: 5d47adc896de14abbac6ec082f69c4bc3cefddad
   - path: plugins/forge/bin/forge-handoff-scaffold.bats
     blob: 6d60f36eed5d6141ae15c38b5d602c73805f6bb5
-references_modules: [plugins-semver-misc]
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/forge/bin (chunk 1)
@@ -59,9 +58,6 @@ This chunk is forge's bin/ safety-net layer: two regression guards, forge-agent-
 | --- | --- | --- | --- |
 
 ## Relationships
-
-- `plugins-forge-bin-chunk-1.blocked_by_graph -> plugins-semver-misc.set (calls)`
-- `plugins-forge-bin-chunk-1.emit -> plugins-semver-misc.set (calls)`
 
 ## Type notes
 

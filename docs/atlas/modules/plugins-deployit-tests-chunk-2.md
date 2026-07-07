@@ -33,9 +33,8 @@ sources:
     blob: be01b59bafa19e9c5bda91c29d3ccd6101f9ad88
   - path: plugins/deployit/tests/test-metadata-single-app.sh
     blob: 1f36ebce4b6cf9363f3e6045fb7afced5dcd2ef0
-references_modules: [plugins-atlas-bin-chunk-1, plugins-deployit-bin, plugins-semver-misc]
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/deployit/tests (chunk 2)
@@ -60,18 +59,6 @@ This chunk pins deployit-cli's state-mutating subcommands — bootstrap, bump, p
 | --- | --- | --- | --- |
 
 ## Relationships
-
-- `plugins-deployit-tests-chunk-2.make_app -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-tests-chunk-2.make_app -> plugins-deployit-bin._append_to_index (calls)`
-- `plugins-deployit-tests-chunk-2.make_app -> plugins-deployit-bin._publish_github_release (calls)`
-- `plugins-deployit-tests-chunk-2.make_app -> plugins-deployit-bin._refresh_local_backend (calls)`
-- `plugins-deployit-tests-chunk-2.make_app -> plugins-deployit-bin._stage_macos (calls)`
-- `plugins-deployit-tests-chunk-2.make_app -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-tests-chunk-2.meta_for -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-tests-chunk-2.meta_for -> plugins-deployit-bin._append_to_index (calls)`
-- `plugins-deployit-tests-chunk-2.meta_for -> plugins-deployit-bin._stage_macos (calls)`
-- `plugins-deployit-tests-chunk-2.meta_for -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-tests-chunk-2.mk -> plugins-deployit-bin._append_to_index (calls)`
 
 ## Type notes
 

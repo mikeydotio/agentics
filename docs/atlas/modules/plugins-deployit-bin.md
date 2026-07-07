@@ -11,9 +11,8 @@ sources:
     blob: 48312b67fd29de6982d480529961efb7df6dc8a9
   - path: plugins/deployit/bin/deployit-router.sh
     blob: 344168329e019299a535c6e7c327e726f0cb5d03
-references_modules: [plugins-atlas-bin-chunk-1, plugins-semver-misc]
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/deployit/bin
@@ -64,87 +63,26 @@ This module is deployit's entire runtime: `deployit-cli` orchestrates archive ->
 
 | Symbol | Kind | Location | Why it matters |
 | --- | --- | --- | --- |
-| `_append_to_index` | def | `plugins/deployit/bin/deployit-cli:877` | The deploy path's sole writer to the shared index: pulls, prepends, prunes this product's older builds, commits, and pushes with reset-and-retry on conflict (plugins/deployit/bin/deployit-cli:877). |
-| `_derive_metadata` | def | `plugins/deployit/bin/deployit-cli:286` | Detects which of deployit's two supported Xcode project layouts (Apps/ monorepo vs single .xcodeproj) applies and derives the project/scheme/bundle metadata every deploy/preflight command depends on (plugins/deployit/bin/deployit-cli:286). |
-| `_find_semver_cli` | def | `plugins/deployit/bin/deployit-cli:398` | Resolves the semver plugin's CLI at runtime (env override, sibling plugin, or a ~/.claude glob) so cmd_bump can drive a real version bump without importing or hard-depending on the semver plugin (plugins/deployit/bin/deployit-cli:398). |
-| `_install_launchd` | def | `plugins/deployit/bin/deployit-cli:203` | Writes and loads the launchd agent for the backend daemon (skippable via DEPLOYIT_SKIP_LAUNCHD for tests); called by both cmd_bootstrap and cmd_redeploy's legacy-plist repair path (plugins/deployit/bin/deployit-cli:203). |
-| `_next_versions` | def | `plugins/deployit/bin/deployit-cli:380` | Computes the major/minor/patch semver candidates offered by cmd_preflight's bump prompt, prefix-aware; the actual bump is delegated to semver-cli, not computed here (plugins/deployit/bin/deployit-cli:380). |
+| `_append_to_index` | def | `plugins/deployit/bin/deployit-cli:877` | Deploy hot path's only writer to the shared builds.json index: pull/prepend/prune/commit/push with conflict-retry (plugins/deployit/bin/deployit-cli:885-917); called from cmd_deploy (plugins/deployit/bin/deployit-cli:1161) — guards the index's consistency invariant. |
+| `_derive_metadata` | def | `plugins/deployit/bin/deployit-cli:286` | Central project-layout detector (Apps-layout vs single-app Xcode project) that cmd_deploy and cmd_preflight both depend on (plugins/deployit/bin/deployit-cli:1085,1229) to resolve bundle id, marketing version, and xcodebuild container args. |
+| `_find_semver_cli` | def | `plugins/deployit/bin/deployit-cli:398` | Sole cross-plugin lookup for the semver plugin's CLI (env override -> sibling plugin -> ~/.claude glob), used by cmd_bump (plugins/deployit/bin/deployit-cli:1295) — the only bridge from deployit into the semver plugin. |
+| `_install_launchd` | def | `plugins/deployit/bin/deployit-cli:203` | Writes and (re)loads the launchd plist that runs deployit-backend as a persistent daemon; called from both cmd_bootstrap and cmd_redeploy (plugins/deployit/bin/deployit-cli:1068,1609) — the sole mechanism that starts/restarts the backend service. |
+| `_next_versions` | def | `plugins/deployit/bin/deployit-cli:380` | Computes the major/minor/patch semver successor labels cmd_bump presents to the operator (plugins/deployit/bin/deployit-cli:1270); a wrong computation would mislead which version a human picks to ship, even though semver-cli performs the actual bump. |
 | `_parse_owner_repo` | def | `plugins/deployit/bin/deployit-cli:73` | Extracts owner/repo from a git remote URL (SSH or HTTPS, with or without .git); the sole source of GitHub repo identity for cmd_release_context (plugins/deployit/bin/deployit-cli:73). |
 | `_parse_owner_repo` | def | `plugins/deployit/bin/deployit-release:179` | Extracts owner/repo from git remote get-url origin when --repo isn't passed — the fallback repo resolution behind every gh call this script makes (plugins/deployit/bin/deployit-release:179). |
 | `_parse_semver_config` | def | `plugins/deployit/bin/deployit-cli:338` | Parses .semver/config.yaml's flat key:value format directly (deliberately not importing the semver plugin) — the sole read path behind _semver_active_version, _semver_prefix, and preflight's target_branch (plugins/deployit/bin/deployit-cli:338). |
 | `_parse_semver_config` | def | `plugins/deployit/bin/deployit-release:69` | Parses .semver/config.yaml directly (mirroring bin/deployit-cli rather than importing it) — feeds _semver_version, the first rung of _resolve_version_and_tag's version ladder (plugins/deployit/bin/deployit-release:69). |
-| `_publish_github_release` | def | `plugins/deployit/bin/deployit-cli:1005` | Shells out to bin/deployit-release to publish the GitHub release for a completed deploy; deliberately never raises, so a release failure can't undo an already-published tailnet build (plugins/deployit/bin/deployit-cli:1005). |
-| `_read_archive_build_number` | def | `plugins/deployit/bin/deployit-cli:535` | Reads CFBundleVersion via PlistBuddy from the just-built .xcarchive, checking both iOS/visionOS and macOS Info.plist locations; the sole source of a deploy's build_number (plugins/deployit/bin/deployit-cli:535). |
-| `_read_config` | def | `plugins/deployit/bin/deployit-cli:458` | Parses config.toml (tomllib when available, else a regex fallback for pre-3.11 Pythons) into the server/macos/github config nearly every subcommand reads (plugins/deployit/bin/deployit-cli:458). |
-| `_refresh_local_backend` | def | `plugins/deployit/bin/deployit-cli:979` | Best-effort POST to the local backend's /_internal/refresh after an index write, so the web UI reflects a deploy/gc/rm without waiting on its own git-pull cadence (plugins/deployit/bin/deployit-cli:979). |
-| `_resolve_version_and_tag` | def | `plugins/deployit/bin/deployit-release:116` | Implements the release's version-resolution ladder — semver VERSION, else the app's CFBundleShortVersionString, else fail loudly — and normalizes the tag to carry semver's prefix so it matches any tag semver already created (plugins/deployit/bin/deployit-release:116). |
-| `_semver_active_version` | def | `plugins/deployit/bin/deployit-cli:357` | Determines whether semver is active for the project (tracking:true plus a readable VERSION file); every semver-aware branch in cmd_deploy/cmd_preflight/cmd_bump gates on this one check (plugins/deployit/bin/deployit-cli:357). |
-| `_stage_macos` | def | `plugins/deployit/bin/deployit-cli:754` | The macOS staging pipeline: wraps the exported .app in a signed/notarized .dmg, optionally produces the Sparkle EdDSA zip and the GitHub-release zip, and writes _meta.json — the single place deciding what artifacts a macOS build ships with (plugins/deployit/bin/deployit-cli:754). |
-| `_sync_plugin_root` | def | `plugins/deployit/bin/deployit-cli:131` | Atomically re-points the daemon's stable _plugin_root and bin/deployit-backend symlinks at a plugin checkout — the indirection that lets the launchd plist stay immutable across plugin upgrades (plugins/deployit/bin/deployit-cli:131). |
-| `_version_label` | def | `plugins/deployit/bin/deployit-backend:120` | Single formatter for the version shown across listing/product/build-landing pages and the Sparkle appcast title, falling back from semver_version to build_number so pre-semver index entries render correctly (plugins/deployit/bin/deployit-backend:120). |
+| `_publish_github_release` | def | `plugins/deployit/bin/deployit-cli:1005` | The only bridge from deployit-cli into bin/deployit-release: invokes it as a subprocess to publish the staged release zip, called once from cmd_deploy (plugins/deployit/bin/deployit-cli:1171); deliberately never raises so a release failure can't roll back an already-deployed tailnet build. |
+| `_read_archive_build_number` | def | `plugins/deployit/bin/deployit-cli:535` | Extracts CFBundleVersion from the freshly-built archive's Info.plist to become the canonical build_number flowing through the rest of the deploy pipeline (meta_full, _stage_macos, _append_to_index); called once from cmd_deploy (plugins/deployit/bin/deployit-cli:1118). |
+| `_read_config` | def | `plugins/deployit/bin/deployit-cli:458` | _read_config (plugins/deployit/bin/deployit-cli:458) is the sole config.toml loader, called by six commands — cmd_deploy:1095, cmd_url:1386, cmd_status:1393, cmd_gc:1450, cmd_rm:1503, cmd_redeploy:1601 — each depending on it for the [server] base_url/port block. |
+| `_refresh_local_backend` | def | `plugins/deployit/bin/deployit-cli:979` | Best-effort POST that tells the running backend daemon to reload its in-memory index cache after any index-mutating command; called from cmd_deploy, cmd_rm, and cmd_gc (plugins/deployit/bin/deployit-cli:1162,1481,1536) to keep it consistent with the pushed builds.json. |
+| `_resolve_version_and_tag` | def | `plugins/deployit/bin/deployit-release:116` | Sole authority for the release version+tag: semver VERSION takes precedence over Info.plist's CFBundleShortVersionString, normalizing the tag to carry semver's prefix; called once from main (plugins/deployit/bin/deployit-release:277) before every GitHub release publish. |
+| `_semver_active_version` | def | `plugins/deployit/bin/deployit-cli:357` | Single source of truth for 'is semver tracking on for this project', gating cmd_deploy, cmd_preflight, and cmd_bump (plugins/deployit/bin/deployit-cli:1092,1230,1293) — decides whether the semver VERSION or the Info.plist version wins. |
+| `_stage_macos` | def | `plugins/deployit/bin/deployit-cli:754` | The macOS packaging pipeline: builds the .dmg, optionally notarizes+staples, produces the Sparkle-signed zip and/or the GitHub-release zip, and writes _meta.json; called from cmd_deploy (plugins/deployit/bin/deployit-cli:1144) — the widest-scoped staging helper in the deploy path. |
+| `_sync_plugin_root` | def | `plugins/deployit/bin/deployit-cli:131` | Points the daemon's stable indirection symlinks (_plugin_root, bin/deployit-backend) at the current plugin_root so the launchd plist never needs regenerating across upgrades; called from cmd_bootstrap and cmd_redeploy (plugins/deployit/bin/deployit-cli:1063,1604). |
+| `_version_label` | def | `plugins/deployit/bin/deployit-backend:120` | Sole formatter for a build's displayed version (semver vs build-number fallback); reused across row, product, and build-landing rendering (plugins/deployit/bin/deployit-backend:169,182,255,392), so it governs every rendered page's version text. |
 
 ## Relationships
-
-- `plugins-deployit-bin._append_to_index -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._clone_index -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._commit_and_push_index -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._commit_and_push_index -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._configure_tailscale_serve -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._dispatch_get -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._find_semver_cli -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._find_sparkle_sign_update -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._gh_bin -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._git -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._git_pull -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._group_by_product -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._install_launchd -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._kickstart_daemon -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._latest_build_for -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._notarize_staple_app -> plugins-semver-misc.set (calls)`
-- `plugins-deployit-bin._parse_semver_config -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._platform_display -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._plist_is_legacy -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._prune_old_builds -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._publish_github_release -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._publish_github_release -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._pull_index -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._read_base_url -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._read_build_meta -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._read_bundle_id -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._read_config -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._read_index -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._read_index -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._read_marketing_version -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._refresh_local_backend -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._release_notes_path -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._release_notes_path -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._render_appcast -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._render_appcast -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._render_build_landing -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._render_listing -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._render_listing -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._render_product -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._render_product -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._render_row -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._render_sparkle_block -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._run_cli_rm -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._run_cli_rm -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._semver_active_version -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._semver_active_version -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._semver_prefix -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._semver_version -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._semver_version -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._send_bytes -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._send_file -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._send_json -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._sparkle_sign -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._sparkle_sign -> plugins-semver-misc.output (calls)`
-- `plugins-deployit-bin._sparkle_sign -> plugins-semver-misc.write (calls)`
-- `plugins-deployit-bin._stage_ios_or_visionos -> plugins-atlas-bin-chunk-1.read_text (calls)`
-- `plugins-deployit-bin._stage_macos -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._stage_sparkle_zip -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._state_dir -> plugins-semver-misc.get (calls)`
-- `plugins-deployit-bin._tailscale_bin -> plugins-semver-misc.get (calls)`
 
 ## Type notes
 

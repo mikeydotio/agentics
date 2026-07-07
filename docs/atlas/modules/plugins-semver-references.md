@@ -13,12 +13,14 @@ sources:
     blob: 097ecc3495c8566e0458f0f3b7e49ab220a8a7e2
   - path: plugins/semver/references/file-locking.md
     blob: b8ac09df7a2d89649f2c7c5e46a0d6ba79353c51
+  - path: plugins/semver/references/set-and-init.md
+    blob: 5e32d26ef08f3b33324765bd9f803aedae1728ae
   - path: plugins/semver/references/sync-validation.md
     blob: 1100011114eb836ee91e61945651835351cc0e1d
   - path: plugins/semver/references/user-hooks.md
     blob: b8909535d97ccea22cb97d62b935a12cd57f77ad
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/semver/references

@@ -4,23 +4,27 @@ summary: "Dispatches a GitHub issue to a new tmux window, git worktree, and plan
 read_when: "Changing handle-issue's dispatch, tmux sequencing, or issue picking"
 sources:
   - path: plugins/handle-issue/.claude-plugin/plugin.json
-    blob: ccb343f93ebfa83c3169d03e9e0143f3a5b47150
+    blob: effb6e00b20f2b9413a7a7f70c53a901220e156a
   - path: plugins/handle-issue/README.md
-    blob: 4483072079005ddcd149122839f21b6f1f0ea024
+    blob: 78f9a4ba7ef99ba1e932c9044d2f13a4c861be46
   - path: plugins/handle-issue/bin/handle-issue.sh
-    blob: e9855ab7d8909f164d0e563cd4eb808ac3a7cce1
+    blob: 9e739101988751a2a42ef2508b0125ccbde7ae2d
   - path: plugins/handle-issue/skills/handle-issue/SKILL.md
-    blob: 7e94f3e0b03fab47dd12b8862fa23edbaabba2de
+    blob: aa868eed12b2910a432667dd9fcdf0511909da13
   - path: plugins/handle-issue/tests/fakes/gh
-    blob: d68aa4ef64c04dd1b38a20cb21e7135fd2a8eb09
+    blob: e46b26b4d6b459f785f8ba49245e7b319192f59f
+  - path: plugins/handle-issue/tests/fakes/tmux
+    blob: 8886849d8b4a975499e4689f48dbe3bc08799ccc
   - path: plugins/handle-issue/tests/lib.sh
-    blob: 9ea554c8f77a71bafb27ba159429f6b5a623e10b
+    blob: 9fb1050377b32f46eb31b1a35d08747321712f6c
   - path: plugins/handle-issue/tests/run-tests.sh
     blob: 221d6216190bad707c257d7bfe75b4147ef2c226
   - path: plugins/handle-issue/tests/test-arg-validation.sh
     blob: 3485d11f170adab9113b98cbb6e8033940fb0b1e
   - path: plugins/handle-issue/tests/test-dispatch-dryrun.sh
-    blob: 20f0c9b2cab557ecc62da4a4eb76153f1727644a
+    blob: 37c9a8558929a01c0737b287d1c8158adb967e7c
+  - path: plugins/handle-issue/tests/test-gitignore.sh
+    blob: 9db415f96f48a32ddcbc9813445ac6bbb61d532b
   - path: plugins/handle-issue/tests/test-list-shaping.sh
     blob: 6d544dd4a10a7fc64543767287cfc966d398b5c9
   - path: plugins/handle-issue/tests/test-owner-repo.sh
@@ -28,7 +32,7 @@ sources:
   - path: plugins/handle-issue/tests/test-preconditions.sh
     blob: 856ec062f3eaf1efc456cb265225f90bb4d637ee
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/handle-issue

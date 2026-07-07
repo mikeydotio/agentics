@@ -1816,8 +1816,9 @@ def enclosing_symbol(symbols_in_file, line):
 
 def extract_call_sites_regex(relpath, text, symbols_in_file):
     """Name-based call sites for the regex backend: `{from, callee, line}` with
-    no resolution target (resolve_edges resolves by name). Skips definition
-    lines (a `def foo(` is not a call to foo) and parenthesised keywords."""
+    no resolution target (resolve_edges resolves by name — to a TYPE only). Skips
+    definition lines (a `def foo(` is not a call to foo) and parenthesised
+    keywords."""
     if relpath.lower().endswith(".md"):
         return []
     sites = []
@@ -1836,20 +1837,39 @@ def extract_call_sites_regex(relpath, text, symbols_in_file):
     return sites
 
 
+# Symbol kinds a bare corpus-unique name may be safely name-resolved to. Only a
+# TYPE name is unambiguous without scope resolution: a bare *func/method* name can
+# shadow a stdlib/framework member the corpus cannot see (`Array.append`,
+# `String.contains`, `Task.cancel`, SwiftUI `dismiss`), so asserting a `calls` edge
+# to a corpus-unique func/method is a guess, not a fact. Deliberately conservative
+# vs. DEF_LINE_RE's full vocabulary: `interface`/`trait` are omitted because they are
+# not `Name(`-constructed and could re-introduce false edges (e.g. a `Foo(` call
+# colliding with a TypeScript `interface Foo`); `extension`/`impl`/`module`/`object`
+# are extensions/namespaces/singletons, also not constructor targets. The function
+# kinds (`func`/`def`/`fn`/`function`) are excluded by design.
+TYPE_KINDS = frozenset(
+    ("class", "struct", "enum", "actor", "protocol", "type"))
+
+
 def resolve_edges(symbols, call_sites):
     """Resolve call sites to structural `calls` edges with a confidence tier:
-      resolved  — a tree-sitter-provided target, OR a unique corpus-wide name
+      resolved  — a tree-sitter-provided `to_loc` target, OR a unique corpus-wide
+                  *type* name (a constructor reference)
       ambiguous — the name matches >1 indexed definition; all kept in candidates
       unresolved— 0 indexed definitions (external/builtin) → dropped, not noise
-    A name-based unique match is `resolved` (it is unambiguous, not a guess);
-    receiver types only matter to collapse an ambiguous set, which the
-    tree-sitter helper does upstream by emitting `to_loc`. Output is sorted and
+    A unique-name match is only `resolved` when the target is a TYPE (see
+    TYPE_KINDS): a bare func/method name is not unambiguous without scope
+    resolution — it can shadow an unseen stdlib member — so it is dropped, never
+    guessed. Real func/method edges survive only via a parser-supplied `to_loc`,
+    which the tree-sitter helper emits after scope resolution. Output is sorted and
     deduped; parallel call sites merge their evidence."""
     name_to_ids = {}
     loc_to_id = {}
+    id_to_kind = {}
     for s in symbols:
         name_to_ids.setdefault(s["name"], []).append(s["id"])
         loc_to_id[(s["file"], s["span"]["start_line"])] = s["id"]
+        id_to_kind[s["id"]] = s["kind"]
 
     merged = {}
     for cs in call_sites:
@@ -1868,6 +1888,8 @@ def resolve_edges(symbols, call_sites):
             if not cands:
                 continue                      # unresolved — dropped
             if len(cands) == 1:
+                if id_to_kind.get(cands[0]) not in TYPE_KINDS:
+                    continue              # bare func/method name-guess — dropped
                 to, confidence = cands[0], "resolved"
             else:
                 confidence, candidates = "ambiguous", cands
@@ -1897,8 +1919,10 @@ def incident_edge_digest(symbol_id, edges):
     design: ambiguous incoming edges (common names like `run`/`get` defined in
     many files) would thrash the digest on every unrelated same-named def, so
     they are excluded. An empty set hashes to a stable constant, so a symbol
-    with no resolved callers (and every regex-only symbol with none) shares it
-    — load_bearing then keys on signature_hash alone, no worse than v1 fan-in."""
+    with no resolved callers shares it (regex-backed TYPEs reached by a
+    constructor call do get resolved callers; func/method targets get one only
+    via a parser `to_loc`) — load_bearing then keys on signature_hash alone, no
+    worse than v1 fan-in."""
     incoming = sorted(
         e["from"] for e in edges
         if e.get("to") == symbol_id and e.get("confidence") == "resolved")

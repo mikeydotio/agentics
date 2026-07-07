@@ -50,7 +50,7 @@ v2 attacks both by splitting every doc into two provenances and caching the expe
 | 21 | Doc provenance | **Projection.** Committed docs are DERIVED by `project` joining the Structure Index with the Judgment Cache. The cartographer no longer writes markdown; it emits judgment cells. |
 | 22 | Structure extraction | **Hybrid.** An external tree-sitter-backed helper (`subprocess`, mirrors `run_git`; probed via `$ATLAS_TS_HELPER` or `PATH`) emitting atlas's structure-JSON contract where available; the `extract_regex` floor (`DEF_LINE_RE`/`IMPORT_LINE_RE`/fan-in) is the always-present fallback. Both feed one `resolve_edges` engine. Plugin is fully functional with **zero new deps**; the helper only raises edge precision (scope-resolved `to` targets). |
 | 23 | Source untouched | Judgments live in a committed sidecar (`judgments.json`), **never** in source comments. The "atlas never mutates your source tree" invariant (v1 decision 11 discipline) is preserved absolutely. |
-| 24 | Edge confidence | Every structural edge carries `resolved` \| `ambiguous` \| `unresolved`. A *unique* corpus-wide name (or a parser-supplied `to` target) is `resolved` — unambiguous, not a guess; a name with **multiple** candidates is never collapsed to one without parser evidence (kept `ambiguous`, all candidates listed); a name defined nowhere is `unresolved` and dropped. The LLM disambiguates only `ambiguous` edges feeding a doc being (re)projected. |
+| 24 | Edge confidence | Every structural edge carries `resolved` \| `ambiguous` \| `unresolved`. A parser-supplied `to` target, or a *unique* corpus-wide **type** name (a constructor reference), is `resolved` — unambiguous, not a guess. A unique **func/method** name is *not* name-resolved: without scope resolution it can shadow an unseen stdlib member (`Array.append`, `String.contains`), so it is dropped, not guessed (it survives only via a parser `to`). A name with **multiple** candidates is never collapsed to one without parser evidence (kept `ambiguous`, all candidates listed); a name defined nowhere is `unresolved` and dropped. The LLM disambiguates only `ambiguous` edges feeding a doc being (re)projected. |
 | 25 | Source of truth | The **Judgment Cache** (committed) is canonical for prose; the **Structure Index** (regenerable) is canonical for structure; docs + INDEX + ledger are all derived. Extends v1 "INDEX is derived" to the whole map. |
 | 26 | Judgment keys | Content-addressed by **three orthogonal per-symbol hashes** — `signature_hash`, `span_hash`, `incident_edge_digest` — so each judgment kind invalidates on exactly the change that affects it (see "The judgment-key derivation"). A pure body edit is a zero-LLM re-projection. |
 | 27 | Generator fingerprint | Bump to `cartographer/3` (the cartographer's output contract changes from markdown doc → JSON cells). Every v1 doc fingerprint-stales; `migrate-v1` re-keys existing prose so the bump costs no re-mapping. |
@@ -91,7 +91,9 @@ ceiling (precise scope resolution for the languages you use).
 
 Both backends feed one shared resolution engine, `resolve_edges`, which assigns each call site a
 confidence tier (decision 24). The regex backend extracts call sites by name and resolves them
-**corpus-wide by name**: a uniquely-named callee is `resolved` (it is unambiguous, not a guess);
+**corpus-wide by name**: a uniquely-named callee is `resolved` **only when it names a type** (a
+constructor reference — unambiguous, not a guess); a uniquely-named func/method is dropped rather
+than guessed, since without scope resolution it can shadow an unseen stdlib member;
 a name defined in several files is `ambiguous` (all candidates kept); a name defined nowhere in the
 map is `unresolved` and dropped (it is an external/builtin call, already covered by `external_deps`).
 The tree-sitter path does real scope resolution and emits a `to` target per call site, which

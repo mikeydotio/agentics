@@ -13,16 +13,16 @@ _judgment_fixture() {
     cat > "$repo/src/core.py" <<'PY'
 class PublicAPI:
     def run(self):
-        return _engine(1)
+        return _Engine(1)
 
-def _engine(x):
-    return x + 1
+class _Engine:
+    pass
 PY
     cat > "$repo/src/caller.py" <<'PY'
-from src.core import _engine
+from src.core import _Engine
 
-def use_engine():
-    return _engine(2)
+def use_Engine():
+    return _Engine(2)
 PY
     local i
     for i in 1 2 3 4 5 6; do seed_file "$repo" "src/pad$i.txt"; done
@@ -49,10 +49,10 @@ test_body_edit_keeps_contract_key() {
     cat > "$repo/src/core.py" <<'PY'
 class PublicAPI:
     def run(self):
-        return _engine(99999)
+        return _Engine(99999)
 
-def _engine(x):
-    return x + 1
+class _Engine:
+    pass
 PY
     commit_all "$repo" body
     local after; after=$(plan_key "$repo" symbol.contract "src/core.py::PublicAPI")
@@ -69,10 +69,10 @@ test_signature_edit_changes_contract_key() {
     cat > "$repo/src/core.py" <<'PY'
 class PublicAPI(object):
     def run(self):
-        return _engine(1)
+        return _Engine(1)
 
-def _engine(x):
-    return x + 1
+class _Engine:
+    pass
 PY
     commit_all "$repo" decl
     local after; after=$(plan_key "$repo" symbol.contract "src/core.py::PublicAPI")
@@ -84,19 +84,19 @@ PY
 # ── CRUX 3: a new caller changes load_bearing but NOT contract ───────────────
 test_new_caller_changes_load_bearing_not_contract() {
     local repo; repo=$(_judgment_fixture)
-    local lb0; lb0=$(plan_key "$repo" symbol.load_bearing "src/core.py::_engine")
+    local lb0; lb0=$(plan_key "$repo" symbol.load_bearing "src/core.py::_Engine")
     local c0;  c0=$(plan_key "$repo" symbol.contract "src/core.py::PublicAPI")
-    [ -n "$lb0" ] || { echo "    FAIL: _engine should be a load_bearing candidate"; return 1; }
+    [ -n "$lb0" ] || { echo "    FAIL: _Engine should be a load_bearing candidate"; return 1; }
 
-    # Append a PRIVATE caller of _engine to an existing file: no new public
-    # surface, no new module — only _engine's resolved-caller set grows.
+    # Append a PRIVATE caller of _Engine to an existing file: no new public
+    # surface, no new module — only _Engine's resolved-caller set grows.
     cat >> "$repo/src/caller.py" <<'PY'
 
 def _also():
-    return _engine(3)
+    return _Engine(3)
 PY
     commit_all "$repo" caller
-    local lb1; lb1=$(plan_key "$repo" symbol.load_bearing "src/core.py::_engine")
+    local lb1; lb1=$(plan_key "$repo" symbol.load_bearing "src/core.py::_Engine")
     local c1;  c1=$(plan_key "$repo" symbol.contract "src/core.py::PublicAPI")
 
     [ "$lb0" != "$lb1" ] || {
@@ -112,12 +112,12 @@ test_reorder_keeps_module_purpose_key() {
 
     # Swap the order of the two top-level definitions in core.py.
     cat > "$repo/src/core.py" <<'PY'
-def _engine(x):
-    return x + 1
+class _Engine:
+    pass
 
 class PublicAPI:
     def run(self):
-        return _engine(1)
+        return _Engine(1)
 PY
     commit_all "$repo" reorder
     local after; after=$(plan_key "$repo" module.purpose "src")
@@ -207,10 +207,10 @@ test_signature_edit_restales_only_that_contract() {
     cat > "$repo/src/core.py" <<'PY'
 class PublicAPI(object):
     def run(self):
-        return _engine(1)
+        return _Engine(1)
 
-def _engine(x):
-    return x + 1
+class _Engine:
+    pass
 PY
     commit_all "$repo" decl
     run_atlas "$repo" judge-plan

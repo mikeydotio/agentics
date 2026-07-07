@@ -13,13 +13,21 @@ _edge_fixture() {
     local repo
     repo=$(create_fixture_repo)
     mkdir -p "$repo/src"
-    # A uniquely-named callee, called once → resolved.
+    # A uniquely-named TYPE, constructed once → resolved (a type name can't shadow
+    # a stdlib member). A uniquely-named FUNC → NOT resolved (a bare func name is a
+    # guess: it can shadow an unseen stdlib member).
     cat > "$repo/src/a.py" <<'PY'
-def unique_target(x):
+class UniqueType:
+    pass
+
+def unique_func(x):
     return x
 
 def caller_one():
-    return unique_target(1)
+    return UniqueType()
+
+def caller_func():
+    return unique_func(1)
 PY
     # `dup` defined in TWO files → a call to it is ambiguous.
     cat > "$repo/src/b.py" <<'PY'
@@ -60,15 +68,26 @@ _digest() {
         "$1/.atlas/structure/index.json"
 }
 
-test_resolved_edge_for_unique_name() {
+test_resolved_edge_for_unique_type_name() {
     local repo; repo=$(_edge_fixture)
     run_atlas "$repo" extract
     local edge
     edge=$(_edges "$repo" | jq -c \
-        '.[] | select(.from=="src/a.py::caller_one" and .to=="src/a.py::unique_target")')
-    [ -n "$edge" ] || { echo "    FAIL: missing caller_one->unique_target edge"; return 1; }
-    assert_json_field "$edge" '.confidence' "resolved" "unique name is resolved" || return 1
+        '.[] | select(.from=="src/a.py::caller_one" and .to=="src/a.py::UniqueType")')
+    [ -n "$edge" ] || { echo "    FAIL: missing caller_one->UniqueType edge"; return 1; }
+    assert_json_field "$edge" '.confidence' "resolved" "unique TYPE name is resolved" || return 1
     assert_json_field "$edge" '.kind' "calls" "kind is calls" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+test_unique_func_name_not_resolved() {
+    local repo; repo=$(_edge_fixture)
+    run_atlas "$repo" extract
+    # A corpus-unique FUNC name is not name-resolved — it could shadow an unseen
+    # stdlib member, so asserting a `calls` edge would be a guess (issue #65).
+    local hits
+    hits=$(_edges "$repo" | jq -c '[.[] | select(.from=="src/a.py::caller_func")] | length')
+    assert_eq "0" "$hits" "a unique FUNC name produces no resolved edge" || return 1
     cleanup_fixture_repo "$repo"
 }
 
@@ -109,9 +128,9 @@ test_incident_digest_nonempty_for_resolved_caller() {
     local repo; repo=$(_edge_fixture)
     run_atlas "$repo" extract
     local d
-    d=$(_digest "$repo" "unique_target")
+    d=$(_digest "$repo" "UniqueType")
     [ "$d" != "$EMPTY_DIGEST" ] || {
-        echo "    FAIL: unique_target has a resolved caller — digest should be non-empty"
+        echo "    FAIL: UniqueType has a resolved caller — digest should be non-empty"
         return 1; }
     cleanup_fixture_repo "$repo"
 }

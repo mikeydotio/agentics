@@ -13,17 +13,17 @@ _mapflow_fixture() {
     cat > "$repo/src/auth/service.py" <<'PY'
 class AuthService:
     def login(self):
-        return _sign(1)
+        return _Signer(1)
 
-def _sign(payload):
-    return payload
+class _Signer:
+    pass
 PY
     cat > "$repo/src/api/client.py" <<'PY'
-from src.auth.service import _sign
+from src.auth.service import _Signer
 
 class ApiClient:
     def call(self):
-        return _sign(2)
+        return _Signer(2)
 PY
     local i
     for i in 1 2 3 4 5 6 7; do
@@ -109,8 +109,8 @@ test_map_flow_cross_module_edge_rendered() {
     local repo; repo=$(_mapflow_fixture)
     _judge_all "$repo"
     run_atlas "$repo" project >/dev/null
-    # ApiClient.call -> _sign (src-auth) is a resolved cross-module edge.
-    grep -q 'src-api.* -> src-auth._sign (calls)' "$repo/docs/atlas/modules/src-api.md" \
+    # ApiClient.call -> _Signer (src-auth) is a resolved cross-module edge.
+    grep -q 'src-api.* -> src-auth._Signer (calls)' "$repo/docs/atlas/modules/src-api.md" \
         || { echo "    FAIL: cross-module edge missing"; cat "$repo/docs/atlas/modules/src-api.md"; return 1; }
     cleanup_fixture_repo "$repo"
 }

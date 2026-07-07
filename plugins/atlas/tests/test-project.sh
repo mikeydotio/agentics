@@ -12,16 +12,16 @@ _project_fixture() {
     cat > "$repo/src/auth/service.py" <<'PY'
 class AuthService:
     def login(self):
-        return _hash_token(1)
+        return _HashToken(1)
 
-def _hash_token(x):
-    return x
+class _HashToken:
+    pass
 PY
     cat > "$repo/src/api/client.py" <<'PY'
-from src.auth.service import _hash_token
+from src.auth.service import _HashToken
 
 def send(kind):
-    return _hash_token(kind)
+    return _HashToken(kind)
 PY
     local i
     for i in 1 2 3 4 5 6 7; do
@@ -114,13 +114,13 @@ test_public_symbol_in_api_private_referenced_in_loadbearing() {
     local repo; repo=$(_project_fixture)
     run_atlas "$repo" project
     local doc="$repo/docs/atlas/modules/src-auth.md"
-    # AuthService is public → Public API; _hash_token is private but referenced
+    # AuthService is public → Public API; _HashToken is private but referenced
     # cross-file → Load-bearing internals.
     local api lb
     api=$(awk '/## Public API/,/## Load-bearing/' "$doc")
     lb=$(awk '/## Load-bearing internals/,/## Relationships/' "$doc")
     echo "$api" | grep -q 'AuthService' || { echo "    FAIL: AuthService not in Public API"; return 1; }
-    echo "$lb" | grep -q '_hash_token' || { echo "    FAIL: _hash_token not in Load-bearing"; return 1; }
+    echo "$lb" | grep -q '_HashToken' || { echo "    FAIL: _HashToken not in Load-bearing"; return 1; }
     cleanup_fixture_repo "$repo"
 }
 
@@ -128,9 +128,9 @@ test_cross_module_relationship_and_refs() {
     local repo; repo=$(_project_fixture)
     run_atlas "$repo" project
     local doc="$repo/docs/atlas/modules/src-api.md"
-    # send (src-api) calls _hash_token (src-auth) → a cross-module edge, and
+    # send (src-api) calls _HashToken (src-auth) → a cross-module edge, and
     # src-auth must appear in references_modules.
-    grep -q 'src-api.send -> src-auth._hash_token (calls)' "$doc" || {
+    grep -q 'src-api.send -> src-auth._HashToken (calls)' "$doc" || {
         echo "    FAIL: cross-module relationship not rendered"; cat "$doc"; return 1; }
     grep -q 'references_modules: \[src-auth\]' "$doc" || {
         echo "    FAIL: references_modules not set"; return 1; }
@@ -140,7 +140,7 @@ test_cross_module_relationship_and_refs() {
 # ingest_edge_semantic <repo> <value-json>
 # Finds the (single) edge.semantic key the fixture plans and ingests <value-json>
 # as its value. The fixture has exactly one resolved cross-module edge:
-# src-api.send -> src-auth._hash_token.
+# src-api.send -> src-auth._HashToken.
 ingest_edge_semantic() {
     local repo="$1" value="$2"
     run_atlas "$repo" judge-plan
@@ -159,22 +159,22 @@ test_edge_semantic_cell_is_planned() {
     cell=$(echo "$OUTPUT" | jq -c '[.missing_keys[] | select(.kind=="edge.semantic")]')
     assert_eq "1" "$(echo "$cell" | jq 'length')" "exactly one edge.semantic planned" || return 1
     assert_json_field "$cell" '.[0].symbol' "src/api/client.py::send" "anchored at caller" || return 1
-    assert_json_field "$cell" '.[0].to' "src/auth/service.py::_hash_token" "names the resolved target" || return 1
+    assert_json_field "$cell" '.[0].to' "src/auth/service.py::_HashToken" "names the resolved target" || return 1
     cleanup_fixture_repo "$repo"
 }
 
 test_edge_semantic_verb_replaces_structural_in_relationships() {
     local repo; repo=$(_project_fixture)
     run_atlas "$repo" project   # no cell yet → structural fallback
-    grep -q 'src-api.send -> src-auth._hash_token (calls)' "$repo/docs/atlas/modules/src-api.md" \
+    grep -q 'src-api.send -> src-auth._HashToken (calls)' "$repo/docs/atlas/modules/src-api.md" \
         || { echo "    FAIL: structural fallback not rendered"; return 1; }
 
-    ingest_edge_semantic "$repo" '{"verb":"reads","to":"src/auth/service.py::_hash_token","why":"send reads the token hasher"}' || return 1
+    ingest_edge_semantic "$repo" '{"verb":"reads","to":"src/auth/service.py::_HashToken","why":"send reads the token hasher"}' || return 1
     run_atlas "$repo" project
     local doc="$repo/docs/atlas/modules/src-api.md"
-    grep -q 'src-api.send -> src-auth._hash_token (reads)' "$doc" \
+    grep -q 'src-api.send -> src-auth._HashToken (reads)' "$doc" \
         || { echo "    FAIL: judged verb not rendered"; sed -n '/## Relationships/,/## Type/p' "$doc"; return 1; }
-    grep -q 'src-api.send -> src-auth._hash_token (calls)' "$doc" \
+    grep -q 'src-api.send -> src-auth._HashToken (calls)' "$doc" \
         && { echo "    FAIL: structural verb should be replaced, not co-rendered"; return 1; }
     # The semantic target's module stays in references_modules.
     grep -q 'references_modules: \[src-auth\]' "$doc" \
@@ -186,17 +186,17 @@ test_edge_semantic_null_verb_renders_structural() {
     local repo; repo=$(_project_fixture)
     ingest_edge_semantic "$repo" '{"verb":null}' || return 1
     run_atlas "$repo" project
-    grep -q 'src-api.send -> src-auth._hash_token (calls)' "$repo/docs/atlas/modules/src-api.md" \
+    grep -q 'src-api.send -> src-auth._HashToken (calls)' "$repo/docs/atlas/modules/src-api.md" \
         || { echo "    FAIL: null verb should render the structural edge"; return 1; }
     cleanup_fixture_repo "$repo"
 }
 
 test_edge_semantic_out_of_grammar_verb_falls_back() {
     local repo; repo=$(_project_fixture)
-    ingest_edge_semantic "$repo" '{"verb":"frobnicates","to":"src/auth/service.py::_hash_token"}' || return 1
+    ingest_edge_semantic "$repo" '{"verb":"frobnicates","to":"src/auth/service.py::_HashToken"}' || return 1
     run_atlas "$repo" project
     local doc="$repo/docs/atlas/modules/src-api.md"
-    grep -q 'src-api.send -> src-auth._hash_token (calls)' "$doc" \
+    grep -q 'src-api.send -> src-auth._HashToken (calls)' "$doc" \
         || { echo "    FAIL: an out-of-grammar verb must fall back to the structural verb"; return 1; }
     # …and the rendered doc still passes the L13 verb-grammar check.
     run_atlas "$repo" lint
@@ -207,7 +207,7 @@ test_edge_semantic_out_of_grammar_verb_falls_back() {
 
 test_edge_semantic_reproject_is_byte_identical() {
     local repo; repo=$(_project_fixture)
-    ingest_edge_semantic "$repo" '{"verb":"reads","to":"src/auth/service.py::_hash_token","why":"reads the hasher"}' || return 1
+    ingest_edge_semantic "$repo" '{"verb":"reads","to":"src/auth/service.py::_HashToken","why":"reads the hasher"}' || return 1
     run_atlas "$repo" project
     local h1; h1=$(shasum "$repo/docs/atlas/modules/src-api.md" | awk '{print $1}')
     run_atlas "$repo" project
@@ -219,7 +219,7 @@ test_edge_semantic_reproject_is_byte_identical() {
 
 test_edge_semantic_doc_records_key_in_judgment_keys() {
     local repo; repo=$(_project_fixture)
-    ingest_edge_semantic "$repo" '{"verb":"reads","to":"src/auth/service.py::_hash_token","why":"x"}' || return 1
+    ingest_edge_semantic "$repo" '{"verb":"reads","to":"src/auth/service.py::_HashToken","why":"x"}' || return 1
     run_atlas "$repo" project >/dev/null
     run_atlas "$repo" ledger finalize --refresh-hashes --generator "cartographer/4"
     # The src-api doc's per-doc judgment_keys must include its edge.semantic key

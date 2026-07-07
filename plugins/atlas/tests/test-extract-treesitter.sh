@@ -168,3 +168,45 @@ test_force_regex_ignores_present_helper() {
     assert_json_field "$OUTPUT" '.backend.py' "regex" "--backend regex forces regex" || return 1
     cleanup_fixture_repo "$repo"
 }
+
+# A bare unique FUNC-kind callee with NO `to` must NOT be name-resolved (issue #65:
+# it could shadow an unseen stdlib member); the same call site WITH a `to` still
+# resolves via the ungated to_loc fast-path.
+test_bare_func_call_without_to_is_dropped_but_toloc_resolves() {
+    local repo; repo=$(create_fixture_repo)
+    mkdir -p "$repo/src"
+    printf 'def render():\n    return 1\n'          > "$repo/src/lib.py"
+    printf 'def build():\n    return 2\n'           > "$repo/src/api.py"
+    printf 'def draw():\n    render()\n    build()\n' > "$repo/src/ui.py"
+    local i; for i in 1 2 3 4 5 6 7 8; do seed_file "$repo" "src/pad$i.txt"; done
+    commit_all "$repo"
+
+    local helper="$repo/ts-helper"
+    cat > "$helper" <<'STUB'
+#!/usr/bin/env python3
+import json, sys
+sys.stdin.read()
+print(json.dumps({"version": 1, "files": {
+  "src/lib.py": {"symbols": [{"name": "render", "kind": "func", "start_line": 1,
+      "end_line": 2, "signature": "def render()", "visibility": "public"}], "calls": []},
+  "src/api.py": {"symbols": [{"name": "build", "kind": "func", "start_line": 1,
+      "end_line": 2, "signature": "def build()", "visibility": "public"}], "calls": []},
+  "src/ui.py": {"symbols": [{"name": "draw", "kind": "func", "start_line": 1,
+      "end_line": 3, "signature": "def draw()", "visibility": "public"}],
+    "calls": [{"callee": "render", "line": 2},
+              {"callee": "build", "line": 3, "to": {"file": "src/api.py", "start_line": 1}}]}}}))
+STUB
+    chmod +x "$helper"
+
+    ATLAS_TS_HELPER="$helper" run_atlas "$repo" extract --backend treesitter
+    local idx="$repo/.atlas/structure/index.json"
+    # bare unique func name, no to_loc → dropped.
+    assert_eq "0" \
+        "$(jq -c '[.edges[] | select(.from=="src/ui.py::draw" and .to=="src/lib.py::render")] | length' "$idx")" \
+        "a unique func name with no to_loc is not resolved" || return 1
+    # same call graph, but this site carries to_loc → still resolved.
+    assert_eq "resolved" \
+        "$(jq -r '.edges[] | select(.from=="src/ui.py::draw" and .to=="src/api.py::build") | .confidence' "$idx")" \
+        "a call carrying to_loc still resolves (fast-path ungated)" || return 1
+    cleanup_fixture_repo "$repo"
+}

@@ -326,21 +326,21 @@ PY
 
 # ── edge.semantic key delta (item #6) ───────────────────────────────────────
 # A two-module fixture so there is a genuine resolved CROSS-module edge:
-# src-web.handle -> src-store.save (the flat _diff_fixture is a single module,
-# whose calls are intra-module and carry no edge.semantic cell).
+# src-web.handle -> src-store.Store (a TYPE reference — the flat _diff_fixture is a
+# single module, whose calls are intra-module and carry no edge.semantic cell).
 _edge_diff_fixture() {
     local repo
     repo=$(create_fixture_repo)
     mkdir -p "$repo/src/store" "$repo/src/web"
     cat > "$repo/src/store/db.py" <<'PY'
-def save(record):
-    return record
+class Store:
+    pass
 PY
     cat > "$repo/src/web/handler.py" <<'PY'
-from src.store.db import save
+from src.store.db import Store
 
 def handle(req):
-    return save(req)
+    return Store(req)
 PY
     local i
     for i in 1 2 3 4 5 6 7; do
@@ -370,15 +370,15 @@ test_edge_semantic_rekeys_when_caller_body_changes() {
     local k1
     k1=$(echo "$OUTPUT" | jq -r '.missing_keys[] | select(.kind=="edge.semantic") | .key')
     _fully_map "$repo"
-    # Change ONLY the caller's body — the call still resolves to save, but
+    # Change ONLY the caller's body — the call still resolves to Store, but
     # handle's span_hash moves, so the cell must re-key (taxonomy: regenerates
     # when the calling code changes) and the old key orphans.
     cat > "$repo/src/web/handler.py" <<'PY'
-from src.store.db import save
+from src.store.db import Store
 
 def handle(req):
     checked = req
-    return save(checked)
+    return Store(checked)
 PY
     commit_all "$repo" caller-body
     run_atlas "$repo" judgment diff

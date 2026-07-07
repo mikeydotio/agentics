@@ -160,3 +160,74 @@ test_ts_helper_raw_contract_is_version_1() {
         "Engine.swift yields 4 symbols (2 classes + 2 same-named run methods)" || return 1
     cleanup_fixture_repo "$repo"
 }
+
+# Bug 2 (issue #65): a bare `dismiss()` (e.g. a SwiftUI @Environment action) must NOT
+# resolve to a same-named METHOD — only a TOP-LEVEL free function is a valid bare-call
+# target. Drive the helper directly and check the wire contract's `to` fields.
+test_ts_helper_bare_call_does_not_resolve_to_method() {
+    local py; py=$(_ts_python) || { echo "$TS_SKIP"; return 0; }
+    local repo; repo=$(create_fixture_repo)
+    mkdir -p "$repo/Sources/UI"
+    cat > "$repo/Sources/UI/View.swift" <<'SW'
+public class ComposeField {
+    public func dismiss() {}
+}
+
+public func teardown() {}
+
+public func run() {
+    dismiss()
+    teardown()
+}
+SW
+    local i; for i in 1 2 3 4 5; do seed_file "$repo" "Sources/UI/pad$i.txt"; done
+    commit_all "$repo"
+
+    local out
+    out=$(printf 'Sources/UI/View.swift\n' | "$py" "$TS_HELPER_MODULE" extract --root "$repo")
+    local calls='.files["Sources/UI/View.swift"].calls'
+    # A bare dismiss() carries NO `to` (dismiss is a method, not a free func).
+    assert_eq "0" \
+        "$(echo "$out" | jq -c "[$calls"'[] | select(.callee=="dismiss") | .to | select(. != null)] | length')" \
+        "bare dismiss() emits no to — methods are not free functions" || return 1
+    # A bare call to a real TOP-LEVEL free function still resolves.
+    assert_eq "Sources/UI/View.swift" \
+        "$(echo "$out" | jq -r "$calls"'[] | select(.callee=="teardown") | .to.file')" \
+        "bare teardown() resolves to the top-level free func" || return 1
+    cleanup_fixture_repo "$repo"
+}
+
+# Fix C: a method whose decl has a leading attribute on its own line still resolves
+# via to_loc end-to-end. type_members/free_funcs store _line(node), matching the
+# emitted symbol start_line atlas keys loc_to_id on. (No-op — and still a valid
+# regression guard — if the grammar does not fold the attribute into the node span.)
+test_ts_helper_attributed_method_still_resolves() {
+    local py; py=$(_ts_python) || { echo "$TS_SKIP"; return 0; }
+    local repo; repo=$(create_fixture_repo)
+    mkdir -p "$repo/Sources/Api" "$repo/Sources/Main"
+    cat > "$repo/Sources/Api/Api.swift" <<'SW'
+public class Api {
+    @objc
+    public func fetch() {}
+}
+SW
+    cat > "$repo/Sources/Main/Main.swift" <<'SW'
+public func caller() {
+    let a = Api()
+    a.fetch()
+}
+SW
+    local i; for i in 1 2 3 4 5; do
+        seed_file "$repo" "Sources/Api/pad$i.txt"
+        seed_file "$repo" "Sources/Main/pad$i.txt"
+    done
+    commit_all "$repo"
+
+    local helper; helper=$(_make_wrapper "$py" "$repo")
+    ATLAS_TS_HELPER="$helper" run_atlas "$repo" extract --backend treesitter
+    assert_eq "1" \
+        "$(jq -c '[.edges[] | select((.from|endswith("::caller")) and .confidence=="resolved" and (.to|test("Api.swift::fetch")))] | length' \
+            "$repo/.atlas/structure/index.json")" \
+        "an attributed method still resolves via to_loc (span-start aligned)" || return 1
+    cleanup_fixture_repo "$repo"
+}

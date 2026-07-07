@@ -69,7 +69,9 @@ reliable subset:
 - bare `func()` → resolves to the unique corpus-wide free function of that name.
 
 Anything it cannot confidently resolve is emitted **without** `to`, and atlas
-resolves it by name (unique → `resolved`, otherwise `ambiguous`). The helper
+resolves it by name — but only to a **type** (unique type name → `resolved`);
+a bare func/method name is dropped rather than guessed (it can shadow an unseen
+stdlib member), and a name with several definitions is `ambiguous`. The helper
 never guesses.
 
 ## Pinned grammar (important)

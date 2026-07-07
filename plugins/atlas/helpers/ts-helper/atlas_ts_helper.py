@@ -139,10 +139,18 @@ class _FileResult:
         self.calls = []
 
 
-def _collect_symbols(src, root, relpath, result, type_members):
+def _collect_symbols(src, root, relpath, result, type_members, free_funcs):
     """Walk every type/function declaration (nested included). Appends contract
-    symbols and, for each type, fills ``type_members[Type][method] =
-    (file, start_line)`` — the table call resolution joins against."""
+    symbols and fills the two tables call resolution joins against:
+    ``type_members[Type][method] = (file, start_line)`` for *enclosed* methods,
+    and ``free_funcs[name] = [(file, start_line), …]`` for *top-level* functions
+    only. A bare ``func()`` call must resolve to a free function, never a
+    same-named *method* — otherwise a bare SwiftUI ``dismiss()`` (an
+    ``@Environment(\\.dismiss)`` action) forges a false edge to some type's
+    ``dismiss`` method. Both tables store ``_line(node)`` (the declaration's
+    start line), matching the emitted symbol ``start_line`` so atlas's
+    ``loc_to_id`` join lands even when a leading attribute/modifier sits on its
+    own line."""
     def visit(node, enclosing_type):
         declared_type = None
         if node.type in _TYPE_DECL_NODES or node.type == "class_declaration":
@@ -166,7 +174,10 @@ def _collect_symbols(src, root, relpath, result, type_members):
                     "visibility": _visibility(src, node)})
                 if enclosing_type is not None:
                     type_members.setdefault(enclosing_type, {}).setdefault(
-                        fname, (relpath, _line(name_node)))
+                        fname, (relpath, _line(node)))
+                else:
+                    free_funcs.setdefault(fname, []).append(
+                        (relpath, _line(node)))
         next_type = declared_type if declared_type is not None else enclosing_type
         for c in node.children:
             if c.is_named:
@@ -274,10 +285,11 @@ def _collect_calls(src, root, relpath, result, type_members, free_funcs):
       * ``receiver.method()`` with a locally-typed receiver -> that type's method
       * ``Type.method()`` (static)                          -> that type's method
       * bare ``func()``                                     -> the unique
-        corpus-wide free function of that name
+        corpus-wide TOP-LEVEL free function of that name (never a same-named
+        method — see ``_collect_symbols``)
 
-    ``to`` is omitted when unresolved; atlas then resolves by name (``resolved``
-    if the name is unique corpus-wide, else ``ambiguous``)."""
+    ``to`` is omitted when unresolved; atlas then resolves by name only to a
+    TYPE (``resolved``), never to a bare func/method (dropped)."""
     def visit(node, local_types):
         if node.type == "function_body":
             local_types = dict(local_types)
@@ -324,11 +336,8 @@ def extract(root, paths):
         results[relpath] = _FileResult()
 
     for relpath, (src, tree) in parsed.items():
-        _collect_symbols(src, tree.root_node, relpath, results[relpath], type_members)
-        for sym in results[relpath].symbols:
-            if sym["kind"] == "func":
-                free_funcs.setdefault(sym["name"], []).append(
-                    (relpath, sym["start_line"]))
+        _collect_symbols(src, tree.root_node, relpath, results[relpath],
+                         type_members, free_funcs)
 
     for relpath, (src, tree) in parsed.items():
         _collect_calls(src, tree.root_node, relpath, results[relpath],

@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.25.0] - 2026-07-07
+
+### Added
+- name worktree with same formula as its window (770ba79)
+- new plugin to rebase & reconcile a PR onto its base (f25653d)
+- auto-gitignore per-issue worktrees (#55) (3c859eb)
+- add /semver set and /semver init commands (ed2ea0a)
+- prefer-the-map steering + per-file covers probe (99ef58a)
+- sync issue label, plan comment, and PR links to GitHub (e55ca1f)
+
+### Fixed
+- open per-issue window detached so focus stays put (#54) (eae50fd)
+
+### Documentation
+- document worktree gitignore hygiene (#55) (ca31164)
+- document set and init commands (4e4c6c0)
+
+### Testing
+- cover worktree gitignore hygiene (#55) (4d51ee8)
+- cover /semver set and /semver init (c6e87d7)
+
+### Maintenance
+- register plugin in marketplace, make test, and docs (d4bc4fc)
+- gitignore handle-issue per-issue worktrees (0296630)
+- re-project agentics map + CLAUDE.md with new steering (a908938)
+
+_[manual]_
+
 ## [v2.24.1] - 2026-07-05
 
 ### Fixed

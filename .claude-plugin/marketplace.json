@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "agentics",
-  "version": "2.24.1",
+  "version": "2.25.0",
   "description": "Mikey's personal collection of Claude Code plugins",
   "owner": {
     "name": "mikeydotio"

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Fake `gh` for reconcile-pr tests. Emits canned output driven by env knobs:
+#   FAKE_GH_LOG=path        append each invocation's args (one line) here
+#   FAKE_GH_AUTH_FAIL=1     `gh auth status` exits non-zero (unauthenticated)
+#   FAKE_GH_VIEW_FAIL=1     `gh pr view <n>` exits non-zero (PR not found)
+#   FAKE_GH_STATE=OPEN      .state           (default OPEN)
+#   FAKE_GH_BASE=main       .baseRefName     (default main)
+#   FAKE_GH_HEAD=pr-branch  .headRefName     (default pr-branch)
+#   FAKE_GH_CROSS=false     .isCrossRepository as JSON bool (default false)
+#   FAKE_GH_URL=...         .url
+#
+# `pr view --json <fields>` returns a superset object; the caller reads specific
+# keys with `// ""` defaults, so extra keys are harmless.
+[ -n "${FAKE_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$FAKE_GH_LOG"
+
+case "${1:-} ${2:-}" in
+  "auth status")
+    if [ -n "${FAKE_GH_AUTH_FAIL:-}" ]; then echo "not logged in" >&2; exit 1; fi
+    echo "Logged in to github.com"; exit 0 ;;
+  "pr view")
+    if [ -n "${FAKE_GH_VIEW_FAIL:-}" ]; then echo "no pull requests found" >&2; exit 1; fi
+    jq -n \
+      --arg state "${FAKE_GH_STATE:-OPEN}" \
+      --arg base "${FAKE_GH_BASE:-main}" \
+      --arg head "${FAKE_GH_HEAD:-pr-branch}" \
+      --argjson cross "${FAKE_GH_CROSS:-false}" \
+      --arg url "${FAKE_GH_URL:-https://github.com/fake/repo/pull/1}" '
+      {state:$state, baseRefName:$base, headRefName:$head, isCrossRepository:$cross,
+       mergeable:"MERGEABLE", commits:[{oid:"aaaa"},{oid:"bbbb"}], url:$url}'
+    exit 0 ;;
+  "pr comment")
+    echo "https://github.com/fake/repo/pull/${3:-1}#issuecomment-123456"; exit 0 ;;
+  *)
+    echo "fake-gh: unhandled: $*" >&2; exit 0 ;;
+esac

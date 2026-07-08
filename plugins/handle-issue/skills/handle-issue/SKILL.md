@@ -29,7 +29,8 @@ Parse `ARGUMENTS` (everything after `/handle-issue`) and dispatch:
 |-----------|---------|--------|
 | _(empty)_ | No issue chosen yet | Run **List → Pick** below, then **Dispatch**. |
 | a bare integer, e.g. `42` | Target issue #42 | Go straight to **Dispatch** with `42`. |
-| anything else | Malformed | Say one line: "Usage: `/handle-issue [issue-number]`", then fall back to **List → Pick**. |
+| `doctor` | Readiness self-test | Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/handle-issue.sh doctor` and show its `display`. A drift check for after a Claude Code upgrade — spins a throwaway `claude`, reports which readiness tier matched (`marker`/`structural`/`none`). No GitHub side effects. |
+| anything else | Malformed | Say one line: "Usage: `/handle-issue [issue-number \| doctor]`", then fall back to **List → Pick**. |
 
 ## List → Pick (no number given)
 
@@ -64,7 +65,9 @@ Parse `ARGUMENTS` (everything after `/handle-issue`) and dispatch:
      repo, issue not found, issue closed — the `display` says which.)
    - `ok:true` → show `display`. If a `warning` field is present, surface it too — the tmux window
      was opened but the handoff (claude readiness and/or prompt submission) couldn't be fully
-     confirmed, so the user should glance at the new window.
+     confirmed, so the user should glance at the new window. When a `pane_tail` field accompanies the
+     warning, include it (fenced) as diagnostic evidence so the user can triage without switching
+     windows.
 
 On success the new window (named `<repo-prefix>-<number>`, e.g. `age-42`) is now running
 `claude -w <repo-prefix>-<number> --permission-mode plan` in a fresh worktree named the **same** as

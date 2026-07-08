@@ -84,7 +84,7 @@ assert not rel.get("ok") and "no release zip" in rel.get("display", ""), rel
 # 5) source guard: publish call comes AFTER index append + backend refresh
 src = (plugin_root / "bin" / "deployit-cli").read_text()
 call = src.index("rel = _publish_github_release(")
-assert src.index("_append_to_index(state, entry)") < call, "publish must follow index append"
+assert src.index("_append_to_index(state, entry") < call, "publish must follow index append"
 assert src.index('_refresh_local_backend(cfg["server"]["port"])') < call, "publish must follow refresh"
 
 print("ok")

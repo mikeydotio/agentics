@@ -33,6 +33,11 @@ __version__ = "0.1.0"
 # Same shape the backend enforces on build ids; `rm` re-validates independently.
 _BUILD_ID_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
+# The shared index repo. `_clone_index` clones its HTTPS URL; the PR-publish
+# fallback needs the owner/repo slug for `gh`. Keep these two in sync.
+INDEX_REPO_SLUG = "mikeydotio/deployit-index"
+INDEX_REPO_URL = f"https://github.com/{INDEX_REPO_SLUG}.git"
+
 
 def ok(payload):
     payload["ok"] = True
@@ -67,7 +72,25 @@ def _tailscale_bin() -> str:
 
 
 def _gh_bin() -> str:
-    return os.environ.get("DEPLOYIT_GH_BIN", "gh")
+    """Absolute path to the `gh` CLI.
+
+    Returns an absolute path so the PR-publish fallback works from the launchd
+    daemon (swipe-to-delete → `deployit-cli rm`), whose PATH is the minimal
+    `/usr/bin:/bin:/usr/sbin:/sbin` and lacks Homebrew's `gh`. The
+    `DEPLOYIT_GH_BIN` override (used by tests' fake gh) always wins; otherwise we
+    resolve via PATH, then probe the common Homebrew (Apple-silicon / Intel)
+    locations, falling back to the bare name so a clear "gh not found" surfaces
+    downstream rather than here."""
+    override = os.environ.get("DEPLOYIT_GH_BIN")
+    if override:
+        return override
+    found = shutil.which("gh")
+    if found:
+        return found
+    for cand in ("/opt/homebrew/bin/gh", "/usr/local/bin/gh"):
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return "gh"
 
 
 def _parse_owner_repo(remote_url: str):
@@ -155,7 +178,7 @@ def _clone_index(state: Path):
     # Re-clone fresh; the placeholder builds.json from _ensure_dirs is overwritten.
     shutil.rmtree(index_dir)
     subprocess.run(
-        ["git", "clone", "https://github.com/mikeydotio/deployit-index.git", str(index_dir)],
+        ["git", "clone", INDEX_REPO_URL, str(index_dir)],
         check=True, timeout=30,
     )
 
@@ -486,8 +509,17 @@ def _read_config(state: Path) -> dict:
         gh_attach = bool(_re.search(r'\[github\][^\[]*?\battach_dmg\s*=\s*true', text))
         gh_clobber = bool(_re.search(r'\[github\][^\[]*?\bclobber\s*=\s*true', text))
 
+        # [index] — publish mode + auto-merge default. auto_merge is on unless the
+        # section explicitly sets it false (scoped to the table like the others).
+        idx_repo_m = _re.search(r'\[index\][^\[]*?\brepo\s*=\s*"([^"]+)"', text)
+        idx_publish_m = _re.search(r'\[index\][^\[]*?\bpublish\s*=\s*"([^"]+)"', text)
+        idx_auto_merge = not bool(_re.search(r'\[index\][^\[]*?\bauto_merge\s*=\s*false', text))
+
         return {
             "server": {"port": int(port_m.group(1)), "base_url": base_m.group(1)},
+            "index":  {"repo": idx_repo_m.group(1) if idx_repo_m else INDEX_REPO_URL,
+                       "publish": idx_publish_m.group(1) if idx_publish_m else "auto",
+                       "auto_merge": idx_auto_merge},
             "macos":  {"notarize": notarize,
                        "notary_profile": notary_profile_m.group(1) if notary_profile_m else "",
                        "notary_keychain": notary_keychain_m.group(1) if notary_keychain_m else "",
@@ -874,17 +906,212 @@ def _prune_old_builds(state: Path, data: dict, new_entry: dict) -> int:
     return len(to_drop)
 
 
-def _append_to_index(state: Path, entry: dict, attempts: int = 3):
-    """Pull, prepend entry to builds.json (newest first), prune this product's
-    older builds beyond PRUNE_KEEP_PER_PRODUCT on this origin, commit, push.
-    Retry up to `attempts` times on push conflict; on final failure, raise via fail()."""
+def _default_index_cfg() -> dict:
+    """Index-publishing defaults used when no config.toml is in scope (e.g. the
+    direct-function tests) or a pre-existing config.toml predates these keys."""
+    return {"repo": INDEX_REPO_URL, "publish": "auto", "auto_merge": True}
+
+
+def _index_cfg(cfg: dict) -> dict:
+    """Normalise the `[index]` publish settings out of a parsed config, filling
+    every key with a default so callers never KeyError on an older config.toml."""
+    idx = (cfg or {}).get("index", {}) or {}
+    return {
+        "repo": idx.get("repo") or INDEX_REPO_URL,
+        "publish": idx.get("publish") or "auto",
+        "auto_merge": idx.get("auto_merge", True),
+    }
+
+
+def _classify_push_failure(stderr: str) -> str:
+    """Classify a failed `git push origin main` from its stderr so the publisher
+    can route it: 'ruleset'/'protected' → publish via PR (retrying the direct
+    push is pointless); 'non_fast_forward' → a concurrent writer won, re-pull and
+    retry; 'auth' → credentials are broken, a PR push would fail identically so
+    preserve and bail; 'other' → unknown, treat as transiently retryable.
+
+    Matches case-insensitively over the whole stderr. Order matters: a ruleset
+    rejection also prints a generic "failed to push some refs" line, so the
+    ruleset/protected checks must precede the non-fast-forward check."""
+    s = (stderr or "").lower()
+    ruleset_signals = ("gh013", "repository rule violations",
+                       "changes must be made through a pull request",
+                       "push declined due to repository rule violations")
+    protected_signals = ("gh006", "protected branch hook declined",
+                         "cannot push to this protected branch",
+                         "at least 1 approving review",
+                         "required status check")
+    auth_signals = ("authentication failed", "could not read username",
+                    "permission denied", "invalid username or password",
+                    "support for password authentication was removed",
+                    "403 forbidden", "fatal: could not read")
+    nff_signals = ("non-fast-forward", "fetch first",
+                   "updates were rejected", "tip of your current branch is behind")
+    if any(sig in s for sig in ruleset_signals):
+        return "ruleset"
+    if any(sig in s for sig in protected_signals):
+        return "protected"
+    if any(sig in s for sig in auth_signals):
+        return "auth"
+    if any(sig in s for sig in nff_signals):
+        return "non_fast_forward"
+    return "other"
+
+
+def _git_index_auth_args() -> list:
+    """Git -c overrides that make an index push/fetch self-sufficient off the
+    login shell: rewrite any SSH remote to HTTPS, then pin the credential helper
+    to an ABSOLUTE `gh` path so the launchd daemon (minimal PATH, no bare `gh`)
+    can still authenticate. The empty-then-set idiom replaces any inherited
+    helper rather than appending to it."""
+    gh = _gh_bin()
+    return [
+        "-c", "url.https://github.com/.insteadOf=git@github.com:",
+        "-c", "credential.https://github.com.helper=",
+        "-c", f"credential.https://github.com.helper=!{gh} auth git-credential",
+    ]
+
+
+def _git_push_index(index_dir: Path, refspec: str, *, lease: bool = False):
+    """Push `refspec` to origin with the self-sufficient auth args. Returns
+    (returncode, stderr); a timeout is surfaced as a retryable non-zero."""
+    cmd = ["git", *_git_index_auth_args(), "-C", str(index_dir), "push"]
+    if lease:
+        cmd.append("--force-with-lease")
+    cmd += ["origin", refspec]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        return p.returncode, (p.stderr or "").strip()
+    except subprocess.TimeoutExpired:
+        return 124, "git push timed out after 60s"
+
+
+def _reset_index_to_origin_main(index_dir: Path):
+    """Return the index checkout to a clean `origin/main` base: best-effort fetch
+    (network optional — `reset` falls back to the cached remote-tracking ref),
+    ensure we're on `main`, then hard-reset. This is the invariant that keeps a
+    generated-but-unpushed commit from ever lingering on local `main`; the commit
+    survives on whatever `deploy/<slug>` branch the publisher created."""
+    subprocess.run(["git", *_git_index_auth_args(), "-C", str(index_dir),
+                    "fetch", "origin", "main", "--quiet"],
+                   capture_output=True, text=True, timeout=60)
+    subprocess.run(["git", "-C", str(index_dir), "checkout", "--quiet", "main"],
+                   capture_output=True, text=True, timeout=30)
+    subprocess.run(["git", "-C", str(index_dir), "reset", "--hard", "--quiet", "origin/main"],
+                   check=True, capture_output=True, text=True, timeout=30)
+
+
+def _preserve_and_fail(index_dir: Path, branch: str, stderr: str):
+    """Terminal path when the commit can't be published AND can't be pushed to a
+    branch (auth/network): stash it on a LOCAL recovery branch, reset `main`
+    clean, and fail with the branch name so nothing is silently lost."""
+    local_branch = f"{branch}-local"
+    subprocess.run(["git", "-C", str(index_dir), "branch", "-f", local_branch, "HEAD"],
+                   capture_output=True, text=True)
+    _reset_index_to_origin_main(index_dir)
+    fail("index publish blocked (could not push to the index); the generated "
+         f"commit was retained on local branch {local_branch} — recover it once "
+         "the cause is fixed", stderr=stderr, branch=local_branch)
+
+
+def _pr_publish_fallback(index_dir: Path, subject: str, branch: str, idx: dict) -> dict:
+    """Publish the just-committed change via a PR: push it to `branch`, open a PR
+    against main, and (when `auto_merge`) merge it. Returns a status dict. The
+    commit is safe on the remote branch before any PR step, so a later failure
+    only ever downgrades to 'pending' (open PR the user merges), never loss."""
+    gh = _gh_bin()
+    owner_repo = _parse_owner_repo(idx["repo"]) or INDEX_REPO_SLUG
+
+    rc, stderr = _git_push_index(index_dir, f"HEAD:refs/heads/{branch}", lease=True)
+    if rc != 0:
+        _preserve_and_fail(index_dir, branch, stderr)  # does not return
+
+    body = ("Automated deployit index publish — a branch-protection ruleset "
+            f"blocks the direct push to main.\n\n{subject}")
+    pr = subprocess.run([gh, "pr", "create", "--repo", owner_repo, "--base", "main",
+                         "--head", branch, "--title", subject, "--body", body],
+                        cwd=str(index_dir), capture_output=True, text=True, timeout=60)
+    combined = ((pr.stdout or "") + " " + (pr.stderr or "")).lower()
+    if pr.returncode == 0:
+        lines = [ln for ln in (pr.stdout or "").strip().splitlines() if ln.strip()]
+        pr_url = lines[-1].strip() if lines else ""
+    elif "already exists" in combined:
+        view = subprocess.run([gh, "pr", "view", branch, "--repo", owner_repo,
+                               "--json", "url", "-q", ".url"],
+                              cwd=str(index_dir), capture_output=True, text=True, timeout=30)
+        pr_url = (view.stdout or "").strip() if view.returncode == 0 else ""
+    else:
+        # Branch is pushed (commit is safe); we just couldn't open the PR.
+        _reset_index_to_origin_main(index_dir)
+        fail("index publish: pushed the branch but `gh pr create` failed — open "
+             "the PR manually to publish this build",
+             stderr=(pr.stderr or "").strip(), branch=branch,
+             pr_create_url=f"https://github.com/{owner_repo}/compare/main...{branch}?expand=1")
+
+    if idx["auto_merge"] and pr_url:
+        merge = subprocess.run([gh, "pr", "merge", branch, "--repo", owner_repo,
+                                "--merge", "--delete-branch"],
+                               cwd=str(index_dir), capture_output=True, text=True, timeout=90)
+        if merge.returncode == 0:
+            _reset_index_to_origin_main(index_dir)  # local main now includes the merge
+            return {"status": "published", "pr_url": pr_url, "branch": None}
+        # Auto-merge failed — most likely a concurrent deploy already merged and
+        # this PR now conflicts on the top of builds.json. Leave it open rather
+        # than force a resolution; the URL is surfaced for a manual merge.
+
+    _reset_index_to_origin_main(index_dir)  # drop the commit from local main; safe on `branch`
+    return {"status": "pending", "pr_url": pr_url, "branch": branch}
+
+
+def _publish_index_commit(index_dir: Path, subject: str, slug: str, idx: dict,
+                          *, allow_retry: bool) -> dict:
+    """Publish the HEAD commit of the index checkout (already `git commit`ed by
+    the caller). Tries a direct push to main first (unless publish='pr'); on a
+    ruleset/protected rejection it publishes via a PR; on a concurrent-writer
+    rejection it asks the caller to re-pull and retry; on an auth failure it
+    preserves the commit and fails. Never resets-and-drops the commit.
+
+    Returns one of:
+      {"status": "published", "pr_url": str|None, "branch": None}
+      {"status": "pending",   "pr_url": str,      "branch": str}   # open PR
+      {"status": "retry",     "stderr": str}                        # caller re-runs
+    or fails terminally via _preserve_and_fail/fail()."""
+    mode = idx["publish"]
+    branch = f"deploy/{slug}"
+
+    if mode != "pr":
+        rc, stderr = _git_push_index(index_dir, "main")
+        if rc == 0:
+            return {"status": "published", "pr_url": None, "branch": None}
+        verdict = _classify_push_failure(stderr)
+        if verdict in ("non_fast_forward", "other") and allow_retry:
+            # A concurrent writer won (or a transient) — the caller's loop resets
+            # to a fresh origin/main, re-mutates, and calls us again.
+            return {"status": "retry", "stderr": stderr}
+        if verdict == "auth" or mode == "push":
+            # publish='push' means direct-push-only: no PR fallback. Either way,
+            # preserve the commit on a branch and bail.
+            _preserve_and_fail(index_dir, branch, stderr)  # does not return
+
+    return _pr_publish_fallback(index_dir, subject, branch, idx)
+
+
+def _append_to_index(state: Path, entry: dict, *, idx: dict = None, attempts: int = 3) -> dict:
+    """Prepend `entry` to builds.json (newest first), prune this product's older
+    builds beyond PRUNE_KEEP_PER_PRODUCT on this origin, commit, and publish.
+
+    Each attempt starts from a clean origin/main base, so a concurrent-writer
+    conflict simply re-runs the prune afresh. Publishing tries a direct push and,
+    when a branch-protection ruleset rejects it, falls back to a PR (auto-merged
+    by default). The generated commit is never discarded. Returns a publish
+    result: {"published": bool, "pr_url": str|None, "branch": str|None}."""
     index_dir = state / "index"
     builds_path = index_dir / "builds.json"
+    idx = idx or _default_index_cfg()
+    slug = entry.get("id") or f"deploy-{_dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-    last_stderr = ""
     for attempt in range(1, attempts + 1):
-        subprocess.run(["git", "-C", str(index_dir), "pull", "--rebase", "--quiet"],
-                       check=True, timeout=30)
+        _reset_index_to_origin_main(index_dir)
         data = json.loads(builds_path.read_text())
         data["builds"].insert(0, entry)
         pruned = _prune_old_builds(state, data, entry)
@@ -895,38 +1122,33 @@ def _append_to_index(state: Path, entry: dict, attempts: int = 3):
                f"{entry['marketing_version']} (build {entry['build_number']}) "
                f"from {entry['origin_host']}{suffix}")
         subprocess.run(["git", "-C", str(index_dir), "add", "builds.json"], check=True)
-        subprocess.run(["git", "-C", str(index_dir), "commit", "-m", msg], check=True)
-        try:
-            push = subprocess.run(
-                ["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
-                 "-C", str(index_dir), "push", "origin", "main"],
-                capture_output=True, text=True, timeout=60,
-            )
-        except subprocess.TimeoutExpired:
-            last_stderr = "git push timed out after 60s"
-            subprocess.run(["git", "-C", str(index_dir), "reset", "--hard", "origin/main"],
-                           check=True)
+        subprocess.run(["git", "-C", str(index_dir), "commit", "-m", msg],
+                       check=True, capture_output=True, text=True)
+        result = _publish_index_commit(index_dir, msg, slug, idx,
+                                       allow_retry=(attempt < attempts))
+        if result["status"] == "retry":
             continue
-        if push.returncode == 0:
-            return
-        last_stderr = push.stderr.strip()
-        subprocess.run(["git", "-C", str(index_dir), "reset", "--hard", "origin/main"],
-                       check=True)
+        return {"published": result["status"] == "published",
+                "pr_url": result.get("pr_url"), "branch": result.get("branch")}
 
-    fail("push to deployit-index failed after retries; local artifacts retained",
-         stderr=last_stderr)
+    fail("push to deployit-index failed after retries; local artifacts retained")
 
 
-def _commit_and_push_index(state: Path, mutate, *, attempts: int = 3):
-    """Apply a mutation to index/builds.json and push it, robustly.
+def _commit_and_push_index(state: Path, mutate, *, attempts: int = 3,
+                           idx: dict = None, slug: str = None):
+    """Apply a mutation to index/builds.json and publish it, robustly.
 
     `mutate(data)` edits the parsed index in place and returns a commit message,
-    or None to abort with no change. Loops up to `attempts` times: pull --rebase,
-    re-read, mutate, write, commit, push; on a push conflict it resets --hard to
-    origin/main and retries, so a concurrent deploy never clobbers us. Honors
-    DEPLOYIT_SKIP_GC_PUSH (write + return locally, touch no git remote) for tests
-    and offline runs. Returns the commit message, or None if the mutation
-    aborted; raises via fail() if every push attempt fails.
+    or None to abort with no change. Loops up to `attempts` times: reset to a
+    clean origin/main, re-read, mutate, write, commit, then publish via
+    `_publish_index_commit` (direct push, PR fallback under a ruleset, auto-merge
+    by default). A concurrent-writer conflict re-runs the mutation on a fresh
+    base; the generated commit is never discarded. Honors DEPLOYIT_SKIP_GC_PUSH
+    (write + return locally, touch no git remote) for tests and offline runs.
+
+    Returns None if the mutation aborted, else a dict {"published": bool,
+    "pr_url": str|None, "branch": str|None, "msg": str}; fails terminally if the
+    commit can neither be published nor preserved.
 
     Shared by cmd_gc and cmd_rm. The high-frequency deploy path keeps its own
     prune-in-loop variant (`_append_to_index`)."""
@@ -939,41 +1161,32 @@ def _commit_and_push_index(state: Path, mutate, *, attempts: int = 3):
         if msg is None:
             return None
         builds_path.write_text(json.dumps(data, indent=2) + "\n")
-        return msg
+        return {"published": True, "pr_url": None, "branch": None, "msg": msg}
 
-    def _git(*args, timeout=30):
-        # capture_output keeps git chatter (commit summaries, "HEAD is now at…")
-        # off our stdout, which must stay a single JSON object for callers such
-        # as the backend that parse it programmatically.
-        return subprocess.run(["git", "-C", str(index_dir), *args],
-                              check=True, capture_output=True, text=True, timeout=timeout)
+    idx = idx or _default_index_cfg()
+    if slug is None:
+        slug = f"index-{_dt.datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-    last_stderr = ""
-    for _ in range(attempts):
-        _git("pull", "--rebase", "--quiet")
+    for attempt in range(1, attempts + 1):
+        _reset_index_to_origin_main(index_dir)
         data = json.loads(builds_path.read_text())
         msg = mutate(data)
         if msg is None:
             return None
         builds_path.write_text(json.dumps(data, indent=2) + "\n")
-        _git("add", "builds.json")
-        _git("commit", "-m", msg)
-        try:
-            push = subprocess.run(
-                ["git", "-c", "url.https://github.com/.insteadOf=git@github.com:",
-                 "-C", str(index_dir), "push", "origin", "main"],
-                capture_output=True, text=True, timeout=60,
-            )
-        except subprocess.TimeoutExpired:
-            last_stderr = "git push timed out after 60s"
-            _git("reset", "--hard", "origin/main")
+        subprocess.run(["git", "-C", str(index_dir), "add", "builds.json"],
+                       check=True, capture_output=True, text=True)
+        subprocess.run(["git", "-C", str(index_dir), "commit", "-m", msg],
+                       check=True, capture_output=True, text=True)
+        result = _publish_index_commit(index_dir, msg, slug, idx,
+                                       allow_retry=(attempt < attempts))
+        if result["status"] == "retry":
             continue
-        if push.returncode == 0:
-            return msg
-        last_stderr = push.stderr.strip()
-        _git("reset", "--hard", "origin/main")
+        return {"published": result["status"] == "published",
+                "pr_url": result.get("pr_url"), "branch": result.get("branch"),
+                "msg": msg}
 
-    fail("push to deployit-index failed after retries", stderr=last_stderr)
+    fail("push to deployit-index failed after retries")
 
 
 def _refresh_local_backend(port: int):
@@ -1158,7 +1371,7 @@ def cmd_deploy(args):
     entry["notes"] = None
     entry.pop("release_zip", None)  # tailnet index doesn't track the GitHub asset
 
-    _append_to_index(state, entry)
+    publish = _append_to_index(state, entry, idx=_index_cfg(cfg))
     _refresh_local_backend(cfg["server"]["port"])
 
     # GitHub release — the final, recoverable step. It runs only after the
@@ -1211,6 +1424,21 @@ def cmd_deploy(args):
             result["release_error"] = rel.get("display") or "release publish failed"
             display += (f"\nrelease:  FAILED — {result['release_error']}"
                         "\n          (build is deployed; fix the cause and re-deploy to publish)")
+    # Index publish outcome. A direct push (or an auto-merged PR) lands the entry
+    # on the shared index immediately; when auto-merge is off and a ruleset
+    # blocked the push, the entry is pending on an open PR — the build is already
+    # installable at its direct URL, and the listing updates once the PR merges.
+    if not publish["published"]:
+        result["index_pending"] = True
+        result["index_pr_url"] = publish.get("pr_url")
+        pending_ref = publish.get("pr_url") or (
+            f"branch {publish.get('branch')}" if publish.get("branch") else "(see index clone)")
+        display += (f"\nindex:    pending PR merge — {pending_ref}"
+                    "\n          (installable now at the install URL above; the "
+                    "listing updates when the PR merges)")
+    elif publish.get("pr_url"):
+        result["index_pr_url"] = publish["pr_url"]
+        display += f"\nindex:    published via PR — {publish['pr_url']}"
     result["display"] = display
     ok(result)
 
@@ -1469,19 +1697,31 @@ def cmd_gc(args):
         archived_ids[:] = [b["id"] for b in to_archive]
         return f"chore(deploy): archive {len(to_archive)} build(s) from {base_url}"
 
-    msg = _commit_and_push_index(state, mutate)
+    result = _commit_and_push_index(state, mutate, idx=_index_cfg(cfg))
 
+    # Only touch local disk once the index change actually lands on main. When a
+    # ruleset left it pending on an open PR, keep the serve dirs so the archive
+    # stays consistent with the (unchanged) index until the PR merges.
+    published = bool(result and result.get("published"))
     removed = 0
-    for bid in archived_ids:
-        d = state / "serve" / bid
-        if d.exists():
-            _shutil.rmtree(d)
-            removed += 1
-    if msg and not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
-        _refresh_local_backend(cfg["server"]["port"])
+    if published:
+        for bid in archived_ids:
+            d = state / "serve" / bid
+            if d.exists():
+                _shutil.rmtree(d)
+                removed += 1
+        if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+            _refresh_local_backend(cfg["server"]["port"])
 
-    ok({"display": f"archived {len(archived_ids)} build(s); removed {removed} local dir(s)",
-        "archived": len(archived_ids), "removed_local": removed})
+    display = f"archived {len(archived_ids)} build(s); removed {removed} local dir(s)"
+    payload = {"archived": len(archived_ids), "removed_local": removed}
+    if result and not published:
+        payload["index_pending"] = True
+        payload["index_pr_url"] = result.get("pr_url")
+        display += (f"\nindex archive pending PR merge — "
+                    f"{result.get('pr_url') or '(see index clone)'}; "
+                    "local dirs kept until it merges")
+    ok({"display": display, **payload})
 
 
 def cmd_rm(args):
@@ -1524,19 +1764,31 @@ def cmd_rm(args):
         removed_ids[:] = sorted(local_ids)
         return f"chore(deploy): rm {scope} via web from {host}"
 
-    msg = _commit_and_push_index(state, mutate)
+    result = _commit_and_push_index(state, mutate, idx=_index_cfg(cfg))
 
+    # Delete files only after the index removal lands on main. A `fail()` inside
+    # the publisher (e.g. the launchd daemon can't reach gh) exits before this,
+    # leaving the serve dirs intact; a pending PR likewise keeps them until merge.
+    published = bool(result and result.get("published"))
     removed = 0
-    for bid in removed_ids:
-        d = state / "serve" / bid
-        if d.exists():
-            _shutil.rmtree(d, ignore_errors=True)
-            removed += 1
-    if msg and not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
-        _refresh_local_backend(cfg["server"]["port"])
+    if published:
+        for bid in removed_ids:
+            d = state / "serve" / bid
+            if d.exists():
+                _shutil.rmtree(d, ignore_errors=True)
+                removed += 1
+        if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+            _refresh_local_backend(cfg["server"]["port"])
 
-    ok({"display": f"removed {len(removed_ids)} build(s); {removed} local dir(s)",
-        "removed": len(removed_ids), "removed_local": removed})
+    display = f"removed {len(removed_ids)} build(s); {removed} local dir(s)"
+    payload = {"removed": len(removed_ids), "removed_local": removed}
+    if result and not published:
+        payload["index_pending"] = True
+        payload["index_pr_url"] = result.get("pr_url")
+        display += (f"\nindex removal pending PR merge — "
+                    f"{result.get('pr_url') or '(see index clone)'}; "
+                    "local files kept until it merges")
+    ok({"display": display, **payload})
 
 
 def _plist_is_legacy(state: Path) -> bool:

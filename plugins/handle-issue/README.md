@@ -72,8 +72,14 @@ With no number, you get a single question listing open issues (newest first). Pi
      `--permission-mode plan` flag opens the session **in plan mode deterministically**, with no
      keystrokes.
    - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
-     worktree first), with a bounded fallback delay, so the prompt keystrokes aren't lost.
+     worktree first), then type the prompt. Detection is **two-tier** so a Claude-Code footer-copy
+     change can't false-negative it (issue #67): a **fast path** matches a broadened alternation of
+     known idle-footer markers, and a **structural** fallback (input-box frame `─` **and** idle
+     prompt glyph `❯`, held stable across polls) confirms readiness even when the footer copy has
+     drifted entirely. A bounded blind fallback delay is the last resort so keystrokes aren't lost.
    - Type and submit the prompt, confirmed via a `capture-pane` read-back (resend if it never lands).
+     A non-gating acceptance check additionally records whether a *ready* TUI consumed the prompt
+     (`prompt_accepted`) without ever re-coupling confirmation to fragile TUI copy.
      The default prompt briefs the child session to comment its finalized plan on the issue, word
      PRs to close it (`Closes #<n>`), and comment each PR link — those steps happen later, inside
      that session, so the prompt is the only place they can be requested.
@@ -81,7 +87,25 @@ With no number, you get a single question listing open issues (newest first). Pi
      alone) then `gh issue edit --add-label`. Best-effort: a failure adds a `warning`, never an
      `ok:false`. Disable with `HANDLE_ISSUE_LABEL=`.
 3. The original pane shows a one-line status. If the handoff or the label couldn't be fully
-   confirmed, you get a `warning` telling you to glance at the new window.
+   confirmed, you get a `warning` telling you to glance at the new window — and, on that path, a
+   `pane_tail` field carrying the last few non-blank lines of the new pane as diagnostic evidence,
+   so you can triage without switching windows.
+
+## Readiness self-test (`doctor`)
+
+After upgrading Claude Code, run the readiness self-test to confirm the fast-path marker still
+matches the installed build:
+
+```
+bash ${CLAUDE_PLUGIN_ROOT}/bin/handle-issue.sh doctor
+```
+
+It spins a throwaway `claude` in a scratch **detached** tmux window, checks readiness, tears the
+window down, and reports `{ok, readiness_confirmed, matched_tier}` where `matched_tier` is `marker`
+(the footer marker still current), `structural` (the marker drifted but the frame+glyph fallback
+carried it — consider updating `HANDLE_ISSUE_READY_PATTERN`), or `none` (readiness never confirmed —
+see the `pane_tail`). It has **no** GitHub side effects and needs a live `claude`, so it is a manual
+diagnostic, deliberately **not** part of `make test` (the pre-push gate stays deterministic/offline).
 
 Once a side effect has happened (the window exists), the helper reports `ok:true` with a `warning`
 rather than a hard failure — so a status line never falsely implies "nothing happened."
@@ -103,10 +127,15 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `HANDLE_ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
 | `HANDLE_ISSUE_LIST_LIMIT` | `50` | Max open issues fetched for the picker. |
 | `HANDLE_ISSUE_GH_BIN` | `gh` | Path to the `gh` binary (tests inject a fake). |
-| `HANDLE_ISSUE_READY_PATTERN` | `for shortcuts` | Regex marking Claude's TUI as ready. TUI text is version-specific — override if it changes. |
-| `HANDLE_ISSUE_READY_ATTEMPTS` / `_READY_DELAY` | `40` / `0.25` | Readiness poll bound (≈10s). |
-| `HANDLE_ISSUE_READY_FALLBACK_DELAY` | `3` | Extra settle (seconds) if readiness never confirms. |
+| `HANDLE_ISSUE_READY_PATTERN` | `for shortcuts\|for agents\|mode on\|to cycle` | **Fast-path** readiness marker — an ERE **alternation** of known idle-footer variants (kept metacharacter-free and mode-agnostic). TUI copy is version-specific, so this is only the fast path; if it drifts entirely the **structural** tier still confirms. Override to add/replace variants. |
+| `HANDLE_ISSUE_READY_FRAME_GLYPH` / `_READY_PROMPT_GLYPH` | `─` / `❯` | **Structural-path** signals — the input-box frame rule and the idle prompt glyph, matched literally. Both must be present (plus stabilisation) to confirm readiness when no footer marker matches. The `❯` requirement stops a static framed *modal* (e.g. a folder-trust dialog) being mistaken for the idle input box. |
+| `HANDLE_ISSUE_READY_STABLE_POLLS` | `3` | Structural path: consecutive **equal** pane captures required before confirming (3 comparisons = 4 identical samples). |
+| `HANDLE_ISSUE_READY_ATTEMPTS` / `_READY_DELAY` | `60` / `0.25` | Readiness poll bound (≈15s). The fast path short-circuits success immediately, so the ceiling only bites on genuine failure. |
+| `HANDLE_ISSUE_READY_FALLBACK_DELAY` | `3` | Extra settle (seconds) if **neither** tier confirms within the budget — a true last resort. |
+| `HANDLE_ISSUE_READY_TAIL_LINES` | `8` | Non-blank pane lines attached as `pane_tail` diagnostic evidence on the **warning** path only. |
+| `HANDLE_ISSUE_READY_ACCEPT_PATTERN` | _(working-indicator alternation)_ | Non-gating post-submit acceptance marker: informs the `prompt_accepted` field but never changes `prompt_confirmed` or triggers a resend. |
 | `HANDLE_ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt-submission confirm/resend bounds. |
+| `HANDLE_ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree). |
 | `HANDLE_ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 
 > **Plan mode is forced by the `--permission-mode plan` launch flag, not keystrokes.** `-w` is

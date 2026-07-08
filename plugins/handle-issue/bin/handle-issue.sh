@@ -79,17 +79,62 @@ FOREGROUND="${HANDLE_ISSUE_FOREGROUND:-}"
 # regardless of how the worktree leaf is named.
 WORKTREE_IGNORE_PATH="${HANDLE_ISSUE_WORKTREE_IGNORE_PATH:-.claude/worktrees/}"
 WORKTREE_IGNORE_COMMENT="# handle-issue per-issue git worktrees (ephemeral — never commit)"
-# Readiness gate before typing the prompt. Claude's TUI text is a version-specific
-# implementation detail, so READY_PATTERN is permissive and overridable; the
-# fallback delay covers the case where the marker never matches.
-READY_PATTERN="${HANDLE_ISSUE_READY_PATTERN:-for shortcuts}"
-READY_ATTEMPTS="${HANDLE_ISSUE_READY_ATTEMPTS:-40}"
+# Readiness gate before typing the prompt (issue #67). Two independent tiers, so
+# a single Claude-Code footer-copy change can no longer false-negative readiness:
+#
+#   1. FAST PATH — a broadened, version-tolerant footer marker (READY_PATTERN).
+#      An ALTERNATION of known idle-footer variants, matched with `grep -E`. Kept
+#      deliberately metacharacter-free (an ERE `+`/`(`/`)` would silently mis-match
+#      literal footer text like `shift+tab`) and mode-agnostic (`mode on` covers
+#      both `plan mode on` — this dispatch runs in plan mode — and `auto mode on`).
+#      `for shortcuts` is retained for back-compat with older builds. BUSY markers
+#      (`esc to interrupt`) and the startup splash (`Welcome to Claude`) are
+#      deliberately NOT here — they don't mean "idle and ready for input".
+#   2. STRUCTURAL PATH — when NO footer variant matches (full future copy drift),
+#      fall back to a copy-agnostic signal: the input-box frame rule (READY_FRAME_
+#      GLYPH `─`) AND the idle prompt glyph (READY_PROMPT_GLYPH `❯`) are both
+#      present AND the pane has STABILISED (byte-identical for READY_STABLE_POLLS
+#      consecutive comparisons). The `❯` requirement stops a static framed *modal*
+#      (e.g. the fresh-worktree "trust this folder?" dialog, which also draws `─`)
+#      from being mistaken for the idle input box. Both glyphs are matched with
+#      `grep -F` (literal bytes) so they're locale-independent and never touch the ERE.
+#
+# The blind READY_FALLBACK_DELAY remains ONLY as a last resort after both tiers
+# exhaust the poll budget.
+READY_PATTERN="${HANDLE_ISSUE_READY_PATTERN:-for shortcuts|for agents|mode on|to cycle}"
+# ~15s ceiling (60 × 0.25s). The fast path short-circuits success immediately, so
+# a larger ceiling only costs time in the genuine-failure case (better tolerating a
+# fresh-worktree build + this repo's heavy SessionStart). Not doubled to 80: that
+# would push worst-case FAILURE latency toward a ~20s silent hang.
+READY_ATTEMPTS="${HANDLE_ISSUE_READY_ATTEMPTS:-60}"
 READY_DELAY="${HANDLE_ISSUE_READY_DELAY:-0.25}"
 READY_FALLBACK_DELAY="${HANDLE_ISSUE_READY_FALLBACK_DELAY:-3}"
+# Structural-path knobs. READY_STABLE_POLLS is a count of consecutive EQUAL
+# comparisons, so 3 == four identical captures in a row (N comparisons need N+1
+# samples). READY_FRAME_GLYPH / READY_PROMPT_GLYPH are matched literally (grep -F).
+READY_STABLE_POLLS="${HANDLE_ISSUE_READY_STABLE_POLLS:-3}"
+READY_FRAME_GLYPH="${HANDLE_ISSUE_READY_FRAME_GLYPH:-─}"
+READY_PROMPT_GLYPH="${HANDLE_ISSUE_READY_PROMPT_GLYPH:-❯}"
+# Pane tail attached to a warning result as diagnostic evidence (issue #67): the
+# last N non-blank lines of the pane, so the caller can triage without switching
+# windows. Only ever emitted on the warning path — the success payload stays clean.
+READY_TAIL_LINES="${HANDLE_ISSUE_READY_TAIL_LINES:-8}"
 # Prompt-submission confirm/resend bounds (freshen semantics).
 CONFIRM_ATTEMPTS="${HANDLE_ISSUE_CONFIRM_ATTEMPTS:-8}"
 CONFIRM_DELAY="${HANDLE_ISSUE_CONFIRM_DELAY:-0.3}"
 SEND_RETRIES="${HANDLE_ISSUE_SEND_RETRIES:-2}"
+# Non-gating post-submit ACCEPTANCE marker (issue #67, direction #2). After the
+# structural "text left the input line" confirmation, a bounded look for one of
+# these tokens records whether a READY TUI actually consumed the prompt (vs. it
+# scrolling off into, say, a modal). This is a version-specific string, so it only
+# INFORMS (a `prompt_accepted` boolean) — it NEVER flips prompt_confirmed to false
+# or triggers a resend (that would resurrect the very cry-wolf warning #67 fixes).
+READY_ACCEPT_PATTERN="${HANDLE_ISSUE_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Crunching|tokens|to interrupt}"
+# `doctor` subcommand (issue #67, direction #5): a throwaway readiness self-test.
+# Its launch OMITS `-w` (no worktree, no git side effect) — it only needs the TUI
+# to render. Overridable so tests can point it at a harmless stand-in binary.
+DOCTOR_LAUNCH_TPL="${HANDLE_ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan}"
+DOCTOR_WINDOW_NAME="${HANDLE_ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
 DRY_RUN="${HANDLE_ISSUE_DRY_RUN:-}"
 ALLOW_CLOSED="${HANDLE_ISSUE_ALLOW_CLOSED:-}"
 
@@ -159,22 +204,92 @@ text_still_pending() {
   esac
 }
 
-# wait_ready <pane> <launch-cmd> — poll until the launch command has left the
-# input line AND the readiness marker appears, bounded by READY_ATTEMPTS.
+# wait_ready <pane> <launch-cmd> — poll until Claude's TUI is ready, bounded by
+# READY_ATTEMPTS. Two tiers (see the config block for the full rationale):
+#   FAST:       launch_gone AND content matches the READY_PATTERN footer marker.
+#   STRUCTURAL: launch_gone AND content has BOTH the frame rule and the idle
+#               prompt glyph AND has stabilised (byte-identical for
+#               READY_STABLE_POLLS consecutive comparisons).
+# Either tier satisfied → success. On success, WAIT_READY_TIER is set to the tier
+# that matched ("marker" | "structural") for callers (doctor) that want it; a
+# timeout leaves it "none".
+#
+# launch_gone = "the pane's last non-blank line no longer ends with the launch
+# command", i.e. the typed launch command has left the input line (claude started).
+WAIT_READY_TIER="none"
 wait_ready() {
   local pane="$1" launch="$2" attempt=0 content last_line
+  local prev='' stable=0 launch_gone
+  WAIT_READY_TIER="none"
   while [ "$attempt" -lt "$READY_ATTEMPTS" ]; do
     if content=$(tmux capture-pane -p -t "$pane" 2>/dev/null); then
       last_line=$(printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -1 || true)
-      if [[ "$last_line" != *"$launch" ]] \
+      launch_gone=false
+      if [[ "$last_line" != *"$launch" ]]; then launch_gone=true; fi
+
+      # Tier 1 — broadened footer marker (returns immediately; no stabilise wait).
+      if [ "$launch_gone" = true ] \
          && printf '%s' "$content" | grep -Eq -- "$READY_PATTERN"; then
+        WAIT_READY_TIER="marker"
         return 0
       fi
+
+      # Tier 2 — structural frame + idle glyph + stabilisation. Increment the
+      # stable counter ONLY when all structural preconditions hold AND this
+      # capture is byte-identical to the previous one; any change (or a missing
+      # precondition) resets it. `prev` starts empty, so the first identical pair
+      # is the first comparison that can count.
+      if [ "$launch_gone" = true ] \
+         && printf '%s' "$content" | grep -qF -- "$READY_FRAME_GLYPH" \
+         && printf '%s' "$content" | grep -qF -- "$READY_PROMPT_GLYPH" \
+         && [ -n "$content" ] && [ "$content" = "$prev" ]; then
+        stable=$((stable + 1))
+        if [ "$stable" -ge "$READY_STABLE_POLLS" ]; then
+          WAIT_READY_TIER="structural"
+          return 0
+        fi
+      else
+        stable=0
+      fi
+      prev="$content"
+    else
+      # Couldn't observe the pane — don't let a stale `prev` fake a stable streak.
+      stable=0
+      prev=''
     fi
     sleep "$READY_DELAY"
     attempt=$((attempt + 1))
   done
   return 1
+}
+
+# pane_tail <pane> — READ-ONLY. Echo the last READY_TAIL_LINES non-blank lines of
+# the pane, for attaching to a warning result as diagnostic evidence (issue #67).
+# A failed capture echoes nothing (an empty tail is an acceptable degrade).
+pane_tail() {
+  local pane="$1" content
+  content=$(tmux capture-pane -p -t "$pane" 2>/dev/null) || return 0
+  printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -n "$READY_TAIL_LINES" || true
+}
+
+# prompt_accepted <pane> — READ-ONLY, NON-GATING. Best-effort check that a READY
+# TUI consumed the just-submitted prompt: either a working/thinking indicator
+# rendered (READY_ACCEPT_PATTERN) or the idle prompt glyph sits on an otherwise
+# cleared input row. Returns 0 (accepted) / 1 (unconfirmed). Callers record the
+# result as signal only — it must NEVER flip prompt_confirmed or trigger a resend.
+prompt_accepted() {
+  local pane="$1" content last_line
+  content=$(tmux capture-pane -p -t "$pane" 2>/dev/null) || return 1
+  if printf '%s' "$content" | grep -Eq -- "$READY_ACCEPT_PATTERN"; then
+    return 0
+  fi
+  # Idle input row: the last non-blank line is just the prompt glyph (no trailing
+  # user text), i.e. the input box cleared and re-rendered its empty prompt.
+  last_line=$(printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -1 || true)
+  case "$last_line" in
+    *"$READY_PROMPT_GLYPH") return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # send_prompt_confirmed <pane> <text> — literal-send <text> + Enter, then poll
@@ -410,9 +525,10 @@ cmd_dispatch() {
   tmux send-keys -t "$pane" Enter 2>/dev/null || true
 
   # Step 7: readiness gate before typing the prompt (claude -w also builds the
-  # worktree before its TUI renders, so this wait matters). One-shot — no retry
-  # cycle, so on miss we settle a fixed amount and proceed best-effort. Plan mode
-  # itself needs no gate: it's set by the --permission-mode plan launch flag.
+  # worktree before its TUI renders, so this wait matters). Two-tier (marker or
+  # structural — see wait_ready); on total miss we settle a fixed amount and
+  # proceed best-effort. Plan mode itself needs no gate: it's set by the
+  # --permission-mode plan launch flag.
   local readiness_confirmed=false
   if wait_ready "$pane" "$launch_cmd"; then
     readiness_confirmed=true
@@ -420,10 +536,16 @@ cmd_dispatch() {
     sleep "$READY_FALLBACK_DELAY"
   fi
 
-  # Step 8: type + submit the prompt, confirmed.
-  local prompt_confirmed=false
+  # Step 8: type + submit the prompt, confirmed (structural: the text left the
+  # input line). Then a NON-GATING acceptance observation — did a ready TUI
+  # actually consume it (working indicator / cleared input row)? This only informs
+  # `prompt_accepted`; it never changes prompt_confirmed or re-sends (issue #67).
+  local prompt_confirmed=false prompt_accepted=false
   if send_prompt_confirmed "$pane" "$prompt"; then
     prompt_confirmed=true
+    if prompt_accepted "$pane"; then
+      prompt_accepted=true
+    fi
   fi
 
   # Step 9: mark the issue in-progress on GitHub (issue #50). Done last so the
@@ -460,8 +582,13 @@ cmd_dispatch() {
     warning="${warning:+$warning }$label_note."
   fi
 
+  # On the warning path only, capture a pane tail as diagnostic evidence (issue
+  # #67, direction #4). Captured AFTER the send attempts, so it reflects whether
+  # the prompt landed. Kept off the success payload so that stays byte-stable.
+  local tail_evidence=""
   if [ -n "$warning" ]; then
     display="$base $warning"
+    tail_evidence=$(pane_tail "$pane")
   else
     display="$base"
   fi
@@ -470,16 +597,99 @@ cmd_dispatch() {
     --arg issue "$n" --arg title "$title" --arg window "$window" --arg wname "$wname" \
     --arg pane "$pane" --arg label "$LABEL" --arg gitignore "$gitignore_result" \
     --argjson ready "$readiness_confirmed" --argjson pconf "$prompt_confirmed" \
+    --argjson paccept "$prompt_accepted" \
     --argjson lapplied "$label_applied" \
-    --arg warning "$warning" --arg display "$display" '
+    --arg warning "$warning" --arg tail "$tail_evidence" --arg display "$display" '
     {
       ok: true,
       issue: ($issue | tonumber), title: $title,
       window: $window, window_name: $wname, pane: $pane,
-      readiness_confirmed: $ready, prompt_confirmed: $pconf,
+      readiness_confirmed: $ready, prompt_confirmed: $pconf, prompt_accepted: $paccept,
       label: $label, label_applied: $lapplied, gitignore: $gitignore
     }
     + (if $warning == "" then {} else {warning: $warning} end)
+    + (if $tail == "" then {} else {pane_tail: $tail} end)
+    + {display: $display}'
+}
+
+# ---- subcommand: doctor -----------------------------------------------------
+# doctor — drift self-test for the readiness gate (issue #67, direction #5).
+# Spins a throwaway claude in a scratch DETACHED tmux window, waits via
+# wait_ready, reports which tier matched (marker | structural | none), then tears
+# the window down. Purely diagnostic: no GitHub calls, no labeling, no worktree
+# (the scratch launch omits `-w`). Deliberately NOT part of `make test` — it needs
+# a live claude, and the pre-push gate must stay deterministic/offline. Run it by
+# hand after a Claude Code upgrade to confirm the default READY_PATTERN still matches.
+cmd_doctor() {
+  # tmux precondition (relaxed under dry-run so it runs headlessly).
+  if [ -z "$DRY_RUN" ]; then
+    [ -n "${TMUX:-}" ] || fail "handle-issue doctor requires tmux — run Claude inside a tmux session."
+    [ -n "${TMUX_PANE:-}" ] || fail "handle-issue doctor requires \$TMUX_PANE — run Claude inside a tmux pane."
+  fi
+
+  # The launch binary (first word of the launch template) must be on PATH.
+  local doctor_bin="${DOCTOR_LAUNCH_TPL%% *}"
+  command -v "$doctor_bin" >/dev/null 2>&1 \
+    || fail "launch binary '$doctor_bin' not found on PATH (set HANDLE_ISSUE_DOCTOR_LAUNCH_CMD)."
+
+  # Dry-run: emit the planned commands and stop before any side effect.
+  if [ -n "$DRY_RUN" ]; then
+    jq -n --arg launch "$DOCTOR_LAUNCH_TPL" --arg wname "$DOCTOR_WINDOW_NAME" '
+      {
+        ok: true, dry_run: true, window_name: $wname,
+        commands: [
+          ("tmux new-window -d -n " + $wname + " -P -F #{pane_id}"),
+          ("tmux send-keys -t <pane> -l " + $launch),
+          "tmux send-keys -t <pane> Enter",
+          "tmux kill-window -t <window>"
+        ],
+        display: ("[handle-issue] DRY RUN doctor: would spin a throwaway `" + $launch
+                  + "` in window " + $wname + ", check readiness, and tear it down.")
+      }'
+    return 0
+  fi
+
+  # Open a scratch DETACHED window (never steals focus).
+  local pane window
+  if ! pane=$(tmux new-window -d -n "$DOCTOR_WINDOW_NAME" -P -F '#{pane_id}' 2>/dev/null) || [ -z "$pane" ]; then
+    fail "failed to open a scratch tmux window for the readiness self-test."
+  fi
+  window=$(tmux display-message -p -t "$pane" '#{window_id}' 2>/dev/null || printf '')
+
+  # Launch (literal mode) and gate on readiness.
+  tmux send-keys -t "$pane" -l "$DOCTOR_LAUNCH_TPL" 2>/dev/null || true
+  tmux send-keys -t "$pane" Enter 2>/dev/null || true
+
+  local readiness_confirmed=false tier="none" tail_evidence
+  if wait_ready "$pane" "$DOCTOR_LAUNCH_TPL"; then
+    readiness_confirmed=true
+  fi
+  tier="$WAIT_READY_TIER"
+  tail_evidence=$(pane_tail "$pane")
+
+  # Tear down the scratch window (best-effort — a failure never flips ok).
+  if [ -n "$window" ]; then
+    tmux kill-window -t "$window" 2>/dev/null || true
+  else
+    tmux kill-window -t "$pane" 2>/dev/null || true
+  fi
+
+  local display
+  if [ "$readiness_confirmed" = true ]; then
+    display="[handle-issue] doctor: readiness OK via the '$tier' tier — the installed Claude build is recognised."
+  else
+    display="[handle-issue] doctor: readiness NOT confirmed within the poll budget — the readiness marker may have drifted. See pane_tail."
+  fi
+
+  jq -n \
+    --argjson ready "$readiness_confirmed" --arg tier "$tier" \
+    --arg tail "$tail_evidence" --arg display "$display" '
+    {
+      ok: true,
+      readiness_confirmed: $ready,
+      matched_tier: $tier
+    }
+    + (if $tail == "" then {} else {pane_tail: $tail} end)
     + {display: $display}'
 }
 
@@ -487,5 +697,6 @@ cmd_dispatch() {
 case "${1:-}" in
   list)     shift; cmd_list "$@" ;;
   dispatch) shift; cmd_dispatch "$@" ;;
-  *)        fail "usage: handle-issue.sh <list | dispatch <issue-number>>" ;;
+  doctor)   shift; cmd_doctor "$@" ;;
+  *)        fail "usage: handle-issue.sh <list | dispatch <issue-number> | doctor>" ;;
 esac

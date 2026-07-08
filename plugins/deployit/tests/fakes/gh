@@ -7,6 +7,12 @@
 #   FAKE_GH_TAG_EXISTS=1      `gh api .../git/ref/tags/<tag>` succeeds (tag exists)
 #   FAKE_GH_PREV_TAG=v1.2.3   tag emitted by `gh release view --json tagName`
 #   FAKE_GH_ISSUES_JSON=...   JSON emitted by `gh issue list --json ...`
+#   FAKE_GH_PR_URL=...        URL emitted by `gh pr create` / `pr view` (default
+#                             https://github.com/fake/repo/pull/1)
+#   FAKE_GH_PR_CREATE_FAIL=1  `gh pr create` exits non-zero (no PR opened)
+#   FAKE_GH_PR_EXISTS=1       `gh pr create` reports "a pull request already
+#                             exists" (exit 1); `pr view` then returns the URL
+#   FAKE_GH_PR_MERGE_FAIL=1   `gh pr merge` exits non-zero (not mergeable)
 [ -n "${FAKE_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$FAKE_GH_LOG"
 
 case "${1:-} ${2:-}" in
@@ -31,6 +37,20 @@ case "${1:-} ${2:-}" in
     exit 0 ;;
   "issue list")
     printf '%s' "${FAKE_GH_ISSUES_JSON:-[]}"; exit 0 ;;
+  "pr create")
+    if [ -n "${FAKE_GH_PR_EXISTS:-}" ]; then
+      echo "a pull request for branch already exists" >&2; exit 1
+    fi
+    if [ -n "${FAKE_GH_PR_CREATE_FAIL:-}" ]; then
+      echo "failed to create pull request" >&2; exit 1
+    fi
+    echo "${FAKE_GH_PR_URL:-https://github.com/fake/repo/pull/1}"; exit 0 ;;
+  "pr view")
+    # `pr view <branch> --json url -q .url` -> the PR URL.
+    echo "${FAKE_GH_PR_URL:-https://github.com/fake/repo/pull/1}"; exit 0 ;;
+  "pr merge")
+    [ -n "${FAKE_GH_PR_MERGE_FAIL:-}" ] && { echo "not mergeable" >&2; exit 1; }
+    exit 0 ;;
   "api "*)
     # `api repos/<R>/git/ref/tags/<tag>` -> tag existence probe (404 -> absent).
     if printf '%s ' "$@" | grep -q 'git/ref/tags/'; then

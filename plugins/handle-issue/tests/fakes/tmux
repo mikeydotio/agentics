@@ -1,26 +1,90 @@
 #!/usr/bin/env bash
 # Fake `tmux` for handle-issue's real-dispatch (non-dry-run) tests. Implements
-# only the five subcommands cmd_dispatch drives in Steps 5–8, enough to let the
-# helper run to completion headlessly without a live tmux server:
+# only the subcommands cmd_dispatch / cmd_doctor drive, enough to let the helper
+# run to completion headlessly without a live tmux server:
 #
 #   new-window        -> print a pane id  (%1), exit 0
 #   display-message   -> print a window id (@1), exit 0
 #   set-window-option -> no-op, exit 0
 #   send-keys         -> no-op, exit 0
-#   capture-pane      -> print a line containing the readiness marker so both
-#                        wait_ready() and text_still_pending() resolve on the
-#                        first attempt (the last non-blank line ends in
-#                        "for shortcuts", which is neither the launch command
-#                        nor the prompt -> ready == true, pending == false).
+#   kill-window       -> no-op, exit 0  (doctor tears its scratch window down)
+#   capture-pane      -> print pane content selected by $FAKE_TMUX_CAPTURE (see
+#                        below). DEFAULT (knob unset) is the legacy
+#                        "  ? for shortcuts" line, so every pre-#67 test that
+#                        relies on it keeps passing unchanged.
 #
-# Anything else is a harmless no-op (exit 0), so an added tmux call never breaks
-# the test — it just isn't asserted on.
+# $FAKE_TMUX_CAPTURE selects the capture-pane output so a test can drive each
+# readiness tier + warning path (issue #67). This is purely ADDITIVE — an unset
+# knob reproduces the original single-line behavior exactly:
+#
+#   (unset) / legacy  Legacy idle footer "  ? for shortcuts" — matches the
+#                     broadened READY_PATTERN via "for shortcuts" (back-compat).
+#   marker            Realistic plan-mode idle pane: framed input box + footer
+#                     "plan mode on (shift+tab to cycle)" and NO "for shortcuts"
+#                     — matches READY_PATTERN via "mode on"/"to cycle" (fast path).
+#   structural        Fully drifted footer (no known marker) but a rendered input
+#                     box: frame rule '─' AND idle glyph '❯', static content — so
+#                     it confirms via the STRUCTURAL tier once it stabilises.
+#   modal             A framed static dialog (trust prompt): frame rule '─' but NO
+#                     idle glyph '❯' — must NOT confirm readiness (guards the
+#                     structural tier against static modals).
+#   busy              Only a BUSY marker ("esc to interrupt"), no frame/glyph —
+#                     must NOT fast-path confirm (busy != idle-ready).
+#   churn             Ever-changing content (a per-call counter), no frame/glyph/
+#                     marker — never stabilises, never matches → readiness stays
+#                     unconfirmed (drives the warning + pane_tail evidence path).
+#
+# The fake is re-exec'd per tmux call and holds no in-process state, so `churn`
+# advances a counter file under $FAKE_TMUX_STATE (a test-provided dir) to
+# guarantee each capture differs; it falls back to $RANDOM if unset.
+
 case "${1:-}" in
   new-window)        printf '%%1\n' ;;
   display-message)   printf '@1\n' ;;
-  capture-pane)      printf '  ? for shortcuts\n' ;;
   set-window-option) : ;;
   send-keys)         : ;;
+  kill-window)       : ;;
+  capture-pane)
+    case "${FAKE_TMUX_CAPTURE:-legacy}" in
+      marker)
+        cat <<'EOF'
+────────────────────────────── rep-42 ──
+❯
+──────────────────────────────────────────
+  ⏵ plan mode on (shift+tab to cycle)
+EOF
+        ;;
+      structural)
+        cat <<'EOF'
+────────────────────────────── rep-42 ──
+❯
+──────────────────────────────────────────
+  a brand new footer nobody predicted yet
+EOF
+        ;;
+      modal)
+        cat <<'EOF'
+──────────────────────────────────────────
+  Do you trust the files in this folder?
+  [ Yes ]     [ No ]
+──────────────────────────────────────────
+EOF
+        ;;
+      busy)
+        printf '  \342\234\273 Working... (esc to interrupt)\n' ;;
+      churn)
+        c=0
+        if [ -n "${FAKE_TMUX_STATE:-}" ]; then
+          c=$(cat "$FAKE_TMUX_STATE/count" 2>/dev/null || echo 0)
+          c=$((c + 1)); echo "$c" > "$FAKE_TMUX_STATE/count"
+        else
+          c=$RANDOM
+        fi
+        printf '  building worktree... step %s\n' "$c" ;;
+      legacy|*)
+        printf '  ? for shortcuts\n' ;;
+    esac
+    ;;
   *)                 : ;;
 esac
 exit 0

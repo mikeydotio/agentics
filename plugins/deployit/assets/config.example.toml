@@ -9,6 +9,21 @@ base_url = "https://<host>.<tailnet>.ts.net/deployit"
 
 [index]
 repo = "https://github.com/mikeydotio/deployit-index.git"
+# How to publish a build's index entry to the shared index repo:
+#   "auto"  (default) — push directly to main; if a branch-protection ruleset
+#                       rejects it (GH013 / "must be made through a pull
+#                       request"), fall back to publishing via a PR.
+#   "pr"              — always publish via a PR (skip the direct push, e.g. on a
+#                       repo you know is protected).
+#   "push"            — direct push only; fail (retaining the commit on a branch)
+#                       if it's blocked. Restores the pre-ruleset behavior.
+publish = "auto"
+# When publishing via a PR, auto-merge it so the deploy stays hands-off. On by
+# default. The PR is created AND merged by the authenticated `gh` identity — if
+# your org gates self-merges (or you want a review), set this false to leave the
+# PR open and print its URL instead; a dedicated deploy identity/token can then
+# merge it. See references/index-publishing.md.
+auto_merge = true
 
 [macos]
 # Whether to notarize macOS builds (.dmg) before serving. Requires an Apple

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# handle-issue.sh — deterministic helper for the /handle-issue skill.
+# issue.sh — deterministic helper for the /issue skill.
 #
 # Two subcommands, each emitting exactly ONE JSON object on stdout with an `ok`
 # boolean and a human-readable `display`. The SKILL is a thin router: it reads
@@ -31,7 +31,7 @@
 # never flip ok to false (a failure just reports gitignore:"add-failed").
 #
 # All timing/behaviour is env-overridable (see the config block) so the flow is
-# testable headlessly (HANDLE_ISSUE_DRY_RUN, HANDLE_ISSUE_GH_BIN) and the
+# testable headlessly (ISSUE_DRY_RUN, ISSUE_GH_BIN) and the
 # launch command / prompt are escape-hatchable without editing code.
 #
 # tmux send/confirm logic is modelled on plugins/freshen/lib/pane-confirm.sh
@@ -40,45 +40,45 @@
 set -euo pipefail
 
 # ---- config (all env-overridable) -------------------------------------------
-GH="${HANDLE_ISSUE_GH_BIN:-gh}"
-LIST_LIMIT="${HANDLE_ISSUE_LIST_LIMIT:-50}"
+GH="${ISSUE_GH_BIN:-gh}"
+LIST_LIMIT="${ISSUE_LIST_LIMIT:-50}"
 # Launch command. <name> renders to the resolved window/worktree name (see
 # WINDOW_NAME_TPL below), so `claude -w <name>` names the worktree the SAME as
 # the tmux window (e.g. "age-42") rather than the bare issue number. <n> (the
 # issue number) is still substituted, so a custom override may use either.
-LAUNCH_TPL="${HANDLE_ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
+LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # The handoff prompt is the ONLY lever the dispatcher has over the child session,
 # which is what actually plans, implements, and opens PRs. So it carries the
 # GitHub self-reporting contract (issue #50): comment the finalized plan, word
 # PRs to close the issue, comment PR links. Kept single-line + ASCII (no
 # backticks) so `tmux send-keys -l` types it verbatim without key-interpretation.
-PROMPT_TPL="${HANDLE_ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it.}"
+PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it.}"
 # The "picked up" label applied to the issue at dispatch (issue #50). Set
-# HANDLE_ISSUE_LABEL="" to disable labeling entirely. Color/description are used
+# ISSUE_LABEL="" to disable labeling entirely. Color/description are used
 # only when the label doesn't yet exist in the repo (create-if-missing). Uses
 # `-` (not `:-`) so an explicit empty string opts out; only an unset var
 # defaults to "in-progress".
-LABEL="${HANDLE_ISSUE_LABEL-in-progress}"
-LABEL_COLOR="${HANDLE_ISSUE_LABEL_COLOR:-fbca04}"
-LABEL_DESC="${HANDLE_ISSUE_LABEL_DESC:-Actively being worked on}"
+LABEL="${ISSUE_LABEL-in-progress}"
+LABEL_COLOR="${ISSUE_LABEL_COLOR:-fbca04}"
+LABEL_DESC="${ISSUE_LABEL_DESC:-Actively being worked on}"
 # New-window (and worktree) name. Default (computed in cmd_dispatch): first 3
 # alphanumerics of the repo name, lowercased, + "-<n>" (e.g. "age-42"). Set this
 # to override in full; supports the <n> placeholder. Because the default launch
 # command renders <name> from this value, overriding it renames the worktree too.
-WINDOW_NAME_TPL="${HANDLE_ISSUE_WINDOW_NAME:-}"
+WINDOW_NAME_TPL="${ISSUE_WINDOW_NAME:-}"
 # Focus policy: the new window is created DETACHED (-d) by default so the user's
 # focus stays on their current window. Every follow-up send-keys/capture-pane
 # targets the new pane by its captured id (not "the current window"), so the
 # handoff still lands in the right window without stealing focus. Set
-# HANDLE_ISSUE_FOREGROUND=1 to switch focus to the new window instead.
-FOREGROUND="${HANDLE_ISSUE_FOREGROUND:-}"
+# ISSUE_FOREGROUND=1 to switch focus to the new window instead.
+FOREGROUND="${ISSUE_FOREGROUND:-}"
 # Per-issue git-worktree hygiene (issue #55). `claude -w <n>` (the launch flag)
 # creates a worktree under this path; dispatch idempotently ensures the path is
 # gitignored so it never dirties the parent repo's `git status`. The CONTAINER
 # dir is ignored (not a per-issue `<n>` leaf), so the rule stays correct
 # regardless of how the worktree leaf is named.
-WORKTREE_IGNORE_PATH="${HANDLE_ISSUE_WORKTREE_IGNORE_PATH:-.claude/worktrees/}"
-WORKTREE_IGNORE_COMMENT="# handle-issue per-issue git worktrees (ephemeral — never commit)"
+WORKTREE_IGNORE_PATH="${ISSUE_WORKTREE_IGNORE_PATH:-.claude/worktrees/}"
+WORKTREE_IGNORE_COMMENT="# issue per-issue git worktrees (ephemeral — never commit)"
 # Readiness gate before typing the prompt (issue #67). Two independent tiers, so
 # a single Claude-Code footer-copy change can no longer false-negative readiness:
 #
@@ -101,42 +101,42 @@ WORKTREE_IGNORE_COMMENT="# handle-issue per-issue git worktrees (ephemeral — n
 #
 # The blind READY_FALLBACK_DELAY remains ONLY as a last resort after both tiers
 # exhaust the poll budget.
-READY_PATTERN="${HANDLE_ISSUE_READY_PATTERN:-for shortcuts|for agents|mode on|to cycle}"
+READY_PATTERN="${ISSUE_READY_PATTERN:-for shortcuts|for agents|mode on|to cycle}"
 # ~15s ceiling (60 × 0.25s). The fast path short-circuits success immediately, so
 # a larger ceiling only costs time in the genuine-failure case (better tolerating a
 # fresh-worktree build + this repo's heavy SessionStart). Not doubled to 80: that
 # would push worst-case FAILURE latency toward a ~20s silent hang.
-READY_ATTEMPTS="${HANDLE_ISSUE_READY_ATTEMPTS:-60}"
-READY_DELAY="${HANDLE_ISSUE_READY_DELAY:-0.25}"
-READY_FALLBACK_DELAY="${HANDLE_ISSUE_READY_FALLBACK_DELAY:-3}"
+READY_ATTEMPTS="${ISSUE_READY_ATTEMPTS:-60}"
+READY_DELAY="${ISSUE_READY_DELAY:-0.25}"
+READY_FALLBACK_DELAY="${ISSUE_READY_FALLBACK_DELAY:-3}"
 # Structural-path knobs. READY_STABLE_POLLS is a count of consecutive EQUAL
 # comparisons, so 3 == four identical captures in a row (N comparisons need N+1
 # samples). READY_FRAME_GLYPH / READY_PROMPT_GLYPH are matched literally (grep -F).
-READY_STABLE_POLLS="${HANDLE_ISSUE_READY_STABLE_POLLS:-3}"
-READY_FRAME_GLYPH="${HANDLE_ISSUE_READY_FRAME_GLYPH:-─}"
-READY_PROMPT_GLYPH="${HANDLE_ISSUE_READY_PROMPT_GLYPH:-❯}"
+READY_STABLE_POLLS="${ISSUE_READY_STABLE_POLLS:-3}"
+READY_FRAME_GLYPH="${ISSUE_READY_FRAME_GLYPH:-─}"
+READY_PROMPT_GLYPH="${ISSUE_READY_PROMPT_GLYPH:-❯}"
 # Pane tail attached to a warning result as diagnostic evidence (issue #67): the
 # last N non-blank lines of the pane, so the caller can triage without switching
 # windows. Only ever emitted on the warning path — the success payload stays clean.
-READY_TAIL_LINES="${HANDLE_ISSUE_READY_TAIL_LINES:-8}"
+READY_TAIL_LINES="${ISSUE_READY_TAIL_LINES:-8}"
 # Prompt-submission confirm/resend bounds (freshen semantics).
-CONFIRM_ATTEMPTS="${HANDLE_ISSUE_CONFIRM_ATTEMPTS:-8}"
-CONFIRM_DELAY="${HANDLE_ISSUE_CONFIRM_DELAY:-0.3}"
-SEND_RETRIES="${HANDLE_ISSUE_SEND_RETRIES:-2}"
+CONFIRM_ATTEMPTS="${ISSUE_CONFIRM_ATTEMPTS:-8}"
+CONFIRM_DELAY="${ISSUE_CONFIRM_DELAY:-0.3}"
+SEND_RETRIES="${ISSUE_SEND_RETRIES:-2}"
 # Non-gating post-submit ACCEPTANCE marker (issue #67, direction #2). After the
 # structural "text left the input line" confirmation, a bounded look for one of
 # these tokens records whether a READY TUI actually consumed the prompt (vs. it
 # scrolling off into, say, a modal). This is a version-specific string, so it only
 # INFORMS (a `prompt_accepted` boolean) — it NEVER flips prompt_confirmed to false
 # or triggers a resend (that would resurrect the very cry-wolf warning #67 fixes).
-READY_ACCEPT_PATTERN="${HANDLE_ISSUE_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Crunching|tokens|to interrupt}"
+READY_ACCEPT_PATTERN="${ISSUE_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Crunching|tokens|to interrupt}"
 # `doctor` subcommand (issue #67, direction #5): a throwaway readiness self-test.
 # Its launch OMITS `-w` (no worktree, no git side effect) — it only needs the TUI
 # to render. Overridable so tests can point it at a harmless stand-in binary.
-DOCTOR_LAUNCH_TPL="${HANDLE_ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan}"
-DOCTOR_WINDOW_NAME="${HANDLE_ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
-DRY_RUN="${HANDLE_ISSUE_DRY_RUN:-}"
-ALLOW_CLOSED="${HANDLE_ISSUE_ALLOW_CLOSED:-}"
+DOCTOR_LAUNCH_TPL="${ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan}"
+DOCTOR_WINDOW_NAME="${ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
+DRY_RUN="${ISSUE_DRY_RUN:-}"
+ALLOW_CLOSED="${ISSUE_ALLOW_CLOSED:-}"
 
 # ---- JSON emitters ----------------------------------------------------------
 # fail <message> — emit {ok:false, display} and exit non-zero. The skill halts
@@ -383,7 +383,7 @@ cmd_list() {
       display: (
         if length == 0
         then ("No open issues on " + $repo + ".")
-        else ("[handle-issue] " + (length | tostring) + " open issue(s) on " + $repo)
+        else ("[issue] " + (length | tostring) + " open issue(s) on " + $repo)
         end
       )
     }'
@@ -392,7 +392,7 @@ cmd_list() {
 # ---- subcommand: dispatch ---------------------------------------------------
 cmd_dispatch() {
   local n="${1:-}"
-  [ -n "$n" ] || fail "usage: handle-issue.sh dispatch <issue-number>"
+  [ -n "$n" ] || fail "usage: issue.sh dispatch <issue-number>"
   [[ "$n" =~ ^[0-9]+$ ]] || fail "issue number must be a positive integer (got: $n)."
 
   # launch_cmd/prompt are rendered AFTER wname is resolved (below), since the
@@ -401,8 +401,8 @@ cmd_dispatch() {
 
   # Step 1: tmux precondition (relaxed under dry-run so it runs headlessly).
   if [ -z "$DRY_RUN" ]; then
-    [ -n "${TMUX:-}" ] || fail "handle-issue requires tmux — run Claude inside a tmux session."
-    [ -n "${TMUX_PANE:-}" ] || fail "handle-issue requires \$TMUX_PANE — run Claude inside a tmux pane."
+    [ -n "${TMUX:-}" ] || fail "issue requires tmux — run Claude inside a tmux session."
+    [ -n "${TMUX_PANE:-}" ] || fail "issue requires \$TMUX_PANE — run Claude inside a tmux pane."
   fi
 
   # Step 2: repo dir (also satisfies claude -w's git-tracked-location requirement).
@@ -422,13 +422,13 @@ cmd_dispatch() {
   title=$(printf '%s' "$issue_json" | jq -r '.title // ""')
   state=$(printf '%s' "$issue_json" | jq -r '.state // ""')
   if [ "$state" = "CLOSED" ] && [ -z "$ALLOW_CLOSED" ]; then
-    fail "issue #$n is closed on $repo (set HANDLE_ISSUE_ALLOW_CLOSED=1 to dispatch anyway)."
+    fail "issue #$n is closed on $repo (set ISSUE_ALLOW_CLOSED=1 to dispatch anyway)."
   fi
 
   # Compute the name used for BOTH the tmux window and the git worktree:
   # "<repo-prefix>-<n>" (e.g. "age-42"), where the prefix is the first 3
   # alphanumerics of the repo name, lowercased. Fully overridable via
-  # HANDLE_ISSUE_WINDOW_NAME (supports the <n> placeholder).
+  # ISSUE_WINDOW_NAME (supports the <n> placeholder).
   local wname
   if [ -n "$WINDOW_NAME_TPL" ]; then
     wname=$(render_template "$WINDOW_NAME_TPL" "$n")
@@ -481,7 +481,7 @@ cmd_dispatch() {
            + " --description " + $desc),
           ("gh issue edit " + $issue + " --repo " + $repo + " --add-label " + $label)
         ] end)),
-        display: ("[handle-issue] DRY RUN for #" + $issue + " (" + $title
+        display: ("[issue] DRY RUN for #" + $issue + " (" + $title
                   + "): would open a new tmux window named " + $wname + " in " + $dir
                   + (if $label == "" then "" else ", mark the issue " + $label end)
                   + " and run the listed commands.")
@@ -494,7 +494,7 @@ cmd_dispatch() {
   local new_window_args pane window
   new_window_args=(-c "$dir" -n "$wname" -P -F '#{pane_id}')
   # Detached by default so the caller's focus stays put; opt in to focus-follow
-  # with HANDLE_ISSUE_FOREGROUND=1. Keystrokes below target $pane by id regardless.
+  # with ISSUE_FOREGROUND=1. Keystrokes below target $pane by id regardless.
   [ -z "$FOREGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
   if ! pane=$(tmux new-window "${new_window_args[@]}" 2>/dev/null) || [ -z "$pane" ]; then
     fail "failed to open a new tmux window."
@@ -565,7 +565,7 @@ cmd_dispatch() {
   # Result. ok:true from here on; warn on any unconfirmed step.
   local warning="" display base
   if [ "$readiness_confirmed" = true ] && [ "$prompt_confirmed" = true ]; then
-    base="[handle-issue] #$n ($title) → opened tmux window \`$wname\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
+    base="[issue] #$n ($title) → opened tmux window \`$wname\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
   else
     if [ "$readiness_confirmed" = false ] && [ "$prompt_confirmed" = false ]; then
       warning="Couldn't confirm claude finished starting, nor that the prompt submitted — check window \`$wname\`."
@@ -574,7 +574,7 @@ cmd_dispatch() {
     else
       warning="claude started, but couldn't confirm the prompt submitted — check window \`$wname\`."
     fi
-    base="[handle-issue] #$n ($title) → window \`$wname\` opened, but I couldn't fully confirm the handoff."
+    base="[issue] #$n ($title) → window \`$wname\` opened, but I couldn't fully confirm the handoff."
   fi
 
   # Fold a label failure into the warning (best-effort — never ok:false).
@@ -623,14 +623,14 @@ cmd_dispatch() {
 cmd_doctor() {
   # tmux precondition (relaxed under dry-run so it runs headlessly).
   if [ -z "$DRY_RUN" ]; then
-    [ -n "${TMUX:-}" ] || fail "handle-issue doctor requires tmux — run Claude inside a tmux session."
-    [ -n "${TMUX_PANE:-}" ] || fail "handle-issue doctor requires \$TMUX_PANE — run Claude inside a tmux pane."
+    [ -n "${TMUX:-}" ] || fail "issue doctor requires tmux — run Claude inside a tmux session."
+    [ -n "${TMUX_PANE:-}" ] || fail "issue doctor requires \$TMUX_PANE — run Claude inside a tmux pane."
   fi
 
   # The launch binary (first word of the launch template) must be on PATH.
   local doctor_bin="${DOCTOR_LAUNCH_TPL%% *}"
   command -v "$doctor_bin" >/dev/null 2>&1 \
-    || fail "launch binary '$doctor_bin' not found on PATH (set HANDLE_ISSUE_DOCTOR_LAUNCH_CMD)."
+    || fail "launch binary '$doctor_bin' not found on PATH (set ISSUE_DOCTOR_LAUNCH_CMD)."
 
   # Dry-run: emit the planned commands and stop before any side effect.
   if [ -n "$DRY_RUN" ]; then
@@ -643,7 +643,7 @@ cmd_doctor() {
           "tmux send-keys -t <pane> Enter",
           "tmux kill-window -t <window>"
         ],
-        display: ("[handle-issue] DRY RUN doctor: would spin a throwaway `" + $launch
+        display: ("[issue] DRY RUN doctor: would spin a throwaway `" + $launch
                   + "` in window " + $wname + ", check readiness, and tear it down.")
       }'
     return 0
@@ -676,9 +676,9 @@ cmd_doctor() {
 
   local display
   if [ "$readiness_confirmed" = true ]; then
-    display="[handle-issue] doctor: readiness OK via the '$tier' tier — the installed Claude build is recognised."
+    display="[issue] doctor: readiness OK via the '$tier' tier — the installed Claude build is recognised."
   else
-    display="[handle-issue] doctor: readiness NOT confirmed within the poll budget — the readiness marker may have drifted. See pane_tail."
+    display="[issue] doctor: readiness NOT confirmed within the poll budget — the readiness marker may have drifted. See pane_tail."
   fi
 
   jq -n \
@@ -698,5 +698,5 @@ case "${1:-}" in
   list)     shift; cmd_list "$@" ;;
   dispatch) shift; cmd_dispatch "$@" ;;
   doctor)   shift; cmd_doctor "$@" ;;
-  *)        fail "usage: handle-issue.sh <list | dispatch <issue-number> | doctor>" ;;
+  *)        fail "usage: issue.sh <list | dispatch <issue-number> | doctor>" ;;
 esac

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fake `gh` for handle-issue tests. Emits canned output driven by env knobs:
+# Fake `gh` for issue tests. Emits canned output driven by env knobs:
 #   FAKE_GH_LOG=path         append each invocation's args (one line) here
 #   FAKE_GH_AUTH_FAIL=1      `gh auth status` exits non-zero (unauthenticated)
 #   FAKE_GH_ISSUES_JSON=...  JSON array emitted by `gh issue list --json ...` (default [])

@@ -58,9 +58,9 @@
       "source": "./plugins/atlas"
     },
     {
-      "name": "handle-issue",
-      "description": "Dispatch a GitHub issue to a fresh, plan-mode Claude session in a new tmux window and per-issue git worktree — pick by number or from open issues, then auto-launch claude -w <repo-prefix>-<n> (worktree named like the window) and prompt it to plan a fix",
-      "source": "./plugins/handle-issue"
+      "name": "issue",
+      "description": "GitHub-issue lifecycle toolkit: /issue do <n> dispatches an issue to a fresh plan-mode Claude session in a new tmux window + per-issue worktree; /issue new interrogates then files an issue; /issue view <n> prints it; /issue complete <n> closes it and safely cleans up merged branches + worktrees; /issue <n> views then offers to work on it",
+      "source": "./plugins/issue"
     },
     {
       "name": "reconcile-pr",

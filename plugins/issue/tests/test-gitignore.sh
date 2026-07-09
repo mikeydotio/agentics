@@ -5,7 +5,7 @@
 # Unlike the other suites, these drive a REAL (non-dry-run) dispatch headlessly:
 # a fake `tmux` (tests/fakes/tmux) prepended on PATH satisfies Steps 5-8 without
 # a live tmux server, dummy $TMUX/$TMUX_PANE pass the Step-1 precondition, the
-# fake `gh` answers issue lookups, and labeling is disabled (HANDLE_ISSUE_LABEL="")
+# fake `gh` answers issue lookups, and labeling is disabled (ISSUE_LABEL="")
 # to keep the run focused on the gitignore write. All poll delays are zeroed so
 # the run returns immediately.
 source "$(dirname "$0")/lib.sh"
@@ -20,9 +20,9 @@ dispatch_real() {
   ( cd "$dir" \
       && PATH="$FAKE_TMUX_DIR:$PATH" \
          TMUX="fake,0,0" TMUX_PANE="%0" \
-         HANDLE_ISSUE_LABEL="" \
-         HANDLE_ISSUE_READY_DELAY=0 HANDLE_ISSUE_READY_FALLBACK_DELAY=0 \
-         HANDLE_ISSUE_CONFIRM_DELAY=0 \
+         ISSUE_LABEL="" \
+         ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
+         ISSUE_CONFIRM_DELAY=0 \
          bash "$SCRIPT" dispatch "$n" 2>&1 )
 }
 

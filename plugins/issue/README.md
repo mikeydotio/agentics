@@ -1,58 +1,48 @@
 # issue
 
-Turn "I want to work on issue #N" into a running, **plan-mode** Claude session in a **new tmux
-window**, launched inside a per-issue git **worktree named the same as the window** (`claude -w
-<repo-prefix>-<n>`). Pick an issue by number or interactively from the repo's open issues; the
-plugin opens a window named `<repo-prefix>-<n>` (e.g. `age-42`) **without stealing your focus**,
-`cd`s it to the repo root, launches Claude in a worktree of the same name
-(`.claude/worktrees/age-42`) **directly in plan mode** (`--permission-mode plan`), and submits a
-prompt asking it to plan a fix — all in one command.
+A **GitHub-issue lifecycle toolkit** for Claude Code. One `issue` skill routes a small verb grammar;
+each verb pushes its deterministic work into `bin/issue.sh` (bash + `jq` + `gh` + `git`), which emits
+one JSON object with `ok` + `display`. The skill only routes, renders, and asks at most one question
+per verb — so token cost stays low and the guard rails live in code, not prose.
 
-It also keeps GitHub in sync: dispatch **marks the issue `in-progress`** (creating the label if the
-repo doesn't have it), and the handoff prompt briefs the child session to **comment its finalized
-plan** on the issue, **word every PR to close the issue** (`Closes #N`), and **comment a link to
-each PR** it pushes.
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `/issue do <n>` | Spin up a fresh **plan-mode** Claude session for issue `<n>` in a **new tmux window** + per-issue git **worktree** (`claude -w <repo-prefix>-<n>`), mark the issue `in-progress`, and hand off a prompt asking it to plan a fix and report its plan/PRs back to the issue. |
+| `/issue new <desc>` | Interrogate you for the nature, scope, and context of the need, draft a title + body, confirm, then **file** the issue via `gh` and return its number + link. |
+| `/issue view <n>` | Print issue `<n>`'s full content (native `gh` rendering incl. comments) and **stop**. |
+| `/issue complete <n>` | Close `<n>` as *completed* and **safely** clean up its artifacts — merged branches (local + remote) and clean worktrees — after showing exactly what it will remove and asking once. |
+| `/issue <n>` | Run `view <n>`, then **offer** to work on it: decline → stop; accept → `do <n>`. |
+| `/issue` | List the repo's open issues, let you pick one, then run the `/issue <n>` flow on it. |
+| `/issue doctor` | Readiness self-test for `do`'s TUI handoff (run after a Claude Code upgrade). |
 
 ## When to use
 
-`/issue` is for kicking off work on a GitHub issue in an **isolated context** without the
-manual dance of: open a window, make a worktree, launch Claude, switch to plan mode, paste a
-prompt. Reach for it when you're triaging a backlog and want to spin up a focused session per
-issue.
-
-It is **not** a background agent — it hands off to a fresh interactive Claude that plans a solution
-(in plan mode, so nothing is changed until you approve). You review and drive that session yourself.
+- `do` — kick off work on an issue in an **isolated context** without the manual dance (open a
+  window, make a worktree, launch Claude, switch to plan mode, paste a prompt). It is **not** a
+  background agent: it hands off to a fresh interactive plan-mode Claude that you review and drive.
+- `new` — turn a rough idea into a well-formed, filed issue without leaving the session.
+- `view` — read an issue inline.
+- `complete` — wrap up a finished issue and tidy the branches/worktrees it left behind, with a
+  confirmation gate and guard rails that never touch unmerged, dirty, locked, current, or protected
+  refs.
 
 ## Requirements
 
-- **tmux** — Claude must be running inside a tmux session (the plugin opens a sibling window).
-  Outside tmux it bails with a clear message.
-- **GitHub CLI** — `gh` must be installed and authenticated (`gh auth login`, or a `GH_TOKEN`).
-- A git checkout with a GitHub **origin** remote (used to resolve `owner/repo` and to satisfy
-  `claude -w`'s requirement that it run from a git-tracked location).
+- **GitHub CLI** — `gh` installed and authenticated (`gh auth login`, or a `GH_TOKEN`) — for every
+  verb.
+- A git checkout with a GitHub **origin** remote (used to resolve `owner/repo`).
+- **tmux** — required by `do` only (it opens a sibling window). The other verbs don't need it.
 
-## Usage
+## `do` — how it works
 
-```
-/issue [issue-number]
-```
+When invoked without a number (bare `/issue`), the skill first runs `bin/issue.sh list` — it derives
+`owner/repo` from the origin remote, calls `gh issue list --state open`, and returns each issue with
+a pre-built pick option that the skill presents via one `AskUserQuestion`. With a number in hand
+(from `do <n>`, or after the picker + "work on it"), it dispatches:
 
-Examples:
-
-```
-/issue 42      # open a plan-mode Claude on issue #42 in a new window + worktree
-/issue         # list the repo's open issues and let you pick one
-```
-
-With no number, you get a single question listing open issues (newest first). Pick one — or choose
-"Other" to type any issue number — and it dispatches.
-
-## How it works
-
-1. **List** (only when no number is given) — `bin/issue.sh list` derives `owner/repo` from
-   the origin remote and calls `gh issue list --state open`, returning each issue with a pre-built
-   pick option. The skill presents them via one `AskUserQuestion`.
-2. **Dispatch** — `bin/issue.sh dispatch <n>` runs a strict, ordered sequence:
+- **Dispatch** — `bin/issue.sh dispatch <n>` runs a strict, ordered sequence:
    - Hard preconditions first (tmux present, inside a git repo, `gh` authenticated, the issue
      exists and is open) — any failure stops **before** anything is opened.
    - `tmux new-window -d -c <repo-root> -n <repo-prefix>-<n>` — open the window **detached** (`-d`),
@@ -110,6 +100,29 @@ diagnostic, deliberately **not** part of `make test` (the pre-push gate stays de
 Once a side effect has happened (the window exists), the helper reports `ok:true` with a `warning`
 rather than a hard failure — so a status line never falsely implies "nothing happened."
 
+## `view`, `new`, and `complete`
+
+- **`view <n>`** — `bin/issue.sh view <n>` runs `gh issue view <n> --comments` and returns its
+  native plaintext in `display` (plus structured `{issue,title,state,url}`). Read-only; the skill
+  just prints it and stops.
+- **`new <desc>`** — the skill follows `references/new.md`: a short interrogation (type, scope,
+  acceptance) via one `AskUserQuestion` at a time, a drafted title + markdown body, one confirmation,
+  then `bin/issue.sh create --title … --body-file …` (the body travels by file, never through shell
+  quoting). `create` files via `gh issue create`, recovers the number from the printed URL, and
+  returns `{number, url}`. Nothing is filed without an explicit confirmation.
+- **`complete <n>`** — a two-phase, guard-railed cleanup (see `references/complete.md`):
+  - `complete plan <n>` (read-only) enumerates the issue's worktrees (`<repo-prefix>-<n>` or legacy
+    `<n>`) and branches (the `worktree-*` branches plus the head branches of MERGED PRs that closed
+    the issue, via `closedByPullRequestsReferences`), classifies each, and previews exactly what it
+    would close/remove and what it would **preserve**.
+  - After one confirmation, `complete execute <n>` closes the issue as *completed* and removes **only
+    the safe set**: clean, unlocked, non-current worktrees (`git worktree remove`, no `--force`) and
+    **fully-merged** branches (`git branch -d` locally; merged PR heads deleted on the remote over
+    the HTTPS credential-helper override). It never touches unmerged, dirty, locked, current, or
+    protected/default refs — with git-native backstops so a scan bug can't cause data loss.
+    `--no-clean` closes without deleting (the picker's "Close only"); `--no-close` cleans without
+    closing.
+
 ## Configuration (environment variables)
 
 All optional; sensible defaults. Useful for customizing the launch/prompt or for testing.
@@ -148,5 +161,6 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 > that is a slash command that routes to a registered `/plan` skill (e.g. forge's planner), not
 > Claude's built-in plan mode.
 
-See `skills/issue/SKILL.md` for the routing logic and `bin/issue.sh` for the full
-dispatch sequence.
+See `skills/issue/SKILL.md` for the verb routing, `bin/issue.sh` for every subcommand's
+deterministic sequence, and `references/new.md` / `references/complete.md` for the `new` and
+`complete` protocols.

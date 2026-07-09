@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.25.2] - 2026-07-09
+
+### Fixed
+- publish index via PR under branch-protection ruleset (4770c56)
+- two-tier readiness gate resilient to footer drift (#67) (f7bfe8e)
+
+### Changed
+- Merge pull request #70 from mikeydotio/fix/deployit-publish-protect-main-69 (5ccde01)
+- Merge pull request #68 from mikeydotio/worktree-age-67 (02e2594)
+
+### Documentation
+- troubleshoot stale version-keyed cache after a merged fix (6c800b3)
+- document index publishing modes and bypass alternative (38f361e)
+- document readiness tiers, doctor, env knobs (#67) (46a77af)
+
+### Testing
+- guard against shipped plugin content drift (#71) (6bdb60c)
+- cover PR-fallback publish, classifier, and disk-safety (5c61285)
+- readiness tier + drift coverage (#67) (24f89bd)
+
+_[manual]_
+
 ## [v2.25.1] - 2026-07-07
 
 ### Fixed

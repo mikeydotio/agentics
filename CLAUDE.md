@@ -61,6 +61,28 @@ plugins are restamped too, so a bump can never miss one.
   `bash .semver/hooks/post-bump/01-sync-plugin-versions.sh` (files only, no git ops).
 - `tests/plugin-versions.sh` (in `make test`) fails if any manifest drifts from `VERSION`.
 
+### Cache is version-keyed — shipped content changes MUST bump
+
+Claude Code caches each plugin by its **version string**: an install that already
+extracted version `X` never re-extracts `X` again, even when the marketplace's
+content for `X` later changes. So **any change to shipped `plugins/**` runtime
+content must ship with a `/semver bump`** — never mutate an already-released
+version's content in place, or installs keep running the old code while the
+manifest reports the (unchanged) version. This was issue #71: a deployit fix
+stranded under an unbumped `2.25.1`, so no install ever received it.
+
+- `tests/plugin-content-drift.sh` (in `make test`) enforces this — it fails the
+  pre-push gate if shipped content under `plugins/**` differs from the release tag
+  `v<VERSION>` (git blob OIDs are content hashes; the check is a `git diff <tag>
+  HEAD`). "Shipped" excludes plugin `tests/`, `*.bats`, and plugin `README.md`; a
+  `/semver bump` retags at the new HEAD, which clears the guard.
+- **Landing a release-bump PR** (keep the tag from being stranded): let
+  `/semver bump` create the local tag, push the **branch only** (never the tag);
+  after the PR merges, re-point the tag onto main's release commit and push it
+  cleanly — `git tag -f v<X.Y.Z> <main-release-sha>` then
+  `git push origin v<X.Y.Z>` (no force needed on a first push). Then
+  `/semver validate` should be all-PASS.
+
 ## Hardening Roadmap
 
 The forge × storyhook seam underwent a full hardening pass (2026-07 audit + 8-workstream plan,

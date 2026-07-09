@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
+.PHONY: test test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
 
-test: test-root-bats test-plugin-versions test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
+test: test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -19,6 +19,12 @@ test-root-bats:
 # Plain bash (no bats) so it always runs as part of the pre-push gate.
 test-plugin-versions:
 	bash tests/plugin-versions.sh
+
+# Marketplace-wide content-drift guard: shipped plugin source under plugins/**
+# must not change without a version bump, or the version-keyed plugin cache
+# serves stale code (issue #71). Plain bash so it always runs in the pre-push gate.
+test-plugin-content-drift:
+	bash tests/plugin-content-drift.sh
 
 test-semver:
 	bash plugins/semver/tests/run-tests.sh

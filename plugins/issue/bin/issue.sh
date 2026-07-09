@@ -389,6 +389,98 @@ cmd_list() {
     }'
 }
 
+# ---- subcommand: view -------------------------------------------------------
+# view <n> — READ-ONLY. Render issue <n>'s full content (gh's native plaintext,
+# including comments) into `display` and stop. Also emits structured
+# {ok, issue, title, state, url} for callers that want the fields. No side
+# effects; the skill simply prints `display`.
+cmd_view() {
+  local n="${1:-}"
+  [ -n "$n" ] || fail "usage: issue.sh view <issue-number>"
+  [[ "$n" =~ ^[0-9]+$ ]] || fail "issue number must be a positive integer (got: $n)."
+  require_gh
+  local repo meta title state url body
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+  # Structured metadata first, so a missing issue fails cleanly with ok:false.
+  if ! meta=$("$GH" issue view "$n" --repo "$repo" \
+                --json number,title,state,url 2>/dev/null); then
+    fail "issue #$n not found on $repo."
+  fi
+  title=$(printf '%s' "$meta" | jq -r '.title // ""')
+  state=$(printf '%s' "$meta" | jq -r '.state // ""')
+  url=$(printf '%s' "$meta" | jq -r '.url // ""')
+  # Human-readable body via gh's native rendering (plaintext in a non-TTY),
+  # including comments. Best-effort: if it fails after metadata succeeded, fall
+  # back to a minimal one-liner rather than a hard fail.
+  body=$("$GH" issue view "$n" --repo "$repo" --comments 2>/dev/null || printf '')
+  [ -n "$body" ] || body="#$n — $title [$state]"$'\n'"$url"
+  jq -n --arg issue "$n" --arg title "$title" --arg state "$state" \
+        --arg url "$url" --arg display "$body" '
+    {ok:true, issue:($issue|tonumber), title:$title, state:$state, url:$url, display:$display}'
+}
+
+# ---- subcommand: create -----------------------------------------------------
+# create --title <t> [--body-file <path> | --body <text>] [--label <csv>]
+#   Files a NEW issue via `gh issue create`, parses the assigned number from the
+#   printed URL, and emits {ok, number, url, title, display}. The body is passed
+#   by FILE by default (the `new` flow writes drafted markdown to a temp file) so
+#   multi-line content never has to survive shell/tmux escaping. ISSUE_DRY_RUN=1
+#   prints the planned command and files nothing.
+cmd_create() {
+  local title="" body_file="" body="" labels="" have_body=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title)     title="${2:-}"; shift 2 ;;
+      --body-file) body_file="${2:-}"; have_body=1; shift 2 ;;
+      --body)      body="${2:-}"; have_body=1; shift 2 ;;
+      --label)     labels="${2:-}"; shift 2 ;;
+      *) fail "create: unknown argument '$1' (usage: create --title <t> [--body-file <p>|--body <t>] [--label <csv>])" ;;
+    esac
+  done
+  [ -n "$title" ] || fail "create: --title is required."
+  if [ -n "$body_file" ] && [ ! -f "$body_file" ]; then
+    fail "create: --body-file '$body_file' does not exist."
+  fi
+  require_gh
+  local repo
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+
+  # Assemble gh args. --body-file wins over --body; an omitted body still passes
+  # an explicit empty --body so gh never opens an interactive editor.
+  local args=(issue create --repo "$repo" --title "$title")
+  if [ -n "$body_file" ]; then
+    args+=(--body-file "$body_file")
+  elif [ -n "$have_body" ]; then
+    args+=(--body "$body")
+  else
+    args+=(--body "")
+  fi
+  [ -n "$labels" ] && args+=(--label "$labels")
+
+  if [ -n "$DRY_RUN" ]; then
+    jq -n --arg repo "$repo" --arg title "$title" \
+          --arg bf "$body_file" --arg labels "$labels" '
+      {ok:true, dry_run:true, repo:$repo, title:$title,
+       command:("gh issue create --repo " + $repo + " --title " + $title
+                + (if $bf == "" then " --body <inline>" else " --body-file " + $bf end)
+                + (if $labels == "" then "" else " --label " + $labels end)),
+       display:("[issue] DRY RUN: would file \"" + $title + "\" on " + $repo + ".")}'
+    return 0
+  fi
+
+  local out url num
+  if ! out=$("$GH" "${args[@]}" 2>&1); then
+    fail "gh issue create failed: $(printf '%s' "$out" | tail -n 2)"
+  fi
+  # gh prints the new issue's URL; recover the number from its trailing segment.
+  url=$(printf '%s\n' "$out" | grep -Eo 'https?://[^ ]*/issues/[0-9]+' | tail -n1)
+  [ -n "$url" ] || fail "gh issue create returned no issue URL (got: $(printf '%s' "$out" | tail -n1))."
+  num="${url##*/}"
+  jq -n --arg num "$num" --arg url "$url" --arg title "$title" '
+    {ok:true, number:($num|tonumber), url:$url, title:$title,
+     display:("[issue] Filed #" + $num + " — " + $title + "\n" + $url)}'
+}
+
 # ---- subcommand: dispatch ---------------------------------------------------
 cmd_dispatch() {
   local n="${1:-}"
@@ -697,6 +789,8 @@ cmd_doctor() {
 case "${1:-}" in
   list)     shift; cmd_list "$@" ;;
   dispatch) shift; cmd_dispatch "$@" ;;
+  view)     shift; cmd_view "$@" ;;
+  create)   shift; cmd_create "$@" ;;
   doctor)   shift; cmd_doctor "$@" ;;
-  *)        fail "usage: issue.sh <list | dispatch <issue-number> | doctor>" ;;
+  *)        fail "usage: issue.sh <list | dispatch <n> | view <n> | create --title <t> [--body-file <p>] | doctor>" ;;
 esac

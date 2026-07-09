@@ -35,6 +35,45 @@ mk_repo() {
   printf '%s' "$dir"
 }
 
+# mk_complete_repo — build a realistic repo for `complete` tests, echo its path.
+# Uses a LOCAL bare origin named fake/repo.git so (a) owner/repo resolves to
+# fake/repo -> prefix "rep" (wname "rep-77"), and (b) remote-branch checks and
+# `push --delete` run OFFLINE and deterministically. Issue under test is 77; the
+# repo holds every guard-rail case:
+#   worktree-rep-77   merged local branch                 -> deletable
+#   worktree-77       unmerged local branch (own commit)  -> skipped (unmerged)
+#   fix/thing-61      merged PR head, pushed to origin     -> deletable local+remote
+#   .claude/worktrees/rep-77   clean detached worktree     -> removable
+#   .claude/worktrees/77       LOCKED detached worktree    -> skipped (locked)
+# Pair with FAKE_GH_CLOSED_BY_PRS='[{"number":61}]' so PR #61 (MERGED, head
+# fix/thing-61) is discovered as the issue's closing PR.
+mk_complete_repo() {
+  local origdir origin repo
+  origdir="$(mktemp -d /tmp/issue-origin.XXXXXX)"
+  mkdir -p "$origdir/fake"
+  origin="$origdir/fake/repo.git"
+  git init -q --bare -b main "$origin"
+  repo="$(mktemp -d /tmp/issue-complete.XXXXXX)"
+  _TMP_REPOS+=("$repo" "$origdir")
+  (
+    cd "$repo" || exit 1
+    git init -q -b main
+    git config user.email t@t; git config user.name t
+    git remote add origin "$origin"
+    echo a > f; git add f; git commit -qm init
+    git push -qu origin main
+    git remote set-head origin main >/dev/null 2>&1 || true
+    git branch worktree-rep-77                         # merged -> deletable
+    git branch worktree-77
+    git checkout -q worktree-77; echo b > g; git add g; git commit -qm b; git checkout -q main
+    git branch fix/thing-61                            # merged PR head
+    git push -q origin fix/thing-61
+    git worktree add -q --detach "$repo/.claude/worktrees/rep-77"        # clean -> removable
+    git worktree add -q --lock --detach "$repo/.claude/worktrees/77"     # locked -> skipped
+  ) >/dev/null 2>&1
+  printf '%s' "$repo"
+}
+
 _FAILED=0
 fail_test() { printf 'FAIL: %s\n' "$1" >&2; _FAILED=1; }
 

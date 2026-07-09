@@ -146,6 +146,14 @@ fail() {
   exit 1
 }
 
+# refuse <reason> <message> — a GUARD rejection: {ok:false, reason, display} +
+# non-zero exit. Distinct from fail() so callers can tell a guard veto (e.g. a
+# protected branch) from an ordinary error. Modelled on reconcile-pr.sh.
+refuse() {
+  jq -n --arg r "$1" --arg d "$2" '{ok:false, reason:$r, display:$d}'
+  exit 1
+}
+
 # ---- helpers ----------------------------------------------------------------
 render_template() {  # render_template <template> <number> [<name>]
   # <n>    -> the issue number
@@ -153,6 +161,145 @@ render_template() {  # render_template <template> <number> [<name>]
   local tpl="$1" n="$2" name="${3:-}"
   tpl="${tpl//<name>/$name}"
   printf '%s' "${tpl//<n>/$n}"
+}
+
+# repo_prefix <owner/repo> — the first 3 alphanumerics of the repo name,
+# lowercased (e.g. "agentics" -> "age"). The window/worktree naming stem.
+repo_prefix() {
+  printf '%s' "${1##*/}" | tr -cd '[:alnum:]' | cut -c1-3 | tr '[:upper:]' '[:lower:]'
+}
+
+# resolve_wname <n> <owner/repo> — the window/worktree name for issue <n>:
+# the ISSUE_WINDOW_NAME override if set, else "<repo-prefix>-<n>" (e.g. age-42).
+# Shared by dispatch (to name the window/worktree it creates) and complete (to
+# find the worktree/branch to clean up), so both agree on the name.
+resolve_wname() {
+  local n="$1" repo="$2"
+  if [ -n "$WINDOW_NAME_TPL" ]; then
+    render_template "$WINDOW_NAME_TPL" "$n"
+  else
+    printf '%s-%s' "$(repo_prefix "$repo")" "$n"
+  fi
+}
+
+# ---- git-safety helpers (used by `complete`) --------------------------------
+# default_branch — the repo's default branch NAME (no "origin/"), from
+# origin/HEAD, falling back to "main". NEVER a valid delete target.
+default_branch() {
+  local ref
+  ref=$(git symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null) || ref=""
+  if [ -n "$ref" ]; then printf '%s' "${ref##*/}"; else printf 'main'; fi
+}
+
+# is_protected_branch <branch> — true for the default branch, main/master, or any
+# glob in ISSUE_PROTECTED_BRANCHES (space-separated). These are never deleted.
+is_protected_branch() {
+  local b="$1" d extra g
+  d=$(default_branch)
+  case "$b" in "$d"|main|master) return 0 ;; esac
+  for g in ${ISSUE_PROTECTED_BRANCHES:-}; do
+    case "$b" in $g) return 0 ;; esac
+  done
+  return 1
+}
+
+# local_branch_exists <branch>
+local_branch_exists() { git show-ref --verify --quiet "refs/heads/$1"; }
+
+# remote_branch_exists <branch>
+remote_branch_exists() { [ -n "$(git ls-remote --heads origin "$1" 2>/dev/null)" ]; }
+
+# branch_is_merged <branch> <base> — true iff <branch> is fully merged into
+# <base> (a local branch or, failing that, origin/<base>). If neither base ref
+# exists, returns FALSE — the safe default: an un-comparable branch is NOT
+# considered merged, so it is never auto-deleted.
+branch_is_merged() {
+  local branch="$1" base="$2" baseref=""
+  if   git show-ref --verify --quiet "refs/heads/$base";          then baseref="$base"
+  elif git show-ref --verify --quiet "refs/remotes/origin/$base"; then baseref="origin/$base"
+  else return 1
+  fi
+  git branch --merged "$baseref" 2>/dev/null | sed 's/^[*+ ]*//' | grep -qxF "$branch"
+}
+
+# collect_targets <n> <repo> — READ-ONLY. Emit TSV describing every cleanup
+# candidate for issue <n>, one per line, so both `complete plan` (display) and
+# `complete execute` (act) work from the same scan:
+#   WT<TAB>removable|current|locked|dirty<TAB><path><TAB><branch>
+#   BR<TAB>local|remote<TAB>deletable|unmerged|protected<TAB><branch>
+# Worktrees are matched by basename == the resolved wname OR the legacy bare <n>.
+# Branch candidates: the worktree branches (worktree-<wname>, worktree-<n>) and
+# the head branch of every MERGED PR that closed the issue. Identical rows are
+# de-duplicated (a worktree branch that is also a closing PR's head would appear
+# via both paths); branch_is_merged is deterministic, so any dup is an exact line.
+collect_targets() {
+  _collect_targets_raw "$@" | awk '!seen[$0]++'
+}
+_collect_targets_raw() {
+  local n="$1" repo="$2" wname default cur
+  wname=$(resolve_wname "$n" "$repo")
+  default=$(default_branch)
+  cur=$(git rev-parse --show-toplevel 2>/dev/null || printf '')
+
+  # --- worktrees (awk flattens the porcelain blocks to path<TAB>branch<TAB>locked) ---
+  # awk emits path<TAB>branch<TAB>locked. `branch` is "-" when a worktree is
+  # detached (empty) — a placeholder, NOT an empty field: `read` with IFS=$'\t'
+  # collapses adjacent tabs (tab is whitespace to `read`), which would otherwise
+  # merge an empty branch into its neighbours and lose the `locked` flag.
+  local wt_path wt_branch wt_locked base status
+  while IFS=$'\t' read -r wt_path wt_branch wt_locked; do
+    [ -n "$wt_path" ] || continue
+    [ "$wt_branch" = "-" ] && wt_branch=""
+    base="${wt_path##*/}"
+    [ "$base" = "$wname" ] || [ "$base" = "$n" ] || continue
+    if   [ "$wt_path" = "$cur" ];                                            then status=current
+    elif [ "$wt_locked" = "1" ];                                            then status=locked
+    elif [ -n "$(git -C "$wt_path" status --porcelain 2>/dev/null)" ];      then status=dirty
+    else                                                                         status=removable
+    fi
+    printf 'WT\t%s\t%s\t%s\n' "$status" "$wt_path" "$wt_branch"
+  done < <(git worktree list --porcelain 2>/dev/null | awk '
+    function flush() { if (p!="") print p"\t"(b==""?"-":b)"\t"l }
+    /^worktree /  { flush(); p=substr($0,10); b=""; l=0 }
+    /^branch /    { b=$0; sub(/^branch refs\/heads\//,"",b) }
+    /^locked/     { l=1 }
+    END           { flush() }')
+
+  # --- worktree branches (local only; these are never pushed as PR heads) ---
+  local b
+  for b in "worktree-$wname" "worktree-$n"; do
+    local_branch_exists "$b" || continue
+    if branch_is_merged "$b" "$default"; then
+      printf 'BR\tlocal\tdeletable\t%s\n' "$b"
+    else
+      printf 'BR\tlocal\tunmerged\t%s\n' "$b"
+    fi
+  done
+
+  # --- head branches of MERGED PRs that closed the issue ---
+  local prs pr head prj st
+  prs=$("$GH" issue view "$n" --repo "$repo" --json closedByPullRequestsReferences 2>/dev/null \
+          | jq -r '.closedByPullRequestsReferences[]?.number' 2>/dev/null || printf '')
+  for pr in $prs; do
+    prj=$("$GH" pr view "$pr" --repo "$repo" --json state,headRefName 2>/dev/null) || continue
+    st=$(printf '%s' "$prj" | jq -r '.state // ""')
+    head=$(printf '%s' "$prj" | jq -r '.headRefName // ""')
+    [ "$st" = "MERGED" ] && [ -n "$head" ] || continue
+    if local_branch_exists "$head"; then
+      if branch_is_merged "$head" "$default"; then
+        printf 'BR\tlocal\tdeletable\t%s\n' "$head"
+      else
+        printf 'BR\tlocal\tunmerged\t%s\n' "$head"
+      fi
+    fi
+    if remote_branch_exists "$head"; then
+      if is_protected_branch "$head"; then
+        printf 'BR\tremote\tprotected\t%s\n' "$head"
+      else
+        printf 'BR\tremote\tdeletable\t%s\n' "$head"
+      fi
+    fi
+  done
 }
 
 require_gh() {
@@ -518,18 +665,10 @@ cmd_dispatch() {
   fi
 
   # Compute the name used for BOTH the tmux window and the git worktree:
-  # "<repo-prefix>-<n>" (e.g. "age-42"), where the prefix is the first 3
-  # alphanumerics of the repo name, lowercased. Fully overridable via
-  # ISSUE_WINDOW_NAME (supports the <n> placeholder).
+  # "<repo-prefix>-<n>" (e.g. "age-42"), or the ISSUE_WINDOW_NAME override. Shared
+  # with `complete`, which resolves the same name to find what to clean up.
   local wname
-  if [ -n "$WINDOW_NAME_TPL" ]; then
-    wname=$(render_template "$WINDOW_NAME_TPL" "$n")
-  else
-    local repo_name pfx
-    repo_name="${repo##*/}"
-    pfx=$(printf '%s' "$repo_name" | tr -cd '[:alnum:]' | cut -c1-3 | tr '[:upper:]' '[:lower:]')
-    wname="${pfx}-${n}"
-  fi
+  wname=$(resolve_wname "$n" "$repo")
 
   # Render launch/prompt now that wname is known. The default launch command
   # resolves <name> -> wname, so `claude -w <name>` names the worktree the same
@@ -785,12 +924,229 @@ cmd_doctor() {
     + {display: $display}'
 }
 
+# ---- subcommand: complete ---------------------------------------------------
+# complete <plan|execute> <n> — close issue <n> as completed and clean up its
+# artifacts. Two-phase (like `semver bump`): `plan` is READ-ONLY and previews
+# exactly what `execute` would do; the skill shows the preview, asks ONE
+# confirmation, then runs `execute`. Guard rails live entirely here (never the
+# LLM): only removable worktrees and fully-merged branches are ever touched;
+# current/locked/dirty worktrees and unmerged/protected branches are skipped and
+# reported.
+
+# complete_issue_state <n> <repo> — echo the issue's state (OPEN/CLOSED) or fail
+# if the issue doesn't exist. Sets the caller's REPO_STATE via stdout.
+complete_issue_state() {
+  local n="$1" repo="$2" meta
+  if ! meta=$("$GH" issue view "$n" --repo "$repo" --json number,state 2>/dev/null); then
+    fail "issue #$n not found on $repo."
+  fi
+  printf '%s' "$meta" | jq -r '.state // "OPEN"'
+}
+
+# cmd_complete_plan <n> — READ-ONLY preview. Emits the structured plan + a
+# human-readable `display`. Deletes nothing.
+cmd_complete_plan() {
+  local n="${1:-}"
+  [ -n "$n" ] || fail "usage: issue.sh complete plan <issue-number>"
+  [[ "$n" =~ ^[0-9]+$ ]] || fail "issue number must be a positive integer (got: $n)."
+  require_gh
+  git rev-parse --show-toplevel >/dev/null 2>&1 || fail "not inside a git repository."
+  local repo state default targets rows_json
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+  state=$(complete_issue_state "$n" "$repo")
+  default=$(default_branch)
+  targets=$(collect_targets "$n" "$repo")
+  rows_json=$(printf '%s' "$targets" | jq -R -s 'split("\n") | map(select(length>0) | split("\t"))')
+
+  jq -n --argjson rows "$rows_json" --arg n "$n" --arg state "$state" --arg default "$default" '
+    ($rows | map(select(.[0]=="WT"))) as $wt |
+    ($rows | map(select(.[0]=="BR"))) as $br |
+    {
+      ok: true, issue: ($n|tonumber), state: $state, default_branch: $default,
+      plan: {
+        close: ($state=="OPEN"),
+        worktrees: {
+          removable: [ $wt[] | select(.[1]=="removable") | {path:.[2], branch:.[3]} ],
+          skipped:   [ $wt[] | select(.[1]!="removable") | {path:.[2], branch:.[3], reason:.[1]} ]
+        },
+        branches: {
+          local_deletable:  [ $br[] | select(.[1]=="local"  and .[2]=="deletable") | .[3] ],
+          remote_deletable: [ $br[] | select(.[1]=="remote" and .[2]=="deletable") | .[3] ],
+          skipped:          [ $br[] | select(.[2]!="deletable") | {scope:.[1], branch:.[3], reason:.[2]} ]
+        }
+      }
+    }
+    | .actions_count = ((.plan.worktrees.removable|length)
+                        + (.plan.branches.local_deletable|length)
+                        + (.plan.branches.remote_deletable|length)
+                        + (if .plan.close then 1 else 0 end))
+    | .display = (
+        "[issue] complete #\($n)"
+        + (if .plan.close then " — will CLOSE as completed." else " — already \($state|ascii_downcase)." end)
+        + "\n"
+        + ( [ (.plan.worktrees.removable[]  | "  remove worktree  \(.path)")
+            , (.plan.branches.local_deletable[]  | "  delete branch    \(.) (local, merged)")
+            , (.plan.branches.remote_deletable[] | "  delete branch    \(.) (remote, merged PR)")
+            ] as $do
+            | if ($do|length) > 0 then "Will:\n" + ($do|join("\n")) + "\n" else "Nothing to remove.\n" end )
+        + ( [ (.plan.worktrees.skipped[] | "  keep worktree    \(.path) (\(.reason))")
+            , (.plan.branches.skipped[]  | "  keep branch      \(.branch) (\(.scope), \(.reason))")
+            ] as $skip
+            | if ($skip|length) > 0 then "Skipped (preserved):\n" + ($skip|join("\n")) else "" end )
+      )'
+}
+
+# cmd_complete_execute <n> [--no-close] — DESTRUCTIVE. Closes the issue (unless
+# --no-close / already closed) and removes exactly the removable worktrees and
+# merged branches the plan identified. ISSUE_DRY_RUN=1 records the commands and
+# performs no side effect.
+cmd_complete_execute() {
+  local n="" no_close=""
+  local no_clean=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --no-close) no_close=1; shift ;;
+      --no-clean) no_clean=1; shift ;;   # close only: skip all deletions
+      *) [ -z "$n" ] && n="$1" && shift || fail "complete execute: unexpected argument '$1'." ;;
+    esac
+  done
+  [ -n "$n" ] || fail "usage: issue.sh complete execute <issue-number> [--no-close] [--no-clean]"
+  [[ "$n" =~ ^[0-9]+$ ]] || fail "issue number must be a positive integer (got: $n)."
+  require_gh
+  git rev-parse --show-toplevel >/dev/null 2>&1 || fail "not inside a git repository."
+  local repo state default targets
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+  state=$(complete_issue_state "$n" "$repo")
+  default=$(default_branch)
+  targets=$(collect_targets "$n" "$repo")
+
+  local -a commands=() removed_wt=() removed_bl=() removed_br=() failed=()
+  local closed=false close_note=""
+
+  # 1) Close the issue as completed (unless opted out or already closed).
+  if [ -z "$no_close" ] && [ "$state" = "OPEN" ]; then
+    if [ -n "$DRY_RUN" ]; then
+      commands+=("gh issue close $n --repo $repo --reason completed")
+      closed=true
+    elif "$GH" issue close "$n" --repo "$repo" --reason completed >/dev/null 2>&1; then
+      closed=true
+    else
+      close_note="couldn't close #$n (check gh permissions)"
+    fi
+  fi
+
+  # 2) Act on the scanned targets (skipped entirely under --no-clean / "close
+  #    only"). Every deletion has a git-native backstop: `worktree remove` (no
+  #    --force) refuses dirty/current; `branch -d` refuses unmerged. A
+  #    protected/default branch can never reach here (filtered out).
+  local kind a b c
+  if [ -z "$no_clean" ]; then
+  while IFS=$'\t' read -r kind a b c; do
+    case "$kind" in
+      WT)  # a=status b=path c=branch
+        [ "$a" = "removable" ] || continue
+        if [ -n "$DRY_RUN" ]; then
+          commands+=("git worktree remove $b" "git worktree prune")
+          removed_wt+=("$b")
+        elif git worktree remove "$b" >/dev/null 2>&1; then
+          git worktree prune >/dev/null 2>&1 || true
+          removed_wt+=("$b")
+        else
+          failed+=("worktree:$b")
+        fi ;;
+      BR)  # a=scope b=status c=branch
+        [ "$b" = "deletable" ] || continue
+        # Belt-and-suspenders: never delete a protected/default branch even if a
+        # future scan bug mislabels it.
+        if is_protected_branch "$c"; then failed+=("branch:$c(protected)"); continue; fi
+        if [ "$a" = "local" ]; then
+          if [ -n "$DRY_RUN" ]; then
+            commands+=("git branch -d $c"); removed_bl+=("$c")
+          elif git branch -d "$c" >/dev/null 2>&1; then
+            removed_bl+=("$c")
+          else
+            failed+=("branch:$c(local)")
+          fi
+        else  # remote
+          if [ -n "$DRY_RUN" ]; then
+            commands+=("git push origin --delete $c"); removed_br+=("$c")
+          elif git -c url."https://github.com/".insteadOf="git@github.com:" \
+                 push origin --delete "$c" >/dev/null 2>&1; then
+            removed_br+=("$c")
+          else
+            failed+=("branch:$c(remote)")
+          fi
+        fi ;;
+    esac
+  done <<EOF
+$targets
+EOF
+  fi
+
+  # Skipped (preserved) items, re-derived from the scan for the report.
+  local skipped_json
+  skipped_json=$(printf '%s' "$targets" | jq -R -s '
+    split("\n") | map(select(length>0) | split("\t"))
+    | [ (.[] | select(.[0]=="WT" and .[1]!="removable") | {kind:"worktree", ref:.[2], reason:.[1]})
+      , (.[] | select(.[0]=="BR" and .[2]!="deletable") | {kind:"branch", ref:.[3], reason:(.[1]+", "+.[2])}) ]')
+
+  # Assemble JSON arrays from the bash arrays.
+  local rwt rbl rbr fail_json
+  rwt=$(printf '%s\n' "${removed_wt[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
+  rbl=$(printf '%s\n' "${removed_bl[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
+  rbr=$(printf '%s\n' "${removed_br[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
+  fail_json=$(printf '%s\n' "${failed[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
+  local cmds_json='[]'
+  if [ -n "$DRY_RUN" ]; then
+    cmds_json=$(printf '%s\n' "${commands[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
+  fi
+
+  jq -n --arg n "$n" --arg repo "$repo" --argjson closed "$closed" \
+        --arg close_note "$close_note" \
+        --argjson rwt "$rwt" --argjson rbl "$rbl" --argjson rbr "$rbr" \
+        --argjson failed "$fail_json" --argjson skipped "$skipped_json" \
+        --argjson cmds "$cmds_json" --argjson dry "$([ -n "$DRY_RUN" ] && echo true || echo false)" \
+        --argjson no_clean "$([ -n "$no_clean" ] && echo true || echo false)" '
+    {
+      ok: true, issue: ($n|tonumber), closed: $closed,
+      removed: { worktrees: $rwt, branches_local: $rbl, branches_remote: $rbr },
+      skipped: $skipped
+    }
+    + (if $no_clean then {cleanup:"skipped"} else {} end)
+    + (if ($failed|length) > 0 then {failed:$failed} else {} end)
+    + (if $dry then {dry_run:true, commands:$cmds} else {} end)
+    + { display: (
+        "[issue] complete #\($n): "
+        + (if $dry then "DRY RUN — " else "" end)
+        + (if $closed then "closed as completed" else "left open" end)
+        + (if $no_clean then "; cleanup skipped (close only)."
+           else "; removed "
+                + (($rwt|length)|tostring) + " worktree(s), "
+                + ((($rbl|length)+($rbr|length))|tostring) + " branch(es)." end)
+        + (if $close_note != "" then "\n" + $close_note + "." else "" end)
+        + (if ($failed|length) > 0 then "\nCould not: " + ($failed|join(", ")) + "." else "" end)
+        + (if ($skipped|length) > 0 then "\nPreserved: "
+             + ([$skipped[] | "\(.ref) (\(.reason))"]|join("; ")) + "." else "" end)
+      ) }'
+}
+
+cmd_complete() {
+  local sub="${1:-}"
+  shift 2>/dev/null || true
+  case "$sub" in
+    plan)    cmd_complete_plan "$@" ;;
+    execute) cmd_complete_execute "$@" ;;
+    *)       fail "usage: issue.sh complete <plan|execute> <issue-number>" ;;
+  esac
+}
+
 # ---- router -----------------------------------------------------------------
 case "${1:-}" in
   list)     shift; cmd_list "$@" ;;
   dispatch) shift; cmd_dispatch "$@" ;;
   view)     shift; cmd_view "$@" ;;
   create)   shift; cmd_create "$@" ;;
+  complete) shift; cmd_complete "$@" ;;
   doctor)   shift; cmd_doctor "$@" ;;
-  *)        fail "usage: issue.sh <list | dispatch <n> | view <n> | create --title <t> [--body-file <p>] | doctor>" ;;
+  *)        fail "usage: issue.sh <list | dispatch <n> | view <n> | create --title <t> [--body-file <p>] | complete <plan|execute> <n> | doctor>" ;;
 esac

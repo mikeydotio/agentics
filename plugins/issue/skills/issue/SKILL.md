@@ -1,5 +1,5 @@
 ---
-name: handle-issue
+name: issue
 description: Address a GitHub issue by spinning up a fresh, plan-mode Claude session in a new tmux window and per-issue git worktree. Marks the issue in-progress on GitHub at dispatch and hands the child session a prompt that reports its plan and PRs back to the issue. Pass an issue number to target it directly, or omit the number to pick from the repo's open issues. Use when the user says "handle issue N", "work on issue N", "let's tackle #N", or wants to start on a GitHub issue in an isolated context. Requires tmux and an authenticated gh CLI.
 argument-hint: "[issue-number]"
 ---
@@ -10,31 +10,31 @@ Turn "I want to work on issue #N" into a running, **plan-mode** Claude session i
 window**, launched inside a per-issue git worktree named like the window (`claude -w <repo-prefix>-<n>`,
 e.g. `age-42`). You are a thin router: the
 deterministic work (GitHub lookups, tmux window lifecycle, keystroke sequencing, capture-pane
-confirmation) lives in `bin/handle-issue.sh`, which emits one JSON object with `ok` + `display`.
+confirmation) lives in `bin/issue.sh`, which emits one JSON object with `ok` + `display`.
 **Your job is to route and render — never call `tmux` or `gh` yourself.**
 
 Run the helper with:
 
 ```
-bash ${CLAUDE_PLUGIN_ROOT}/bin/handle-issue.sh <subcommand>
+bash ${CLAUDE_PLUGIN_ROOT}/bin/issue.sh <subcommand>
 ```
 
 Every run returns JSON. **If `ok` is `false`, show the `display` string to the user and stop.**
 
 ## Command Router
 
-Parse `ARGUMENTS` (everything after `/handle-issue`) and dispatch:
+Parse `ARGUMENTS` (everything after `/issue`) and dispatch:
 
 | ARGUMENTS | Meaning | Action |
 |-----------|---------|--------|
 | _(empty)_ | No issue chosen yet | Run **List → Pick** below, then **Dispatch**. |
 | a bare integer, e.g. `42` | Target issue #42 | Go straight to **Dispatch** with `42`. |
-| `doctor` | Readiness self-test | Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/handle-issue.sh doctor` and show its `display`. A drift check for after a Claude Code upgrade — spins a throwaway `claude`, reports which readiness tier matched (`marker`/`structural`/`none`). No GitHub side effects. |
-| anything else | Malformed | Say one line: "Usage: `/handle-issue [issue-number \| doctor]`", then fall back to **List → Pick**. |
+| `doctor` | Readiness self-test | Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/issue.sh doctor` and show its `display`. A drift check for after a Claude Code upgrade — spins a throwaway `claude`, reports which readiness tier matched (`marker`/`structural`/`none`). No GitHub side effects. |
+| anything else | Malformed | Say one line: "Usage: `/issue [issue-number \| doctor]`", then fall back to **List → Pick**. |
 
 ## List → Pick (no number given)
 
-1. Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/handle-issue.sh list`.
+1. Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/issue.sh list`.
 2. Parse the JSON.
    - `ok:false` → show `display`, stop.
    - `count == 0` → show `display` ("No open issues …"), stop. **Do not** open an AskUserQuestion.
@@ -59,7 +59,7 @@ Parse `ARGUMENTS` (everything after `/handle-issue`) and dispatch:
 
 ## Dispatch (issue number in hand)
 
-1. Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/handle-issue.sh dispatch <number>`.
+1. Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/issue.sh dispatch <number>`.
 2. Render the result:
    - `ok:false` → show `display`, stop. (Common causes: not in tmux, `gh` unauthenticated, not a git
      repo, issue not found, issue closed — the `display` says which.)
@@ -82,8 +82,8 @@ Nothing further is needed from you.
   `gh`** CLI.
 - The launch command (`claude -w <name> --permission-mode plan`, where `<name>` resolves to the
   `<repo-prefix>-<n>` window name so the worktree matches the window) and the prompt are sent
-  verbatim and overridable via `HANDLE_ISSUE_LAUNCH_CMD` / `HANDLE_ISSUE_PROMPT`; the window/worktree
-  name is `HANDLE_ISSUE_WINDOW_NAME` — overriding it renames both (see the README for all env knobs).
+  verbatim and overridable via `ISSUE_LAUNCH_CMD` / `ISSUE_PROMPT`; the window/worktree
+  name is `ISSUE_WINDOW_NAME` — overriding it renames both (see the README for all env knobs).
   `<n>` (the issue number) is still available in the launch template. Plan mode comes from the
   `--permission-mode plan` flag — **not** a `/plan` prompt prefix (that would route to a `/plan`
   skill like forge's planner). Don't rewrite these here — the helper owns them.
@@ -91,8 +91,8 @@ Nothing further is needed from you.
   the child session to comment its finalized plan on the issue, word every PR to close the issue
   (`Closes #<n>` in the body), and comment a link to each PR it pushes. Requirement #2–#4 of the
   child's contract live in the prompt because they happen later, inside that session, after the
-  helper has already returned. The `in-progress` label is configurable via `HANDLE_ISSUE_LABEL`
-  (set it to empty to disable labeling); `HANDLE_ISSUE_LABEL_COLOR` / `HANDLE_ISSUE_LABEL_DESC`
+  helper has already returned. The `in-progress` label is configurable via `ISSUE_LABEL`
+  (set it to empty to disable labeling); `ISSUE_LABEL_COLOR` / `ISSUE_LABEL_DESC`
   style it on first creation.
 - **Worktree hygiene (automatic):** dispatch idempotently gitignores `.claude/worktrees/` — the
   container dir `claude -w <n>` builds each per-issue worktree under — so the ephemeral worktrees
@@ -100,4 +100,4 @@ Nothing further is needed from you.
   field (`added` / `already-ignored` / `add-failed`); it never affects `ok`. The helper owns this —
   don't add gitignore rules yourself.
 - To preview what a dispatch *would* do without opening a window, the helper supports
-  `HANDLE_ISSUE_DRY_RUN=1` (used by the tests); you generally won't need it interactively.
+  `ISSUE_DRY_RUN=1` (used by the tests); you generally won't need it interactively.

@@ -1,4 +1,4 @@
-# handle-issue
+# issue
 
 Turn "I want to work on issue #N" into a running, **plan-mode** Claude session in a **new tmux
 window**, launched inside a per-issue git **worktree named the same as the window** (`claude -w
@@ -15,7 +15,7 @@ each PR** it pushes.
 
 ## When to use
 
-`/handle-issue` is for kicking off work on a GitHub issue in an **isolated context** without the
+`/issue` is for kicking off work on a GitHub issue in an **isolated context** without the
 manual dance of: open a window, make a worktree, launch Claude, switch to plan mode, paste a
 prompt. Reach for it when you're triaging a backlog and want to spin up a focused session per
 issue.
@@ -34,14 +34,14 @@ It is **not** a background agent — it hands off to a fresh interactive Claude 
 ## Usage
 
 ```
-/handle-issue [issue-number]
+/issue [issue-number]
 ```
 
 Examples:
 
 ```
-/handle-issue 42      # open a plan-mode Claude on issue #42 in a new window + worktree
-/handle-issue         # list the repo's open issues and let you pick one
+/issue 42      # open a plan-mode Claude on issue #42 in a new window + worktree
+/issue         # list the repo's open issues and let you pick one
 ```
 
 With no number, you get a single question listing open issues (newest first). Pick one — or choose
@@ -49,10 +49,10 @@ With no number, you get a single question listing open issues (newest first). Pi
 
 ## How it works
 
-1. **List** (only when no number is given) — `bin/handle-issue.sh list` derives `owner/repo` from
+1. **List** (only when no number is given) — `bin/issue.sh list` derives `owner/repo` from
    the origin remote and calls `gh issue list --state open`, returning each issue with a pre-built
    pick option. The skill presents them via one `AskUserQuestion`.
-2. **Dispatch** — `bin/handle-issue.sh dispatch <n>` runs a strict, ordered sequence:
+2. **Dispatch** — `bin/issue.sh dispatch <n>` runs a strict, ordered sequence:
    - Hard preconditions first (tmux present, inside a git repo, `gh` authenticated, the issue
      exists and is open) — any failure stops **before** anything is opened.
    - `tmux new-window -d -c <repo-root> -n <repo-prefix>-<n>` — open the window **detached** (`-d`),
@@ -60,13 +60,13 @@ With no number, you get a single question listing open issues (newest first). Pi
      its pane id. Every later keystroke targets that pane **by id**, so the handoff still lands in
      the new window without stealing focus. tmux's `automatic-rename` and program-driven
      `allow-rename` are turned **off** on the window so the name sticks even though Claude sets its
-     own terminal title. (Set `HANDLE_ISSUE_FOREGROUND=1` to switch focus to the new window instead.)
+     own terminal title. (Set `ISSUE_FOREGROUND=1` to switch focus to the new window instead.)
    - **Worktree hygiene** — before launching Claude, idempotently ensure `.claude/worktrees/` is
      gitignored (the container dir `claude -w <repo-prefix>-<n>` builds its per-issue worktree
      under), so the ephemeral worktrees never dirty the parent repo's `git status`. It respects a
      broader existing rule (e.g. `.claude/`) and is a no-op when already ignored. Best-effort: a
      write failure only leaves the pre-fix status quo (an untracked worktree dir), never an
-     `ok:false`. Override the ignored path with `HANDLE_ISSUE_WORKTREE_IGNORE_PATH`.
+     `ok:false`. Override the ignored path with `ISSUE_WORKTREE_IGNORE_PATH`.
    - Launch `claude -w <repo-prefix>-<n> --permission-mode plan` (literal send + Enter) — the `-w`
      argument matches the window name, so the worktree is `.claude/worktrees/<repo-prefix>-<n>`; the
      `--permission-mode plan` flag opens the session **in plan mode deterministically**, with no
@@ -85,7 +85,7 @@ With no number, you get a single question listing open issues (newest first). Pi
      that session, so the prompt is the only place they can be requested.
    - **Mark the issue `in-progress`** — `gh label create` (create-if-missing, existing styling left
      alone) then `gh issue edit --add-label`. Best-effort: a failure adds a `warning`, never an
-     `ok:false`. Disable with `HANDLE_ISSUE_LABEL=`.
+     `ok:false`. Disable with `ISSUE_LABEL=`.
 3. The original pane shows a one-line status. If the handoff or the label couldn't be fully
    confirmed, you get a `warning` telling you to glance at the new window — and, on that path, a
    `pane_tail` field carrying the last few non-blank lines of the new pane as diagnostic evidence,
@@ -97,13 +97,13 @@ After upgrading Claude Code, run the readiness self-test to confirm the fast-pat
 matches the installed build:
 
 ```
-bash ${CLAUDE_PLUGIN_ROOT}/bin/handle-issue.sh doctor
+bash ${CLAUDE_PLUGIN_ROOT}/bin/issue.sh doctor
 ```
 
 It spins a throwaway `claude` in a scratch **detached** tmux window, checks readiness, tears the
 window down, and reports `{ok, readiness_confirmed, matched_tier}` where `matched_tier` is `marker`
 (the footer marker still current), `structural` (the marker drifted but the frame+glyph fallback
-carried it — consider updating `HANDLE_ISSUE_READY_PATTERN`), or `none` (readiness never confirmed —
+carried it — consider updating `ISSUE_READY_PATTERN`), or `none` (readiness never confirmed —
 see the `pane_tail`). It has **no** GitHub side effects and needs a live `claude`, so it is a manual
 diagnostic, deliberately **not** part of `make test` (the pre-push gate stays deterministic/offline).
 
@@ -116,27 +116,27 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `HANDLE_ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode. |
-| `HANDLE_ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), and comment each PR link. `<n>` → issue number. Deliberately has no `/plan` prefix. |
-| `HANDLE_ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`HANDLE_ISSUE_LABEL=`) to disable labeling entirely. |
-| `HANDLE_ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
-| `HANDLE_ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
-| `HANDLE_ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window **and worktree** name (the default launch renders `<name>` from this). Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
-| `HANDLE_ISSUE_WORKTREE_IGNORE_PATH` | `.claude/worktrees/` | Path idempotently added to the repo's root `.gitignore` at dispatch so `claude -w`'s per-issue worktrees don't dirty `git status`. No-op if already ignored (respects a broader rule like `.claude/`). |
-| `HANDLE_ISSUE_FOREGROUND` | _(unset)_ | By default the new window opens **detached** (`-d`), so your focus stays on the current window. Set to `1` to switch focus to the new window instead. |
-| `HANDLE_ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
-| `HANDLE_ISSUE_LIST_LIMIT` | `50` | Max open issues fetched for the picker. |
-| `HANDLE_ISSUE_GH_BIN` | `gh` | Path to the `gh` binary (tests inject a fake). |
-| `HANDLE_ISSUE_READY_PATTERN` | `for shortcuts\|for agents\|mode on\|to cycle` | **Fast-path** readiness marker — an ERE **alternation** of known idle-footer variants (kept metacharacter-free and mode-agnostic). TUI copy is version-specific, so this is only the fast path; if it drifts entirely the **structural** tier still confirms. Override to add/replace variants. |
-| `HANDLE_ISSUE_READY_FRAME_GLYPH` / `_READY_PROMPT_GLYPH` | `─` / `❯` | **Structural-path** signals — the input-box frame rule and the idle prompt glyph, matched literally. Both must be present (plus stabilisation) to confirm readiness when no footer marker matches. The `❯` requirement stops a static framed *modal* (e.g. a folder-trust dialog) being mistaken for the idle input box. |
-| `HANDLE_ISSUE_READY_STABLE_POLLS` | `3` | Structural path: consecutive **equal** pane captures required before confirming (3 comparisons = 4 identical samples). |
-| `HANDLE_ISSUE_READY_ATTEMPTS` / `_READY_DELAY` | `60` / `0.25` | Readiness poll bound (≈15s). The fast path short-circuits success immediately, so the ceiling only bites on genuine failure. |
-| `HANDLE_ISSUE_READY_FALLBACK_DELAY` | `3` | Extra settle (seconds) if **neither** tier confirms within the budget — a true last resort. |
-| `HANDLE_ISSUE_READY_TAIL_LINES` | `8` | Non-blank pane lines attached as `pane_tail` diagnostic evidence on the **warning** path only. |
-| `HANDLE_ISSUE_READY_ACCEPT_PATTERN` | _(working-indicator alternation)_ | Non-gating post-submit acceptance marker: informs the `prompt_accepted` field but never changes `prompt_confirmed` or triggers a resend. |
-| `HANDLE_ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt-submission confirm/resend bounds. |
-| `HANDLE_ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree). |
-| `HANDLE_ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
+| `ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode. |
+| `ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), and comment each PR link. `<n>` → issue number. Deliberately has no `/plan` prefix. |
+| `ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`ISSUE_LABEL=`) to disable labeling entirely. |
+| `ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
+| `ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
+| `ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window **and worktree** name (the default launch renders `<name>` from this). Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
+| `ISSUE_WORKTREE_IGNORE_PATH` | `.claude/worktrees/` | Path idempotently added to the repo's root `.gitignore` at dispatch so `claude -w`'s per-issue worktrees don't dirty `git status`. No-op if already ignored (respects a broader rule like `.claude/`). |
+| `ISSUE_FOREGROUND` | _(unset)_ | By default the new window opens **detached** (`-d`), so your focus stays on the current window. Set to `1` to switch focus to the new window instead. |
+| `ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
+| `ISSUE_LIST_LIMIT` | `50` | Max open issues fetched for the picker. |
+| `ISSUE_GH_BIN` | `gh` | Path to the `gh` binary (tests inject a fake). |
+| `ISSUE_READY_PATTERN` | `for shortcuts\|for agents\|mode on\|to cycle` | **Fast-path** readiness marker — an ERE **alternation** of known idle-footer variants (kept metacharacter-free and mode-agnostic). TUI copy is version-specific, so this is only the fast path; if it drifts entirely the **structural** tier still confirms. Override to add/replace variants. |
+| `ISSUE_READY_FRAME_GLYPH` / `_READY_PROMPT_GLYPH` | `─` / `❯` | **Structural-path** signals — the input-box frame rule and the idle prompt glyph, matched literally. Both must be present (plus stabilisation) to confirm readiness when no footer marker matches. The `❯` requirement stops a static framed *modal* (e.g. a folder-trust dialog) being mistaken for the idle input box. |
+| `ISSUE_READY_STABLE_POLLS` | `3` | Structural path: consecutive **equal** pane captures required before confirming (3 comparisons = 4 identical samples). |
+| `ISSUE_READY_ATTEMPTS` / `_READY_DELAY` | `60` / `0.25` | Readiness poll bound (≈15s). The fast path short-circuits success immediately, so the ceiling only bites on genuine failure. |
+| `ISSUE_READY_FALLBACK_DELAY` | `3` | Extra settle (seconds) if **neither** tier confirms within the budget — a true last resort. |
+| `ISSUE_READY_TAIL_LINES` | `8` | Non-blank pane lines attached as `pane_tail` diagnostic evidence on the **warning** path only. |
+| `ISSUE_READY_ACCEPT_PATTERN` | _(working-indicator alternation)_ | Non-gating post-submit acceptance marker: informs the `prompt_accepted` field but never changes `prompt_confirmed` or triggers a resend. |
+| `ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt-submission confirm/resend bounds. |
+| `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree). |
+| `ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 
 > **Plan mode is forced by the `--permission-mode plan` launch flag, not keystrokes.** `-w` is
 > Claude Code's official `--worktree` switch (creates a named per-issue worktree — here named with
@@ -148,5 +148,5 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 > that is a slash command that routes to a registered `/plan` skill (e.g. forge's planner), not
 > Claude's built-in plan mode.
 
-See `skills/handle-issue/SKILL.md` for the routing logic and `bin/handle-issue.sh` for the full
+See `skills/issue/SKILL.md` for the routing logic and `bin/issue.sh` for the full
 dispatch sequence.

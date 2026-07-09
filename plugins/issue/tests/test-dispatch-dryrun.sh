@@ -7,7 +7,7 @@ source "$(dirname "$0")/lib.sh"
 repo=$(mk_repo)
 
 # happy path: open issue, default launch/prompt
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
 assert_eq "$(jqf "$out" .ok)" "true" "dryrun ok:true"
 assert_eq "$(jqf "$out" .dry_run)" "true" "dryrun flag"
 assert_eq "$(jqf "$out" .issue)" "42" "dryrun issue number"
@@ -48,25 +48,25 @@ assert_contains "$cmds" "comment a link to each PR on issue #42" "prompt asks ch
 assert_eq "$(jqf "$out" .gitignore)" "would-add" "fresh repo previews gitignore would-add"
 assert_eq "$(jqf "$out" '[.commands[]|select(test("gitignore"))]|length')" "0" "gitignore write is not a tmux command"
 
-# foreground opt-out (#54): HANDLE_ISSUE_FOREGROUND=1 drops -d so focus follows the window.
+# foreground opt-out (#54): ISSUE_FOREGROUND=1 drops -d so focus follows the window.
 # Runs after the default-run assertions above, which rely on this run's $out/$cmds.
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 HANDLE_ISSUE_FOREGROUND=1 bash "$SCRIPT" dispatch 42 2>&1)
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 ISSUE_FOREGROUND=1 bash "$SCRIPT" dispatch 42 2>&1)
 fg_cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_not_contains "$fg_cmds" "new-window -d" "foreground opt-out drops -d (focus follows)"
 assert_contains "$fg_cmds" "new-window -c $reported_dir" "foreground opt-out uses plain new-window"
 
 # custom launch/prompt templates substitute <n>
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
-      HANDLE_ISSUE_LAUNCH_CMD="claude -w feature-<n>" \
-      HANDLE_ISSUE_PROMPT="fix <n> now" \
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 \
+      ISSUE_LAUNCH_CMD="claude -w feature-<n>" \
+      ISSUE_PROMPT="fix <n> now" \
       bash "$SCRIPT" dispatch 9 2>&1)
 cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_contains "$cmds" "claude -w feature-9" "custom launch substituted"
 assert_contains "$cmds" "fix 9 now" "custom prompt substituted"
 
 # custom window name override substitutes <n>
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
-      HANDLE_ISSUE_WINDOW_NAME="wip-<n>" \
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 \
+      ISSUE_WINDOW_NAME="wip-<n>" \
       bash "$SCRIPT" dispatch 7 2>&1)
 assert_eq "$(jqf "$out" .window_name)" "wip-7" "custom window name override"
 ovr_cmds="$(jqf "$out" '.commands | join("\n")')"
@@ -76,29 +76,29 @@ assert_contains "$ovr_cmds" "-n wip-7" "custom window name in new-window"
 assert_contains "$ovr_cmds" "claude -w wip-7 --permission-mode plan" "window-name override renames the worktree too"
 
 # closed issue -> ok:false (dry-run still validates state)
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED bash "$SCRIPT" dispatch 42 2>&1)
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED bash "$SCRIPT" dispatch 42 2>&1)
 assert_eq "$(jqf "$out" .ok)" "false" "closed ok:false"
 assert_contains "$(jqf "$out" .display)" "closed" "closed display"
 
 # closed + allow-closed override -> ok:true
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED HANDLE_ISSUE_ALLOW_CLOSED=1 \
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED ISSUE_ALLOW_CLOSED=1 \
       bash "$SCRIPT" dispatch 42 2>&1)
 assert_eq "$(jqf "$out" .ok)" "true" "allow-closed ok:true"
 
 # nonexistent issue -> ok:false
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 FAKE_GH_VIEW_FAIL=1 bash "$SCRIPT" dispatch 999 2>&1)
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 FAKE_GH_VIEW_FAIL=1 bash "$SCRIPT" dispatch 999 2>&1)
 assert_eq "$(jqf "$out" .ok)" "false" "nonexistent ok:false"
 assert_contains "$(jqf "$out" .display)" "not found" "nonexistent display"
 
-# issue #50: labeling opts out with an explicit empty HANDLE_ISSUE_LABEL (uses
+# issue #50: labeling opts out with an explicit empty ISSUE_LABEL (uses
 # `-` not `:-`, so "" disables while unset defaults). No gh label commands appear.
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 HANDLE_ISSUE_LABEL="" bash "$SCRIPT" dispatch 42 2>&1)
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 ISSUE_LABEL="" bash "$SCRIPT" dispatch 42 2>&1)
 assert_eq "$(jqf "$out" .label)" "" "empty label field when disabled"
 assert_eq "$(jqf "$out" '[.commands[]|select(startswith("gh"))]|length')" "0" "no gh commands when label disabled"
 assert_not_contains "$(jqf "$out" .display)" "mark the issue" "display omits label clause when disabled"
 
 # issue #50: a custom label name flows through to both gh writes.
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 HANDLE_ISSUE_LABEL="wip" bash "$SCRIPT" dispatch 42 2>&1)
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 ISSUE_LABEL="wip" bash "$SCRIPT" dispatch 42 2>&1)
 cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_eq "$(jqf "$out" .label)" "wip" "custom label field"
 assert_contains "$cmds" "gh label create wip --repo fake/repo" "custom label in create"
@@ -109,12 +109,12 @@ assert_contains "$cmds" "--add-label wip" "custom label in add-label"
 # per case so a stray .gitignore can't leak between assertions.
 ig_exact=$(mk_repo)
 printf 'node_modules/\n.claude/worktrees/\n' > "$ig_exact/.gitignore"
-out=$(cd "$ig_exact" && HANDLE_ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
+out=$(cd "$ig_exact" && ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
 assert_eq "$(jqf "$out" .gitignore)" "already-ignored" "exact .claude/worktrees/ rule -> already-ignored"
 
 ig_broad=$(mk_repo)
 printf '.claude/\n' > "$ig_broad/.gitignore"
-out=$(cd "$ig_broad" && HANDLE_ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
+out=$(cd "$ig_broad" && ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 42 2>&1)
 assert_eq "$(jqf "$out" .gitignore)" "already-ignored" "broad .claude/ rule also counts as already-ignored"
 
 finish

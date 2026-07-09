@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Shared helpers for handle-issue tests. Source this at the top of each test-*.sh.
+# Shared helpers for issue tests. Source this at the top of each test-*.sh.
 #
-# Provides: SCRIPT (path to handle-issue.sh), FAKE_GH (path to the fake gh),
+# Provides: SCRIPT (path to issue.sh), FAKE_GH (path to the fake gh),
 # mk_repo (create a throwaway git repo under /tmp — NOT $TMPDIR, which macOS
 # Spotlight indexes and can stall file-intensive tests), and small assert
 # helpers. Each test runs standalone under `bash test-*.sh` and exits non-zero
@@ -10,11 +10,11 @@ set -uo pipefail
 
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
-SCRIPT="$PLUGIN_ROOT/bin/handle-issue.sh"
+SCRIPT="$PLUGIN_ROOT/bin/issue.sh"
 FAKE_GH="$TESTS_DIR/fakes/gh"
 
 # Point the helper at the fake gh for every test by default.
-export HANDLE_ISSUE_GH_BIN="$FAKE_GH"
+export ISSUE_GH_BIN="$FAKE_GH"
 
 _TMP_REPOS=()
 _cleanup() { local d; for d in "${_TMP_REPOS[@]:-}"; do [ -n "$d" ] && rm -rf "$d"; done; }
@@ -25,7 +25,7 @@ trap _cleanup EXIT
 mk_repo() {
   local origin="${1:-https://github.com/fake/repo.git}"
   local dir
-  dir="$(mktemp -d /tmp/handle-issue-test.XXXXXX)"
+  dir="$(mktemp -d /tmp/issue-test.XXXXXX)"
   _TMP_REPOS+=("$dir")
   (
     cd "$dir" || exit 1

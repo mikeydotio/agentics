@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.26.0] - 2026-07-09
+
+### Added
+- add guard-railed complete verb (plan/execute) (f3c667e)
+- add view + create subcommands and the new-verb protocol (a0c9b65)
+
+### Changed
+- Merge pull request #73 from mikeydotio/fix/deployit-version-bump-71 (d2276c6)
+
+### Documentation
+- rewrite SKILL router + README for the verb grammar (1305d80)
+
+### Maintenance
+- rename handle-issue plugin to issue (44d0191)
+
+_[manual]_
+
 ## [v2.25.2] - 2026-07-09
 
 ### Fixed

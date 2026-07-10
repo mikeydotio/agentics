@@ -4,9 +4,9 @@ summary: "Normative design record, map/doc format spec, and orchestration protoc
 read_when: "Changing atlas's map format, protocols, or the CLAUDE.md injection contract"
 sources:
   - path: plugins/atlas/references/claude-md-injection.md
-    blob: fb192f9f878111762ca863b12091dfe9036eeef8
+    blob: 96ea2bd6d2dc31b25caac57c09099c298c1da0ec
   - path: plugins/atlas/references/design-v2.md
-    blob: 78893a72badc8b26aec2ad2e7a20582a0e91a73b
+    blob: 17658b4dafbd2b35208f0f93ea1612eb3f61b21d
   - path: plugins/atlas/references/map-format.md
     blob: 180d8e724e10e9bfe42a4a9b314fb2c15eb6c9ee
   - path: plugins/atlas/references/mapping-protocol.md
@@ -14,7 +14,7 @@ sources:
   - path: plugins/atlas/references/update-protocol.md
     blob: 7fbd5134f7bb12ed427d613759adb4ed0c593213
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/atlas/references

@@ -4,7 +4,7 @@ summary: "Root-level scaffolding: marketplace registry, semver version-sync hook
 read_when: "Registering/installing plugins, changing root agent instructions, or wiring make test"
 sources:
   - path: .claude-plugin/marketplace.json
-    blob: 8983722750c9678a0bf735be6b5ee0d125346978
+    blob: 46542bcbe02b04273982bfcf9643bf5ea6d6a596
   - path: .semver/config.yaml
     blob: 34a5c2bfa206393f2256834b5bd999e9aec3f077
   - path: .semver/hooks/post-bump/01-sync-plugin-versions.sh
@@ -14,13 +14,13 @@ sources:
   - path: HANDOFF.md
     blob: 907df53e9f7c3f6e449693c13adab0e710396e13
   - path: Makefile
-    blob: 86d01957167ef956d6163991028118168240dc2b
+    blob: 3350ac542f31dbd242445cda2a27b8aa3a86ea7e
   - path: README.md
     blob: 5f28be43c59b3bb49b0976dc3199d42abfee9fea
   - path: docs/forge-workflow.md
     blob: 829219590927e60d40bc6b2e7d19bbedba22613d
 generator: cartographer/4
-baseline: 402cc2be3b8bd0ca2adce0980dfed2d6e44427ba
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: root (misc)

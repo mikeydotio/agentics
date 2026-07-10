@@ -4,7 +4,7 @@ summary: "Automatic /clear + re-invocation via tmux: Stop/SessionStart hooks con
 read_when: "Touching context clearing, .freshen signal files, or /clear re-invocation automation"
 sources:
   - path: plugins/freshen/.claude-plugin/plugin.json
-    blob: 969c07e7087b63ae5c4fe77caa8bbb17a60f7c8d
+    blob: b85d1bef2899e54c47d773f996c932fbb9267759
   - path: plugins/freshen/bin/freshen.sh
     blob: 58f1e47f2d10aa68f58dafac3a83351d8ff0caa6
   - path: plugins/freshen/hooks/hooks.json
@@ -30,7 +30,7 @@ sources:
   - path: plugins/freshen/tests/run-tests.sh
     blob: 626c549707b88e4917d53ddecd4a9fb50e2ad075
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/freshen

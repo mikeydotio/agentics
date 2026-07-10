@@ -4,13 +4,13 @@ summary: "Plugin manifest, /agents command router, and structural validator for 
 read_when: "Changing the /agents command, plugin manifest, or agent validation script"
 sources:
   - path: plugins/agents/.claude-plugin/plugin.json
-    blob: 6d447cb61fd79ef91e025f9122558b0a2225a4d4
+    blob: ebc64164f387e0b2c6d1eec3d0d804481c816632
   - path: plugins/agents/bin/validate-agents.sh
     blob: ce55f55b8ac86af01f2fde7f9cad4ee9e6f7c9f6
   - path: plugins/agents/skills/agents/SKILL.md
     blob: a124fbbf7f5ad088ee35819abd2a57d151497678
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/agents (misc)

@@ -4,7 +4,7 @@ summary: "Shared circuit breaker that halts runaway Stop-hook loops and resets s
 read_when: "Touching Stop hooks, stop_guard_check/stop_guard_reset, or hook-loop protection"
 sources:
   - path: plugins/hook-guard/.claude-plugin/plugin.json
-    blob: eb873c3f3e433facaebeb70e7ef837218df82aca
+    blob: 8b50d27dd1f638548bdf4541dae513cd12137f26
   - path: plugins/hook-guard/hooks/hooks.json
     blob: d22a3169ebee8171c0149fd33e18c5f191b39144
   - path: plugins/hook-guard/hooks/session-start.bats
@@ -18,7 +18,7 @@ sources:
   - path: plugins/hook-guard/tests/run-tests.sh
     blob: 3328ae66d73fa45c77f307c11b8d38fba1e63adf
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/hook-guard

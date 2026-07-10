@@ -4,17 +4,17 @@ summary: "Atlas plugin identity, README docs, and the /atlas orchestrator plus i
 read_when: "Touching atlas plugin identity, README, /atlas dispatch, or the staleness hook"
 sources:
   - path: plugins/atlas/.claude-plugin/plugin.json
-    blob: 01927d4b342619c544025b6fe202f6561f197465
+    blob: b6d1b9e2f6b141defd8340d2e9ee3710e1e63c72
   - path: plugins/atlas/README.md
-    blob: 3d38a4d216a4876d6d6b6ba307b55c93ce29c98b
+    blob: 9cf94e438eac816b0bd995a72ef2217b7288ef3e
   - path: plugins/atlas/hooks/hooks.json
     blob: 41851681fe5ce7fdd0fc14b33dd4868d38398e6a
   - path: plugins/atlas/hooks/session-start.sh
     blob: 4277ada1b6f54bba1034edf015c622f6a3a3eb94
   - path: plugins/atlas/skills/atlas/SKILL.md
-    blob: 0c476269b0d77a0a8d2b5fd274d952daac8e5106
+    blob: 0dd4b60cddcc8e5ed66df66dd4328ec020b9f869
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
 ---
 
 # Module: plugins/atlas (misc)

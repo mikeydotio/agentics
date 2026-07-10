@@ -7,6 +7,8 @@ sources:
     blob: 24850fe5b053d9925a7af47513cfc2ac04033f93
   - path: plugins/deployit/references/github-release.md
     blob: c76af9df46aa1976f57f66cff2d6e7afc5b073cc
+  - path: plugins/deployit/references/index-publishing.md
+    blob: c403b37310959de5a4bbef9d30684e75d81f17a3
   - path: plugins/deployit/references/ios.md
     blob: 59175850b662bbf27b81972fc0ee97cfbe31acb9
   - path: plugins/deployit/references/macos.md
@@ -18,11 +20,11 @@ sources:
   - path: plugins/deployit/references/tailscale-serve.md
     blob: 92267a1597530c980bfee1916f83a818dba94abd
   - path: plugins/deployit/references/troubleshooting.md
-    blob: 248dc2a7c4b900aba19b4bf61cdcca189fc37b7d
+    blob: f088e1e68868f93c78f755868aeec1cfb81ba0ea
   - path: plugins/deployit/references/visionos.md
     blob: 3773ae52396c5b6df79ce4d8926f2412fe4eca3d
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
 ---
 
 # Module: plugins/deployit/references

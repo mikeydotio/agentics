@@ -14,16 +14,16 @@
         "verdict": "unverified"
       }
     },
-    "module.gotchas/1877474fd9904f474b03be6d": {
+    "module.gotchas/0413ab895cb2004f614c5aad": {
       "kind": "module.gotchas",
       "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
-      "value": "The tmux send/confirm logic is deliberately duplicated from plugins/freshen/lib/pane-confirm.sh rather than sourced, since handle-issue must keep working when freshen isn't installed (plugins/handle-issue/bin/handle-issue.sh:29-31) \u2014 a fix to one send/confirm bug needs mirroring in the other. The plan-mode readiness gate depends on a version-specific TUI marker (`HANDLE_ISSUE_READY_PATTERN` default \"for shortcuts\"); if Claude's UI text changes and it stops matching, `wait_ready` doesn't fail \u2014 it silently falls through to a fixed settle delay and proceeds best-effort (plugins/handle-issue/bin/handle-issue.sh:40-46,104-120). Tests deliberately create throwaway repos under `/tmp` rather than `$TMPDIR`, because macOS Spotlight indexes the latter and can stall file-heavy git operations (plugins/handle-issue/tests/lib.sh:5-6,27-28).",
+      "value": "- Single path segments that merely look like a build id (\"p\", \"_healthz\", \"icons\", static asset filenames) are hard-coded as reserved words so the DELETE build route can't be tricked into deleting health/internal/static paths \u2014 plugins/deployit/bin/deployit-backend:34-40, 601.\n- `_classify_push_failure` must check ruleset/protected signals before the non-fast-forward signals: a ruleset rejection's stderr also contains the generic \"failed to push some refs\" line that would otherwise be misclassified as a retryable non-fast-forward \u2014 plugins/deployit/bin/deployit-cli:933-935 (comment), 950-957 (check order).\n- `deployit-backend`'s `main()` skips recreating the `_plugin_root` symlink when invoked with `--plugin-root` already pointing at that same symlink, to avoid a self-referential symlink loop \u2014 plugins/deployit/bin/deployit-backend:627-634.\n- `_gh_bin()` resolves an absolute path to `gh` (probing Homebrew locations) rather than trusting PATH, because the launchd daemon's swipe-to-delete \u2192 `deployit-cli rm` \u2192 PR-fallback path runs with the minimal `/usr/bin:/bin:/usr/sbin:/sbin` PATH that lacks Homebrew's `gh` \u2014 plugins/deployit/bin/deployit-cli:74-93.\n- `_read_config` has two parse paths (tomllib on Python 3.11+, a hand-rolled regex fallback otherwise) with a comment noting the target OS/Python version rather than requiring the modern path unconditionally \u2014 plugins/deployit/bin/deployit-cli:482-534.",
       "verify": {
-        "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -120,20 +120,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "- \"adding pilot states is idempotent\" can't actually fail: the test wraps the second add_work_states call in its own grep guard, so the assertion is tautological rather than proof the helper is idempotent (tests/init.bats:18-34, esp. :26-28).\n- create_stale_lock computes stale_time via a GNU/BSD date fallback that can yield an empty string if both invocations fail, but create_lock_json's `heartbeat_at=\"${1:-$(date -u ...)}\"` treats an empty $1 as unset and substitutes a fresh current timestamp \u2014 so a failed stale_time silently produces a lock that looks current, not one with an empty heartbeat_at, which would make \"stale lock heartbeat exceeds window\" (asserting age >= 30) fail rather than pass (tests/helpers.bash:76-92, tests/state-machine.bats:62-72).\n- assert_json_field applied to .pilot/verdicts.jsonl assumes a single JSON object in the file \u2014 it runs plain `jq -r` with no `-s`/per-line handling, so a real multi-record JSONL log would break the assertion (tests/helpers.bash:162-170, tests/state-machine.bats:76-83).\n- run-tests.sh's missing-bats error message hardcodes the Debian/apt install command even though the suite it's about to run itself branches on GNU vs BSD `date` syntax (tests/run-tests.sh:8-10, tests/state-machine.bats:55,67).",
-      "verify": {
-        "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "verdict": "pass",
-        "verifier": "map-verifier"
-      }
-    },
-    "module.gotchas/3a9d7c30a84da4b0ba8dcc7d": {
-      "kind": "module.gotchas",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "- test-cli-bump.sh SKIPs when semver-cli isn't found at ../semver/bin/semver-cli \u2014 plugins/deployit/tests/test-cli-bump.sh:10-11.\n- test-cli-archive-build-number.sh SKIPs on non-macOS when /usr/libexec/PlistBuddy is absent \u2014 plugins/deployit/tests/test-cli-archive-build-number.sh:11-12.\n- test-cli-deploy-release-wiring.sh and the stage-macos-*.sh tests SKIP unless hdiutil/ditto (and PlistBuddy) are present \u2014 plugins/deployit/tests/test-cli-deploy-release-wiring.sh:12-14, plugins/deployit/tests/test-cli-stage-macos-sparkle.sh:12-13.\n- test-cli-rm.sh polls the bare remote's log rather than reading it once, because a local push's post-receive settle can briefly lag a fresh reader even though the push already landed \u2014 plugins/deployit/tests/test-cli-rm.sh:84-93.\n- test-cli-deploy-release-wiring.sh pins publish-after-append/refresh ordering by grepping the CLI's own source text, not by asserting at runtime \u2014 plugins/deployit/tests/test-cli-deploy-release-wiring.sh:85-88.\n- test-cli-version.sh hardcodes the literal \"0.1.0\"; it must be updated whenever the CLI's --version output changes \u2014 plugins/deployit/tests/test-cli-version.sh:7.",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
         "verdict": "pass",
@@ -280,6 +266,20 @@
         "verifier": "map-verifier"
       }
     },
+    "module.gotchas/70215dc663a364f52f0bb92f": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "- `_tag_exists` exists only to decide whether `--target` is safe to pass: `gh release create` sets the tag's commit only when creating it, so passing `--target` on an *existing* tag whose commit has since diverged (e.g. semver tagged the release commit, then a build-number bump moved HEAD) makes the GitHub API reject the create with HTTP 422; the target is silently omitted whenever the tag already exists (plugins/deployit/bin/deployit-release:216-227, plugins/deployit/bin/deployit-release:310-313).\n- Exactly one of `--app`/`--zip` is required, enforced via `bool(args.app) == bool(args.zip)` (true \u2014 and rejected \u2014 when both or neither are set) rather than argparse's mutually-exclusive-group machinery (plugins/deployit/bin/deployit-release:253-254).\n- `_read_app_short_version` probes both `Contents/Info.plist` and a root-level `Info.plist` because macOS bundles nest the plist under `Contents/` while iOS/visionOS keep it at the bundle root \u2014 the check exists so an app extracted from a `--zip` (of unknown platform origin) still resolves (plugins/deployit/bin/deployit-release:99-104).\n- The tag is only prefixed with the semver `version_prefix` if the version doesn't already start with it, making tag construction idempotent against a version string that's already prefixed (plugins/deployit/bin/deployit-release:128-129).\n- `deployit-router.sh` pre-checks for `python3` on PATH itself, before exec'ing the Python CLI, printing a hand-rolled JSON failure \u2014 the one piece of output in this bash file not produced by the delegated CLI, so a missing interpreter never leaks as bare shell text (plugins/deployit/bin/deployit-router.sh:12-15).",
+      "verify": {
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "module.gotchas/7321fd9fc0d08ba7afc71e67": {
       "kind": "module.gotchas",
       "provenance": {
@@ -406,16 +406,16 @@
         "verifier": "map-verifier"
       }
     },
-    "module.gotchas/99ec5b7667cbc5b7e2baf55d": {
+    "module.gotchas/92f190ed1bdba3dbba7668c0": {
       "kind": "module.gotchas",
       "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
-      "value": "gh rejects a divergent --target on an existing tag (HTTP 422 \"Release.target_commitish is invalid\"), so deployit-release must omit --target once the tag exists on the remote \u2014 plugins/deployit/tests/test-release-tag-exists-omits-target.sh:2-7,44-46.\nverify-live.sh inverts pass/fail for two markers: finding id=\"ptr\" or touchstart in the served UI is a FAIL, because pull-to-refresh was deliberately replaced by a nav-bar refresh button and pointerdown swipe-to-delete \u2014 plugins/deployit/tests/verify-live.sh:79-81,93-95.\ntest-release-version-resolution.sh loads bin/deployit-release itself as a python module via importlib.machinery.SourceFileLoader to unit-test _resolve_version_and_tag directly, rather than shelling out \u2014 plugins/deployit/tests/test-release-version-resolution.sh:17-19.\ntest-release-adhoc-signing.sh is the one release test that never sets DEPLOYIT_SKIP_CODESIGN_VERIFY (every other release test in this chunk does), so a real unsigned .app produces a genuine codesign failure to verify the Developer-ID gate \u2014 plugins/deployit/tests/test-release-adhoc-signing.sh:2-4,22 vs plugins/deployit/tests/test-release-existing-tag.sh:21.",
+      "value": "- test-gitignore.sh's unwritable-.gitignore case (add-failed path) is skipped entirely when running as root, since root bypasses Unix file-permission bits and could never trigger it (plugins/issue/tests/test-gitignore.sh:64-65).\n- dispatch_ready (test-readiness.sh) must route extra env overrides through `env \"$@\"` rather than a bare shell-assignment prefix, because a variable that expands to `name=value` is not recognized by bash as an assignment prefix (plugins/issue/tests/test-readiness.sh:20-22,33).\n- test-dispatch-dryrun.sh's empty-label case depends on `ISSUE_LABEL=\"\"` using the SUT's `-` (not `:-`) expansion, so an explicitly empty value disables labeling while an unset var still defaults \u2014 called out inline as deliberate (plugins/issue/tests/test-dispatch-dryrun.sh:93-94).\n- fakes/tmux's churn capture mode is re-exec'd per call with no in-process state, so it persists a counter file under $FAKE_TMUX_STATE (falling back to $RANDOM if unset) purely to guarantee successive captures differ (plugins/issue/tests/fakes/tmux:37-39).",
       "verify": {
-        "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -444,6 +444,20 @@
       "value": "- `_constructor_type`'s callee-is-a-bare-identifier heuristic can misclassify an ordinary function call as a type constructor, but the docstring notes this is deliberate: downstream resolution only matches real type tables, so the false positive costs nothing (plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:193-196).\n- The tree-sitter grammar is pinned to an exact version (`tree-sitter-language-pack==0.9.1`) because atlas re-hashes each symbol's span from raw file bytes; a grammar upgrade that shifts declaration boundaries silently re-hashes and re-judges every affected cell, so a bump must be deliberate and rolled out in lockstep (plugins/atlas/helpers/ts-helper/pyproject.toml:11-18, plugins/atlas/helpers/ts-helper/README.md:75-82).\n- The contract `version` must stay `1` in lockstep with atlas: a mismatched version is silently rejected (atlas falls back to regex rather than erroring) (plugins/atlas/helpers/ts-helper/atlas_ts_helper.py:22-24).",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "module.gotchas/ab462b06195e2ac81b970397": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "- _read_archive_build_number's macOS layout check was a real latent bug: every macOS deploy failed at the build-number read because only the iOS Info.plist path was checked, caught by the first real macOS deploy (plugins/deployit/tests/test-cli-archive-build-number.sh:4-6).\n- _read_config's TOML parsing has two live code paths \u2014 tomllib on Python 3.11+, a regex fallback below it \u2014 and this test runs whichever the ambient python3 provides, so the dev/CI python version silently picks the path under test (plugins/deployit/tests/test-cli-config-sparkle.sh:2-4).\n- Auto-prune's keep-cap is scoped by (bundle_id, platform, origin_base_url) together, so a same-app build on a different platform or a different origin survives pruning past the cap (plugins/deployit/tests/test-cli-deploy-autoprune.sh:2-5,120-123).\n- test-cli-deploy-release-wiring.sh asserts call ORDER by grepping deployit-cli's own source text (not runtime behavior) to guarantee _publish_github_release always runs after _append_to_index and _refresh_local_backend, so a failed deploy can never orphan a public GitHub release (plugins/deployit/tests/test-cli-deploy-release-wiring.sh:85-88).\n- An auth-classified push failure preserves the commit on a LOCAL branch named deploy/<id>-local and skips the PR fallback entirely \u2014 a different recovery path than ruleset/protected failures, which push the branch and open a PR (plugins/deployit/tests/test-cli-publish-preserve-on-failure.sh:125-128).\n- test-cli-rm.sh polls the bare origin's log for up to ~1s instead of reading once, because receive-pack's post-receive settle (quarantine migration + a detached maintenance run) can make a fresh reader briefly miss a just-pushed tip (plugins/deployit/tests/test-cli-rm.sh:84-93).",
+      "verify": {
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -504,6 +518,20 @@
         "verifier": "map-verifier"
       }
     },
+    "module.gotchas/ba2d05590d90d539a57288a9": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "gh's `release create --target` is rejected with HTTP 422 \"Release.target_commitish is invalid\" once the tag already exists on the remote, so deployit-release must omit --target on that path \u2014 documented and asserted in plugins/deployit/tests/test-release-tag-exists-omits-target.sh:3-6,44-46.\nA bare `gc` (no --keep) is asserted to still print valid JSON with \"ok\": false on stdout despite a nonzero exit; the test captures stdout+stderr together with `2>&1 || true` specifically because `pipefail` would otherwise fire on gc's own failing exit code \u2014 plugins/deployit/tests/test-gc.sh:69-76.\nThe EdDSA signature the Sparkle-enabled test asserts is a literal sentinel, \"TEST-ED-SIGNATURE-DO-NOT-SHIP==\", produced by the DEPLOYIT_SKIP_SPARKLE_SIGN stub path rather than a real signature \u2014 a deliberately unshippable placeholder value \u2014 plugins/deployit/tests/test-cli-stage-macos-sparkle.sh:49,60.\nMetadata is introspected through a private, dunder-prefixed `--__dump-metadata` flag on the `deploy` subcommand that dumps resolved project metadata without performing a real deploy \u2014 plugins/deployit/tests/test-metadata-single-app.sh:32 and plugins/deployit/tests/test-metadata.sh:29.\nmacOS-only tests SKIP (exit 0) rather than FAIL when hdiutil/ditto/codesign/PlistBuddy are unavailable, so this suite can pass vacuously with zero coverage on a non-macOS host \u2014 plugins/deployit/tests/test-release-adhoc-signing.sh:9-11.",
+      "verify": {
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "module.gotchas/ba3fe995d30e1ef267274346": {
       "kind": "module.gotchas",
       "provenance": {
@@ -528,6 +556,20 @@
       "value": "- Only one source may have a pending signal at a time; queuing from a second source while another's signal is unconsumed is a hard error, not a queue (plugins/freshen/bin/freshen.sh:64-73).\n- Every hook exit path must write to stderr \u2014 a silent exit makes Claude Code report \"No stderr output\", which can otherwise trigger an infinite Stop-hook loop (plugins/freshen/hooks/on-stop.sh:13-16, plugins/freshen/hooks/on-clear.sh:12-14).\n- .clear-pending is renamed to .clear-consumed rather than deleted outright, solely to survive an unspecified cross-plugin ordering race with hook-guard's own SessionStart(clear) hook reading the same flag (plugins/freshen/hooks/on-clear.sh:37-66).\n- A capture-pane call that itself fails is treated as \"still pending\" (not confirmed) \u2014 an unobservable pane must never be assumed to have accepted input (plugins/freshen/lib/pane-confirm.sh:49-58).\n- Literal-mode sends require both the literal-text send-keys call AND a separate Enter call to succeed before a signal counts as delivered; a failing Enter alone must not delete the signal (plugins/freshen/lib/pane-confirm.sh:88-105, plugins/freshen/hooks/on-clear.sh:84-103).\n- Signals older than 2 hours are swept and deleted before dispatch on every Stop hook run (plugins/freshen/hooks/on-stop.sh:41).",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "module.gotchas/be8f54b9c1a5bbe4a1cc7d89": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "The top-of-file doc comment claims 'Two subcommands' (list, dispatch) but the router now dispatches six \u2014 list, dispatch, view, create, complete, doctor \u2014 the header is stale, don't treat it as the full subcommand list (plugins/issue/bin/issue.sh:4, plugins/issue/bin/issue.sh:1144-1152). LABEL is set with `${ISSUE_LABEL-in-progress}` (`-` not `:-`), so an explicit `ISSUE_LABEL=\"\"` disables labeling entirely while only an *unset* var falls back to \"in-progress\" \u2014 an easy bash pitfall to get backwards (plugins/issue/bin/issue.sh:59-61). READY_PATTERN is deliberately kept free of ERE metacharacters (`+`, `(`, `)`) because they would silently mismatch literal footer text like \"shift+tab\" (plugins/issue/bin/issue.sh:87-89). `doctor` is deliberately excluded from `make test` (it needs a live `claude` binary and the pre-push gate must stay deterministic/offline) \u2014 run it by hand after a Claude Code upgrade (plugins/issue/bin/issue.sh:851-853, plugins/issue/README.md:97-98).",
+      "verify": {
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -598,20 +640,6 @@
       "value": "Rebase inverts git's own ours/theirs labels \u2014 HEAD/`<<<<<<<` is the base branch and `theirs`/`>>>>>>>` is the PR's replayed commit, the opposite of `git merge` \u2014 so the script never uses those words and relabels them base_side/pr_side instead (plugins/reconcile-pr/bin/reconcile-pr.sh:33-37; spelled out with a marker table in plugins/reconcile-pr/references/reconciliation.md:20-36). A reconcile worktree shares `.git` with the main checkout but not untracked/ignored files, so RECONCILE_PR_TEST_CMD must include any dependency install (e.g. `npm ci && npm test`) or the test gate fails spuriously (plugins/reconcile-pr/references/reconciliation.md:85-87). teardown() silences ALL git output including stdout, because `git branch -D` prints \"Deleted branch \u2026\" to stdout and would otherwise corrupt the caller's single-JSON-object contract (plugins/reconcile-pr/bin/reconcile-pr.sh:255-257).",
       "verify": {
         "at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "verdict": "pass",
-        "verifier": "map-verifier"
-      }
-    },
-    "module.gotchas/e7419eebc9227c49d1f8de4c": {
-      "kind": "module.gotchas",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "- `_commit_and_push_index`'s retry loop resets --hard to origin/main on every push conflict before retrying, so a losing writer's local commit is discarded rather than merged \u2014 its `mutate` callback must be safely re-runnable (plugins/deployit/bin/deployit-cli:969,974).\n- `_notarize_staple_app` points notarytool at a file-based login keychain via --keychain when `notary_keychain` is configured, because the default data-protection keychain locks when the screen locks, which otherwise breaks headless SSH/mosh deploys (plugins/deployit/bin/deployit-cli:715-716).\n- `deployit-release` omits --target when the release tag already exists: `gh release create` only honors --target when creating a new tag, and a divergent --target on an existing tag makes the API reject with HTTP 422 (plugins/deployit/bin/deployit-release:216-224,312-313).\n- Index pushes use an explicit insteadOf HTTPS override instead of the configured git remote, sidestepping SSH-agent prompts in non-interactive contexts (plugins/deployit/bin/deployit-cli:901,963).",
-      "verify": {
-        "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -720,30 +748,6 @@
         "verdict": "unverified"
       }
     },
-    "module.purpose/1cc106ec9212bfd6d3ec1ec2": {
-      "kind": "module.purpose",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "handle-issue turns \"work on issue #N\" into a fully isolated Claude session: it opens a new tmux window, launches `claude -w <n>` to build a per-issue git worktree, gates on the TUI becoming ready, flips to plan mode via two Shift+Tabs, and types + submits a prompt asking Claude to plan a fix \u2014 all in one command the calling session never has to drive by hand. The idea holding it together is a strict ok/warning boundary: every hard precondition (tmux, git repo, authenticated gh, issue exists and is open) must pass before any side effect, but once the tmux window is opened, further confirmation failures degrade to a warning rather than a false `ok:false`, because a status line must never imply nothing happened when it did. Without this module, spinning up an isolated per-issue Claude session would mean manually repeating the same window/worktree/plan-mode/prompt sequence by hand every time.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.purpose/2286785c47865dc7db1b4ce2": {
-      "kind": "module.purpose",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "This chunk pins deployit's release-publishing pipeline and gives a human a live-deploy sanity check. Five scripts drive bin/deployit-release end to end against a faked gh binary \u2014 the Developer-ID signing gate, existing-tag/--clobber handling, --target omission once a tag exists, dry-run-vs-real gh invocation, and the semver-vs-Info.plist version/tag resolution order \u2014 one drives deployit-cli release-context's commit/issue aggregation for release notes, one drives deployit-cli's --__dump-metadata xcodegen project.yml parsing, and verify-live.sh stands apart as a standalone post-deploy smoke test that curls a running instance instead of exercising the CLI in a fixture. If this chunk vanished, a bad gh invocation, wrong tag/version resolution, or a signing-gate regression could ship undetected until a real release failed in production.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.purpose/295f95bcc66090709cbab661": {
       "kind": "module.purpose",
       "provenance": {
@@ -776,18 +780,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "This module defines forge's two decision-quality gate agents: triager (plugins/agents/agents/triager.md) turns reviewer and validator findings into calibrated FIX, ESCALATE, or DEFER verdicts through severity re-calibration, scope checking, systemic-impact assessment, and mandatory security elevation; validator (plugins/agents/agents/validator.md) hardens the test suite itself, enforcing a no-mock policy, an 11-category edge-case taxonomy, and requirement-to-test coverage mapping. Together they form forge's final quality gate before deploy \u2014 validator raises the bar the implementation must clear, and triager decides which remaining gaps the pipeline may auto-fix versus which need a human decision. Without them, forge's fix loop would have no systematic way to separate a trivial auto-fixable finding from one needing human judgment, and no mechanism for closing test-coverage or no-mock gaps beyond ad hoc test writing.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.purpose/34da013920c8930f1dcbf4bd": {
-      "kind": "module.purpose",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "This chunk pins deployit-cli's state-mutating subcommands \u2014 bootstrap, bump, preflight, redeploy, rm, gc, and deploy's macOS staging/release path \u2014 plus the private functions those subcommands lean on (_stage_macos, _publish_github_release, _read_archive_build_number, _read_config, _append_to_index, _derive_metadata), most exercised in-process via importlib.machinery.SourceFileLoader rather than only through the CLI's JSON stdout. It also carries the backend's version-label rendering test and a single-app Xcode metadata-extraction fixture. Losing this chunk removes the only regression coverage for prune scoping, Sparkle signing degradation, redeploy's legacy-plist repair, and the semver-driven bump/preflight decision \u2014 the riskiest, most state-mutating parts of deployit.",
       "verify": {
         "verdict": "unverified"
       }
@@ -836,6 +828,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "This directory is forge's entire step vocabulary: the state-machine router (skills/forge/SKILL.md) that detects pipeline state from .forge/ artifacts and storyhook and dispatches, plus the 11 pipeline-step skills (interrogate through deploy) it dispatches to. Each step skill is a self-contained, stateless prompt \u2014 it reads its own inputs from .forge/, does its work (often by spawning specialist subagents from the shared agent library), writes its outputs, and exits through the shared Step Exit Protocol (handoff, commit, queue freshen, STOP) so no state has to survive in conversation context between steps. Without this module the router has a state machine but nothing to dispatch to \u2014 these files are the actual behavior of the idea-to-deployment pipeline, not just its shape.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/4f2c003bacbbaeada01188f9": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "The issue plugin is a GitHub-issue lifecycle toolkit: a thin skill router dispatches list/view/new/do/complete/doctor verbs to a single deterministic bash helper (bin/issue.sh) that owns every git/gh/tmux side effect and returns one JSON object with `ok`+`display` (plugins/issue/skills/issue/SKILL.md:9-11). Its most delicate concern is the `dispatch` handoff: launching a plan-mode Claude session in a new tmux window plus a per-issue worktree needs a two-tiered readiness gate \u2014 a footer-marker fast path and a structural frame+glyph stabilization fallback \u2014 so a future Claude Code TUI copy change can't silently break the handoff (plugins/issue/bin/issue.sh:82-103). `complete`'s two-phase plan/execute split and hard git-native backstops (never touch unmerged/dirty/locked/current/protected refs) exist so a scan bug can never destroy work (plugins/issue/bin/issue.sh:927-934).",
       "verify": {
         "verdict": "unverified"
       }
@@ -900,18 +904,6 @@
         "verdict": "unverified"
       }
     },
-    "module.purpose/81df3f3b8ee630da3e5568e9": {
-      "kind": "module.purpose",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "This module is deployit's entire runtime: `deployit-cli` orchestrates archive -> export -> stage -> notarize -> index-push -> GitHub-release for one signed build, `deployit-backend` is the long-running, launchd-supervised HTTP daemon that serves the install/listing/appcast web UI other devices hit, and `deployit-release` is a standalone script the CLI shells out to for publishing. Together they let one Mac deploy a build once and make it fetchable tailnet-wide, coordinating with the semver plugin only via a discovered subprocess (never an import \u2014 see _find_semver_cli) and treating a separate git-backed index repo as the sole shared state. If this module vanished, deployit would have no runtime at all \u2014 deployit-router.sh, the only other piece wired to the /deployit skill, does nothing but exec deployit-cli.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.purpose/86a61428b55d31d8c5d0fce4": {
       "kind": "module.purpose",
       "provenance": {
@@ -936,6 +928,18 @@
         "verdict": "unverified"
       }
     },
+    "module.purpose/995e657f52936fa8e01fb855": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "This chunk is the correctness backstop for deployit's most host-dependent, hardest-to-eyeball code paths \u2014 macOS DMG/Sparkle staging, Developer-ID/codesign gating, GitHub release publishing, and Xcode project metadata extraction \u2014 each test forcing one specific failure or edge case (a missing sign_update tool, an existing GH tag, an unsigned app, a monorepo vs. single-app project layout) deterministically via env-var seams or a faked `gh` binary rather than depending on real signing keys or network state. verify-live.sh is the odd one out: not a fixture-driven unit test but a smoke check that curls a running deployit instance to confirm a deploy actually shipped the expected markup/asset changes, since a clean exit elsewhere never proves the live server itself was updated. Collectively they guard the exact fragile edges \u2014 graceful signing degradation, GH's tag/target_commitish rejection, and version-resolution precedence \u2014 that would otherwise only surface once shipped to production.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.purpose/a298a29028f63e37735324d8": {
       "kind": "module.purpose",
       "provenance": {
@@ -956,6 +960,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "tests/ holds two independent, largely CI-free harnesses: a bats suite (helpers.bash, init.bats, state-machine.bats, run via run-tests.sh) that fabricates a throwaway git repo to pin the on-disk shape of pilot/storyhook state files \u2014 .storyhook/states.toml and .pilot/{state,config,lock}.json, verdicts.jsonl, plan-mapping.json \u2014 purely by asserting on fixtures the tests write themselves, never a production script (tests/init.bats:24-28); and a separate plain-bash harness (plugin-versions.sh) that asserts every plugin.json/marketplace.json version matches the repo's bare VERSION and exercises the real .semver post-bump sync hook against disposable fixture repos (tests/plugin-versions.sh:74-186). The latter is deliberately bash-only, per its own header, because bats-core isn't guaranteed installed and this project runs no tests in CI \u2014 a .bats file here would simply never execute (tests/plugin-versions.sh:4-8). If either half vanished, the pre-push gate would lose its pin on the pilot/storyhook file schemas or its guard against a drifted plugin manifest reaching a release.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/a5d9be6b84bc1197c817cf5d": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "This chunk covers deployit's higher-risk CLI paths: git push-failure classification and PR fallback (ruleset/protected/auth/non-fast-forward), auto-prune on deploy, bootstrap/redeploy plist and symlink management, and rm's index-then-disk ordering. Tests load bin/deployit-cli as a module via importlib.machinery.SourceFileLoader to call internals like _append_to_index, _classify_push_failure, and _read_archive_build_number directly, and drive real local bare git repos (with pre-receive hooks simulating GitHub rulesets) instead of mocking git. Losing this chunk would strip regression coverage for the exact failure modes deployit's publish path exists to survive: a rejected push must never silently drop a commit.",
       "verify": {
         "verdict": "unverified"
       }
@@ -1032,6 +1048,18 @@
         "verdict": "unverified"
       }
     },
+    "module.purpose/b618f663a8eff958272d8dc9": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "deployit turns a developer's Mac into a private, Tailscale-only app-distribution point for iOS/macOS/visionOS builds: the CLI (deployit-cli) drives xcodebuild archive/export, packages installers (OTA manifest.plist, notarized .dmg, optional Sparkle-signed zip), and is the sole writer of the shared git-backed build index (index/builds.json), reconciling concurrent-writer races and branch-protection rulesets on every publish. The backend (deployit-backend) is a read-mostly stdlib HTTP server that renders the listing/build/product/appcast pages from that same index and serves artifacts directly, but delegates every destructive action (build/product delete) back to the CLI's `rm` subcommand over subprocess rather than touching the index itself. Without this split, either the index would gain multiple uncoordinated writers (silent corruption under concurrent deploys) or the CLI's archive/export/notarize machinery would have to be duplicated inside a long-running server process.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.purpose/be3699c53aa178d35468c38c": {
       "kind": "module.purpose",
       "provenance": {
@@ -1064,6 +1092,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "semver-cli is the single deterministic, JSON-in/out Python executable behind the /semver skill: every subcommand (init, set, bump, tracking start/stop, auto-bump, repair, validate, recommend) is a pure function of cwd + .semver/config.yaml + git state, with all mutating writes serialized through a per-project FileLock (plugins/semver/bin/semver-cli:391-457). Its unifying idea is a gather/run/execute split \u2014 read-only assessment functions (cmd_*_run, _init_snapshot/_init_assess) surface AskUserQuestion-shaped blockers to the calling skill, while *_execute functions perform the actual git/file writes \u2014 so the skill layer never reimplements version-bump logic. If this file vanished, the /semver plugin would have no version tracking, bumping, tagging, changelog generation, or CLAUDE.md injection at all; nothing else in the repo re-implements it.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/c4d95e0f5fcef319070f2996": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "deployit-release is the last mile of the macOS deploy pipeline: it turns a signed .app into an immutable, versioned GitHub release, and it is the sole place deciding what that release's tag actually is via a strict ladder \u2014 semver VERSION, then the app's own CFBundleShortVersionString, then a loud failure \u2014 so an unversioned release can never ship (plugins/deployit/bin/deployit-release:116-130). deployit-router.sh is the stateless front door for every /deployit subcommand: it does nothing but confirm python3 exists and exec deployit-cli with the resolved plugin root, so all routing logic and behavior lives in the CLI, not here (plugins/deployit/bin/deployit-router.sh:9-17). Both scripts share a JSON-only-output discipline (ok()/fail() at plugins/deployit/bin/deployit-release:44-52) so every caller \u2014 success, argument error, or gh failure \u2014 gets machine-parseable output instead of free text.",
       "verify": {
         "verdict": "unverified"
       }
@@ -1124,6 +1164,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "greenlight is a PreToolUse hook that gates every Bash tool call through a three-tier decision pipeline (plugins/greenlight/hooks/greenlight.sh:1-20): deterministic allow for 150+ known-safe commands (plugins/greenlight/hooks/greenlight.sh:253-346), deterministic pass-with-warning for known-destructive ones (plugins/greenlight/hooks/greenlight.sh:353-406), and an opt-in Claude Haiku fallback for genuinely uncertain commands (plugins/greenlight/hooks/greenlight.sh:1151-1258). It exists so an autonomous inner loop (e.g. forge's execute step, called out by name in plugins/greenlight/README.md:5 and the story/git fast-path comments at plugins/greenlight/hooks/greenlight.sh:332-343) can run git/test/build commands without a human present for every call, while still surfacing genuine destructiveness (rm, sudo, chmod) for confirmation. Config is a flat YAML file bootstrapped from references/default-config.yaml on first run and re-read on every invocation, so behavior changes take effect without restarting Claude Code (plugins/greenlight/hooks/greenlight.sh:29-38, 70-87).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/cd7132e3c537d836f754ba66": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "This suite is the executable specification for the issue plugin's CLI surface (dispatch, complete plan/execute, create, list, view, doctor), replacing a live GitHub/tmux session with two knob-driven fakes (plugins/issue/tests/fakes/gh:1-31, plugins/issue/tests/fakes/tmux:1-39) so the whole flow runs offline and deterministically. Its heaviest investment is mk_complete_repo, a single realistic git fixture (merged/unmerged branches, a pushed merged PR-head branch, a clean worktree, a locked worktree) that both complete-plan and complete-execute tests reuse to prove destructive cleanup only ever touches the safe set (plugins/issue/tests/lib.sh:38-75). Without this module the plugin's guard-rail logic \u2014 branch/worktree deletion safety, the multi-tier readiness gate's drift-proofing, gitignore idempotency \u2014 would have no regression protection at all.",
       "verify": {
         "verdict": "unverified"
       }
@@ -1296,6 +1348,18 @@
         "verdict": "unverified"
       }
     },
+    "module.read_when/1305514c24ac1617d6f8888c": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Touching deployit-cli push/PR-fallback, rm, redeploy, or config/release parsing",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.read_when/165ea821d471f53fcbc88bce": {
       "kind": "module.read_when",
       "provenance": {
@@ -1316,30 +1380,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Touching semver-cli's bump, set, init, tracking, or config logic",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.read_when/273df06e703a83f27d6acffc": {
-      "kind": "module.read_when",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Debugging deployit-release/gh publishing or verifying a live deployment",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.read_when/2ab7b5acce9e2a5c95d57940": {
-      "kind": "module.read_when",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Changing deployit subcommands, the deploy/publish flow, or backend endpoints",
       "verify": {
         "verdict": "unverified"
       }
@@ -1368,6 +1408,18 @@
         "verdict": "unverified"
       }
     },
+    "module.read_when/2e7f0f795c12119fb2e2b161": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Touching deployit release, staging, metadata, gc tests, or live-deploy verification",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.read_when/41a96451eb0653355589f696": {
       "kind": "module.read_when",
       "provenance": {
@@ -1376,18 +1428,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Adding or changing shared agents A\u2013H, the agent template schema, or shared guardrails",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.read_when/437ba97c1b671f0407be1633": {
-      "kind": "module.read_when",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Changing deployit CLI subcommands, macOS staging/release, or version-label rendering",
       "verify": {
         "verdict": "unverified"
       }
@@ -1464,6 +1504,18 @@
         "verdict": "unverified"
       }
     },
+    "module.read_when/67274d1cebcaa0e02425de1e": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Touching deployit subcommands, the deploy/publish flow, or backend endpoints",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.read_when/6c7bb84ae01f966f6d037e27": {
       "kind": "module.read_when",
       "provenance": {
@@ -1488,6 +1540,18 @@
         "verdict": "unverified"
       }
     },
+    "module.read_when/6f9d0266eb818615c7eef4d7": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Touching GitHub release publishing, version-tag resolution, or /deployit routing",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.read_when/73179957875e9bb2f7204196": {
       "kind": "module.read_when",
       "provenance": {
@@ -1496,6 +1560,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Touching ts-helper precision, update-flow re-judging, or verify-cache",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/78dae5d38a9082525fe798aa": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Touching issue dispatch, complete cleanup, or new-issue filing flows",
       "verify": {
         "verdict": "unverified"
       }
@@ -1532,6 +1608,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Changing deployit's install pages, OTA manifest, export signing options, or config seed",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/974bc31a5f370f3e9da283c5": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Touching issue plugin tests, fake gh/tmux harness, or dispatch/complete/list behavior",
       "verify": {
         "verdict": "unverified"
       }
@@ -1640,18 +1728,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Changing forge's marketplace identity, README pipeline overview, or bats test runner",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.read_when/c11a827b4f21fcfae6681f18": {
-      "kind": "module.read_when",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Changing handle-issue's dispatch, tmux sequencing, or issue picking",
       "verify": {
         "verdict": "unverified"
       }
@@ -1932,6 +2008,18 @@
         "verdict": "unverified"
       }
     },
+    "module.summary/357b51086b62f75f1980f560": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "GitHub-issue lifecycle toolkit: skill routes verbs to issue.sh, which owns all git/gh/tmux work and emits JSON.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.summary/3910018daf77832be70fadd0": {
       "kind": "module.summary",
       "provenance": {
@@ -1964,6 +2052,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Plugin manifest, /agents command router, and structural validator for the shared agent library.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/4db5f21abed5077af350fd49": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "deployit's stdlib-only HTTP backend (listing/serve/delete) and CLI (archive/export/stage/publish to the index).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2040,14 +2140,14 @@
         "verdict": "unverified"
       }
     },
-    "module.summary/66fb208fd37ebe5909f1d92d": {
+    "module.summary/6961694da3c0c4ff71171252": {
       "kind": "module.summary",
       "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
-      "value": "Dispatches a GitHub issue to a new tmux window, git worktree, and plan-mode Claude session via a bash CLI.",
+      "value": "Publishes a Developer-ID-signed macOS app as a GitHub release; routes /deployit subcommands to deployit-cli.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2076,18 +2176,6 @@
         "verdict": "unverified"
       }
     },
-    "module.summary/794915a622a7a31dfcf526b6": {
-      "kind": "module.summary",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "deployit's runtime: CLI orchestrator, HTTP install/listing daemon, and GitHub-release publisher.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.summary/9022c8a4a9c600a0b9ecf496": {
       "kind": "module.summary",
       "provenance": {
@@ -2112,18 +2200,6 @@
         "verdict": "unverified"
       }
     },
-    "module.summary/9b7947eba4650f67355f753a": {
-      "kind": "module.summary",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Deployit CLI tests (bootstrap, redeploy, gc, rm, preflight, bump, macOS staging) plus the backend version-label test.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.summary/a375d15a8dec5d6dada7b881": {
       "kind": "module.summary",
       "provenance": {
@@ -2132,6 +2208,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Per-concern procedure docs behind /deployit \u2014 setup, platform deploys, proxy, semver bump guard, recovery",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/a83935556c44b1e94adf3fbf": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Bash test suite for the issue plugin (dispatch/complete/list/view) driven by fake gh & tmux binaries.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2172,14 +2260,26 @@
         "verdict": "unverified"
       }
     },
-    "module.summary/bd58afad53926a3b69673bf1": {
+    "module.summary/b6da04f7723c431072159eee": {
       "kind": "module.summary",
       "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
-      "value": "Bash smoke tests for deployit-release's signing/tag/version logic and release-context, plus a live post-deploy check.",
+      "value": "Bash tests for deployit macOS staging, release publish, metadata, gc, plus a live-deploy smoke verifier.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/b9d824f746020ee5fc4f1379": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Bash+python3 tests exercising deployit-cli/-backend via real git repos, fake gh, and DEPLOYIT_SKIP_* env sandboxing.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2436,18 +2536,6 @@
         "verdict": "unverified"
       }
     },
-    "module.type_notes/1a6c930ff75b48b8fdadfce7": {
-      "kind": "module.type_notes",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "- Prune invariant: `_append_to_index` prunes to a per-product cap within `(bundle_id, platform, origin_base_url)`; other platforms/origins of the same bundle survive \u2014 plugins/deployit/tests/test-cli-deploy-autoprune.sh:2-5.\n- `rm` scoping: only builds whose `origin_base_url` matches the local config's `base_url` may be removed, even by exact `--build` id \u2014 plugins/deployit/tests/test-cli-rm.sh:5-6.\n- Release-publish ordering: `_publish_github_release` must run after `_append_to_index` and `_refresh_local_backend` so a failed deploy never orphans a public release \u2014 plugins/deployit/tests/test-cli-deploy-release-wiring.sh:5-7.\n- Sparkle metadata propagation: `sparkle.*` fields written by `_stage_macos` into `_meta.json` must survive the pop/add transform applied before `_append_to_index` \u2014 plugins/deployit/tests/test-cli-stage-macos-sparkle.sh:69-77.\n- Archive layout duality: `_read_archive_build_number` must resolve `CFBundleVersion` from a flat `.app/Info.plist` (iOS/visionOS) or a nested `.app/Contents/Info.plist` (macOS) \u2014 plugins/deployit/tests/test-cli-archive-build-number.sh:2-6.\n- `_read_config`'s `[macos.sparkle]` sub-table degrades to `enabled: False` when the section is absent, on both the tomllib and regex-fallback parse paths \u2014 plugins/deployit/tests/test-cli-config-sparkle.sh:2-6.\n- `redeploy` plist repair: a legacy launchd plist pinning a cache-hash script path is rewritten to the stable `<state>/bin/deployit-backend` path, and is idempotent on re-run \u2014 plugins/deployit/tests/test-cli-redeploy.sh:54-59.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.type_notes/1ff44c04a5f07dbd19737a47": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2456,6 +2544,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "category/auto_advance: category is set explicitly at every branch of detect_state() (plugins/forge/bin/forge-state.sh:351-459), and auto_advance is a pure derived view (category == \"pass_through\") computed once, never independently recomputed (plugins/forge/bin/forge-state.sh:485-491) -- it cannot drift from category by construction.\ntransition_id lifecycle: forge-state.sh mints a \"predicted\" correlator as PID+RANDOM (plugins/forge/bin/forge-state.sh:500); forge-step-exit.sh accepts it via --transition-id, defaulting to the literal string \"none\" when omitted (plugins/forge/bin/forge-step-exit.sh:52,66-67,71); forge-transition-report.sh joins predicted and actual records by that id, never by log position (plugins/forge/bin/forge-transition-report.sh:84-106).\nforge-state.sh is deliberately read-only/side-effect-free: read_project_story notes it must stay a pure detector because it's invoked from many non-execute contexts (hooks, /forge status) (plugins/forge/bin/forge-state.sh:257-258).\nstate.json is always written via temp-file+rename, never a direct redirect, so a concurrent reader (forge-state.sh, forge-status.sh) can never observe a partial write (plugins/forge/bin/forge-step-exit.sh:111-118); this is a structural invariant enforced by plugins/forge/bin/state-json-atomicity.bats.\nforge-verdict.sh's verdicts.jsonl is append-only, one self-contained JSON object per line, matching the evaluator's unified verdict schema (plugins/forge/bin/forge-verdict.sh:88-98).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.type_notes/318aad77fbd2f4cbf010921e": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "- `JsonArgumentParser` (plugins/deployit/bin/deployit-release:55-57) overrides argparse's `error()` to route argument-parsing failures through `fail()` instead of argparse's default text-to-stderr-plus-exit(2), so even a malformed CLI invocation still emits the `{\"ok\": false, \"display\": ...}` contract.\n- `ok()`/`fail()` (plugins/deployit/bin/deployit-release:44-52) are the single output surface for the whole script \u2014 every code path ends in exactly one of them, and `fail()` owns the process's only `sys.exit(1)`.\n- `main()` scopes all packaging work to a `tempfile.TemporaryDirectory` (plugins/deployit/bin/deployit-release:261-262): the extracted-or-zipped `.app` and its `.zip` live only for the process's lifetime and are never persisted by this script.\n- Version resolution is stateless and re-derived per run: `_semver_version`/`_semver_prefix` re-parse `.semver/config.yaml` directly (plugins/deployit/bin/deployit-release:69-96) rather than importing the semver plugin, deliberately keeping this script standalone (comment at plugins/deployit/bin/deployit-release:65-67).\n- `DEPLOYIT_SKIP_CODESIGN_VERIFY` and `DEPLOYIT_GH_BIN` (plugins/deployit/bin/deployit-release:60-61, 138-139) are the only mutable environment seams \u2014 the former exists purely for tests, short-circuiting Developer ID verification without a real certificate.\n- `deployit-router.sh` holds no state and forwards all arguments verbatim via `exec` (plugins/deployit/bin/deployit-router.sh:17), so its own process image is replaced by `deployit-cli` \u2014 it never runs code after dispatch.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2472,14 +2572,14 @@
         "verdict": "unverified"
       }
     },
-    "module.type_notes/40f7507d1f2c6c8dee473a09": {
+    "module.type_notes/4c1fd2f13c1e122e416c1503": {
       "kind": "module.type_notes",
       "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
-      "value": "All configuration is environment-variable driven with defaults in bin/handle-issue.sh's config block (plugins/handle-issue/bin/handle-issue.sh:34-54) \u2014 unlike most plugins in this repo, there is no persisted state file or artifact directory; each `dispatch` run is stateless. `cmd_dispatch` enforces a hard-fail/soft-warning lifecycle boundary: precondition checks (steps 1-4) exit `ok:false` before any tmux side effect, but once `tmux new-window` succeeds (step 5, plugins/handle-issue/bin/handle-issue.sh:231-238) every later confirmation failure degrades to `{ok:true, warning}` instead of `ok:false` (plugins/handle-issue/bin/handle-issue.sh:19-23,265-278). `render_template` does plain `<n>` string substitution (plugins/handle-issue/bin/handle-issue.sh:65-68), and both the launch command and the prompt are sent through `tmux send-keys -l` (literal mode) so no character in them is ever key-interpreted (plugins/handle-issue/bin/handle-issue.sh:127-128,242).",
+      "value": "Tests bypass deployit-cli's argv parser and unit-test its internals directly by loading the script as a module via importlib.machinery.SourceFileLoader (plugins/deployit/tests/test-cli-classify-push-failure.sh:13, plugins/deployit/tests/test-cli-deploy-pr-automerge.sh:51, plugins/deployit/tests/test-cli-archive-build-number.sh:39), calling functions like _classify_push_failure, _append_to_index, _read_archive_build_number, _read_config, and _publish_github_release straight off the loaded module.\n- PR/ruleset scenarios stand up REAL local bare git repos with a `pre-receive` hook that rejects `main` with GH013-style stderr while allowing `deploy/*` branches, so the push-failure classifier and PR-fallback path run against real git plumbing rather than a git mock (plugins/deployit/tests/test-cli-deploy-pr-automerge.sh:30-42, plugins/deployit/tests/test-cli-rm-pr-fallback.sh:31-41).\n- tests/fakes/gh (plugins/deployit/tests/fakes/gh:3-15) is a stateful bash stub logging each invocation to $FAKE_GH_LOG and toggled by env knobs (FAKE_GH_PR_CREATE_FAIL, FAKE_GH_PR_EXISTS, FAKE_GH_PR_MERGE_FAIL, etc.); DEPLOYIT_LAUNCHCTL_BIN is pointed at tests/fakes/true (a real compiled no-op `true` binary) to stub launchctl (plugins/deployit/tests/test-bootstrap-dirs.sh:10).\n- DEPLOYIT_STATE_DIR plus DEPLOYIT_SKIP_* env vars (LAUNCHD, TAILSCALE_SERVE, INDEX_CLONE, KICKSTART, VERIFY, CODESIGN_VERIFY, RELEASE_PUBLISH) sandbox bootstrap/redeploy/deploy side effects away from the real machine (plugins/deployit/tests/test-bootstrap-dirs.sh:8-13, plugins/deployit/tests/test-cli-redeploy.sh:15-22, plugins/deployit/tests/test-cli-deploy-release-wiring.sh:18,70).\n- test-backend-version-label.sh runs bin/deployit-backend as a real subprocess and polls /deployit/_healthz before asserting on rendered HTML (plugins/deployit/tests/test-backend-version-label.sh:58-67).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2592,6 +2692,18 @@
         "verdict": "unverified"
       }
     },
+    "module.type_notes/80584f0a98c999a451751041": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Every test is a standalone bash script (no bats/test framework): each resolves TESTS_DIR/PLUGIN_ROOT from BASH_SOURCE and asserts by exiting non-zero + printing FAIL, only printing PASS on success (plugins/deployit/tests/test-cli-version.sh:3-4).\nmacOS-only tests self-skip (exit 0, \"SKIP: ... unavailable\") when native tools like hdiutil/ditto/codesign/PlistBuddy are missing, e.g. plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh:11-12.\nInternal (non-CLI) functions are unit-tested by dynamically loading the bin/ script as a Python module via importlib.machinery.SourceFileLoader, bypassing deployit-cli's/-release's own argument parser \u2014 `_stage_macos` in plugins/deployit/tests/test-cli-stage-macos-sparkle.sh:24-27 and `_resolve_version_and_tag` in plugins/deployit/tests/test-release-version-resolution.sh:17-19.\nDeterminism seams are env vars: DEPLOYIT_SPARKLE_SIGN_UPDATE (plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh:28), DEPLOYIT_SKIP_SPARKLE_SIGN (plugins/deployit/tests/test-cli-stage-macos-sparkle.sh:49), DEPLOYIT_STATE_DIR + DEPLOYIT_SKIP_GC_PUSH (plugins/deployit/tests/test-gc.sh:8-9), and DEPLOYIT_SKIP_CODESIGN_VERIFY (plugins/deployit/tests/test-release-existing-tag.sh:21).\nThe `gh` CLI is faked by pointing DEPLOYIT_GH_BIN at tests/fakes/gh and driving it with FAKE_GH_* knobs (FAKE_GH_PREV_TAG, FAKE_GH_ISSUES_JSON, FAKE_GH_RELEASE_EXISTS, FAKE_GH_TAG_EXISTS, FAKE_GH_LOG) that set canned responses and capture the invocation for assertion \u2014 plugins/deployit/tests/test-release-context.sh:19-21, plugins/deployit/tests/test-release-existing-tag.sh:20-23, plugins/deployit/tests/test-release-tag-exists-omits-target.sh:24-25,41.\nEach test isolates state in `mktemp -d` and cleans it via `trap 'rm -rf \"$ROOT\"' EXIT` (plugins/deployit/tests/test-gc.sh:6-7).\nverify-live.sh is not fixture-based: it curls a real running server (port from --port, $DEPLOYIT_STATE_DIR, or the default config path) and accumulates PASS/FAIL counters via pass()/fail() helpers, exiting 1 on any failure (plugins/deployit/tests/verify-live.sh:41-45,138-139).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.type_notes/824b60d198db4bc5178c1277": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2604,6 +2716,18 @@
         "verdict": "unverified"
       }
     },
+    "module.type_notes/8464e187735c7b5cdc3b0482": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "- The backend never mutates the index; all destructive routes shell out to deployit-cli's `rm` subcommand so there is exactly one index writer \u2014 plugins/deployit/bin/deployit-backend:413-419, 585-607.\n- CLI state is a per-machine directory (~/Library/Application Support/deployit, overridable via DEPLOYIT_STATE_DIR) that owns config.toml, the index clone, serve/ artifacts, and launchd logs \u2014 plugins/deployit/bin/deployit-cli:62-67, 138-141.\n- The launchd plist is generated once against STABLE indirection symlinks (<state>/_plugin_root, <state>/bin/deployit-backend); plugin upgrades only repoint the symlinks via `_sync_plugin_root`, never regenerate the plist \u2014 plugins/deployit/bin/deployit-cli:196-201, 154-166.\n- Every index-mutating operation resets the local checkout to a clean origin/main before mutating (`_reset_index_to_origin_main`), so a concurrent-writer conflict simply retries from a fresh base rather than merging \u2014 plugins/deployit/bin/deployit-cli:989-1001, 1113-1114.\n- A commit that can neither be published nor pushed to a fallback branch is never dropped: `_preserve_and_fail` stashes it on a local `<branch>-local` recovery branch before resetting main \u2014 plugins/deployit/bin/deployit-cli:1004-1015.\n- `Handler.root` is a class attribute injected per-process by `make_handler`'s dynamic subclass, not an instance field \u2014 plugins/deployit/bin/deployit-backend:447-448, 610-611.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.type_notes/862fb37561990c0b86031102": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2612,6 +2736,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "State is owned per-PR under .claude/worktrees/reconcile-pr/<pr>/ (state_dir, plugins/reconcile-pr/bin/reconcile-pr.sh:107): meta.json (repo/base/head/remote_oid/base_oid, written once at start \u2014 plugins/reconcile-pr/bin/reconcile-pr.sh:364-369) plus conflicts.log. cmd_start refuses to begin if that directory already exists, so at most one reconcile is in flight per PR (plugins/reconcile-pr/bin/reconcile-pr.sh:302). The worktree is created by `git worktree add` inside cmd_start (plugins/reconcile-pr/bin/reconcile-pr.sh:358-362) and destroyed only through the single teardown() function shared by abort and cleanup (plugins/reconcile-pr/bin/reconcile-pr.sh:258-264, called at :605 and :631) \u2014 there is no other removal path. remote_oid recorded at start (plugins/reconcile-pr/bin/reconcile-pr.sh:367-369) is read back unmodified at push time (plugins/reconcile-pr/bin/reconcile-pr.sh:498) and pinned into --force-with-lease (plugins/reconcile-pr/bin/reconcile-pr.sh:547); it is never refreshed mid-flow, so a branch that moved since start always fails the lease rather than silently re-arming the guard. Each subcommand invocation is single-shot and stateless between calls \u2014 all cross-call state is the meta.json/conflicts.log/worktree triad \u2014 and every code path emits exactly one JSON object on stdout (plugins/reconcile-pr/bin/reconcile-pr.sh:11-12), funneled through the fail/refuse emitters (plugins/reconcile-pr/bin/reconcile-pr.sh:63-73).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.type_notes/8b1a52e8f257bb1a6767b13f": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Every issue.sh subcommand owns its own git/gh/tmux side effects and emits exactly one JSON object with ok+display; the skill never calls git/gh/tmux itself (plugins/issue/bin/issue.sh:4-6, plugins/issue/skills/issue/SKILL.md:9-11). Dispatch's ok-vs-warning boundary is a hard lifecycle line: steps 0-4 are preconditions that fail before any side effect, but from step 5 (the first `tmux new-window`) onward a failure degrades to ok:true+warning because the window already exists (plugins/issue/bin/issue.sh:23-27). resolve_wname() is the single naming authority shared by dispatch (which creates the window/worktree) and complete (which looks the same name up to clean it), so the two subcommands must stay in lock-step (plugins/issue/bin/issue.sh:172-183). collect_targets() is read-only and shared verbatim by complete plan (preview) and complete execute (deletion), so both phases always act on identical scanned data (plugins/issue/bin/issue.sh:225-237). WAIT_READY_TIER is a global set as a side-channel by wait_ready() so both dispatch and doctor can read which readiness tier matched (plugins/issue/bin/issue.sh:360-366). Deletion invariants are enforced with git-native backstops, not just script logic: `git worktree remove` (no --force) and `git branch -d` both refuse dirty/current/unmerged targets even if collect_targets' classification has a bug (plugins/issue/bin/issue.sh:1051,1065).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2648,18 +2784,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Every script here is a standalone bash CLI (`set -euo pipefail`) that always exits 0 and reports failure only via a JSON `ok`/`error` field, so callers branch on the JSON body, not the exit code (plugins/forge/bin/forge-crash-recover.sh:12-17, plugins/forge/bin/forge-dag-validate.sh:16-20). forge-dag-validate.sh's cycle search is written entirely in jq rather than bash because \"bash on macOS ships 3.2, which has no associative arrays\" (plugins/forge/bin/forge-dag-validate.sh:59-61). forge-agent-alignment-check.sh's real logic lives in an embedded python3 heredoc and degrades to a still-`ok:false`-shaped skip result when python3 is absent (plugins/forge/bin/forge-agent-alignment-check.sh:54-59). forge-close-project-story.sh is explicitly a best-effort hygiene action \u2014 its own header states the actual deadlock fix is forge-state.sh's read-only exclusion of `project_story` from its done-computation elsewhere in the pipeline (plugins/forge/bin/forge-close-project-story.sh:15-21).",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.type_notes/ab2652ad687d11d8fd0f49c5": {
-      "kind": "module.type_notes",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Every test in this chunk except verify-live.sh is a self-contained bash script that builds its own mktemp sandbox (a throwaway git repo or fake .app bundle) and tears it down via `trap ... EXIT`, so no fixture state is shared across files \u2014 e.g. plugins/deployit/tests/test-metadata.sh:6-7, plugins/deployit/tests/test-release-context.sh:9.\nRelease tests never touch real GitHub: they redirect gh to a fake binary via DEPLOYIT_GH_BIN (plugins/deployit/tests/test-release-context.sh:19, plugins/deployit/tests/test-release-existing-tag.sh:20, plugins/deployit/tests/test-release-gh-invocation.sh:21, plugins/deployit/tests/test-release-tag-exists-omits-target.sh:24), and most also stub codesign via DEPLOYIT_SKIP_CODESIGN_VERIFY=1 (plugins/deployit/tests/test-release-existing-tag.sh:21).\nverify-live.sh is the outlier: it owns no fixture at all and instead assumes an already-running deployit server, resolving its port from $DEPLOYIT_STATE_DIR/config.toml before hitting it over HTTP \u2014 plugins/deployit/tests/verify-live.sh:8-14,40.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2744,6 +2868,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "No types \u2014 a single case-statement dispatcher. `run_cli` deliberately toggles `set +e` around the `$CLI \"$@\"` invocation before restoring `set -e` (plugins/atlas/bin/atlas-router.sh:16-20), so a non-zero `atlas-cli` exit does not abort the router under `set -euo pipefail` (plugins/atlas/bin/atlas-router.sh:5) \u2014 the CLI's own JSON `ok:false` payload is left to carry the error signal to the caller rather than the shell's exit code. `CLI` is built unquoted as `\"python3 ${SCRIPT_DIR}/atlas-cli\"` (plugins/atlas/bin/atlas-router.sh:8) and expanded unquoted in `run_cli` (plugins/atlas/bin/atlas-router.sh:18), relying on word-splitting to invoke `python3` with the script path as a separate argument.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.type_notes/c7c06c144f980ddd15aed40d": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "- Every test-*.sh sources lib.sh, which resolves SCRIPT to bin/issue.sh and exports ISSUE_GH_BIN to the fake gh, so every invocation of $SCRIPT under test talks to the fake, never live GitHub (plugins/issue/tests/lib.sh:13-17).\n- mk_repo creates throwaway repos under /tmp, not $TMPDIR, specifically to dodge macOS Spotlight's mds_stores indexing stalls on file-heavy git fixtures (plugins/issue/tests/lib.sh:5-6).\n- mk_complete_repo builds one fixed, heavily-commented fixture (issue 77, origin prefix \"rep\") encoding every `complete` guard-rail case \u2014 merged/unmerged branches, a pushed merged PR-head branch, a clean worktree, and a locked worktree \u2014 that test-complete-plan.sh and test-complete-execute.sh both reuse verbatim (plugins/issue/tests/lib.sh:38-75).\n- fakes/tmux implements only the subcommands cmd_dispatch/cmd_doctor need and selects capture-pane output via the FAKE_TMUX_CAPTURE tiers (legacy/marker/structural/modal/busy/churn) to drive the multi-tier readiness gate under test (plugins/issue/tests/fakes/tmux:41-86).\n- Real (non-dry-run) dispatch tests (test-gitignore.sh, test-readiness.sh) prepend the fake tmux's directory onto PATH and set dummy TMUX/TMUX_PANE plus zeroed poll delays so cmd_dispatch's polling loop runs headlessly and instantly (plugins/issue/tests/test-gitignore.sh:13-26, plugins/issue/tests/test-readiness.sh:23-35).\n- No test framework: fail_test/assert_eq/assert_contains/assert_not_contains/finish are hand-rolled in lib.sh, and jqf wraps `jq -r` for JSON field assertions (plugins/issue/tests/lib.sh:77-108).\n- run-tests.sh discovers test-*.sh by glob and accepts an optional substring filter as its sole argument (plugins/issue/tests/run-tests.sh:14-18).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2892,18 +3028,6 @@
         "verdict": "unverified"
       }
     },
-    "module.type_notes/f3fd4070c3d29d71ae99101c": {
-      "kind": "module.type_notes",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "- Handler binds its serving `root` via a per-request dynamic subclass, not an instance attribute: make_handler creates a fresh subclass via `type('Handler', (Handler,), {'root': root})` because ThreadingHTTPServer instantiates one Handler per connection with no hook into `__init__` (plugins/deployit/bin/deployit-backend:610-611).\n- `_pull_lock` is the backend's only concurrency guard: ThreadingHTTPServer serves each request on its own thread, and only `_git_pull` (which mutates the index checkout) takes it (plugins/deployit/bin/deployit-backend:41,213).\n- The backend never mutates the shared index itself; `_run_cli_rm` always shells out to `deployit-cli rm`, which owns the pull/prune/commit/push sequence (plugins/deployit/bin/deployit-backend:413; plugins/deployit/bin/deployit-cli:920,877).\n- `deployit-release` runs only as a subprocess invoked from `_publish_github_release`, never imported \u2014 a release-publish failure can't roll back or corrupt the already-committed tailnet deploy (plugins/deployit/bin/deployit-cli:1005).",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.type_notes/f5055491a55d5e5b4dca938c": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2928,10 +3052,10 @@
         "verdict": "unverified"
       }
     },
-    "overview.dataflow/e51af52de33fa39abb22927b": {
+    "overview.dataflow/62c073bd7a2f12d9909cba55": {
       "kind": "overview.dataflow",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
@@ -2940,37 +3064,35 @@
         "verdict": "unverified"
       }
     },
-    "overview.index_facts/61211d4c2a571f38ad4bccc2": {
+    "overview.index_facts/274a19d010f317ae6a5be483": {
       "kind": "overview.index_facts",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
       "value": [
         "Claude Code plugin marketplace; marketplace.json is the sole plugin registry.",
-        "12 plugins live under plugins/<name>/, each with its own bin/, skills/, references/.",
-        "Skills are thin routers; bin/ scripts (bash+jq or python3) do deterministic work.",
-        "plugins/agents/agents/ is the shared agent library forge/rca/atlas/council spawn from.",
-        "Artifact dirs: .forge/ .rca/<slug>/ .atlas/ .semver/ .freshen/; presence drives resume.",
-        "hook-guard is a shared circuit breaker any Stop hook sources to halt runaway loops.",
-        "greenlight is a PreToolUse hook gating Bash: deterministic allow/warn plus AI fallback.",
+        "12 plugins under plugins/<name>/; thin-router skills, deterministic bin/ scripts.",
+        "plugins/agents/agents/ is the shared agent library forge/rca/atlas/council spawn.",
+        "Artifact dirs .forge/ .rca/ .atlas/ .semver/ .freshen/; presence drives resume.",
+        "greenlight is a PreToolUse hook gating Bash: deterministic allow/warn plus AI.",
         "Atlas v2 separates deterministic extraction/projection from LLM judgment cells.",
-        "Plugins share no runtime code except the agent library, semver stamp, freshen signals.",
-        "reconcile-pr never force-pushes bare; uses explicit-OID --force-with-lease."
+        "reconcile-pr never force-pushes bare; uses explicit-OID --force-with-lease.",
+        "Plugins share no runtime code except agent library, semver stamp, freshen signals."
       ],
       "verify": {
         "verdict": "unverified"
       }
     },
-    "overview.shape/ba10f77cd6e8a0970c7b4138": {
+    "overview.shape/372d3b9742e5551495fbaa3d": {
       "kind": "overview.shape",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
-      "value": "Agentics is a Claude Code plugin marketplace: `.claude-plugin/marketplace.json` registers twelve independently-versioned plugins (agents, atlas, council, deployit, forge, freshen, greenlight, handle-issue, hook-guard, rca, reconcile-pr, semver), each living under `plugins/<name>/` with its own `plugins/<name>/.claude-plugin/plugin.json` manifest. Within every plugin the same layered pattern repeats: a thin-router `SKILL.md` (one `AskUserQuestion` at a time) dispatches to deterministic `bin/` scripts \u2014 bash+jq or stdlib-only python3 CLIs emitting one JSON object with an `ok`+`display` contract \u2014 for anything computable, and to `references/*.md` protocol docs for detailed procedure, so the skill itself stays a router rather than a procedure. Judgment that can't be computed (module purpose, release notes, triage verdicts) is usually pushed into an optional fourth layer: `agent-overrides/<name>-context.md` files that narrow a generic shared-agent role to the plugin's own state and artifact contract. reconcile-pr is the one plugin that skips this fourth layer entirely: it ships no `agent-overrides/` directory and spawns no shared agent, and its `SKILL.md` instead performs the handful of judgment calls a script can't make \u2014 conflict-side labeling, tree verification, summary prose \u2014 directly, collapsing the pattern to three layers for that plugin alone.\n\nThe one real code-sharing seam is `plugins/agents/agents/`, a library of self-contained agent spawn contracts (YAML frontmatter + role body) that forge, rca, atlas, and council all inline verbatim rather than importing at runtime \u2014 a consumer concatenates the shared agent file with its own override doc into one spawn prompt. Beyond that library, plugins are deliberately independent at the runtime-code level: deployit's CLI coordinates with semver only by discovering `semver-cli` as a subprocess (never an import), and atlas, forge, rca, and reconcile-pr each own a fully self-contained deterministic backend with no cross-plugin function calls. Large module-edge counts linking atlas/deployit bin scripts to the semver module are regex-extractor artifacts from common method-name collisions (`get`/`write`/`add`), not real call edges, and should not be read as runtime dependencies.\n\nState is never held in conversation context across a pipeline's steps; each stateful plugin owns a gitignored artifact directory instead (`.forge/`, `.rca/<slug>/`, `.atlas/`, `.semver/`, `.freshen/`), and every resumption decision is derived from which files are present. `plugins-reconcile-pr` varies this pattern rather than breaking it: state is scoped per pull request inside an isolated git worktree at `.claude/worktrees/reconcile-pr/<pr>/` (a `meta.json` plus a `conflicts.log`), and its `start` subcommand refuses to begin if that directory already exists, capping concurrency to one reconcile per PR; `plugins-handle-issue`, by contrast, is fully stateless \u2014 each `dispatch` run persists nothing at all. The remaining cross-cutting seams are hook-mediated rather than call-mediated: semver's post-bump hook one-way-stamps `VERSION` into every other plugin's manifest; freshen's Stop/SessionStart hooks are the sole tmux mechanism any plugin uses to `/clear` and re-invoke between steps, driven by a signal file a plugin queues rather than a direct call; hook-guard's shared circuit breaker is sourced by any plugin's Stop hook to halt runaway loops; and greenlight's PreToolUse hook gates every Bash tool call regardless of which plugin is active \u2014 including the git/gh commands reconcile-pr and handle-issue issue. This hook layer is where plugins actually touch each other at runtime \u2014 everywhere else, a plugin's `bin/` is a closed deterministic world.",
+      "value": "Agentics is a Claude Code plugin marketplace: `.claude-plugin/marketplace.json` registers twelve independently-versioned plugins (agents, atlas, council, deployit, forge, freshen, greenlight, hook-guard, issue, rca, reconcile-pr, semver), each living under `plugins/<name>/` with its own `plugins/<name>/.claude-plugin/plugin.json` manifest. Within every plugin the same layered pattern repeats: a thin-router `SKILL.md` (one `AskUserQuestion` at a time) dispatches to deterministic `bin/` scripts \u2014 bash+jq or stdlib-only python3 CLIs emitting one JSON object with an `ok`+`display` contract \u2014 for anything computable, and to `references/*.md` protocol docs for detailed procedure, so the skill itself stays a router rather than a procedure. Judgment that can't be computed (module purpose, release notes, triage verdicts) is usually pushed into an optional fourth layer: `agent-overrides/<name>-context.md` files that narrow a generic shared-agent role to the plugin's own state and artifact contract. reconcile-pr is the one plugin that skips this fourth layer entirely: it ships no `agent-overrides/` directory and spawns no shared agent, and its `SKILL.md` instead performs the handful of judgment calls a script can't make \u2014 conflict-side labeling, tree verification, summary prose \u2014 directly, collapsing the pattern to three layers for that plugin alone.\n\nThe one real code-sharing seam is `plugins/agents/agents/`, a library of self-contained agent spawn contracts (YAML frontmatter + role body) that forge, rca, atlas, and council all inline verbatim rather than importing at runtime \u2014 a consumer concatenates the shared agent file with its own override doc into one spawn prompt. Beyond that library, plugins are deliberately independent at the runtime-code level: deployit's CLI coordinates with semver only by discovering `semver-cli` as a subprocess (never an import) and is itself the sole writer of a shared git-backed build index, classifying each push failure (ruleset/protected \u2192 PR fallback; non-fast-forward \u2192 retry from a fresh origin/main; auth \u2192 preserve-and-fail without a PR attempt) so concurrent deploys can never corrupt it; atlas, forge, rca, and reconcile-pr each own a fully self-contained deterministic backend with no cross-plugin function calls. Large module-edge counts linking atlas/deployit bin scripts to the semver module are regex-extractor artifacts from common method-name collisions (`get`/`write`/`add`), not real call edges, and should not be read as runtime dependencies.\n\nState is never held in conversation context across a pipeline's steps; each stateful plugin owns a gitignored artifact directory instead (`.forge/`, `.rca/<slug>/`, `.atlas/`, `.semver/`, `.freshen/`), and every resumption decision is derived from which files are present. `plugins-reconcile-pr` varies this pattern rather than breaking it: state is scoped per pull request inside an isolated git worktree at `.claude/worktrees/reconcile-pr/<pr>/` (a `meta.json` plus a `conflicts.log`), and its `start` subcommand refuses to begin if that directory already exists, capping concurrency to one reconcile per PR; `plugins-issue-misc`, by contrast, is fully stateless \u2014 each `dispatch` run persists nothing at all. The remaining cross-cutting seams are hook-mediated rather than call-mediated: semver's post-bump hook one-way-stamps `VERSION` into every other plugin's manifest; freshen's Stop/SessionStart hooks are the sole tmux mechanism any plugin uses to `/clear` and re-invoke between steps, driven by a signal file a plugin queues rather than a direct call; hook-guard's shared circuit breaker is sourced by any plugin's Stop hook to halt runaway loops; and greenlight's PreToolUse hook gates every Bash tool call regardless of which plugin is active \u2014 including the git/gh commands that both reconcile-pr's rebase machine and the issue plugin's dispatch/complete flows run. This hook layer is where plugins actually touch each other at runtime \u2014 everywhere else, a plugin's `bin/` is a closed deterministic world.",
       "verify": {
         "verdict": "unverified"
       }
@@ -5225,6 +5347,20 @@
       "value": "Builds the Structure Index fresh: symbols, edges, imports, external deps and module membership for every scanned file.",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "symbol.contract/6f7751bba38b2bde421906c9": {
+      "kind": "symbol.contract",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "Flushes the pending worktree record (path, branch-or-'-', locked flag) once per porcelain block and at EOF; never emits when p is empty.",
+      "verify": {
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -8141,22 +8277,6 @@
         "verifier": "map-verifier"
       }
     },
-    "symbol.load_bearing/0312be044f573649a5d87dc1": {
-      "kind": "symbol.load_bearing",
-      "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": {
-        "load_bearing": false
-      },
-      "verify": {
-        "at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "verdict": "pass",
-        "verifier": "map-verifier"
-      }
-    },
     "symbol.load_bearing/0551b6f75cdeec9ac9877696": {
       "kind": "symbol.load_bearing",
       "provenance": {
@@ -8333,16 +8453,16 @@
         "verifier": "map-verifier"
       }
     },
-    "symbol.load_bearing/47e06aee1a60c6a84873d106": {
+    "symbol.load_bearing/449610ed8d9c93470c49f2ff": {
       "kind": "symbol.load_bearing",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "generator": "cartographer/4",
         "model": "claude-sonnet-5"
       },
-      "value": "Deploy hot path's only writer to the shared builds.json index: pull/prepend/prune/commit/push with conflict-retry (plugins/deployit/bin/deployit-cli:885-917); called from cmd_deploy (plugins/deployit/bin/deployit-cli:1161) \u2014 guards the index's consistency invariant.",
+      "value": "The single decision point for every index push: classifies git push stderr into ruleset/protected (\u2192 PR fallback), auth (\u2192 preserve-and-fail, no PR attempt), non_fast_forward/other (\u2192 retry from a fresh origin/main). Consumed at plugins/deployit/bin/deployit-cli:1086 inside _publish_index_commit, which both _append_to_index and _commit_and_push_index depend on for every publish.",
       "verify": {
-        "at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -8357,6 +8477,20 @@
       "value": "Parses .semver/config.yaml's flat key:value format directly (deliberately not importing the semver plugin) \u2014 the sole read path behind _semver_active_version, _semver_prefix, and preflight's target_branch (plugins/deployit/bin/deployit-cli:338).",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "symbol.load_bearing/5ecffbe501a0e39663a39a07": {
+      "kind": "symbol.load_bearing",
+      "provenance": {
+        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet-5"
+      },
+      "value": "The high-frequency deploy path's sole writer to the shared index: prepends the new build entry, prunes this origin's older builds, commits, and publishes, resetting to a clean origin/main on each retry attempt so concurrent deploys never corrupt builds.json. Called from cmd_deploy at plugins/deployit/bin/deployit-cli:1374; delegates the push-classification/retry/PR-fallback decision to _publish_index_commit (plugins/deployit/bin/deployit-cli:1127).",
+      "verify": {
+        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
         "verdict": "pass",
         "verifier": "map-verifier"
       }

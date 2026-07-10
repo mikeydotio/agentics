@@ -16,7 +16,7 @@ sources:
   - path: plugins/deployit/assets/appcast.template.xml
     blob: cafd1d470f8cea90690c9cdf5adbc56e8351d714
   - path: plugins/deployit/assets/config.example.toml
-    blob: 858c6553f1a133b2ff2396392367132f3007722b
+    blob: 1257fea5ed12a00998249906d19d68edd1a317dc
   - path: plugins/deployit/assets/icons/icon.svg
     blob: d706e39034df2f1f5838ce57beab5623d8243146
   - path: plugins/deployit/assets/index.template.html
@@ -30,7 +30,7 @@ sources:
   - path: plugins/deployit/assets/product.template.html
     blob: 1262e6f64dfb9b2abe10d9736524c8cbc18c9dc2
 generator: cartographer/4
-baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
+baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
 ---
 
 # Module: plugins/deployit/assets

@@ -4,7 +4,7 @@ summary: "Bash integration tests that boot the real deployit-backend server agai
 read_when: "Touching deployit-backend HTTP routes/rendering or the bash test harness/fakes"
 sources:
   - path: plugins/deployit/tests/fakes/gh
-    blob: fa6e252e325c5fedba6b0e3ec0a9edf528d68208
+    blob: f43a0f8c7dd8277830250d88080614443ec65c40
   - path: plugins/deployit/tests/fakes/tailscale
     blob: e791bddad3f3d31a1e584d72f71075a4a5270547
   - path: plugins/deployit/tests/run-tests.sh
@@ -34,7 +34,7 @@ sources:
   - path: plugins/deployit/tests/test-backend-static-assets.sh
     blob: 2a6a390c6fe8a1e708e1f90d404eee00918cef86
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
 ---
 
 # Module: plugins/deployit/tests (chunk 1)

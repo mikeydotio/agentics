@@ -4,7 +4,7 @@ summary: "Orchestrates five-phase root cause analysis: symptom, evidence, hypoth
 read_when: "Touching the /rca skill, phase artifacts (.rca/<slug>/), references, or agent overrides"
 sources:
   - path: plugins/rca/.claude-plugin/plugin.json
-    blob: 2c8f35ec6ee91eae723b3f285b57fca1b47d8a3e
+    blob: a921fbf8a55d1cb96c90b40ee8dd1f17328c0c71
   - path: plugins/rca/README.md
     blob: 65f996dd8e8f6f0627b43e7f2ddab8b68dd21b3b
   - path: plugins/rca/agent-overrides/architect-rca.md
@@ -22,7 +22,7 @@ sources:
   - path: plugins/rca/skills/rca/SKILL.md
     blob: c5271dfc51b0450cc67a901b66fc599a53601e88
 generator: cartographer/4
-baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
+baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
 ---
 
 # Module: plugins/rca

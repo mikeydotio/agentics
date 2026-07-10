@@ -1,5 +1,5 @@
 {
-  "baseline": "134d628a77fb9540e6c1f561e02d9a1e192e6552",
+  "baseline": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/4",
@@ -74,7 +74,7 @@
       "module": "plugins/agents (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/agents/.claude-plugin/plugin.json": "ebc64164f387e0b2c6d1eec3d0d804481c816632",
+        "plugins/agents/.claude-plugin/plugin.json": "8b72f069b276f7c9965b7fef799111d86953aa6a",
         "plugins/agents/bin/validate-agents.sh": "ce55f55b8ac86af01f2fde7f9cad4ee9e6f7c9f6",
         "plugins/agents/skills/agents/SKILL.md": "a124fbbf7f5ad088ee35819abd2a57d151497678"
       },
@@ -145,7 +145,7 @@
       "module": "plugins/atlas (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/atlas/.claude-plugin/plugin.json": "b6d1b9e2f6b141defd8340d2e9ee3710e1e63c72",
+        "plugins/atlas/.claude-plugin/plugin.json": "6549fb2295a89a48f538f072652204771cb3021f",
         "plugins/atlas/README.md": "9cf94e438eac816b0bd995a72ef2217b7288ef3e",
         "plugins/atlas/hooks/hooks.json": "41851681fe5ce7fdd0fc14b33dd4868d38398e6a",
         "plugins/atlas/hooks/session-start.sh": "4277ada1b6f54bba1034edf015c622f6a3a3eb94",
@@ -232,7 +232,7 @@
       "module": "plugins/council",
       "references_modules": [],
       "sources": {
-        "plugins/council/.claude-plugin/plugin.json": "6f4d695e0e33ce23c100f66127e9074dec85b626",
+        "plugins/council/.claude-plugin/plugin.json": "8022f3c59c56ec6aa383c5a141680c5db0ea1425",
         "plugins/council/README.md": "6fc77ba8523cf7262b3d0a8f9f79586464cefc62",
         "plugins/council/references/archetypes.md": "c44c68234b14a4ac1f63ad6212ba15acf1677685",
         "plugins/council/references/council-protocol.md": "c0f8ed74139972454cb6d45d4b50ba47417c8cbb",
@@ -255,7 +255,7 @@
         "plugins/deployit/assets/app.css": "e067d3a7de38b88668dde0a50176f1b29e8e3238",
         "plugins/deployit/assets/app.js": "04c208727cd8fffa2251c407d3dcf8080d1bb483",
         "plugins/deployit/assets/appcast.template.xml": "cafd1d470f8cea90690c9cdf5adbc56e8351d714",
-        "plugins/deployit/assets/config.example.toml": "858c6553f1a133b2ff2396392367132f3007722b",
+        "plugins/deployit/assets/config.example.toml": "1257fea5ed12a00998249906d19d68edd1a317dc",
         "plugins/deployit/assets/icons/icon.svg": "d706e39034df2f1f5838ce57beab5623d8243146",
         "plugins/deployit/assets/index.template.html": "e0b564edf11a7723473248d94a3397eed55acf27",
         "plugins/deployit/assets/listing.template.html": "47a89ff8324958e2c7969b33a93c61b1a34a140f",
@@ -266,17 +266,26 @@
       "summary": "Static web templates/styles/JS, platform export-options plists, and the default config seed deployit renders or reads.",
       "verified": null
     },
-    "modules/plugins-deployit-bin.md": {
+    "modules/plugins-deployit-bin-chunk-1.md": {
       "generator": "cartographer/4",
-      "module": "plugins/deployit/bin",
+      "module": "plugins/deployit/bin (chunk 1)",
       "references_modules": [],
       "sources": {
         "plugins/deployit/bin/deployit-backend": "7938f381f5c77f195c95d8f7a120b4d38cd8fc7e",
-        "plugins/deployit/bin/deployit-cli": "ea8f46203210b4801b7783512ed21732f17fa54b",
+        "plugins/deployit/bin/deployit-cli": "ba3fed29a0db0680bfb9fd7e3c3f24aa55cac9d9"
+      },
+      "summary": "deployit's stdlib-only HTTP backend (listing/serve/delete) and CLI (archive/export/stage/publish to the index).",
+      "verified": null
+    },
+    "modules/plugins-deployit-bin-chunk-2.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/deployit/bin (chunk 2)",
+      "references_modules": [],
+      "sources": {
         "plugins/deployit/bin/deployit-release": "48312b67fd29de6982d480529961efb7df6dc8a9",
         "plugins/deployit/bin/deployit-router.sh": "344168329e019299a535c6e7c327e726f0cb5d03"
       },
-      "summary": "deployit's runtime: CLI orchestrator, HTTP install/listing daemon, and GitHub-release publisher.",
+      "summary": "Publishes a Developer-ID-signed macOS app as a GitHub release; routes /deployit subcommands to deployit-cli.",
       "verified": null
     },
     "modules/plugins-deployit-misc.md": {
@@ -284,7 +293,7 @@
       "module": "plugins/deployit (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/deployit/.claude-plugin/plugin.json": "e15cbb0df6b411dadfcca2c63459f75120acdb62",
+        "plugins/deployit/.claude-plugin/plugin.json": "723abf317f8b7ccf512d2c8510d3dde771a3f2bb",
         "plugins/deployit/skills/deployit/SKILL.md": "61ac326fd6cb8ef2020cec7f05b0a81db14896e4"
       },
       "summary": "Deployit's plugin manifest and orchestrator skill: routes /deployit commands to the CLI and authors release notes.",
@@ -297,12 +306,13 @@
       "sources": {
         "plugins/deployit/references/bootstrap.md": "24850fe5b053d9925a7af47513cfc2ac04033f93",
         "plugins/deployit/references/github-release.md": "c76af9df46aa1976f57f66cff2d6e7afc5b073cc",
+        "plugins/deployit/references/index-publishing.md": "c403b37310959de5a4bbef9d30684e75d81f17a3",
         "plugins/deployit/references/ios.md": "59175850b662bbf27b81972fc0ee97cfbe31acb9",
         "plugins/deployit/references/macos.md": "f3a69568a6ae8ad41280e7be3b3e3e34a19a1272",
         "plugins/deployit/references/semver.md": "6bfc5d8f26e34851b97f77d4236e88fe8be273d6",
         "plugins/deployit/references/sparkle.md": "03c53342a7c898cc3f381e24959f28e0a893257f",
         "plugins/deployit/references/tailscale-serve.md": "92267a1597530c980bfee1916f83a818dba94abd",
-        "plugins/deployit/references/troubleshooting.md": "248dc2a7c4b900aba19b4bf61cdcca189fc37b7d",
+        "plugins/deployit/references/troubleshooting.md": "f088e1e68868f93c78f755868aeec1cfb81ba0ea",
         "plugins/deployit/references/visionos.md": "3773ae52396c5b6df79ce4d8926f2412fe4eca3d"
       },
       "summary": "Per-concern procedure docs behind /deployit \u2014 setup, platform deploys, proxy, semver bump guard, recovery",
@@ -313,7 +323,7 @@
       "module": "plugins/deployit/tests (chunk 1)",
       "references_modules": [],
       "sources": {
-        "plugins/deployit/tests/fakes/gh": "fa6e252e325c5fedba6b0e3ec0a9edf528d68208",
+        "plugins/deployit/tests/fakes/gh": "f43a0f8c7dd8277830250d88080614443ec65c40",
         "plugins/deployit/tests/fakes/tailscale": "e791bddad3f3d31a1e584d72f71075a4a5270547",
         "plugins/deployit/tests/run-tests.sh": "5d017ec337d7a22a0616704396c2d233e1b32278",
         "plugins/deployit/tests/test-backend-500-on-corrupt.sh": "c1683f5c6233f47754ef702b8204def77f0f3815",
@@ -341,19 +351,19 @@
         "plugins/deployit/tests/test-bootstrap-dirs.sh": "fcb3b27daa351b0cba8db9cd480d2b35677662d1",
         "plugins/deployit/tests/test-cli-archive-build-number.sh": "300b23be4b25228e0c39a522166c692fabe8b911",
         "plugins/deployit/tests/test-cli-bump.sh": "04836f17b13c459010bcf9394f9fb1290831ceec",
+        "plugins/deployit/tests/test-cli-classify-push-failure.sh": "63117ce4a300476dae2632a87229430634aa47f2",
         "plugins/deployit/tests/test-cli-config-sparkle.sh": "6f8ac4ff1172a8da5127f4dc3f8d64484d12fe88",
         "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "8f43eb9f58e1c4ad048e566c70e0313ae401e004",
-        "plugins/deployit/tests/test-cli-deploy-release-wiring.sh": "a06013b6b9fdfb84de6568994835065c20f0490b",
+        "plugins/deployit/tests/test-cli-deploy-pr-automerge.sh": "6f488ecd1974e97d525ab2594947dc9adc7c8b61",
+        "plugins/deployit/tests/test-cli-deploy-pr-leave-open.sh": "048aca413738047ded55eda85cee972681886efe",
+        "plugins/deployit/tests/test-cli-deploy-release-wiring.sh": "0e013d6517715c30f668601827a896c1972be904",
         "plugins/deployit/tests/test-cli-preflight.sh": "894d8c16d5cd39f2d0f18f40f0aab8527c185e9b",
+        "plugins/deployit/tests/test-cli-publish-preserve-on-failure.sh": "0928c7b78ef0847181fa040170b1a8b3347bc1e5",
         "plugins/deployit/tests/test-cli-redeploy.sh": "5cc4141d1c5dc1700865ec366d1304c672bd9817",
-        "plugins/deployit/tests/test-cli-rm.sh": "dfac34f95d15aa78c898783643ccdc0c990f1bbf",
-        "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "6b3bfa75c163b4144936d08ceb7c2f26fb025081",
-        "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "483caf8c6d787b64d08bea97ad2796815d6f3f55",
-        "plugins/deployit/tests/test-cli-version.sh": "d7a1daaa409feb77dbb59b51a4c1f76b58050f79",
-        "plugins/deployit/tests/test-gc.sh": "be01b59bafa19e9c5bda91c29d3ccd6101f9ad88",
-        "plugins/deployit/tests/test-metadata-single-app.sh": "1f36ebce4b6cf9363f3e6045fb7afced5dcd2ef0"
+        "plugins/deployit/tests/test-cli-rm-pr-fallback.sh": "52a497fd13bde12d066e87aba4647d8d6852f285",
+        "plugins/deployit/tests/test-cli-rm.sh": "dfac34f95d15aa78c898783643ccdc0c990f1bbf"
       },
-      "summary": "Deployit CLI tests (bootstrap, redeploy, gc, rm, preflight, bump, macOS staging) plus the backend version-label test.",
+      "summary": "Bash+python3 tests exercising deployit-cli/-backend via real git repos, fake gh, and DEPLOYIT_SKIP_* env sandboxing.",
       "verified": null
     },
     "modules/plugins-deployit-tests-chunk-3.md": {
@@ -361,6 +371,11 @@
       "module": "plugins/deployit/tests (chunk 3)",
       "references_modules": [],
       "sources": {
+        "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "6b3bfa75c163b4144936d08ceb7c2f26fb025081",
+        "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "483caf8c6d787b64d08bea97ad2796815d6f3f55",
+        "plugins/deployit/tests/test-cli-version.sh": "d7a1daaa409feb77dbb59b51a4c1f76b58050f79",
+        "plugins/deployit/tests/test-gc.sh": "be01b59bafa19e9c5bda91c29d3ccd6101f9ad88",
+        "plugins/deployit/tests/test-metadata-single-app.sh": "1f36ebce4b6cf9363f3e6045fb7afced5dcd2ef0",
         "plugins/deployit/tests/test-metadata.sh": "5c49e2f4a48015c86de20068bd861f6edde9103c",
         "plugins/deployit/tests/test-release-adhoc-signing.sh": "1c2eec4f879b10ad29ff5ac5990c35b77c5e2c21",
         "plugins/deployit/tests/test-release-context.sh": "f7fee93b3950536b1d8343e7cd10de58289a0ea1",
@@ -370,7 +385,7 @@
         "plugins/deployit/tests/test-release-version-resolution.sh": "d635899e972a0301e03037445d8dc7ab49c90e9a",
         "plugins/deployit/tests/verify-live.sh": "bd37453899de071cc6fc016d65e27dd31550e720"
       },
-      "summary": "Bash smoke tests for deployit-release's signing/tag/version logic and release-context, plus a live post-deploy check.",
+      "summary": "Bash tests for deployit macOS staging, release publish, metadata, gc, plus a live-deploy smoke verifier.",
       "verified": null
     },
     "modules/plugins-forge-agent-overrides.md": {
@@ -472,7 +487,7 @@
       "module": "plugins/forge (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/forge/.claude-plugin/plugin.json": "b41aedecee76836d3f8664014d7ef80c01c7c7e1",
+        "plugins/forge/.claude-plugin/plugin.json": "497dbabccd1504f7b51e2ef6a3db73e911d02ec7",
         "plugins/forge/README.md": "1ce02e4c6294d5613a305d8487b42132d669a063",
         "plugins/forge/tests/run-tests.sh": "ec21a7688fb6712b2f89b69aaa176c1bde7999b7"
       },
@@ -538,7 +553,7 @@
       "module": "plugins/freshen",
       "references_modules": [],
       "sources": {
-        "plugins/freshen/.claude-plugin/plugin.json": "b85d1bef2899e54c47d773f996c932fbb9267759",
+        "plugins/freshen/.claude-plugin/plugin.json": "9ed70693a672a4b1af9ac887d90c0bb49780029f",
         "plugins/freshen/bin/freshen.sh": "58f1e47f2d10aa68f58dafac3a83351d8ff0caa6",
         "plugins/freshen/hooks/hooks.json": "d6b0145c08230b99b9be1f9dbf838455b2dad6b6",
         "plugins/freshen/hooks/on-clear.bats": "477bcb483c51d61cf8e530d55323521a02ef14dd",
@@ -560,7 +575,7 @@
       "module": "plugins/greenlight",
       "references_modules": [],
       "sources": {
-        "plugins/greenlight/.claude-plugin/plugin.json": "977a4fb089180653f81260cd238abedea87abe3f",
+        "plugins/greenlight/.claude-plugin/plugin.json": "84b5d5fc27ada54106a99691cc7c2de0ca87b3df",
         "plugins/greenlight/README.md": "f930f291dc43f3be2ed0c5e0f98ea7e0b5980f09",
         "plugins/greenlight/hooks/greenlight.sh": "5a77823c3f947ef5d5dac09ef16812c5d6a4a5a3",
         "plugins/greenlight/hooks/hooks.json": "20cc2c86286ac87e52943958af770264e327a86c",
@@ -572,35 +587,12 @@
       "summary": "PreToolUse safety hook: deterministic allow/pass classification for Bash commands, plus opt-in AI fallback.",
       "verified": null
     },
-    "modules/plugins-handle-issue.md": {
-      "generator": "cartographer/4",
-      "module": "plugins/handle-issue",
-      "references_modules": [],
-      "sources": {
-        "plugins/handle-issue/.claude-plugin/plugin.json": "effb6e00b20f2b9413a7a7f70c53a901220e156a",
-        "plugins/handle-issue/README.md": "78f9a4ba7ef99ba1e932c9044d2f13a4c861be46",
-        "plugins/handle-issue/bin/handle-issue.sh": "9e739101988751a2a42ef2508b0125ccbde7ae2d",
-        "plugins/handle-issue/skills/handle-issue/SKILL.md": "aa868eed12b2910a432667dd9fcdf0511909da13",
-        "plugins/handle-issue/tests/fakes/gh": "e46b26b4d6b459f785f8ba49245e7b319192f59f",
-        "plugins/handle-issue/tests/fakes/tmux": "8886849d8b4a975499e4689f48dbe3bc08799ccc",
-        "plugins/handle-issue/tests/lib.sh": "9fb1050377b32f46eb31b1a35d08747321712f6c",
-        "plugins/handle-issue/tests/run-tests.sh": "221d6216190bad707c257d7bfe75b4147ef2c226",
-        "plugins/handle-issue/tests/test-arg-validation.sh": "3485d11f170adab9113b98cbb6e8033940fb0b1e",
-        "plugins/handle-issue/tests/test-dispatch-dryrun.sh": "37c9a8558929a01c0737b287d1c8158adb967e7c",
-        "plugins/handle-issue/tests/test-gitignore.sh": "9db415f96f48a32ddcbc9813445ac6bbb61d532b",
-        "plugins/handle-issue/tests/test-list-shaping.sh": "6d544dd4a10a7fc64543767287cfc966d398b5c9",
-        "plugins/handle-issue/tests/test-owner-repo.sh": "0badffd1d9e8bed05f6a865910a503466446f935",
-        "plugins/handle-issue/tests/test-preconditions.sh": "856ec062f3eaf1efc456cb265225f90bb4d637ee"
-      },
-      "summary": "Dispatches a GitHub issue to a new tmux window, git worktree, and plan-mode Claude session via a bash CLI.",
-      "verified": null
-    },
     "modules/plugins-hook-guard.md": {
       "generator": "cartographer/4",
       "module": "plugins/hook-guard",
       "references_modules": [],
       "sources": {
-        "plugins/hook-guard/.claude-plugin/plugin.json": "8b50d27dd1f638548bdf4541dae513cd12137f26",
+        "plugins/hook-guard/.claude-plugin/plugin.json": "e2b680e6c4facf11c9959e11c9586de0609d2170",
         "plugins/hook-guard/hooks/hooks.json": "d22a3169ebee8171c0149fd33e18c5f191b39144",
         "plugins/hook-guard/hooks/session-start.bats": "d0fef980e4026dbe472957321842098e21b3b4b4",
         "plugins/hook-guard/hooks/session-start.sh": "4f29deec3b0e13b0c5ba7fcf07a718d30b638576",
@@ -611,12 +603,51 @@
       "summary": "Shared circuit breaker that halts runaway Stop-hook loops and resets safely across SessionStart events.",
       "verified": null
     },
+    "modules/plugins-issue-misc.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/issue (misc)",
+      "references_modules": [],
+      "sources": {
+        "plugins/issue/.claude-plugin/plugin.json": "2fbe5baeec060fe1bc88afd097a58c566769c166",
+        "plugins/issue/README.md": "69dd64e419dee9c34c27374e533802ac7997b7d8",
+        "plugins/issue/bin/issue.sh": "4c7088dfac642a3da65ea88a05378d50f5b1faae",
+        "plugins/issue/references/complete.md": "e78243246be2041358cce327b932e1721898284c",
+        "plugins/issue/references/new.md": "c2bc904a4f678b127beb57457f95b1ef5ab1db81",
+        "plugins/issue/skills/issue/SKILL.md": "94b5372ae281a1b05b5da9e5fa428cbe68bad6f8"
+      },
+      "summary": "GitHub-issue lifecycle toolkit: skill routes verbs to issue.sh, which owns all git/gh/tmux work and emits JSON.",
+      "verified": null
+    },
+    "modules/plugins-issue-tests.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/issue/tests",
+      "references_modules": [],
+      "sources": {
+        "plugins/issue/tests/fakes/gh": "c762ce565897189d63ef650c2e2f73a3bfa0e0d8",
+        "plugins/issue/tests/fakes/tmux": "1378c9a28c50ece6a7aa00ee80983a0e7f390a37",
+        "plugins/issue/tests/lib.sh": "2eb10a47d3045ba9e6d7c1c953d1b9952abfa360",
+        "plugins/issue/tests/run-tests.sh": "c9ecbe69ff1c00f2d0108e90b1d0041fe66bf4c7",
+        "plugins/issue/tests/test-arg-validation.sh": "52aa1da180368a683c351421dce3d79fc7c24e1d",
+        "plugins/issue/tests/test-complete-execute.sh": "38287da1cc8334b5553d2f08a673943f2809d509",
+        "plugins/issue/tests/test-complete-plan.sh": "b8cb085a2740ac6a4600d7fdaf960625efb717b2",
+        "plugins/issue/tests/test-create.sh": "170d6c086487159620f780be54b39bafe0309fc4",
+        "plugins/issue/tests/test-dispatch-dryrun.sh": "ede282f4309f54ae0d0f2f7ae36f21ab6ffa3958",
+        "plugins/issue/tests/test-gitignore.sh": "d27cf5681485e1fbd5e7d8272ecdefb7acfcf799",
+        "plugins/issue/tests/test-list-shaping.sh": "6d544dd4a10a7fc64543767287cfc966d398b5c9",
+        "plugins/issue/tests/test-owner-repo.sh": "0badffd1d9e8bed05f6a865910a503466446f935",
+        "plugins/issue/tests/test-preconditions.sh": "5ab10ab525d49d2197a578e88ec7640ff926f480",
+        "plugins/issue/tests/test-readiness.sh": "7abefdddf8ff0562bfce3e1d9836ddf8478ce078",
+        "plugins/issue/tests/test-view.sh": "b9659671bf365ecf8cbcdfe8d6e3ecfaa3a0438c"
+      },
+      "summary": "Bash test suite for the issue plugin (dispatch/complete/list/view) driven by fake gh & tmux binaries.",
+      "verified": null
+    },
     "modules/plugins-rca.md": {
       "generator": "cartographer/4",
       "module": "plugins/rca",
       "references_modules": [],
       "sources": {
-        "plugins/rca/.claude-plugin/plugin.json": "2c8f35ec6ee91eae723b3f285b57fca1b47d8a3e",
+        "plugins/rca/.claude-plugin/plugin.json": "a921fbf8a55d1cb96c90b40ee8dd1f17328c0c71",
         "plugins/rca/README.md": "65f996dd8e8f6f0627b43e7f2ddab8b68dd21b3b",
         "plugins/rca/agent-overrides/architect-rca.md": "6c5765aa64e41195c3841b0775d1847fa4359c31",
         "plugins/rca/agent-overrides/investigator-rca.md": "85ff269974b4953c0687a67583763f5f734c334f",
@@ -634,7 +665,7 @@
       "module": "plugins/reconcile-pr",
       "references_modules": [],
       "sources": {
-        "plugins/reconcile-pr/.claude-plugin/plugin.json": "4d1f9f60370cb15199273fc1d76c630a86a202c7",
+        "plugins/reconcile-pr/.claude-plugin/plugin.json": "2cb64ff6430a4bcfba162a7930b2dbdeea94b9da",
         "plugins/reconcile-pr/README.md": "f80668fbd527ffd096f174662ba67c34648f6ab5",
         "plugins/reconcile-pr/bin/reconcile-pr.sh": "e86472f23d63075a1fecd4fbe2f023d1e7e63cf7",
         "plugins/reconcile-pr/references/reconciliation.md": "1fc5dbd0d2f4d72aa1eae200b0f67521f51fdcc4",
@@ -691,7 +722,7 @@
       "module": "plugins/semver (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/semver/.claude-plugin/plugin.json": "6db8bf1d06563f14da6f640932bd720f17f9e604",
+        "plugins/semver/.claude-plugin/plugin.json": "16b5ebb317ee76929d76642bb2c4fee3088e0d11",
         "plugins/semver/README.md": "22ec64306da43a6a4e9b4b7a4270770508d3a7c0",
         "plugins/semver/skills/semver/SKILL.md": "11fab2c938ab5be0798d073f4328428d101c78c0"
       },
@@ -752,12 +783,12 @@
       "module": "root (misc)",
       "references_modules": [],
       "sources": {
-        ".claude-plugin/marketplace.json": "46542bcbe02b04273982bfcf9643bf5ea6d6a596",
+        ".claude-plugin/marketplace.json": "f36f8676b7fe7d6db4e8d6cec733a62acdc06841",
         ".semver/config.yaml": "34a5c2bfa206393f2256834b5bd999e9aec3f077",
         ".semver/hooks/post-bump/01-sync-plugin-versions.sh": "29c1f99416d5f42410c2da7ea59165ed979b2c80",
         "AGENTS.md": "04fef50d2517e57a411f7f23a09af90a44b24dba",
         "HANDOFF.md": "907df53e9f7c3f6e449693c13adab0e710396e13",
-        "Makefile": "3350ac542f31dbd242445cda2a27b8aa3a86ea7e",
+        "Makefile": "926cb27a1499a300ddf88a0975e754ec445c37f6",
         "README.md": "5f28be43c59b3bb49b0976dc3199d42abfee9fea",
         "docs/forge-workflow.md": "829219590927e60d40bc6b2e7d19bbedba22613d"
       },
@@ -771,6 +802,7 @@
       "sources": {
         "tests/helpers.bash": "ca28a41ee9ec7cc8b278243237315d55e07e8a04",
         "tests/init.bats": "4165667c3062581e7e3ff170335e404a87da24de",
+        "tests/plugin-content-drift.sh": "3a494b7e42e880f4f57a37f5713fdf4413f7e90b",
         "tests/plugin-versions.sh": "8bf8703bb6c6d0b0d9f3d31668392f316d65d25c",
         "tests/run-tests.sh": "18b3f63079da9fd9dce3c88ed11500f2eadbf0c3",
         "tests/state-machine.bats": "57349d4bcfc4676886ed90ac73cab29022d2678b"
@@ -787,49 +819,51 @@
         "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "ca030670e871f62db7b140b41cb28826dbcd952b",
         "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "54aaf6c336b4983457db178c8b30c16531f13d38",
         "docs/atlas/modules/plugins-agents-agents-ux.md": "c01f936bc20b66925ad2801c4be17e3161d9a289",
-        "docs/atlas/modules/plugins-agents-misc.md": "1914aaa3678fc5ab17443b3a9c9d1c84a93579b4",
+        "docs/atlas/modules/plugins-agents-misc.md": "05d36f4cfa2e299646dda9b62cf600ff94bba650",
         "docs/atlas/modules/plugins-agents-references.md": "1eff07f91f67d123c4f55dee199f6c493d81c8b2",
         "docs/atlas/modules/plugins-atlas-agent-overrides.md": "4d1dad48609393ef8311cfcbc65966b1bb38febe",
         "docs/atlas/modules/plugins-atlas-bin-chunk-1.md": "e2b19fb5988ab633012d76931631e82b5872ed72",
         "docs/atlas/modules/plugins-atlas-bin-chunk-2.md": "6d8aab0ab6b3ac819c4a5205fb9c8ad7f6ce9096",
         "docs/atlas/modules/plugins-atlas-helpers-ts-helper.md": "469d365d7180e706259a5a323708beaa21ccc97f",
-        "docs/atlas/modules/plugins-atlas-misc.md": "5f8d23fff5c7682e20d4b4143679f28b945cef2b",
+        "docs/atlas/modules/plugins-atlas-misc.md": "63591ba20c998f3a35a57d796c909e1de75df00b",
         "docs/atlas/modules/plugins-atlas-references.md": "3ee390a3ede83da8fce921a6529154456831a447",
         "docs/atlas/modules/plugins-atlas-tests-chunk-1.md": "1d4798201c1ad94362c47a560dc5ded9a0081917",
         "docs/atlas/modules/plugins-atlas-tests-chunk-2.md": "8a7cf46ec3fc63ccb251851ada2432638341b79a",
         "docs/atlas/modules/plugins-atlas-tests-chunk-3.md": "bdbebf3c665e85168dcce04beb45ea1488e42e04",
-        "docs/atlas/modules/plugins-council.md": "f2bac52bfbf1a0cf6dca0f3a5dbaac0c57bb36b2",
-        "docs/atlas/modules/plugins-deployit-assets.md": "bdae424dba7a580acd58eeb04a62bb410651a0fd",
-        "docs/atlas/modules/plugins-deployit-bin.md": "c99c106e416f55363387c0afcf2c61d75fa1381d",
-        "docs/atlas/modules/plugins-deployit-misc.md": "6954089d12f75324623ac3f1efdc20dd2fea7b5f",
-        "docs/atlas/modules/plugins-deployit-references.md": "fd6d5b05370f301b92148de977392593722547d3",
-        "docs/atlas/modules/plugins-deployit-tests-chunk-1.md": "f174c69e4fa40880f993b798c0f985efeabd6eef",
-        "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": "482c907017c3084752d4b184cbf7707b85a9c417",
-        "docs/atlas/modules/plugins-deployit-tests-chunk-3.md": "95d7a472bd68c7da45dc99fd78be46949fa02f0a",
+        "docs/atlas/modules/plugins-council.md": "4eba0787fdd5f846c07e65313ee6b075f21475d2",
+        "docs/atlas/modules/plugins-deployit-assets.md": "aa6ce2aee689858c7491087d56ccb44c63310dfa",
+        "docs/atlas/modules/plugins-deployit-bin-chunk-1.md": "345b9e98fd4cb52c0f9485820913487e0e1dbeeb",
+        "docs/atlas/modules/plugins-deployit-bin-chunk-2.md": "e4a4c85f1bd7fac93142dd5d1512659ca1bd4c06",
+        "docs/atlas/modules/plugins-deployit-misc.md": "b45370230a4c8f6f1d58f4cbe2be77e8b5b8dd2e",
+        "docs/atlas/modules/plugins-deployit-references.md": "ccc52d0b57d350979ca6e0d662476118db0e9b61",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-1.md": "85887614887ce17e4167be7951ebd57239721687",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": "03a27f5326decdedb5fd20a6bfb6e435cd74067f",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-3.md": "16b6f14379ff3be787209cd621115a21cfb7d99b",
         "docs/atlas/modules/plugins-forge-agent-overrides.md": "93a5f727595bcce96a6efa407304e2d7f2930db3",
         "docs/atlas/modules/plugins-forge-bin-chunk-1.md": "36909a7a18e7b8f82ca7a55d57b475b8dacd6098",
         "docs/atlas/modules/plugins-forge-bin-chunk-2.md": "51070b3ccc9078b160fe5ce04283f7fd98293cc4",
         "docs/atlas/modules/plugins-forge-bin-chunk-3.md": "33d934c408257859bfd504b00308a22612425f58",
         "docs/atlas/modules/plugins-forge-hooks.md": "966b4c064d43f9460289aa22e7debce4a30704f5",
-        "docs/atlas/modules/plugins-forge-misc.md": "e1071d77b40e41a83dcccb49f87c2feee43a6ea5",
+        "docs/atlas/modules/plugins-forge-misc.md": "bb204f8164e2a90ece605752cd4ac73f19dbbad5",
         "docs/atlas/modules/plugins-forge-references-chunk-1.md": "2afa3865c4fae1349519a6577ac53d714d15c84d",
         "docs/atlas/modules/plugins-forge-references-chunk-2.md": "87eae3702c7040ec3badecd02ee25f5419b4c151",
         "docs/atlas/modules/plugins-forge-skills.md": "03955da6003626919c72277f90450acbaae24630",
-        "docs/atlas/modules/plugins-freshen.md": "04362241a3691fdcd149ed29410dc385900cbe87",
-        "docs/atlas/modules/plugins-greenlight.md": "234b1c288231f7df9f9374b888ec2bf91c8626d2",
-        "docs/atlas/modules/plugins-handle-issue.md": "9237cac4374e0966be86fb35ed1ef87a41e6bd9c",
-        "docs/atlas/modules/plugins-hook-guard.md": "6d512477ba6a8331a0618231495400bc42a3298c",
-        "docs/atlas/modules/plugins-rca.md": "2059f6cbd5db90a04b7e34cb7ad09a6c5ba22b2f",
-        "docs/atlas/modules/plugins-reconcile-pr.md": "631faf429b255a4c3e4a9b8d788d33dbbff8d26c",
+        "docs/atlas/modules/plugins-freshen.md": "36ee76916bf57fc64cd6b539706411019c234697",
+        "docs/atlas/modules/plugins-greenlight.md": "5f2d470885c2601d0541cd3f4876f4001ca74c0f",
+        "docs/atlas/modules/plugins-hook-guard.md": "88befd5bddd2b14fede25eeb5618def6614ec555",
+        "docs/atlas/modules/plugins-issue-misc.md": "0fb19fdd0aeceb14a4640fcd48e4a3d359971f7d",
+        "docs/atlas/modules/plugins-issue-tests.md": "8171af4d41d513718f6e85f428c4779823480ff3",
+        "docs/atlas/modules/plugins-rca.md": "f75d2b6c0d838dbf409ec35f93aa0475b1f69993",
+        "docs/atlas/modules/plugins-reconcile-pr.md": "fda736e111b3fc16e29ace755b1194a9ee4fced7",
         "docs/atlas/modules/plugins-semver-bin-chunk-1.md": "43db4365d275c874b9f3a8d2a537467ce80d098c",
         "docs/atlas/modules/plugins-semver-bin-chunk-2.md": "2f148213e6c84b2227668b2416293e665fb54558",
         "docs/atlas/modules/plugins-semver-hooks.md": "fc144ea7b9e4c74850f76cf9b413b8b88ab8b5b1",
-        "docs/atlas/modules/plugins-semver-misc.md": "1ccc8540a4605edff2b858acb75367e36416f7aa",
+        "docs/atlas/modules/plugins-semver-misc.md": "8a74544406055efe8df5daefa4fbe42c53e6aa89",
         "docs/atlas/modules/plugins-semver-references.md": "f7fd7ba435d49347ee01f2b65b47d08c34950d08",
         "docs/atlas/modules/plugins-semver-tests-chunk-1.md": "17811e6532744904637bf66b701436677ea36cd8",
         "docs/atlas/modules/plugins-semver-tests-chunk-2.md": "fbfc73348f80cfb23228a74d1153afb07bf50f4e",
-        "docs/atlas/modules/root-misc.md": "d67afab0f151d2bb7e36fc12a2d4c0ac68f976c3",
-        "docs/atlas/modules/tests.md": "a38143ec06d116e409beaeca5821572afa5a34a1"
+        "docs/atlas/modules/root-misc.md": "0f8209b072ff49972641be87019ca4de21b4d114",
+        "docs/atlas/modules/tests.md": "81be3d1395504312e71932a45906f2b64ac382ff"
       },
       "summary": "System architecture and cross-module relationships",
       "verified": null
@@ -1232,26 +1266,22 @@
       "symbol.contract/e5b0186faed47f1d9ddbb913",
       "symbol.contract/f988e90949ab5b4790d59d0c"
     ],
-    "docs/atlas/modules/plugins-deployit-bin.md": [
-      "module.gotchas/e7419eebc9227c49d1f8de4c",
-      "module.purpose/81df3f3b8ee630da3e5568e9",
-      "module.read_when/2ab7b5acce9e2a5c95d57940",
-      "module.summary/794915a622a7a31dfcf526b6",
-      "module.type_notes/f3fd4070c3d29d71ae99101c",
+    "docs/atlas/modules/plugins-deployit-bin-chunk-1.md": [
+      "module.gotchas/0413ab895cb2004f614c5aad",
+      "module.purpose/b618f663a8eff958272d8dc9",
+      "module.read_when/67274d1cebcaa0e02425de1e",
+      "module.summary/4db5f21abed5077af350fd49",
+      "module.type_notes/8464e187735c7b5cdc3b0482",
       "symbol.contract/08e9fac45df0ccd7b89fbd83",
       "symbol.contract/0b98b346f830da2e934ba9aa",
       "symbol.contract/42b800eef82e149b9eb5f18c",
       "symbol.contract/431a80837b4183dce97d24f7",
-      "symbol.contract/4364ff56a856a7fb10d050dd",
-      "symbol.contract/4c4ecacc4701295bc1db49a9",
       "symbol.contract/582711242acaf43341c6457a",
       "symbol.contract/655c60c2223be3c94c43662a",
-      "symbol.contract/6a111efef95a1f7b2c901016",
       "symbol.contract/70db0ad6d8acf6f8a8844dec",
       "symbol.contract/7639ca21480465f9acb7e0f3",
       "symbol.contract/77c9f5d0ca9c016cfd2ac569",
       "symbol.contract/7d6b8f7fe0b679d5423a9749",
-      "symbol.contract/7f4ad10c2c508d5c19c61289",
       "symbol.contract/844094033459c5c7509f7f0b",
       "symbol.contract/846df7d911e91fb8f76b133d",
       "symbol.contract/8f16a80ff7d357525626b75d",
@@ -1263,37 +1293,48 @@
       "symbol.contract/bd20aea8dd6f11223e8298e6",
       "symbol.contract/bf52e04e5434962299c7e077",
       "symbol.contract/c8424fa50c43c982aa6be4c6",
-      "symbol.contract/cef2ec828b8515af2a410356",
       "symbol.contract/ddf3e9c3e3616a1f7b2d3c37",
       "symbol.contract/e34d053940baadfacde8f43f",
       "symbol.contract/e3f84ecaf0cb6002e295ffe0",
       "symbol.contract/eb967d42f1a865a27af9b1ad",
       "symbol.contract/f07e0880381170fb59f9abce",
-      "symbol.contract/f37b78f6c0d56666e2c4bb84",
       "symbol.contract/f8a3a117c5b1ceaf3069953d",
-      "symbol.load_bearing/00401dca39fb8858eddb587f",
-      "symbol.load_bearing/0312be044f573649a5d87dc1",
       "symbol.load_bearing/0551b6f75cdeec9ac9877696",
       "symbol.load_bearing/0e58d50cf084c62dc4dfa8a0",
-      "symbol.load_bearing/17285ab0edfd8238acf3e654",
-      "symbol.load_bearing/23963c5f159f15c0781c8a6b",
       "symbol.load_bearing/2a55035fae03e781361cccf6",
       "symbol.load_bearing/3e6d0649d6d01d0ae1f47190",
       "symbol.load_bearing/43b721fc130e0486c195467b",
-      "symbol.load_bearing/47e06aee1a60c6a84873d106",
+      "symbol.load_bearing/449610ed8d9c93470c49f2ff",
       "symbol.load_bearing/49795332733f69b94f2649ba",
+      "symbol.load_bearing/5ecffbe501a0e39663a39a07",
       "symbol.load_bearing/608757288247d757ab6a4cde",
       "symbol.load_bearing/66cf46ef924798de60e55531",
       "symbol.load_bearing/6d4223d4064d8437d40e6ac3",
       "symbol.load_bearing/72c0ad70281596431e80945b",
       "symbol.load_bearing/854cdbb9e269d7b8fdd17955",
       "symbol.load_bearing/8a42249c1b744fa093e92bcb",
-      "symbol.load_bearing/a035dcf319e445fa26907788",
       "symbol.load_bearing/a4facc757a76effd0612d125",
       "symbol.load_bearing/b0846c27bcd42283f6226c48",
       "symbol.load_bearing/b5f6293f07710b38658f5d26",
-      "symbol.load_bearing/db4340a08b48669bda170cc8",
       "symbol.load_bearing/e73641119b7b1a91d731e2ed"
+    ],
+    "docs/atlas/modules/plugins-deployit-bin-chunk-2.md": [
+      "module.gotchas/70215dc663a364f52f0bb92f",
+      "module.purpose/c4d95e0f5fcef319070f2996",
+      "module.read_when/6f9d0266eb818615c7eef4d7",
+      "module.summary/6961694da3c0c4ff71171252",
+      "module.type_notes/318aad77fbd2f4cbf010921e",
+      "symbol.contract/4364ff56a856a7fb10d050dd",
+      "symbol.contract/4c4ecacc4701295bc1db49a9",
+      "symbol.contract/6a111efef95a1f7b2c901016",
+      "symbol.contract/7f4ad10c2c508d5c19c61289",
+      "symbol.contract/cef2ec828b8515af2a410356",
+      "symbol.contract/f37b78f6c0d56666e2c4bb84",
+      "symbol.load_bearing/00401dca39fb8858eddb587f",
+      "symbol.load_bearing/17285ab0edfd8238acf3e654",
+      "symbol.load_bearing/23963c5f159f15c0781c8a6b",
+      "symbol.load_bearing/a035dcf319e445fa26907788",
+      "symbol.load_bearing/db4340a08b48669bda170cc8"
     ],
     "docs/atlas/modules/plugins-deployit-misc.md": [
       "module.gotchas/c18349e8c3f3df7bb3cbabd1",
@@ -1317,23 +1358,23 @@
       "module.type_notes/0262a100fcaa7f4473658065"
     ],
     "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": [
-      "module.gotchas/3a9d7c30a84da4b0ba8dcc7d",
-      "module.purpose/34da013920c8930f1dcbf4bd",
-      "module.read_when/437ba97c1b671f0407be1633",
-      "module.summary/9b7947eba4650f67355f753a",
-      "module.type_notes/1a6c930ff75b48b8fdadfce7",
+      "module.gotchas/ab462b06195e2ac81b970397",
+      "module.purpose/a5d9be6b84bc1197c817cf5d",
+      "module.read_when/1305514c24ac1617d6f8888c",
+      "module.summary/b9d824f746020ee5fc4f1379",
+      "module.type_notes/4c1fd2f13c1e122e416c1503",
       "symbol.contract/08bd035f029ce0731ff84626",
       "symbol.contract/87e86ae9ced18c844441acb5",
-      "symbol.contract/918b2b9d2589dbe3a4cb9f63",
-      "symbol.contract/9ff4bba2e47eac97de96a131",
       "symbol.contract/da72d7b80bfa0d797171e623"
     ],
     "docs/atlas/modules/plugins-deployit-tests-chunk-3.md": [
-      "module.gotchas/99ec5b7667cbc5b7e2baf55d",
-      "module.purpose/2286785c47865dc7db1b4ce2",
-      "module.read_when/273df06e703a83f27d6acffc",
-      "module.summary/bd58afad53926a3b69673bf1",
-      "module.type_notes/ab2652ad687d11d8fd0f49c5"
+      "module.gotchas/ba2d05590d90d539a57288a9",
+      "module.purpose/995e657f52936fa8e01fb855",
+      "module.read_when/2e7f0f795c12119fb2e2b161",
+      "module.summary/b6da04f7723c431072159eee",
+      "module.type_notes/80584f0a98c999a451751041",
+      "symbol.contract/918b2b9d2589dbe3a4cb9f63",
+      "symbol.contract/9ff4bba2e47eac97de96a131"
     ],
     "docs/atlas/modules/plugins-forge-agent-overrides.md": [
       "module.gotchas/eb1a346232a7cdecf39ed71c",
@@ -1417,19 +1458,27 @@
       "module.summary/a8398f39c961470296eb4eda",
       "module.type_notes/5df415a31de0fe56f79dab91"
     ],
-    "docs/atlas/modules/plugins-handle-issue.md": [
-      "module.gotchas/1877474fd9904f474b03be6d",
-      "module.purpose/1cc106ec9212bfd6d3ec1ec2",
-      "module.read_when/c11a827b4f21fcfae6681f18",
-      "module.summary/66fb208fd37ebe5909f1d92d",
-      "module.type_notes/40f7507d1f2c6c8dee473a09"
-    ],
     "docs/atlas/modules/plugins-hook-guard.md": [
       "module.gotchas/6c0d8a64a07f0e8bf6e0b0be",
       "module.purpose/be3699c53aa178d35468c38c",
       "module.read_when/061b6dba35c72f5b3a2b9101",
       "module.summary/ecc35066363b02b2dc9a2f6c",
       "module.type_notes/6069c26b2100854237c198c6"
+    ],
+    "docs/atlas/modules/plugins-issue-misc.md": [
+      "module.gotchas/be8f54b9c1a5bbe4a1cc7d89",
+      "module.purpose/4f2c003bacbbaeada01188f9",
+      "module.read_when/78dae5d38a9082525fe798aa",
+      "module.summary/357b51086b62f75f1980f560",
+      "module.type_notes/8b1a52e8f257bb1a6767b13f",
+      "symbol.contract/6f7751bba38b2bde421906c9"
+    ],
+    "docs/atlas/modules/plugins-issue-tests.md": [
+      "module.gotchas/92f190ed1bdba3dbba7668c0",
+      "module.purpose/cd7132e3c537d836f754ba66",
+      "module.read_when/974bc31a5f370f3e9da283c5",
+      "module.summary/a83935556c44b1e94adf3fbf",
+      "module.type_notes/c7c06c144f980ddd15aed40d"
     ],
     "docs/atlas/modules/plugins-rca.md": [
       "module.gotchas/1bc50c3d26235cbf79d3eb57",
@@ -1570,9 +1619,9 @@
       "module.type_notes/53a318e3b42813a7da386d6d"
     ],
     "docs/atlas/overview/ARCHITECTURE.md": [
-      "overview.dataflow/e51af52de33fa39abb22927b",
-      "overview.index_facts/61211d4c2a571f38ad4bccc2",
-      "overview.shape/ba10f77cd6e8a0970c7b4138"
+      "overview.dataflow/62c073bd7a2f12d9909cba55",
+      "overview.index_facts/274a19d010f317ae6a5be483",
+      "overview.shape/372d3b9742e5551495fbaa3d"
     ]
   },
   "paths": {
@@ -1695,12 +1744,13 @@
     "plugins/deployit/assets/manifest.template.plist": "modules/plugins-deployit-assets.md",
     "plugins/deployit/assets/manifest.webmanifest": "modules/plugins-deployit-assets.md",
     "plugins/deployit/assets/product.template.html": "modules/plugins-deployit-assets.md",
-    "plugins/deployit/bin/deployit-backend": "modules/plugins-deployit-bin.md",
-    "plugins/deployit/bin/deployit-cli": "modules/plugins-deployit-bin.md",
-    "plugins/deployit/bin/deployit-release": "modules/plugins-deployit-bin.md",
-    "plugins/deployit/bin/deployit-router.sh": "modules/plugins-deployit-bin.md",
+    "plugins/deployit/bin/deployit-backend": "modules/plugins-deployit-bin-chunk-1.md",
+    "plugins/deployit/bin/deployit-cli": "modules/plugins-deployit-bin-chunk-1.md",
+    "plugins/deployit/bin/deployit-release": "modules/plugins-deployit-bin-chunk-2.md",
+    "plugins/deployit/bin/deployit-router.sh": "modules/plugins-deployit-bin-chunk-2.md",
     "plugins/deployit/references/bootstrap.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/github-release.md": "modules/plugins-deployit-references.md",
+    "plugins/deployit/references/index-publishing.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/ios.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/macos.md": "modules/plugins-deployit-references.md",
     "plugins/deployit/references/semver.md": "modules/plugins-deployit-references.md",
@@ -1728,17 +1778,22 @@
     "plugins/deployit/tests/test-bootstrap-dirs.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-archive-build-number.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-bump.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-classify-push-failure.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-config-sparkle.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-deploy-autoprune.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-deploy-pr-automerge.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-deploy-pr-leave-open.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-deploy-release-wiring.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-preflight.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-publish-preserve-on-failure.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-redeploy.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-rm-pr-fallback.sh": "modules/plugins-deployit-tests-chunk-2.md",
     "plugins/deployit/tests/test-cli-rm.sh": "modules/plugins-deployit-tests-chunk-2.md",
-    "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "modules/plugins-deployit-tests-chunk-2.md",
-    "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "modules/plugins-deployit-tests-chunk-2.md",
-    "plugins/deployit/tests/test-cli-version.sh": "modules/plugins-deployit-tests-chunk-2.md",
-    "plugins/deployit/tests/test-gc.sh": "modules/plugins-deployit-tests-chunk-2.md",
-    "plugins/deployit/tests/test-metadata-single-app.sh": "modules/plugins-deployit-tests-chunk-2.md",
+    "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "modules/plugins-deployit-tests-chunk-3.md",
+    "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "modules/plugins-deployit-tests-chunk-3.md",
+    "plugins/deployit/tests/test-cli-version.sh": "modules/plugins-deployit-tests-chunk-3.md",
+    "plugins/deployit/tests/test-gc.sh": "modules/plugins-deployit-tests-chunk-3.md",
+    "plugins/deployit/tests/test-metadata-single-app.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-metadata.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-release-adhoc-signing.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-release-context.sh": "modules/plugins-deployit-tests-chunk-3.md",
@@ -1847,20 +1902,6 @@
     "plugins/greenlight/skills/greenlight/SKILL.md": "modules/plugins-greenlight.md",
     "plugins/greenlight/tests/greenlight.bats": "modules/plugins-greenlight.md",
     "plugins/greenlight/tests/run-tests.sh": "modules/plugins-greenlight.md",
-    "plugins/handle-issue/.claude-plugin/plugin.json": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/README.md": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/bin/handle-issue.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/skills/handle-issue/SKILL.md": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/fakes/gh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/fakes/tmux": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/lib.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/run-tests.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/test-arg-validation.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/test-dispatch-dryrun.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/test-gitignore.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/test-list-shaping.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/test-owner-repo.sh": "modules/plugins-handle-issue.md",
-    "plugins/handle-issue/tests/test-preconditions.sh": "modules/plugins-handle-issue.md",
     "plugins/hook-guard/.claude-plugin/plugin.json": "modules/plugins-hook-guard.md",
     "plugins/hook-guard/hooks/hooks.json": "modules/plugins-hook-guard.md",
     "plugins/hook-guard/hooks/session-start.bats": "modules/plugins-hook-guard.md",
@@ -1868,6 +1909,27 @@
     "plugins/hook-guard/lib/stop-guard.bats": "modules/plugins-hook-guard.md",
     "plugins/hook-guard/lib/stop-guard.sh": "modules/plugins-hook-guard.md",
     "plugins/hook-guard/tests/run-tests.sh": "modules/plugins-hook-guard.md",
+    "plugins/issue/.claude-plugin/plugin.json": "modules/plugins-issue-misc.md",
+    "plugins/issue/README.md": "modules/plugins-issue-misc.md",
+    "plugins/issue/bin/issue.sh": "modules/plugins-issue-misc.md",
+    "plugins/issue/references/complete.md": "modules/plugins-issue-misc.md",
+    "plugins/issue/references/new.md": "modules/plugins-issue-misc.md",
+    "plugins/issue/skills/issue/SKILL.md": "modules/plugins-issue-misc.md",
+    "plugins/issue/tests/fakes/gh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/fakes/tmux": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/lib.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/run-tests.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-arg-validation.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-complete-execute.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-complete-plan.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-create.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-dispatch-dryrun.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-gitignore.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-list-shaping.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-owner-repo.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-preconditions.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-readiness.sh": "modules/plugins-issue-tests.md",
+    "plugins/issue/tests/test-view.sh": "modules/plugins-issue-tests.md",
     "plugins/rca/.claude-plugin/plugin.json": "modules/plugins-rca.md",
     "plugins/rca/README.md": "modules/plugins-rca.md",
     "plugins/rca/agent-overrides/architect-rca.md": "modules/plugins-rca.md",
@@ -1925,6 +1987,7 @@
     "plugins/semver/tests/test-set.sh": "modules/plugins-semver-tests-chunk-2.md",
     "tests/helpers.bash": "modules/tests.md",
     "tests/init.bats": "modules/tests.md",
+    "tests/plugin-content-drift.sh": "modules/tests.md",
     "tests/plugin-versions.sh": "modules/tests.md",
     "tests/run-tests.sh": "modules/tests.md",
     "tests/state-machine.bats": "modules/tests.md"
@@ -1935,8 +1998,8 @@
     ]
   },
   "structure": {
-    "index_commit": "134d628a77fb9540e6c1f561e02d9a1e192e6552",
-    "index_digest": "sha256:960d3c1a73ef7dd8451de31bd7a94e82ea01b148c03a1ccc2f86f12da1c0cc52",
+    "index_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+    "index_digest": "sha256:9467e7553ff519ea64e80b3ced1092f325d55149069173174e007f9211fa3c17",
     "symbols": {
       "plugins/atlas/bin/atlas-cli": [
         {
@@ -3982,8 +4045,8 @@
         {
           "id": "plugins/deployit/bin/deployit-cli::_append_to_index",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "signature_hash": "sha256:4bd67fb73dd5d5874b7054f56502a0871545c3d1798678ca9bb8c398ab8bd735",
-          "span_hash": "sha256:b41e554f79f7b525ee3926c3a6c64ac5464665932923e98d76ea99b946fdeca8"
+          "signature_hash": "sha256:8360d9ef44014aee9faf33adf6a645ea1b2d8590ba0797209517fa2b3b2a58b6",
+          "span_hash": "sha256:0cc08eb43c621e58af05bf3e14560678d36dd530eae6ea9724296075313a5bde"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_atomic_symlink",
@@ -3998,16 +4061,22 @@
           "span_hash": "sha256:99b38a77b4f545a99318932153dc37bfcc4307471f0eefeab07f45fd4cd67737"
         },
         {
+          "id": "plugins/deployit/bin/deployit-cli::_classify_push_failure",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:1a42d58416dcfb8c2d38190b882ee93d944c0b5c2da833bcb7b8f968040b6bca",
+          "span_hash": "sha256:6a9df2f414cb769bf6b9411b3070a81c4732f6e59831cf88a8bd5fe6d4161c1d"
+        },
+        {
           "id": "plugins/deployit/bin/deployit-cli::_clone_index",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:7bfad92fed870b899d5363df1628e3240dc1eec0c82bf49c409d9fbef5eeb3fa",
-          "span_hash": "sha256:7bd21ae667d6b3ff94d3fb39e9b3b3c4f79ced0ce510a6726271c27dee4a936c"
+          "span_hash": "sha256:2b33353421c22210bde9c8b28162e460e065fb5951d867d6bf8c68162a3f544c"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_commit_and_push_index",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "signature_hash": "sha256:5691aaaac84eec1609094d500372e79aa498738c540fa690f5417970d6227da2",
-          "span_hash": "sha256:f762fbedc3216e96bb86d01d5c12dbb712ac42a21d5b022b547bdbbc9abacec1"
+          "signature_hash": "sha256:f311b9b80930bd8a9271e1935fcbc73ca214215c73fce4c999de166fc62b12e1",
+          "span_hash": "sha256:90cd3b6ae97f9b980927449d6fa305c9f4dee42f8ed869db26dc71fe2d159a6d"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_configure_tailscale_serve",
@@ -4020,6 +4089,12 @@
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:38a4c6d5e21db8f61e265dacc2ca26120a8cbc99591103b987d9a18cc757b6bf",
           "span_hash": "sha256:9d3024142688b1b06d7920c2479b090f6cf552c166490bc78a380b1e3ec5faf7"
+        },
+        {
+          "id": "plugins/deployit/bin/deployit-cli::_default_index_cfg",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:f55767ab90103f418fb99f17fe0e87312a4b964a9906f9d95166d9cf2728ef98",
+          "span_hash": "sha256:27b7e7ee6386155a94c634e79664576560cd6b030b53a82674828cc6b6913e70"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_derive_base_url",
@@ -4085,13 +4160,25 @@
           "id": "plugins/deployit/bin/deployit-cli::_gh_bin",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:fed2d7b257cf0ad192f3555e609f28aff25100fd960afc165b39e07e16c57151",
-          "span_hash": "sha256:834f965a2edb32e5ff65e930205500b1a058bb5e0387b3989d28a8fda4767884"
+          "span_hash": "sha256:3f628265a0b7cd3a7906e4fd9063b005499006a3001cb790ff328b3d7cafd081"
         },
         {
-          "id": "plugins/deployit/bin/deployit-cli::_git",
+          "id": "plugins/deployit/bin/deployit-cli::_git_index_auth_args",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "signature_hash": "sha256:f75950d592104aeb2f95636c8839409cf721bda615a01672e24f7e2c8ec0849a",
-          "span_hash": "sha256:175e11c3061719731d5f7784d5ea53231d93eab26fd493eecee587da991b4d0c"
+          "signature_hash": "sha256:80c2a16b995749c39f796d63d1321ee3b18d72de0c8cebe84036b40da38aedf0",
+          "span_hash": "sha256:99d6d9bbfa8aa60363b1f15f98d389046ac441edda7d9a13b1b0573212edd391"
+        },
+        {
+          "id": "plugins/deployit/bin/deployit-cli::_git_push_index",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:6863ce929ad4c078052537d729b2929474c8c2df997033bad7f105c1646f0349",
+          "span_hash": "sha256:9138c6419f6de1d3a0eccae0371cd1588cb41acf315eeebe1b2b807e17aa2acd"
+        },
+        {
+          "id": "plugins/deployit/bin/deployit-cli::_index_cfg",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:271cc090b7e2f52009af09e3bcac1cde41eec8ec0891418806956a52c032aa23",
+          "span_hash": "sha256:a0ddcdcfccc36f47db5480d0d3a8b2787aa676b7ee639de3da270553686a7c2a"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_install_launchd",
@@ -4154,6 +4241,18 @@
           "span_hash": "sha256:e3a8f91e078ba416e99b2a5c362de8e7749c1c567b16054a515405e037269d99"
         },
         {
+          "id": "plugins/deployit/bin/deployit-cli::_pr_publish_fallback",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:cf818c79874205b5cd047a8c3766fe074c1d54b1f8b22a7023e93a349d46094b",
+          "span_hash": "sha256:511a0d5085a17f54f6cfb00772ceff1be758cf2c4dae8e21c73f72d1be055a85"
+        },
+        {
+          "id": "plugins/deployit/bin/deployit-cli::_preserve_and_fail",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:83446e82c9412afcf22c78217f3fda88221463d36b44f734c9a1b10649fe385c",
+          "span_hash": "sha256:8be86ca0491cba0c31386070970da7f39ec11ede441b89672cd4614beef1b3ec"
+        },
+        {
           "id": "plugins/deployit/bin/deployit-cli::_prune_old_builds",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:4b1eae601f6007a810775c6c1be81d6f1e6c2732e5148bd0240933bdd2ada13e",
@@ -4164,6 +4263,12 @@
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:f883301637c63a1fb121f53844d8ce52c5a2d3e7d1e0a644036342854bb0175f",
           "span_hash": "sha256:feea451ba4d43dd3d94c8e0220c2c630195f20ff70527ccab118ebe2f5783c4a"
+        },
+        {
+          "id": "plugins/deployit/bin/deployit-cli::_publish_index_commit",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:fb3ea8adff38f5d934f2ebed7bc3b47c1a8c7830ef8bc2f9f1cce25a909b28fe",
+          "span_hash": "sha256:e93c8ef27a54a40ee8626bd2ae387f87144ed51e3bed8cb0ae3ce923d1e65ef9"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_pull_index",
@@ -4187,7 +4292,7 @@
           "id": "plugins/deployit/bin/deployit-cli::_read_config",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:e5750230edf009bfb03715b7f0273435c515f060043a3f733be86b99c92826fd",
-          "span_hash": "sha256:3c388ba5f7b73891a241a39cbafd37ae89ce442094b3c0c9fde3551d035f680d"
+          "span_hash": "sha256:df65aca9f37de7562559618276dd597ce8107a4f3293d06d40f902c4e3447e48"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_read_marketing_version",
@@ -4214,6 +4319,12 @@
           "span_hash": "sha256:fa6122f2a195857840e3986d574f8089f4f8a43a4448546f8c0f7927a10dd0b8"
         },
         {
+          "id": "plugins/deployit/bin/deployit-cli::_reset_index_to_origin_main",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:dfefdffa145c8c59b9f32b714760a6e9d7c9a2a070b329ce571ce0f3cf6956ce",
+          "span_hash": "sha256:79e381e806aac4da64390085213148bf76db51b5699e0ad0076096b5a6c533e8"
+        },
+        {
           "id": "plugins/deployit/bin/deployit-cli::_semver_active_version",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:249cfd11d4779389be58c60ac1b8602284a2e564f9d9e8e82c14231abe22614e",
@@ -4235,7 +4346,7 @@
           "id": "plugins/deployit/bin/deployit-cli::_sp",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:9566d7cb695e36c3b0dbab94e65cc2b5d79db25531804c3d227602297622a1c1",
-          "span_hash": "sha256:6287000244d0b1113344d149e2c23030fcbcdecddbc6063cca3a6abf0557cb41"
+          "span_hash": "sha256:2be756e6cec49f503326edc5c98b68a645a539f4cd8322cdf8538650752f2a52"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_sparkle_sign",
@@ -4325,13 +4436,13 @@
           "id": "plugins/deployit/bin/deployit-cli::cmd_deploy",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:35f5c146e87c7c7cbe46de3ad7f843e409cbf0bcb32202b50f8e6952461c20b7",
-          "span_hash": "sha256:7236206c40f92862df5875e833a34dd5ef1bf9c1a0be8710f3c5dd38b36a76e5"
+          "span_hash": "sha256:4613a0ef6a432dde16d8956299ba2462b5c935d808dc06c47893bfbae63f0e8e"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::cmd_gc",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:0ee9b0de37746e5e2dde2be61e737f459c9e1ea7fa6b7f018627ac592a07ad94",
-          "span_hash": "sha256:8ffa3573371704a22d685a90a8c162bf4ce6301d722f2c1e890e6b8d6aa3f4d2"
+          "span_hash": "sha256:f5b1377bc1985087e21c1ac140081c13df5d82416018d9fb0b20f04a40a47518"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::cmd_list",
@@ -4361,7 +4472,7 @@
           "id": "plugins/deployit/bin/deployit-cli::cmd_rm",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:fb714ecb31818ec42e2a96156dc349bb315133e9223f5c370ab9c3f84f3c5955",
-          "span_hash": "sha256:9ff5d0f507026f8208e64bca8d4e48939feca21d1aa6c6731985400e0cb9ba9c"
+          "span_hash": "sha256:0ddd1a650d9c50f4062e91b9b418f754047ebdf7631dd228451361eb5fd3a77f"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::cmd_status",
@@ -4397,13 +4508,13 @@
           "id": "plugins/deployit/bin/deployit-cli::mutate",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:dad87e9b81320f69c57a9ef88aaa4162625951444b916e89cf72f2f89d45b149",
-          "span_hash": "sha256:d5d08f6104067fd68424723711ec108d40f6b41970f54f0a7d7867dbb80ae033"
+          "span_hash": "sha256:2fc750fa104723c26648cde29b9d33c4a04701ea01571ccfb641d119d17fab6a"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::mutate#2",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:dad87e9b81320f69c57a9ef88aaa4162625951444b916e89cf72f2f89d45b149",
-          "span_hash": "sha256:057a8f8f8937fc68c3db6d3d1362f1302fe2921a11cd141b0dad68f35373200e"
+          "span_hash": "sha256:d5e00d9100d14a7a67fed97bd0331ecb5d662a5eaf1acbe33498475e32ab423b"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::not_implemented",
@@ -4553,7 +4664,7 @@
           "id": "plugins/deployit/tests/test-cli-deploy-release-wiring.sh::make_app",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:eb72e73764000e8c95e8ad21215d01bed58fc63029e2d6e0589b8fe93c9bc03d",
-          "span_hash": "sha256:e81237472298192937aef4b59551577f859b0fe810b1736ea787614448eed424"
+          "span_hash": "sha256:847c56522530d4625a3e5f9af0ae05abacd331a37af89561f3c7ab28910176aa"
         }
       ],
       "plugins/deployit/tests/test-cli-rm.sh": [
@@ -4612,6 +4723,14 @@
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:c33baa2e761c00f220a7b041c2ba45553b20a485028ed38394db10d27db1b4d5",
           "span_hash": "sha256:a1179a270c98e1671db632a63cf9af63d9b34c7cd41e1a2190ce28d73dc20e57"
+        }
+      ],
+      "plugins/issue/bin/issue.sh": [
+        {
+          "id": "plugins/issue/bin/issue.sh::flush",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:505b06437c7abf0b58214bc738771c694a5e266f01786ae5dbf59e8c4eddceb2",
+          "span_hash": "sha256:fc3c62f77f3c14e3660930c39a02576c8d48eacb195b48f8e4208dfab713a0e2"
         }
       ],
       "plugins/semver/bin/semver-cli": [

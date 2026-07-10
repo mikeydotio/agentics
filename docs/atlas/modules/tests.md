@@ -7,6 +7,8 @@ sources:
     blob: ca28a41ee9ec7cc8b278243237315d55e07e8a04
   - path: tests/init.bats
     blob: 4165667c3062581e7e3ff170335e404a87da24de
+  - path: tests/plugin-content-drift.sh
+    blob: 3a494b7e42e880f4f57a37f5713fdf4413f7e90b
   - path: tests/plugin-versions.sh
     blob: 8bf8703bb6c6d0b0d9f3d31668392f316d65d25c
   - path: tests/run-tests.sh
@@ -14,7 +16,7 @@ sources:
   - path: tests/state-machine.bats
     blob: 57349d4bcfc4676886ed90ac73cab29022d2678b
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
 ---
 
 # Module: tests

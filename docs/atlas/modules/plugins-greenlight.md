@@ -4,7 +4,7 @@ summary: "PreToolUse safety hook: deterministic allow/pass classification for Ba
 read_when: "Touching greenlight's Bash safety classification, config, or AI fallback"
 sources:
   - path: plugins/greenlight/.claude-plugin/plugin.json
-    blob: 977a4fb089180653f81260cd238abedea87abe3f
+    blob: 84b5d5fc27ada54106a99691cc7c2de0ca87b3df
   - path: plugins/greenlight/README.md
     blob: f930f291dc43f3be2ed0c5e0f98ea7e0b5980f09
   - path: plugins/greenlight/hooks/greenlight.sh
@@ -20,7 +20,7 @@ sources:
   - path: plugins/greenlight/tests/run-tests.sh
     blob: fb724aa07154a6df7e529601a4e6374ee0eed7ce
 generator: cartographer/4
-baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
+baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
 ---
 
 # Module: plugins/greenlight

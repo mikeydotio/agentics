@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Fake `gh` for issue tests. Emits canned output driven by env knobs so the whole
+# gh-dependent flow runs offline and deterministically.
+#
+# Shared:
+#   FAKE_GH_LOG=path            append each invocation's args (one line) here
+#   FAKE_GH_AUTH_FAIL=1         `gh auth status` exits non-zero (unauthenticated)
+#
+# issue list:
+#   FAKE_GH_ISSUES_JSON=...     JSON array for `gh issue list --json ...` (default [])
+#
+# issue view:
+#   FAKE_GH_VIEW_FAIL=1         `gh issue view <n>` exits non-zero (issue not found)
+#   FAKE_GH_STATE=OPEN|CLOSED   state field (default OPEN)
+#   FAKE_GH_VIEW_TITLE=...      title field (default "Fake issue <n>")
+#   FAKE_GH_VIEW_BODY=...       plaintext body for the `--comments` (no --json) call
+#   FAKE_GH_CLOSED_BY_PRS=...   JSON array for the closedByPullRequestsReferences
+#                               field (default []); shape [{"number":N}, ...]
+#
+# issue create:
+#   FAKE_GH_CREATE_FAIL=1       `gh issue create` exits non-zero
+#   FAKE_GH_CREATE_URL=...      URL printed (default .../issues/123)
+#
+# issue close:
+#   FAKE_GH_CLOSE_FAIL=1        `gh issue close` exits non-zero
+#
+# pr view (per-PR overrides win over the generic knob):
+#   FAKE_PR_STATE[_<n>]=MERGED|OPEN|CLOSED  state field (default MERGED)
+#   FAKE_PR_HEAD[_<n>]=<branch>             headRefName field (default fix/thing-<n>)
+#
+# label create / issue edit: FAKE_GH_LABEL_CREATE_FAIL / FAKE_GH_EDIT_FAIL.
+args="$*"
+[ -n "${FAKE_GH_LOG:-}" ] && printf '%s\n' "$args" >> "$FAKE_GH_LOG"
+
+# has <flag> — true if <flag> appears as a whitespace-delimited token in the args.
+has() { case " $args " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+case "${1:-} ${2:-}" in
+  "auth status")
+    if [ -n "${FAKE_GH_AUTH_FAIL:-}" ]; then echo "not logged in" >&2; exit 1; fi
+    echo "Logged in to github.com"; exit 0 ;;
+  "issue list")
+    printf '%s' "${FAKE_GH_ISSUES_JSON:-[]}"; exit 0 ;;
+  "issue view")
+    n="${3:-0}"
+    if [ -n "${FAKE_GH_VIEW_FAIL:-}" ]; then echo "not found" >&2; exit 1; fi
+    if has --json; then
+      # Structured metadata. Always includes closedByPullRequestsReferences so the
+      # `complete` flow can read it; the dispatch/view paths just ignore it.
+      printf '{"number":%s,"title":"%s","state":"%s","url":"https://github.com/fake/repo/issues/%s","closedByPullRequestsReferences":%s}' \
+        "$n" "${FAKE_GH_VIEW_TITLE:-Fake issue $n}" "${FAKE_GH_STATE:-OPEN}" "$n" \
+        "${FAKE_GH_CLOSED_BY_PRS:-[]}"
+    else
+      # Plaintext rendering for `issue view <n> --comments`.
+      printf '#%s %s\nState: %s\n\n%s\n' \
+        "$n" "${FAKE_GH_VIEW_TITLE:-Fake issue $n}" "${FAKE_GH_STATE:-OPEN}" \
+        "${FAKE_GH_VIEW_BODY:-Body of fake issue $n.}"
+    fi
+    exit 0 ;;
+  "issue create")
+    if [ -n "${FAKE_GH_CREATE_FAIL:-}" ]; then echo "could not create issue" >&2; exit 1; fi
+    printf '%s\n' "${FAKE_GH_CREATE_URL:-https://github.com/fake/repo/issues/123}"; exit 0 ;;
+  "issue close")
+    if [ -n "${FAKE_GH_CLOSE_FAIL:-}" ]; then echo "could not close" >&2; exit 1; fi
+    exit 0 ;;
+  "pr view")
+    prn="${3:-0}"
+    sv="FAKE_PR_STATE_$prn"; hv="FAKE_PR_HEAD_$prn"
+    st="${!sv:-${FAKE_PR_STATE:-MERGED}}"
+    hd="${!hv:-${FAKE_PR_HEAD:-fix/thing-$prn}}"
+    printf '{"state":"%s","headRefName":"%s"}' "$st" "$hd"; exit 0 ;;
+  "label create")
+    # Idempotent create-if-missing in the real gh; the fake just succeeds unless
+    # FAKE_GH_LABEL_CREATE_FAIL is set (used to prove add-label still runs).
+    if [ -n "${FAKE_GH_LABEL_CREATE_FAIL:-}" ]; then echo "label already exists" >&2; exit 1; fi
+    exit 0 ;;
+  "issue edit")
+    # `gh issue edit <n> --add-label <label>`. Fails on FAKE_GH_EDIT_FAIL so the
+    # helper's non-fatal warning path can be exercised.
+    if [ -n "${FAKE_GH_EDIT_FAIL:-}" ]; then echo "could not add label" >&2; exit 1; fi
+    exit 0 ;;
+  *)
+    echo "fake-gh: unhandled: $args" >&2; exit 0 ;;
+esac

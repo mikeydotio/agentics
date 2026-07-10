@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# handle-issue test runner. Discovers and runs all test-*.sh files in this
+# issue test runner. Discovers and runs all test-*.sh files in this
 # directory, reports pass/fail. Optional filter: `bash run-tests.sh dryrun`
 # runs only tests whose filename contains 'dryrun'. Plain bash (no bats).
 set -uo pipefail
@@ -9,7 +9,7 @@ FILTER="${1:-}"
 PASS=0
 FAIL=0
 FAILED=()
-LOG="$(mktemp /tmp/handle-issue-run.XXXXXX)"
+LOG="$(mktemp /tmp/issue-run.XXXXXX)"
 
 for test in "$TESTS_DIR"/test-*.sh; do
   name=$(basename "$test")

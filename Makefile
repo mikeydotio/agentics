@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
+.PHONY: test test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr
 
-test: test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-handle-issue test-reconcile-pr
+test: test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -32,11 +32,12 @@ test-semver:
 test-deployit:
 	bash plugins/deployit/tests/run-tests.sh
 
-# handle-issue's plain-bash suite (plugins/handle-issue/tests/test-*.sh) — the
-# list/dispatch JSON contract, owner/repo parsing, and dry-run tmux sequencing
-# (driven by a fake gh on PATH; no live tmux/claude). Always runs (no bats).
-test-handle-issue:
-	bash plugins/handle-issue/tests/run-tests.sh
+# issue's plain-bash suite (plugins/issue/tests/test-*.sh) — the
+# list/dispatch/view/create/complete JSON contracts, owner/repo parsing, dry-run
+# tmux sequencing, and the complete-verb cleanup guard rails (driven by a fake gh
+# on PATH + throwaway git repos; no live tmux/claude). Always runs (no bats).
+test-issue:
+	bash plugins/issue/tests/run-tests.sh
 
 # reconcile-pr's plain-bash suite (plugins/reconcile-pr/tests/test-*.sh) — the
 # state-machine JSON contract, non-inverted conflict labeling, the force-push

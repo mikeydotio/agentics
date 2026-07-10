@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fake `tmux` for handle-issue's real-dispatch (non-dry-run) tests. Implements
+# Fake `tmux` for issue's real-dispatch (non-dry-run) tests. Implements
 # only the subcommands cmd_dispatch / cmd_doctor drive, enough to let the helper
 # run to completion headlessly without a live tmux server:
 #

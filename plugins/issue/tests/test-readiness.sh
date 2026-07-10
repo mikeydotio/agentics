@@ -25,11 +25,11 @@ dispatch_ready() {
   ( cd "$dir" \
       && PATH="$FAKE_DIR:$PATH" \
          TMUX="fake,0,0" TMUX_PANE="%0" \
-         HANDLE_ISSUE_LABEL="" \
+         ISSUE_LABEL="" \
          FAKE_TMUX_CAPTURE="$mode" \
-         HANDLE_ISSUE_READY_DELAY=0 HANDLE_ISSUE_READY_FALLBACK_DELAY=0 \
-         HANDLE_ISSUE_CONFIRM_DELAY=0 \
-         HANDLE_ISSUE_READY_ATTEMPTS=8 HANDLE_ISSUE_READY_STABLE_POLLS=2 \
+         ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
+         ISSUE_CONFIRM_DELAY=0 \
+         ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
          env "$@" \
          bash "$SCRIPT" dispatch "$n" 2>&1 )
 }
@@ -76,7 +76,7 @@ assert_eq "$(jqf "$out" .readiness_confirmed)" "false" "T5 busy: 'esc to interru
 # no frame → readiness never confirms, but the prompt still leaves the input line
 # (prompt_confirmed:true), and the warning path attaches diagnostic evidence.
 repo=$(mk_repo)
-state=$(mktemp -d /tmp/handle-issue-churn.XXXXXX)
+state=$(mktemp -d /tmp/issue-churn.XXXXXX)
 out=$(dispatch_ready "$repo" 46 churn FAKE_TMUX_STATE="$state")
 rm -rf "$state"
 assert_eq "$(jqf "$out" .ok)" "true" "T3 churn: ok:true (window opened)"
@@ -107,14 +107,14 @@ assert_eq "$(jqf "$out" 'has("prompt_accepted")')" "true" "T6 success: prompt_ac
 # '─' and idle glyph '❯', so the STRUCTURAL tier must carry readiness. This is the
 # core #67 guarantee: readiness no longer depends on ANY footer copy.
 repo=$(mk_repo)
-out=$(dispatch_ready "$repo" 49 marker HANDLE_ISSUE_READY_PATTERN='__no_such_marker__')
+out=$(dispatch_ready "$repo" 49 marker ISSUE_READY_PATTERN='__no_such_marker__')
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "drift-proof: structural tier confirms with READY_PATTERN matching nothing"
 assert_eq "$(jqf "$out" 'has("warning")')" "false" "drift-proof: no warning"
 
 # --- doctor: dry-run lists the scratch-window commands and never touches gh ----
 repo=$(mk_repo)
-out=$(cd "$repo" && HANDLE_ISSUE_DRY_RUN=1 \
-      HANDLE_ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' \
+out=$(cd "$repo" && ISSUE_DRY_RUN=1 \
+      ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .ok)" "true" "doctor dry-run: ok:true"
 assert_eq "$(jqf "$out" .dry_run)" "true" "doctor dry-run: dry_run flag"
@@ -128,21 +128,21 @@ assert_eq "$(jqf "$out" '[.commands[]|select(startswith("gh"))]|length')" "0" "d
 # marker capture → "marker" tier; structural capture → "structural" tier.
 repo=$(mk_repo)
 out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
-      HANDLE_ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=marker \
-      HANDLE_ISSUE_READY_DELAY=0 HANDLE_ISSUE_READY_ATTEMPTS=8 HANDLE_ISSUE_READY_STABLE_POLLS=2 \
+      ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=marker \
+      ISSUE_READY_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "doctor marker: readiness confirmed"
 assert_eq "$(jqf "$out" .matched_tier)" "marker" "doctor marker: reports the marker tier"
 
 out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
-      HANDLE_ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=structural \
-      HANDLE_ISSUE_READY_DELAY=0 HANDLE_ISSUE_READY_ATTEMPTS=8 HANDLE_ISSUE_READY_STABLE_POLLS=2 \
+      ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=structural \
+      ISSUE_READY_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .matched_tier)" "structural" "doctor structural: reports the structural tier"
 
 # --- doctor: missing launch binary → ok:false (hard precondition) -------------
 repo=$(mk_repo)
-out=$(cd "$repo" && HANDLE_ISSUE_DOCTOR_LAUNCH_CMD='/nonexistent/claude x' \
+out=$(cd "$repo" && ISSUE_DOCTOR_LAUNCH_CMD='/nonexistent/claude x' \
       TMUX="fake,0,0" TMUX_PANE="%0" bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .ok)" "false" "doctor: missing launch binary → ok:false"
 assert_contains "$(jqf "$out" .display)" "not found on PATH" "doctor: clear display on missing binary"

@@ -49,10 +49,13 @@ LIST_LIMIT="${ISSUE_LIST_LIMIT:-50}"
 LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # The handoff prompt is the ONLY lever the dispatcher has over the child session,
 # which is what actually plans, implements, and opens PRs. So it carries the
-# GitHub self-reporting contract (issue #50): comment the finalized plan, word
-# PRs to close the issue, comment PR links. Kept single-line + ASCII (no
-# backticks) so `tmux send-keys -l` types it verbatim without key-interpretation.
-PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it.}"
+# briefs the child can't get any other way: read the issue AND all its comments
+# for the full history, treat a reopen as a signal a previous fix fell short
+# (issue #78), and the GitHub self-reporting contract (issue #50) — comment the
+# finalized plan, word PRs to close the issue, comment PR links. Kept single-line
+# + ASCII (no backticks) so `tmux send-keys -l` types it verbatim without
+# key-interpretation.
+PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. Begin by reading the issue and ALL of its comments (e.g. gh issue view <n> --comments) so you have the full discussion history. If the issue has been reopened, treat that as a signal that a previous fix was insufficient: review the earlier attempts and any linked PRs, understand why they fell short, and make sure your plan resolves the underlying problem rather than repeating them. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it.}"
 # The "picked up" label applied to the issue at dispatch (issue #50). Set
 # ISSUE_LABEL="" to disable labeling entirely. Color/description are used
 # only when the label doesn't yet exist in the repo (create-if-missing). Uses

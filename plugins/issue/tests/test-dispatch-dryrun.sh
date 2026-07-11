@@ -41,6 +41,11 @@ assert_contains "$(jqf "$out" .display)" "mark the issue in-progress" "display m
 assert_contains "$cmds" "Closes #42" "prompt words PRs to close the issue"
 assert_contains "$cmds" "post the full plan as a Markdown comment on issue #42" "prompt asks child to comment the plan"
 assert_contains "$cmds" "comment a link to each PR on issue #42" "prompt asks child to comment PR links"
+# issue #78: the prompt also briefs the child to read ALL comments (the concrete
+# nudge is the --comments example, since a bare `gh issue view` omits them) and to
+# weigh a reopen as a signal a previous fix was insufficient.
+assert_contains "$cmds" "gh issue view 42 --comments" "prompt asks child to read all comments"
+assert_contains "$cmds" "reopened" "prompt asks child to weigh a reopen as a failed prior fix"
 
 # issue #55: the dry-run previews the worktree gitignore decision. A fresh mk_repo
 # has no .gitignore, so it reports "would-add" — and the write is NOT a tmux

@@ -451,13 +451,6 @@ def current_blob_map(root):
     return blobs
 
 
-def git_tree_oid(root, treepath):
-    code, out = run_git(["rev-parse", "HEAD:{}".format(treepath)], cwd=root)
-    if code != 0:
-        return None
-    return out.decode().strip()
-
-
 def git_commit_exists(root, sha):
     code, _ = run_git(["cat-file", "-e", "{}^{{commit}}".format(sha)], cwd=root)
     return code == 0
@@ -647,6 +640,16 @@ def cmd_ledger_finalize(args):
     docs_rewritten = 0
     if args.refresh_hashes:
         except_docs = set(getattr(args, "except_docs", None) or [])
+        # Scope shas are content digests over the scanned files under each
+        # top-level scope dir — computed once, working-tree truth, same view as
+        # the source-blob hashing below. When the scan fails (a mid-run
+        # not-a-git-repo race; enforce_ceiling=False rules out ceiling errors),
+        # scan_files is None and scope shas are left untouched rather than
+        # recorded as an empty-set digest that would go sticky-stale.
+        scope_scan = do_scan(root, enforce_ceiling=False)
+        scope_files = ({f["path"] for f in scope_scan["files"]}
+                       if scope_scan.get("ok") else None)
+        scope_blobs = current_blob_map(root)
         # Module docs first, then overview docs — overview sources are module
         # doc files, which must carry their final bytes before being hashed.
         ordered = ([d for d in docs if d["doc_id"].startswith("modules/")] +
@@ -671,9 +674,13 @@ def cmd_ledger_finalize(args):
             for entry in fm["sources"]:
                 entry["blob"] = hashes.get(entry["path"])
                 sources_count += 1
-            for scope in fm.get("scopes") or []:
-                if isinstance(scope, dict) and isinstance(scope.get("tree"), str):
-                    scope["sha"] = git_tree_oid(root, scope["tree"])
+            if scope_files is not None:
+                for scope in fm.get("scopes") or []:
+                    if isinstance(scope, dict) and isinstance(scope.get("tree"), str):
+                        # sha256:<hex> content digest over the scope's scanned
+                        # files (not a git tree OID) — see scope_digest / #79.
+                        scope["sha"] = scope_digest(
+                            scope["tree"], scope_files, scope_blobs)
             if args.generator:
                 fm["generator"] = args.generator
             # Hash-gating: a doc whose recorded inputs are unchanged must
@@ -829,6 +836,14 @@ def compute_diff(root, generator=None):
     for blob in blob_to_paths:
         blob_to_paths[blob].sort()
 
+    # One scan feeds both scope-digest invalidation and new-file detection. When
+    # it fails (a not-a-git-repo race; ceiling disabled), scan_files is None and
+    # scope-change detection is skipped so a failed scan never falsely flags the
+    # overview stale.
+    scan = do_scan(root, enforce_ceiling=False)
+    scan_files = ({f["path"] for f in scan["files"]}
+                  if scan.get("ok") else None)
+
     stale_docs = []
     renamed_docs = []
     orphaned_docs = []
@@ -856,14 +871,15 @@ def compute_diff(root, generator=None):
                 edited.append(path)
 
         scope_changed = []
-        for scope in fm.get("scopes") or []:
-            if not isinstance(scope, dict):
-                continue
-            tree, recorded_sha = scope.get("tree"), scope.get("sha")
-            if not tree or not recorded_sha:
-                continue
-            if git_tree_oid(root, tree) != recorded_sha:
-                scope_changed.append(tree)
+        if scan_files is not None:
+            for scope in fm.get("scopes") or []:
+                if not isinstance(scope, dict):
+                    continue
+                tree, recorded_sha = scope.get("tree"), scope.get("sha")
+                if not tree or not recorded_sha:
+                    continue
+                if scope_digest(tree, scan_files, current) != recorded_sha:
+                    scope_changed.append(tree)
 
         if fm["sources"] and len(deleted) == len(fm["sources"]):
             orphaned_docs.append({"doc": doc_id, "deleted": deleted})
@@ -893,7 +909,7 @@ def compute_diff(root, generator=None):
             ripple_docs.append({"doc": doc["doc_id"], "via": via})
             affected_doc_ids.add(doc["doc_id"])
 
-    scan = do_scan(root, enforce_ceiling=False)
+    # Reuse the single scan hoisted above (feeds scope digests too).
     new_files = [f["path"] for f in scan.get("files", [])
                  if f["path"] not in covered_paths] if scan.get("ok") else []
 
@@ -1929,13 +1945,35 @@ def incident_edge_digest(symbol_id, edges):
     return content_hash("\n".join(incoming))
 
 
+def paths_digest(paths, blobs):
+    """sha256 over sorted (path, blob) pairs — a stable content address of a set
+    of files, given a precomputed {path: blob} map. An empty set hashes to a
+    stable constant, so a scope/module that loses its last member converges
+    rather than thrashing."""
+    pairs = sorted("{} {}".format(p, blobs.get(p, "")) for p in paths)
+    return content_hash("\n".join(pairs))
+
+
 def compute_inputs_digest(root, file_list):
     """sha256 over (path, blob) for every mappable file as it exists now — the
     cache-validity fingerprint. Invalidates precisely when any mapped byte
     changes (working-tree edits included, via current_blob_map)."""
-    blobs = current_blob_map(root)
-    pairs = sorted("{} {}".format(p, blobs.get(p, "")) for p in file_list)
-    return content_hash("\n".join(pairs))
+    return paths_digest(file_list, current_blob_map(root))
+
+
+def scope_digest(tree, scan_files, blobs):
+    """Content address of the *mappable* files under a top-level scope dir.
+
+    `scan_files` is the do_scan file set, which excludes docs/atlas/** and
+    .atlas/** (DEFAULT_EXCLUDES) — so the map's own committed output can no
+    longer self-invalidate the overview's scope (issue #79; a raw HEAD:<dir>
+    tree OID re-included it). `blobs` is a precomputed current_blob_map. The
+    `p == tree` guard is cheap defense: git cannot hold a blob and a tree at one
+    path, so it never fires for a real scope (scopes are always full top-level
+    directory segments)."""
+    prefix = tree + "/"
+    members = [p for p in scan_files if p == tree or p.startswith(prefix)]
+    return paths_digest(members, blobs)
 
 
 def path_to_module(index):

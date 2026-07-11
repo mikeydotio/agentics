@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.26.2] - 2026-07-11
+
+### Fixed
+- hash overview scopes over scanned files, not the git tree (333952a)
+
+### Changed
+- Merge pull request #80 from mikeydotio/worktree-age-78 (d827a59)
+
+### Documentation
+- scopes invalidate via scanned-file digest, not tree SHA (b7fc786)
+
+### Testing
+- regression guards for docs-scope self-invalidation (de06c8f)
+
+_[manual]_
+
 ## [v2.26.1] - 2026-07-11
 
 ### Added

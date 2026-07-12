@@ -50,9 +50,11 @@ LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # The handoff prompt is the ONLY lever the dispatcher has over the child session,
 # which is what actually plans, implements, and opens PRs. So it carries the
 # GitHub self-reporting contract (issue #50): comment the finalized plan, word
-# PRs to close the issue, comment PR links. Kept single-line + ASCII (no
-# backticks) so `tmux send-keys -l` types it verbatim without key-interpretation.
-PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it.}"
+# PRs to close the issue, comment PR links. It also briefs the child NOT to bump
+# the version or deploy from its worktree (those happen later from `main`), since
+# this session always runs inside a per-issue worktree. Kept single-line + ASCII
+# (no backticks) so `tmux send-keys -l` types it verbatim without key-interpretation.
+PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it. Do not bump the version or deploy from this worktree: do not run semver bump, deployit deploy, or any release/version step, and do not plan for them -- versioning and deployment happen later from the main branch, not here.}"
 # The "picked up" label applied to the issue at dispatch (issue #50). Set
 # ISSUE_LABEL="" to disable labeling entirely. Color/description are used
 # only when the label doesn't yet exist in the repo (create-if-missing). Uses

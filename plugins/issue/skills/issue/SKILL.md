@@ -87,8 +87,10 @@ the window (`.claude/worktrees/age-42`) — in plan mode, prompt already submitt
   a `/plan` prompt prefix. The helper owns these; don't rewrite them here.
 - **GitHub write-backs live in the helper — never call `gh`/`git` yourself.** `do`'s default prompt
   briefs the child session to comment its finalized plan on the issue, word every PR to close it
-  (`Closes #<n>`), and comment each PR link. `complete`'s cleanup (close, worktree/branch removal)
-  and `new`'s filing are likewise the helper's job.
+  (`Closes #<n>`), comment each PR link, and **never bump the version or deploy from the worktree**
+  (versioning/deployment happen later from `main`; the semver/deployit CLIs also hard-refuse inside a
+  worktree). `complete`'s cleanup (close, worktree/branch removal) and `new`'s filing are likewise the
+  helper's job.
 - **Worktree hygiene (automatic):** `do` idempotently gitignores `.claude/worktrees/` so the
   per-issue worktrees never dirty `git status` (reported in the `gitignore` field; never affects
   `ok`).

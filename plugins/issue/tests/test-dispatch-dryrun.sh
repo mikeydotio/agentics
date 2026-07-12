@@ -41,6 +41,9 @@ assert_contains "$(jqf "$out" .display)" "mark the issue in-progress" "display m
 assert_contains "$cmds" "Closes #42" "prompt words PRs to close the issue"
 assert_contains "$cmds" "post the full plan as a Markdown comment on issue #42" "prompt asks child to comment the plan"
 assert_contains "$cmds" "comment a link to each PR on issue #42" "prompt asks child to comment PR links"
+# Worktree hygiene: the child must never bump the version or deploy from its
+# worktree (versioning/deploy happen later from main).
+assert_contains "$cmds" "Do not bump the version or deploy from this worktree" "prompt forbids bump/deploy in the worktree"
 
 # issue #55: the dry-run previews the worktree gitignore decision. A fresh mk_repo
 # has no .gitignore, so it reports "would-add" — and the write is NOT a tmux

@@ -72,7 +72,10 @@ a pre-built pick option that the skill presents via one `AskUserQuestion`. With 
      (`prompt_accepted`) without ever re-coupling confirmation to fragile TUI copy.
      The default prompt briefs the child session to comment its finalized plan on the issue, word
      PRs to close it (`Closes #<n>`), and comment each PR link — those steps happen later, inside
-     that session, so the prompt is the only place they can be requested.
+     that session, so the prompt is the only place they can be requested. It also tells the child
+     **not to bump the version or deploy** from its worktree (no `/semver bump`, no `/deployit
+     deploy`) — versioning and deployment happen later from `main`, and the semver/deployit CLIs
+     now hard-refuse inside a worktree anyway.
    - **Mark the issue `in-progress`** — `gh label create` (create-if-missing, existing styling left
      alone) then `gh issue edit --add-label`. Best-effort: a failure adds a `warning`, never an
      `ok:false`. Disable with `ISSUE_LABEL=`.
@@ -130,7 +133,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode. |
-| `ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), and comment each PR link. `<n>` → issue number. Deliberately has no `/plan` prefix. |
+| `ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), comment each PR link, and **never bump the version or deploy from the worktree** (that happens later from `main`). `<n>` → issue number. Deliberately has no `/plan` prefix. |
 | `ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`ISSUE_LABEL=`) to disable labeling entirely. |
 | `ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
 | `ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |

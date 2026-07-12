@@ -182,7 +182,7 @@ module: overview/ARCHITECTURE
 summary: System architecture and cross-module relationships
 sources:                              # the module DOCS, not source files
   - path: docs/atlas/modules/src-auth.md
-scopes:                               # mapped roots — tree-SHA invalidation
+scopes:                               # mapped roots — scanned-file digest
   - tree: src
 generator: cartographer/2 model=<model-id>
 ---
@@ -190,8 +190,13 @@ generator: cartographer/2 model=<model-id>
 
 The overview is written from the module docs plus the import graph — NOT by
 re-reading source. Its `sources` are the module doc files (so it regenerates
-whenever any module doc changed); `scopes` are the mapped root directories
-(so committed structural changes invalidate it even when no listed file did).
+whenever any module doc changed); `scopes` are the mapped root directories. Each
+scope's `sha` is a `sha256:` content digest over the **scanned** files under that
+root (the same include/exclude set `scan` applies, so `docs/atlas/**` and
+`.atlas/**` are excluded) — so committed structural changes invalidate the
+overview even when no listed source file did, while the map regenerating its own
+output under `docs/atlas/` no longer self-invalidates it (issue #79). A raw
+`git rev-parse HEAD:<root>` tree OID would re-include the map's own output.
 
 ### Body
 

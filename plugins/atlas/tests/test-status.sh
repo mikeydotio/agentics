@@ -145,3 +145,88 @@ test_status_for_hook_is_trimmed() {
 
     cleanup_fixture_repo "$repo"
 }
+
+# --- issue #79: the overview `docs` scope must not self-invalidate ------------
+# A repo whose docs/ holds BOTH a real mapped source (docs/guide.md) AND the
+# map's own committed output (docs/atlas/**). The overview scopes on `docs`.
+# `ledger finalize` writes the scope sha INTO the overview (which lives under
+# docs/atlas/), so every map commit rewrites docs/atlas/** — a raw
+# `git rev-parse HEAD:docs` tree OID reads that as a scope change and flags the
+# overview stale forever (never converges). The scoped-file digest hashes only
+# the SCANNED files under the root (docs/atlas/** excluded), so a clean
+# map+commit stays tier 0 while a genuine docs/guide.md change still invalidates.
+_status_docs_scope_fixture() {
+    local repo
+    repo=$(create_fixture_repo)
+    seed_file "$repo" "docs/guide.md"
+    write_module_doc "$repo" "docs-guide" "docs" "" "docs/guide.md"
+    seed_file "$repo" "src/m1/f.txt"
+    write_module_doc "$repo" "src-m1" "src/m1" "" "src/m1/f.txt"
+    write_overview_doc "$repo" "ARCHITECTURE" "docs" \
+        docs/atlas/modules/docs-guide.md \
+        docs/atlas/modules/src-m1.md
+    commit_all "$repo"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    run_atlas "$repo" index rebuild
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m "map"
+    echo "$repo"
+}
+
+# The core regression: pre-fix this fixture reports tier 2 ("ARCHITECTURE …
+# stale") on the very first clean map+commit because the map's own output moved
+# HEAD:docs. It must be tier 0.
+test_status_docs_scope_selfmap_stays_t0() {
+    local repo
+    repo=$(_status_docs_scope_fixture)
+
+    run_atlas "$repo" status
+    assert_json_field "$OUTPUT" '.mapped' "true" "mapped" || return 1
+    assert_json_field "$OUTPUT" '.tier' "0" \
+        "docs-scope overview stays tier 0 after a clean map+commit (issue #79)" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+# No false negative: a real change to the scanned source under the scope MUST
+# still invalidate the overview, and specifically via a `docs` scope_changed
+# reason — proving the fix narrowed detection to scanned files, not disabled it.
+test_status_docs_scope_real_edit_flags_overview() {
+    local repo
+    repo=$(_status_docs_scope_fixture)
+    echo "// behavior change" >> "$repo/docs/guide.md"
+    commit_all "$repo" "edit guide"
+
+    run_atlas "$repo" ledger diff
+    assert_json_contains "$OUTPUT" '[.stale_docs[].doc]' "overview/ARCHITECTURE.md" \
+        "real docs/ source change invalidates the overview" || return 1
+    assert_json_contains "$OUTPUT" \
+        '[.stale_docs[] | select(.doc=="overview/ARCHITECTURE.md") | .reasons[] | select(.kind=="scope_changed") | .path]' \
+        "docs" "invalidation is a docs scope_changed, not a false positive" || return 1
+
+    cleanup_fixture_repo "$repo"
+}
+
+# Convergence under real map churn: editing a non-docs source forces a re-map
+# whose commit legitimately rewrites docs/atlas/** (module doc + INDEX +
+# overview). The `docs` scope must NOT be re-flagged by that churn — the map
+# reaches tier 0 again. Pre-fix, docs/atlas moving on every commit meant the
+# overview never converged.
+test_status_docs_scope_converges_after_remap() {
+    local repo
+    repo=$(_status_docs_scope_fixture)
+
+    echo "// behavior change" >> "$repo/src/m1/f.txt"
+    write_module_doc "$repo" "src-m1" "src/m1" "" "src/m1/f.txt"
+    run_atlas "$repo" ledger finalize --refresh-hashes
+    assert_exit_code 0 "$EXIT_CODE" "re-finalize ok" || return 1
+    run_atlas "$repo" index rebuild
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m "map2"
+
+    run_atlas "$repo" status
+    assert_json_field "$OUTPUT" '.tier' "0" \
+        "docs-scope overview converges to tier 0 after a real re-map commit (issue #79)" || return 1
+
+    cleanup_fixture_repo "$repo"
+}

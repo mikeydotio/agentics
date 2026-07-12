@@ -105,7 +105,7 @@ write_module_doc() {
 
 # write_overview_doc <repo> <doc-id> <scope-dir> <doc-source-relpath...>
 # Overview docs draw from module docs (path sources) and directory scopes
-# (tree-SHA invalidation).
+# (scanned-file digest invalidation — excludes docs/atlas/** and .atlas/**).
 write_overview_doc() {
     local repo="$1" doc_id="$2" scope_dir="$3"
     shift 3

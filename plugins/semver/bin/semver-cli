@@ -188,6 +188,58 @@ def ensure_git_root():
                       f"Must run from git root. CWD: {cwd}, Git root: {root}")
 
 
+def is_linked_worktree(cwd=None):
+    """True iff cwd is inside a *linked* git worktree (not the main working tree).
+
+    Detected by comparing the per-worktree git dir against the shared common dir:
+    in a linked worktree `--git-dir` resolves to `<repo>/.git/worktrees/<name>`
+    while `--git-common-dir` resolves to `<repo>/.git`; in the main tree both are
+    the same `.git`. (`--is-inside-work-tree` is true in both, so it cannot tell
+    them apart.) Returns False when not inside a repo — no worktree concern.
+    """
+    base = os.path.realpath(cwd or os.getcwd())
+    rc1, gd, _ = git("rev-parse", "--git-dir", cwd=base)
+    rc2, cdir, _ = git("rev-parse", "--git-common-dir", cwd=base)
+    if rc1 != 0 or rc2 != 0:
+        return False
+    # git returns these relative to cwd in the main tree (bare ".git") and
+    # absolute in a linked worktree — resolve both against base before comparing.
+    resolve = lambda p: os.path.realpath(os.path.join(base, p))
+    return resolve(gd) != resolve(cdir)
+
+
+# Subcommands (and command+subcommand pairs) that never mutate VERSION/CHANGELOG,
+# config, commits, or tags — safe to run from a linked worktree. Everything else
+# is treated as mutating and refused inside a worktree (fail-safe: a new mutating
+# subcommand is blocked by default until explicitly listed here).
+def _is_readonly_command(args):
+    if args.command in ("current", "validate", "recommend"):
+        return True
+    if args.command == "bump" and getattr(args, "bump_command", None) == "gather":
+        return True
+    if args.command == "tracking" and getattr(args, "tracking_command", None) == "stop-gather":
+        return True
+    if args.command == "repair" and getattr(args, "repair_command", None) == "diagnose":
+        return True
+    return False
+
+
+def ensure_not_worktree(args):
+    """Refuse a mutating op inside a linked worktree (override with
+    SEMVER_ALLOW_WORKTREE=1). Versioning happens later from the main tree."""
+    if _is_readonly_command(args):
+        return
+    if os.environ.get("SEMVER_ALLOW_WORKTREE"):
+        return
+    if is_linked_worktree():
+        output_error(
+            "in_worktree",
+            "Refusing to run a mutating semver operation inside a git worktree. "
+            "Versioning happens later from the main working tree on the main "
+            "branch, not from a per-issue worktree. Set SEMVER_ALLOW_WORKTREE=1 "
+            "to override.")
+
+
 def current_branch():
     rc, out, _ = git("rev-parse", "--abbrev-ref", "HEAD")
     return out if rc == 0 else None
@@ -3088,6 +3140,11 @@ def main():
     if args.command is None:
         parser.print_help()
         sys.exit(2)
+
+    # Never mutate versioning state from inside a linked git worktree — bumps,
+    # tags, and release commits belong to the main working tree on the main
+    # branch (exits here for mutating ops; read-only reporting is allowed).
+    ensure_not_worktree(args)
 
     if args.command == "current":
         cmd_current(args)

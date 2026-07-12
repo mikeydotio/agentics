@@ -3,19 +3,49 @@
 # only the subcommands cmd_dispatch / cmd_doctor drive, enough to let the helper
 # run to completion headlessly without a live tmux server:
 #
-#   new-window        -> print a pane id  (%1), exit 0
+#   new-window        -> reset the virtual input-box state, print a pane id (%1)
 #   display-message   -> print a window id (@1), exit 0
 #   set-window-option -> no-op, exit 0
-#   send-keys         -> no-op, exit 0
+#   send-keys         -> mutate the virtual input box (see STATEFUL MODEL below)
 #   kill-window       -> no-op, exit 0  (doctor tears its scratch window down)
-#   capture-pane      -> print pane content selected by $FAKE_TMUX_CAPTURE (see
+#   capture-pane      -> print pane content selected by $FAKE_TMUX_CAPTURE, then
+#                        append the current input-box row when non-empty (see
 #                        below). DEFAULT (knob unset) is the legacy
 #                        "  ? for shortcuts" line, so every pre-#67 test that
 #                        relies on it keeps passing unchanged.
 #
-# $FAKE_TMUX_CAPTURE selects the capture-pane output so a test can drive each
-# readiness tier + warning path (issue #67). This is purely ADDITIVE — an unset
-# knob reproduces the original single-line behavior exactly:
+# STATEFUL MODEL (issue #82) — the fake now models the Claude Code input box so a
+# test can observe both RECEIPT (the paste landed in the box) and SUBMISSION (the
+# box cleared) — the two guarantees issue.sh's send_prompt_confirmed makes. This
+# is purely ADDITIVE: with none of the FAKE_TMUX_* knobs below set, and the input
+# box empty (its state after the launch Enter clears it), capture-pane emits
+# EXACTLY the same base fixture as before, so every readiness/gitignore test is
+# byte-for-byte unaffected.
+#
+#   * A virtual input buffer lives in $STATE/input (STATE = $FAKE_TMUX_STATE, or a
+#     fixed /tmp dir otherwise). `send-keys -l <text>` APPENDS <text> to it (a
+#     literal paste); `send-keys ... Enter` SUBMITS (clears it) — with two twists:
+#       - The FIRST Enter after launch always clears (it submits the launch
+#         command line); it also flips $STATE/launched so later Enters are treated
+#         as prompt submissions. This keeps a prompt absorb-count from ever
+#         stranding wait_ready's launch_gone gate.
+#       - $FAKE_TMUX_ENTER_ABSORB=N makes the next N *prompt* Enters get ABSORBED
+#         (decrement, do NOT clear) — the exact #82 race where an Enter fired into
+#         a still-settling bracketed paste is swallowed as a newline. The (N+1)th
+#         Enter submits.
+#   * capture-pane appends a "<glyph> <input>" row (glyph = U+276F, the same idle
+#     prompt glyph the fixtures use) ONLY when the input buffer is non-empty, so an
+#     empty box renders the base fixture verbatim.
+#   * $FAKE_TMUX_DROP_PASTE=1 makes a post-launch prompt paste get LOGGED but not
+#     applied to the input buffer (a genuinely dropped paste) — drives the
+#     receipt-phase re-paste path.
+#   * Every literal paste is also appended (one line per paste) to
+#     $STATE/pastes.log, so a test can assert the prompt was pasted exactly once
+#     (no duplicate-paste on the submit retry) or the bounded re-paste count.
+#
+# $FAKE_TMUX_CAPTURE selects the base capture-pane output so a test can drive each
+# readiness tier + warning path (issue #67). Unset reproduces the original
+# single-line behavior exactly:
 #
 #   (unset) / legacy  Legacy idle footer "  ? for shortcuts" — matches the
 #                     broadened READY_PATTERN via "for shortcuts" (back-compat).
@@ -34,15 +64,60 @@
 #                     marker — never stabilises, never matches → readiness stays
 #                     unconfirmed (drives the warning + pane_tail evidence path).
 #
-# The fake is re-exec'd per tmux call and holds no in-process state, so `churn`
-# advances a counter file under $FAKE_TMUX_STATE (a test-provided dir) to
-# guarantee each capture differs; it falls back to $RANDOM if unset.
+# The fake is re-exec'd per tmux call and holds no in-process state, so ALL of the
+# above (the input buffer, the launched flag, the absorb counter, the churn
+# counter) live in files under $STATE. `churn` still advances $STATE/count and
+# falls back to $RANDOM when $FAKE_TMUX_STATE is unset.
+
+STATE="${FAKE_TMUX_STATE:-/tmp/issue-faketmux}"
+mkdir -p "$STATE" 2>/dev/null || true
 
 case "${1:-}" in
-  new-window)        printf '%%1\n' ;;
+  new-window)
+    # First side effect of a dispatch: reset the virtual input box so every run
+    # starts clean, and seed the prompt-Enter absorb counter from the knob.
+    rm -f "$STATE/input" "$STATE/launched" "$STATE/absorb" "$STATE/pastes.log" 2>/dev/null || true
+    printf '%s' "${FAKE_TMUX_ENTER_ABSORB:-0}" > "$STATE/absorb" 2>/dev/null || true
+    printf '%%1\n'
+    ;;
   display-message)   printf '@1\n' ;;
   set-window-option) : ;;
-  send-keys)         : ;;
+  send-keys)
+    # Parse the two shapes issue.sh emits: `-t <pane> -l <text>` (literal paste)
+    # and `-t <pane> Enter` (submit). Anything else is ignored.
+    shift || true
+    has_l=false; ltext=""; is_enter=false
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -t) shift || true ;;                 # drop the pane target (next arg)
+        -l) has_l=true; shift || true; ltext="${1-}" ;;
+        Enter) is_enter=true ;;
+      esac
+      shift || true
+    done
+    if [ "$has_l" = true ]; then
+      printf '%s\n' "$ltext" >> "$STATE/pastes.log" 2>/dev/null || true
+      launched="$(cat "$STATE/launched" 2>/dev/null || printf 'false')"
+      if [ "${FAKE_TMUX_DROP_PASTE:-}" = "1" ] && [ "$launched" = true ]; then
+        : # dropped paste: logged above, but never reaches the input box
+      else
+        printf '%s' "$ltext" >> "$STATE/input" 2>/dev/null || true
+      fi
+    elif [ "$is_enter" = true ]; then
+      launched="$(cat "$STATE/launched" 2>/dev/null || printf 'false')"
+      if [ "$launched" != true ]; then
+        : > "$STATE/input" 2>/dev/null || true          # launch line submitted
+        printf 'true' > "$STATE/launched" 2>/dev/null || true
+      else
+        absorb="$(cat "$STATE/absorb" 2>/dev/null || printf '0')"
+        if [ "${absorb:-0}" -gt 0 ] 2>/dev/null; then
+          printf '%s' "$((absorb - 1))" > "$STATE/absorb" 2>/dev/null || true
+        else
+          : > "$STATE/input" 2>/dev/null || true          # prompt submitted
+        fi
+      fi
+    fi
+    ;;
   kill-window)       : ;;
   capture-pane)
     case "${FAKE_TMUX_CAPTURE:-legacy}" in
@@ -84,6 +159,13 @@ EOF
       legacy|*)
         printf '  ? for shortcuts\n' ;;
     esac
+    # Append the active input-box row when the virtual box holds text, so a test
+    # can observe receipt (row present) and submission (row gone). Empty box ⇒ no
+    # extra output ⇒ base fixture is byte-identical to the pre-#82 fake.
+    inp="$(cat "$STATE/input" 2>/dev/null || printf '')"
+    if [ -n "$inp" ]; then
+      printf '❯ %s\n' "$inp"
+    fi
     ;;
   *)                 : ;;
 esac

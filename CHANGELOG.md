@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.27.0] - 2026-07-12
+
+### Added
+- refuse deploy/bump inside a git worktree (532ccc5)
+- refuse mutating ops inside a git worktree (9745bb7)
+- brief the worktree agent to never bump or deploy (c7c15a6)
+
+### Changed
+- Merge pull request #77 from mikeydotio/atlas/update-a4486d2 (3d618e4)
+- Merge pull request #76 from mikeydotio/atlas/update-cb09ceb (a4486d2)
+- Merge pull request #75 from mikeydotio/chore/issue-toolkit-72 (cc5a619)
+
+### Documentation
+- update to a4486d2 (36 cells re-judged; map issue plugin + deployit bin re-chunk, drop handle-issue/deployit-bin docs) (dc6193d)
+- refresh ARCHITECTURE ledger hashes (clear stale-source flag; no content change) (ecf8872)
+- update to cb09ceb (93 cells re-judged, 3 corrected on verify; map reconcile-pr + semver re-chunk, drop stale semver-tests doc) (134d628)
+
+_[manual]_
+
 ## [v2.26.0] - 2026-07-09
 
 ### Added

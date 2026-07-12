@@ -457,6 +457,41 @@ def _is_dirty(cwd: Path) -> bool:
         return False
 
 
+def _is_linked_worktree(cwd: Path) -> bool:
+    """True iff cwd is inside a *linked* git worktree (not the main working tree).
+
+    In a linked worktree `--git-dir` resolves to `<repo>/.git/worktrees/<name>`
+    while `--git-common-dir` resolves to the shared `<repo>/.git`; in the main
+    tree both are the same `.git`. Returns False when cwd is not inside a repo.
+    """
+    def _rev_parse(flag: str):
+        try:
+            res = subprocess.run(["git", "-C", str(cwd), "rev-parse", flag],
+                                 capture_output=True, text=True, timeout=5)
+            return res.stdout.strip() if res.returncode == 0 else None
+        except Exception:
+            return None
+    gd = _rev_parse("--git-dir")
+    cdir = _rev_parse("--git-common-dir")
+    if gd is None or cdir is None:
+        return False
+    base = str(cwd)
+    return os.path.realpath(os.path.join(base, gd)) != os.path.realpath(os.path.join(base, cdir))
+
+
+def _refuse_if_worktree(cwd: Path):
+    """Refuse a deploy/bump inside a linked git worktree (override with
+    DEPLOYIT_ALLOW_WORKTREE=1). Deploys and version bumps run from the main
+    working tree on the main branch, never a per-issue worktree."""
+    if os.environ.get("DEPLOYIT_ALLOW_WORKTREE"):
+        return
+    if _is_linked_worktree(cwd):
+        fail("Refusing to deploy or bump from a git worktree. Deploys and version "
+             "bumps run from the main working tree on the main branch, not from a "
+             "per-issue worktree. Set DEPLOYIT_ALLOW_WORKTREE=1 to override.",
+             error="in_worktree")
+
+
 def _pull_index(state: Path):
     """Best-effort refresh of the shared index before a read. Never fatal;
     skippable via DEPLOYIT_SKIP_INDEX_PULL (e.g. remote-less test indexes)."""
@@ -1295,6 +1330,7 @@ def cmd_deploy(args):
     if not args.platform:
         fail("--platform required (one of ios | macos | visionos)")
     cwd = Path.cwd()
+    _refuse_if_worktree(cwd)
     meta = _derive_metadata(cwd, args.platform)
     if getattr(args, "dump_metadata", False):
         ok({"display": "metadata", **meta})
@@ -1518,6 +1554,7 @@ def cmd_bump(args):
     if not args.component:
         fail("--component required (one of major | minor | patch)")
     cwd = Path.cwd()
+    _refuse_if_worktree(cwd)
     if _semver_active_version(cwd) is None:
         fail("semver is not active for this project — nothing to bump")
     cli = _find_semver_cli(args.plugin_root)

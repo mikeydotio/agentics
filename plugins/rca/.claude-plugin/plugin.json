@@ -1,6 +1,6 @@
 {
   "name": "rca",
-  "version": "2.26.2",
+  "version": "2.27.0",
   "description": "Perform thorough root cause analysis on bugs and regressions to find the REAL underlying cause, not just the symptom",
   "author": {
     "name": "mikeydotio"

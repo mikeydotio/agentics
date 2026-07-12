@@ -1,6 +1,6 @@
 {
   "name": "reconcile-pr",
-  "version": "2.26.2",
+  "version": "2.27.0",
   "description": "Rebase a GitHub PR's branch onto the latest tip of its base branch, resolve any merge conflicts while preserving both the pre-existing base behavior and the PR's new behavior, verify with exhaustive testing, force-push the reconciled branch with a leased safety guard, and comment on the PR summarizing the conflicts and their resolution",
   "author": {
     "name": "mikeydotio"

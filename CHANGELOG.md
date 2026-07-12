@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.27.0] - 2026-07-12
+
+### Added
+- refuse deploy/bump inside a git worktree (c72ac2c)
+- refuse mutating ops inside a git worktree (f49a8b6)
+- brief the worktree agent to never bump or deploy (4990dec)
+
+### Changed
+- Merge pull request #81 from mikeydotio/worktree-age-79 (40bef09)
+
+_[manual]_
+
 ## [v2.26.2] - 2026-07-11
 
 ### Fixed

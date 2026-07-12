@@ -46,6 +46,9 @@ assert_contains "$cmds" "comment a link to each PR on issue #42" "prompt asks ch
 # weigh a reopen as a signal a previous fix was insufficient.
 assert_contains "$cmds" "gh issue view 42 --comments" "prompt asks child to read all comments"
 assert_contains "$cmds" "reopened" "prompt asks child to weigh a reopen as a failed prior fix"
+# Worktree hygiene: the child must never bump the version or deploy from its
+# worktree (versioning/deploy happen later from main).
+assert_contains "$cmds" "Do not bump the version or deploy from this worktree" "prompt forbids bump/deploy in the worktree"
 
 # issue #55: the dry-run previews the worktree gitignore decision. A fresh mk_repo
 # has no .gitignore, so it reports "would-add" — and the write is NOT a tmux

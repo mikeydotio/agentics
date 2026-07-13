@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.28.0] - 2026-07-12
+
+### Added
+- thin orchestrator router + manifests, README, CLAUDE.md row (98a077b)
+- seven pipeline subskills + eight agent-override contexts (5b17988)
+- methodology reference set — scientific debugging encoded (3442f50)
+- experimenter agent + RCA-focused improvements to qa-engineer, investigator, hypothesis-challenger (11f1d7c)
+- deterministic bin layer — 8 JSON-contract scripts + plain-bash test suite (fe9645f)
+
+### Changed
+- Merge pull request #84 from mikeydotio/feat/worktree-guards (62e1840)
+
+_[manual]_
+
 ## [v2.27.0] - 2026-07-12
 
 ### Added

@@ -45,7 +45,7 @@ A hypothesis like "The auth token expiry race condition causes login failures" a
 
 Each claim must be independently challenged.
 
-### 2. Five Challenge Strategies
+### 2. Six Challenge Strategies
 
 #### A. The Coincidence Test (from Skeptic)
 "Is the proposed cause actually connected to the effect, or just correlated?"
@@ -104,6 +104,19 @@ For each alternative, assess: does it explain the symptoms better, worse, or equ
 - **Blast radius**: What else would the fix affect? Could it introduce new failures?
 - **Regression risk**: Would the fix break any existing behavior?
 - **Recurrence potential**: After the fix, could the same class of problem recur through a different code path?
+
+#### F. The Experiment Design Review (from Experimenter)
+"Do the experiments that 'confirmed' this hypothesis actually confirm anything?"
+
+Before attacking the hypothesis itself, attack the evidence offered for it. For each experiment cited in support:
+
+- **Prediction timing**: Was the pass/fail prediction written BEFORE the run, or fitted to the result afterward? A post-hoc prediction confirms nothing — any outcome can be narrated as success.
+- **Discriminating power**: Does the experiment distinguish this hypothesis from its rivals? Ask directly: would the leading alternative (H2) produce the *same* observation? If yes, the experiment is consistent with both and supports neither.
+- **Single variable**: Was exactly one thing changed? A multi-variable intervention cannot attribute the result to the hypothesized cause.
+- **Toggle both directions**: Was the failure re-confirmed after reverting the intervention? A one-way disappearance is correlation; only the failure *returning* on revert closes the causal loop.
+- **Masking vs removal**: Could the intervention have hidden the symptom rather than removed the cause (e.g. a retry that papers over a race, a broadened catch that swallows the error)? A masked failure looks fixed but the defect remains.
+
+An experiment that cannot answer these supports nothing, and any hypothesis resting on it reverts to *unverified* — treat it as needing a proper falsification experiment, not as confirmed.
 
 ### 3. Git History Analysis (absorbed from code-archaeologist)
 
@@ -194,6 +207,11 @@ If the hypothesis is strong, say so. You're not required to find problems — yo
 - **Blast radius**: [contained / moderate / wide]
 - **Recurrence risk**: [low / medium / high]
 - **Recommendation**: [proceed / revise / redesign]
+
+### Experiment Design Review
+| Supporting Experiment | Prediction Pre-Written? | Discriminates H vs Alternatives? | Single Variable? | Toggle Both Directions? | Masking Risk? | Verdict |
+|-----------------------|-------------------------|----------------------------------|------------------|-------------------------|---------------|---------|
+| [experiment] | [yes/no] | [yes/no — would H2 give same result?] | [yes/no] | [yes/no] | [none/possible] | [confirms / supports nothing → unverified] |
 
 ### Git History Correlation
 - **Timeline alignment**: [aligns / partial / contradicts]

@@ -4,7 +4,7 @@ summary: "Bash test suite for atlas-cli git/config/extract/covers/diffpack/doc/i
 read_when: "Changing atlas-cli behavior or writing/debugging atlas plugin tests"
 sources:
   - path: plugins/atlas/tests/helpers/setup.sh
-    blob: 67dcb11d42fa2aa4316c6d95170130c6e0169ee8
+    blob: 96567a779d4fb3e2362c930d986faf2ec0071a2d
   - path: plugins/atlas/tests/run-tests.sh
     blob: febae8f36c0646a382a834d4bb81fac24f7ba8fb
   - path: plugins/atlas/tests/test-branch.sh
@@ -34,7 +34,7 @@ sources:
   - path: plugins/atlas/tests/test-init.sh
     blob: e49e647be93e9eaa3a2eb2884ce58f4b11963e14
 generator: cartographer/4
-baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/atlas/tests (chunk 1)

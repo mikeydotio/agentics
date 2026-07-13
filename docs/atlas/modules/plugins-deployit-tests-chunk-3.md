@@ -9,6 +9,8 @@ sources:
     blob: 483caf8c6d787b64d08bea97ad2796815d6f3f55
   - path: plugins/deployit/tests/test-cli-version.sh
     blob: d7a1daaa409feb77dbb59b51a4c1f76b58050f79
+  - path: plugins/deployit/tests/test-cli-worktree-guard.sh
+    blob: 0a96a9850aa9ed4e1730ae251fe7809691ebefce
   - path: plugins/deployit/tests/test-gc.sh
     blob: be01b59bafa19e9c5bda91c29d3ccd6101f9ad88
   - path: plugins/deployit/tests/test-metadata-single-app.sh
@@ -30,7 +32,7 @@ sources:
   - path: plugins/deployit/tests/verify-live.sh
     blob: bd37453899de071cc6fc016d65e27dd31550e720
 generator: cartographer/4
-baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/deployit/tests (chunk 3)

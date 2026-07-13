@@ -4,15 +4,15 @@ summary: "Contract docs for the shared agent library — roster catalog, design 
 read_when: "Choosing/staffing shared agents, writing agent-overrides, or auditing plugin tool design"
 sources:
   - path: plugins/agents/references/agent-catalog.md
-    blob: f93292a997df80ef3a018c3b1471854af9ec9cb1
+    blob: 263d8647f67125e159f5f8bf6d3c0c6324584636
   - path: plugins/agents/references/agent-design-principles.md
     blob: 5403c125a741fe7f632141b408ed8605da796133
   - path: plugins/agents/references/cross-plugin-usage.md
-    blob: 0085451323188046cb2513c52c2f0d3a500d48d3
+    blob: 959ade0800380a28dc776c446ca0a67ee9aba7d9
   - path: plugins/agents/references/tool-audit.md
     blob: b16db34d0e9301d6a9177aab1bb9a49cd664549c
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/agents/references

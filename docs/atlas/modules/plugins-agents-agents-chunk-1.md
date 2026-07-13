@@ -25,12 +25,12 @@ sources:
     blob: 082350b18419ec31b4dd2d700dee1239012f56ad
   - path: plugins/agents/agents/evidence-collector.md
     blob: 232c0bcdcd2d3d3d86f596fe2c517c1890ac9590
+  - path: plugins/agents/agents/experimenter.md
+    blob: 6d3ac09b7b5a11e829be708533530fcf93297a4c
   - path: plugins/agents/agents/generator.md
     blob: ce5e3ff4fc21bb701db1910eb780382945291489
-  - path: plugins/agents/agents/hypothesis-challenger.md
-    blob: 49dac36dfb6c0f7a022497710e490b2d0869881e
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/agents/agents (chunk 1)

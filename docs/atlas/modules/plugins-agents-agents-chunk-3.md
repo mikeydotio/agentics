@@ -3,12 +3,18 @@ module: "plugins/agents/agents (chunk 3)"
 summary: "Forge's triager (FIX/ESCALATE/DEFER triage) and validator (no-mock test hardening) agent definitions."
 read_when: "Touching forge triage/validate steps or the triager/validator agent contracts"
 sources:
+  - path: plugins/agents/agents/software-architect.md
+    blob: c3abdf88838589d5c78cfe5669e730737bf0195c
+  - path: plugins/agents/agents/software-engineer.md
+    blob: 8ebb8be26e64490f77669942f1b88c3bab9a2246
+  - path: plugins/agents/agents/technical-writer.md
+    blob: fcec96880785ebb5409208d8d8d2abc35ef9f375
   - path: plugins/agents/agents/triager.md
     blob: 4b91a0e95e560c1a4e48e6bee8d3ddd3ad2561d7
   - path: plugins/agents/agents/validator.md
     blob: e85b72f785ded4cdb4b1965161c2dd2abad5047f
 generator: cartographer/4
-baseline: 50c998d53e2ed58951ac5f794afd32bfa729f658
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/agents/agents (chunk 3)

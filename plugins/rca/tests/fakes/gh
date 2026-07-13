@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Minimal fake `gh` for rca skill-level flows. Records argv (one line per call)
+# to $FAKE_GH_LOG if set, and emits canned JSON for `gh issue view`.
+#   FAKE_GH_LOG=path         append each invocation's args here
+#   FAKE_GH_ISSUE_NUM=42     .number      (default 42)
+#   FAKE_GH_ISSUE_TITLE=...  .title
+#   FAKE_GH_ISSUE_STATE=OPEN .state
+[ -n "${FAKE_GH_LOG:-}" ] && printf '%s\n' "$*" >> "$FAKE_GH_LOG"
+
+case "${1:-} ${2:-}" in
+  "issue view")
+    jq -n \
+      --argjson number "${FAKE_GH_ISSUE_NUM:-42}" \
+      --arg title "${FAKE_GH_ISSUE_TITLE:-Login flakes intermittently}" \
+      --arg state "${FAKE_GH_ISSUE_STATE:-OPEN}" \
+      --arg body "${FAKE_GH_ISSUE_BODY:-Repro: run the login test in a loop.}" \
+      '{number:$number, title:$title, state:$state, body:$body,
+        url:("https://github.com/fake/repo/issues/" + ($number|tostring))}'
+    exit 0 ;;
+  "auth status")
+    echo "Logged in to github.com"; exit 0 ;;
+  *)
+    echo "fake-gh: unhandled: $*" >&2; exit 0 ;;
+esac

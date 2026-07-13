@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr
+.PHONY: test test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
 
-test: test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr
+test: test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-atlas test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -45,6 +45,15 @@ test-issue:
 # and a local bare-origin repo; no live network. Always runs (no bats).
 test-reconcile-pr:
 	bash plugins/reconcile-pr/tests/run-tests.sh
+
+# rca's plain-bash suite (plugins/rca/tests/test-*.sh) — the investigation state
+# ladder, scaffold/gitignore idempotency, stack detection, the repro harness
+# (flaky/timeout/cmd-not-found), the worktree lifecycle + untracked --copy, the
+# git-bisect culprit finder (incl. build-skip mapping), read-only forensics, the
+# hotspots/co-change ranker, and the docs<->CLI skill-contract guard. Driven by
+# throwaway git repos under /private/tmp; no live network. Always runs (no bats).
+test-rca:
+	bash plugins/rca/tests/run-tests.sh
 
 test-atlas:
 	bash plugins/atlas/tests/run-tests.sh

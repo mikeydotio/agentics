@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "agentics",
-  "version": "2.27.0",
+  "version": "2.28.0",
   "description": "Mikey's personal collection of Claude Code plugins",
   "owner": {
     "name": "mikeydotio"
@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "rca",
-      "description": "Perform thorough root cause analysis on bugs and regressions — find the REAL underlying cause, not just the symptom",
+      "description": "Reproduction-gated root cause analysis for known defects — scientific-debugging pipeline with git forensics, hypothesis falsification in disposable worktrees, ODC classification, surgical-vs-redesign verdicts, gated fixes, and committed blameless postmortems",
       "source": "./plugins/rca"
     },
     {

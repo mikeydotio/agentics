@@ -1,6 +1,10 @@
 # Symptom vs Root Cause Heuristics
 
-How to tell if you've found the real root cause or are still looking at a symptom.
+How to tell if you've found the real root cause or are still looking at a symptom. These
+heuristics run at two points: against the verified cause in `diagnose`, and against the
+proposed diff in `fix` before commit. They pair with `odc-classification.md` — a fix that
+fails these checks usually means the ODC classification was made against the symptom (the
+encounter point) instead of the defect (the origin).
 
 ## The Core Question
 
@@ -50,7 +54,7 @@ You're looking at the **root cause** if:
 "It's a race condition" is often a symptom diagnosis. The root cause question is: "Why is there shared mutable state that requires synchronization?" or "Why do these operations have temporal coupling?"
 
 ### The "Missing Validation" Trap
-"We need to add input validation" is sometimes the root cause (validation at a trust boundary IS structural) but often a symptom. Ask: "Why is invalid data reaching this point? Who should have validated it and didn't?"
+"We need to add input validation" is sometimes the root cause (validation at a trust boundary IS structural) but often a symptom. Ask: "Why is invalid data reaching this point? Who should have validated it and didn't?" In ODC terms this is the difference between a *Checking/Missing* defect at the boundary that owns the data (structural — fix there) and scattering guards at every encounter point (symptom masking).
 
 ### The "Configuration" Trap
 "The config was wrong" is almost never the root cause. Ask: "Why did wrong config cause silent failure instead of loud failure?" and "Why is the system sensitive to this config value?"
@@ -70,3 +74,8 @@ Apply these tests to your proposed root cause:
 | **Locality** | Is the fix localized or spread across many files? | Primarily in one component |
 | **Upstream** | Is the fix where the bad state ORIGINATES or where it's ENCOUNTERED? | At the origin |
 | **Explanation** | Can you explain WHY this was wrong, not just WHAT was wrong? | Clear structural explanation |
+
+Two ODC cross-checks on the Locality test: a genuinely non-local fix (coordinated edits across
+modules — shotgun surgery) is a REDESIGN signal for the verdict rubric, not a license to
+scatter patches; and an *Interface/Timing* classification legitimately touches both sides of
+one boundary without failing Locality — the unit of locality is the contract, not the file.

@@ -7,14 +7,15 @@ Complete roster of agents available in the shared library at `plugins/agents/age
 | Name | Tools | R/O | Tags | Description |
 |------|-------|-----|------|-------------|
 | [software-engineer](../agents/software-engineer.md) | Read, Write, Edit, Bash, Grep, Glob | no | implementation | Red-green TDD, SOLID, YAGNI, DRY — writes minimum correct code |
-| [qa-engineer](../agents/qa-engineer.md) | Read, Write, Edit, Bash, Grep, Glob | no | testing | No-mock enforcement, 11-category edge cases, production workflow tests, .env scaffolding |
+| [qa-engineer](../agents/qa-engineer.md) | Read, Write, Edit, Bash, Grep, Glob | no | testing, investigation | No-mock enforcement, 11-category edge cases, production workflow tests, .env scaffolding, reproduction-mode failing tests |
 | [security-researcher](../agents/security-researcher.md) | Read, Grep, Glob, Bash, WebSearch | yes | review, investigation | OWASP Top 10 audit, trust boundary mapping, exploit scenarios, CVE scanning |
 | [software-architect](../agents/software-architect.md) | Read, Grep, Glob | yes | design, review | SOLID enforcement, coupling analysis, interface contracts, system diagrams, dependency direction |
 | [project-manager](../agents/project-manager.md) | Read, Write, Grep, Glob | no | design | Wave decomposition, requirement traceability, scope creep detection, deviation tracking |
 | [technical-writer](../agents/technical-writer.md) | Read, Write, Edit, Grep, Glob | no | documentation | Documentation placement framework, audience targeting, ADRs, signal-to-noise optimization |
 | [copy-editor](../agents/copy-editor.md) | Read, Write, Edit, Grep, Glob | no | documentation | LLM-tell detection, human voice calibration, engagement optimization, error message design |
 | [skeptic](../agents/skeptic.md) | Read, Grep, Glob | yes | challenge, review | Socratic questioning, assumption mapping, gap detection, stress testing, constructive challenge |
-| [investigator](../agents/investigator.md) | Read, Grep, Glob, Bash, WebSearch | yes | investigation, research | 5 Whys, Fishbone, multi-hypothesis, red herring detection, evidence-vs-theory separation |
+| [investigator](../agents/investigator.md) | Read, Grep, Glob, Bash, WebSearch | yes | investigation, research | 5 Whys, Fishbone, multi-hypothesis, red herring detection, evidence-vs-theory separation, deterministic-forensics grounding, Zeller defect→infection→failure |
+| [experimenter](../agents/experimenter.md) | Read, Write, Edit, Bash, Grep, Glob | no | investigation, testing | Prediction-first falsification experiments, single-variable discipline, toggle-the-failure gold standard, workspace isolation, SUPPORTED/REFUTED/INCONCLUSIVE verdicts |
 | [accessibility-engineer](../agents/accessibility-engineer.md) | Read, Grep, Glob, WebSearch | yes | review, design | WCAG 2.2 AA, per-platform assistive tech, ADHD/cognitive/motor/vestibular considerations |
 | [performance-engineer](../agents/performance-engineer.md) | Read, Grep, Glob, Bash | yes | review, investigation | Big-O analysis, profiling methodology, bottleneck identification, caching strategy, budgets |
 | [devops-engineer](../agents/devops-engineer.md) | Read, Write, Edit, Bash, Grep, Glob | no | operations, implementation | CI/CD pipelines, deployment strategies, containerization, monitoring/alerting, IaC |
@@ -49,7 +50,7 @@ Complete roster of agents available in the shared library at `plugins/agents/age
 | Name | Tools | R/O | Description |
 |------|-------|-----|-------------|
 | [evidence-collector](../agents/evidence-collector.md) | Read, Grep, Glob, Bash | yes | 7-category evidence taxonomy, facts-only discipline. Draws from Investigator + Observability + Data + Security. |
-| [hypothesis-challenger](../agents/hypothesis-challenger.md) | Read, Grep, Glob, Bash | yes | 5 challenge strategies, absorbs archaeologist + analyst + remediation roles. Draws from Skeptic + Architect + Security. |
+| [hypothesis-challenger](../agents/hypothesis-challenger.md) | Read, Grep, Glob, Bash | yes | 6 challenge strategies (incl. experiment-design review), absorbs archaeologist + analyst + remediation roles. Draws from Skeptic + Architect + Security + Experimenter. |
 
 ### Atlas Pipeline
 

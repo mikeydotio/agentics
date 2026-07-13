@@ -90,11 +90,20 @@ plugins/forge/agent-overrides/
 └── ...
 
 plugins/rca/agent-overrides/
+├── qa-engineer-context.md          # RCA reproduce-first: minimal failing test for the defect
+├── investigator-context.md         # RCA git-forensics grounding + infection-chain tracing
 ├── evidence-collector-context.md   # RCA evidence gathering scope
-├── hypothesis-challenger-context.md # RCA challenge methodology additions
-├── investigator-rca.md             # General investigator with RCA context
-└── architect-rca.md                # General architect with remediation focus
+├── hypothesis-challenger-context.md # RCA adversarial challenge methodology additions
+├── experimenter-context.md         # RCA falsification experiments in a disposable worktree
+├── software-architect-context.md   # RCA remediation design, surgical-vs-redesign verdict
+├── software-engineer-context.md    # RCA surgical fix implementation
+└── technical-writer-context.md     # RCA report / postmortem authoring
 ```
+
+Every override follows the `<name>-context.md` rule (the `<name>` is the shared agent's `name:`,
+e.g. `software-architect-context.md`, never `architect-rca.md`) so the orchestrator can resolve
+it mechanically alongside the shared definition — see "Override Layering" and "Namespace
+Convention" below.
 
 ### Override Layering
 
@@ -147,7 +156,7 @@ The RCA pipeline uses the shared software-architect for remediation design:
 ```
 AGENTS_PLUGIN_ROOT="$(cd "$(dirname "${CLAUDE_PLUGIN_ROOT}")/agents" && pwd)"
 Read "$AGENTS_PLUGIN_ROOT/agents/software-architect.md"
-Read "${CLAUDE_PLUGIN_ROOT}/agent-overrides/architect-rca.md"
+Read "${CLAUDE_PLUGIN_ROOT}/agent-overrides/software-architect-context.md"
 
 Agent(
   subagent_type: "general-purpose",
@@ -167,7 +176,7 @@ The RCA pipeline uses the shared investigator (which absorbed code-archaeologist
 ```
 AGENTS_PLUGIN_ROOT="$(cd "$(dirname "${CLAUDE_PLUGIN_ROOT}")/agents" && pwd)"
 Read "$AGENTS_PLUGIN_ROOT/agents/investigator.md"
-Read "${CLAUDE_PLUGIN_ROOT}/agent-overrides/investigator-rca.md"
+Read "${CLAUDE_PLUGIN_ROOT}/agent-overrides/investigator-context.md"
 
 Agent(
   subagent_type: "general-purpose",

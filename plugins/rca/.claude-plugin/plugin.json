@@ -1,7 +1,7 @@
 {
   "name": "rca",
-  "version": "2.27.0",
-  "description": "Perform thorough root cause analysis on bugs and regressions to find the REAL underlying cause, not just the symptom",
+  "version": "2.28.0",
+  "description": "Reproduction-gated root cause analysis for known defects — scientific-debugging pipeline with git forensics, hypothesis falsification in disposable worktrees, ODC classification, surgical-vs-redesign verdicts, gated fixes, and committed blameless postmortems",
   "author": {
     "name": "mikeydotio"
   }

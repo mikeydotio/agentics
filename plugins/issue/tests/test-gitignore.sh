@@ -22,7 +22,7 @@ dispatch_real() {
          TMUX="fake,0,0" TMUX_PANE="%0" \
          ISSUE_LABEL="" \
          ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
-         ISSUE_CONFIRM_DELAY=0 \
+         ISSUE_CONFIRM_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 \
          bash "$SCRIPT" dispatch "$n" 2>&1 )
 }
 

@@ -35,8 +35,12 @@
 # launch command / prompt are escape-hatchable without editing code.
 #
 # tmux send/confirm logic is modelled on plugins/freshen/lib/pane-confirm.sh
-# (send-keys keys/literal modes + capture-pane read-back). It is INLINED here
-# rather than sourced because freshen may not be installed alongside this plugin.
+# (literal paste + capture-pane read-back), hardened for issue #82 into a
+# two-phase, input-row-scoped handoff: paste + settle, confirm RECEIPT (the box
+# holds text), Enter, confirm SUBMISSION (the box cleared), re-sending Enter ALONE
+# (never re-pasting) on the bracketed-paste Enter-absorption race. It is INLINED
+# here rather than sourced because freshen may not be installed alongside this
+# plugin.
 set -euo pipefail
 
 # ---- config (all env-overridable) -------------------------------------------
@@ -124,10 +128,19 @@ READY_PROMPT_GLYPH="${ISSUE_READY_PROMPT_GLYPH:-❯}"
 # last N non-blank lines of the pane, so the caller can triage without switching
 # windows. Only ever emitted on the warning path — the success payload stays clean.
 READY_TAIL_LINES="${ISSUE_READY_TAIL_LINES:-8}"
-# Prompt-submission confirm/resend bounds (freshen semantics).
+# Prompt-submission confirm/resend bounds. CONFIRM_ATTEMPTS/_DELAY bound BOTH the
+# receipt poll (the paste landed in the input box) and the submit poll (the box
+# cleared); SEND_RETRIES bounds BOTH the receipt re-paste AND the submit re-Enter
+# (issue #82). Reusing CONFIRM_DELAY means a test that zeroes it also zeroes the
+# receipt poll with no extra plumbing.
 CONFIRM_ATTEMPTS="${ISSUE_CONFIRM_ATTEMPTS:-8}"
 CONFIRM_DELAY="${ISSUE_CONFIRM_DELAY:-0.3}"
 SEND_RETRIES="${ISSUE_SEND_RETRIES:-2}"
+# Settle after each literal paste, BEFORE Enter, so a bracketed paste closes and
+# the Enter is read as "submit" rather than absorbed as a newline into the still-
+# settling paste buffer (issue #82 — the primary cure). Fractional; BSD + GNU
+# sleep compatible. Tests zero it.
+PASTE_SETTLE_DELAY="${ISSUE_PASTE_SETTLE_DELAY:-0.2}"
 # Non-gating post-submit ACCEPTANCE marker (issue #67, direction #2). After the
 # structural "text left the input line" confirmation, a bounded look for one of
 # these tokens records whether a READY TUI actually consumed the prompt (vs. it
@@ -343,17 +356,42 @@ apply_in_progress_label() {
   "$GH" issue edit "$n" --repo "$repo" --add-label "$LABEL" >/dev/null 2>&1
 }
 
-# text_still_pending <pane> <text> — true if <text> still sits, unsubmitted, as
-# the trailing content of the pane's last non-blank line. A failed capture-pane
-# counts as "still pending" (never a false confirmation).
-text_still_pending() {
-  local pane="$1" text="$2" content last_line
-  content=$(tmux capture-pane -p -t "$pane" 2>/dev/null) || return 0
-  last_line=$(printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -1 || true)
-  case "$last_line" in
-    *"$text") return 0 ;;
-    *) return 1 ;;
+# input_box_text <content> — echo the trailing text of the ACTIVE input row (the
+# LAST line bearing READY_PROMPT_GLYPH), box padding stripped. The input row, NOT
+# the pane's last non-blank line: the real TUI (and the test fixtures) render a
+# FOOTER *below* the input box, so the last non-blank line is the footer and never
+# the prompt — checking it was vacuous and always read "submitted" (issue #82).
+input_box_text() {
+  local content="$1" row tail
+  row=$(printf '%s\n' "$content" | grep -F -- "$READY_PROMPT_GLYPH" | tail -1) || row=""
+  [ -n "$row" ] || { printf ''; return 0; }
+  tail=${row##*"$READY_PROMPT_GLYPH"}   # everything after the last glyph
+  tail=${tail//│/}                       # strip the box border (literal, mb-safe)
+  printf '%s' "$tail"
+}
+
+# input_state <pane> — "text" (box holds unsubmitted input) | "empty" (idle box) |
+# "unknown" (capture failed). "unknown" is DISTINCT from "empty" so a transient
+# capture failure can never be misread as a submission confirmation.
+input_state() {
+  local content
+  content=$(tmux capture-pane -p -t "$1" 2>/dev/null) || { printf 'unknown'; return; }
+  case "$(input_box_text "$content")" in
+    *[![:space:]]*) printf 'text' ;;
+    *)              printf 'empty' ;;
   esac
+}
+
+# poll_input <pane> <text|empty> — poll input_state up to CONFIRM_ATTEMPTS times,
+# CONFIRM_DELAY apart, for the box to reach <want>. 0 on reaching it, else 1.
+poll_input() {
+  local pane="$1" want="$2" attempt=0
+  while [ "$attempt" -lt "$CONFIRM_ATTEMPTS" ]; do
+    [ "$(input_state "$pane")" = "$want" ] && return 0
+    sleep "$CONFIRM_DELAY"
+    attempt=$((attempt + 1))
+  done
+  return 1
 }
 
 # wait_ready <pane> <launch-cmd> — poll until Claude's TUI is ready, bounded by
@@ -444,21 +482,47 @@ prompt_accepted() {
   esac
 }
 
-# send_prompt_confirmed <pane> <text> — literal-send <text> + Enter, then poll
-# for it to leave the input line; resend up to SEND_RETRIES times.
+# paste_text <pane> <text> — literal-paste <text>, then SETTLE so a bracketed
+# paste closes before any Enter (issue #82). Shared by the launch send and the
+# prompt send; sends NO Enter. Returns non-zero if the paste send itself failed.
+paste_text() {
+  tmux send-keys -t "$1" -l "$2" 2>/dev/null || return 1
+  sleep "$PASTE_SETTLE_DELAY"
+}
+
+# send_prompt_confirmed <pane> <text> — two-phase confirmed handoff (issue #82).
+#   Phase A: paste the prompt and confirm it was RECEIVED (the input box holds
+#            text); re-paste (bounded by SEND_RETRIES) ONLY if nothing landed —
+#            never blind-repaste.
+#   Phase B: send Enter and confirm SUBMISSION (the box cleared); on a swallowed
+#            Enter re-send ENTER ALONE (bounded) — never re-paste, which would
+#            duplicate the prompt.
+# A positive result REQUIRES having first observed the box hold the prompt, so an
+# empty box from a never-arrived paste can't masquerade as submitted. If receipt
+# is never confirmed, Enter is still pressed once best-effort (never regress below
+# the old "always Enter"), but the result is reported unconfirmed. Returns 0 only
+# once submission is confirmed.
 send_prompt_confirmed() {
-  local pane="$1" text="$2" resend=0 attempt
-  while [ "$resend" -le "$SEND_RETRIES" ]; do
-    if tmux send-keys -t "$pane" -l "$text" 2>/dev/null \
-       && tmux send-keys -t "$pane" Enter 2>/dev/null; then
-      attempt=0
-      while [ "$attempt" -lt "$CONFIRM_ATTEMPTS" ]; do
-        text_still_pending "$pane" "$text" || return 0
-        sleep "$CONFIRM_DELAY"
-        attempt=$((attempt + 1))
-      done
+  local pane="$1" text="$2" received=false try=0
+  # Phase A — deliver + confirm receipt.
+  while [ "$try" -le "$SEND_RETRIES" ]; do
+    if paste_text "$pane" "$text" && poll_input "$pane" text; then
+      received=true
+      break
     fi
-    resend=$((resend + 1))
+    try=$((try + 1))
+  done
+  # Phase B — submit + confirm. Re-send Enter alone (never re-paste).
+  try=0
+  while [ "$try" -le "$SEND_RETRIES" ]; do
+    if tmux send-keys -t "$pane" Enter 2>/dev/null; then
+      if [ "$received" = true ]; then
+        poll_input "$pane" empty && return 0
+      else
+        break
+      fi
+    fi
+    try=$((try + 1))
   done
   return 1
 }
@@ -757,7 +821,9 @@ cmd_dispatch() {
   fi
 
   # Step 6: launch claude (literal mode — the space/flag must not be key-interpreted).
-  tmux send-keys -t "$pane" -l "$launch_cmd" 2>/dev/null || true
+  # Route through paste_text so the same settle guards the launch's own Enter
+  # against the bracketed-paste race (issue #82).
+  paste_text "$pane" "$launch_cmd" || true
   tmux send-keys -t "$pane" Enter 2>/dev/null || true
 
   # Step 7: readiness gate before typing the prompt (claude -w also builds the
@@ -892,8 +958,9 @@ cmd_doctor() {
   fi
   window=$(tmux display-message -p -t "$pane" '#{window_id}' 2>/dev/null || printf '')
 
-  # Launch (literal mode) and gate on readiness.
-  tmux send-keys -t "$pane" -l "$DOCTOR_LAUNCH_TPL" 2>/dev/null || true
+  # Launch (literal mode) and gate on readiness. paste_text adds the settle
+  # before Enter (issue #82).
+  paste_text "$pane" "$DOCTOR_LAUNCH_TPL" || true
   tmux send-keys -t "$pane" Enter 2>/dev/null || true
 
   local readiness_confirmed=false tier="none" tail_evidence

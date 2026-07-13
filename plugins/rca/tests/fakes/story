@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Minimal fake `story` (storyhook CLI) for rca skill-level flows. Records argv to
+# $FAKE_STORY_LOG if set, and emits canned JSON for `story show`.
+#   FAKE_STORY_LOG=path        append each invocation's args here
+#   FAKE_STORY_ID=RCA-1        .id      (default RCA-1)
+#   FAKE_STORY_TITLE=...       .title
+#   FAKE_STORY_STATUS=open     .status
+[ -n "${FAKE_STORY_LOG:-}" ] && printf '%s\n' "$*" >> "$FAKE_STORY_LOG"
+
+case "${1:-}" in
+  show)
+    jq -n \
+      --arg id "${FAKE_STORY_ID:-RCA-1}" \
+      --arg title "${FAKE_STORY_TITLE:-Login flakes intermittently}" \
+      --arg status "${FAKE_STORY_STATUS:-open}" \
+      --arg body "${FAKE_STORY_BODY:-Reproduce the intermittent login failure.}" \
+      '{id:$id, title:$title, status:$status, body:$body}'
+    exit 0 ;;
+  *)
+    echo "fake-story: unhandled: $*" >&2; exit 0 ;;
+esac

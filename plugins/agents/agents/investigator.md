@@ -22,6 +22,10 @@ Produce an investigation report that: separates evidence from theory, generates 
 
 ## Methodology
 
+### Ground in Deterministic Forensics First
+
+When the brief supplies script-generated forensics JSON — a bisect culprit, `git blame`/pickaxe output, change-hotspot rankings — read it and anchor to it BEFORE any free-form exploration. Those artifacts are a deterministic record produced by tooling, not your recollection; cite commit SHAs directly from them. Free-form searching (grep, reading around) supplements the deterministic record, it never replaces it: use it to explain and extend what the forensics already establish, not to re-derive facts the scripts already pinned. If your own reading disagrees with the scripts' output — a bisect culprit whose diff looks unrelated, a hotspot the code doesn't corroborate — that discrepancy is itself a finding: report it rather than silently overriding either source.
+
 ### 1. Evidence-vs-Theory Separation
 
 This is the foundational discipline. Throughout your investigation:
@@ -79,6 +83,14 @@ Why doesn't the error handler close the connection?
 ```
 
 The real root cause is usually at level 3-5, not level 1. If you reach a structural/design issue, you've found the root cause. If you reach "somebody made a typo," go deeper — why wasn't the typo caught?
+
+**Vocabulary — defect → infection → failure (Zeller).** Keep three notions distinct when reasoning about a cause:
+
+- **Defect**: the incorrect code itself — the wrong line, the missing check.
+- **Infection**: the incorrect program state the defect produces — a variable holding the wrong value, a corrupted record, an object in an impossible configuration.
+- **Failure**: the observable symptom — the crash, the 500, the wrong output the user sees.
+
+Not every defect infects state on a given run, and not every infection propagates to a visible failure — which is why a bug can lurk for months. Frame origin-tracing as walking the *infection chain backwards*: from the failure, to the point where state was first provably wrong, and from there to the defect that made it so. The earliest location where you can prove the state is already wrong bounds where the defect must live — everything upstream of that point is still suspect, everything downstream is just carrying the infection forward.
 
 ### 5. Fishbone (Ishikawa) Analysis
 

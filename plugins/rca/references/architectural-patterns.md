@@ -1,6 +1,9 @@
 # Architectural Root Cause Patterns
 
-Common architectural patterns that cause bugs. When investigating a root cause, check if it matches one of these.
+Common architectural patterns that cause bugs. When investigating a root cause, check if it
+matches one of these. Each pattern carries a typical ODC signature (`odc-classification.md`) —
+matching a pattern is evidence for that classification and, usually, for a design-level
+verdict with the narrow patch + escalation path.
 
 ## Leaky Abstractions
 
@@ -103,12 +106,12 @@ Common architectural patterns that cause bugs. When investigating a root cause, 
 
 When investigating a bug, check each pattern:
 
-| Pattern | Check | How to Detect |
-|---------|-------|---------------|
-| Leaky abstraction | Do consumers depend on internal behavior? | Grep for internal details used outside the component |
-| Shared mutable state | Is state accessed by multiple components? | Find global variables, singletons, shared caches |
-| Temporal coupling | Must operations happen in a specific order? | Look for init(), setup(), "must call before" comments |
-| Missing invariant | Is there an assumption that's not enforced? | Find defensive null checks, "impossible" state handling |
-| Abstraction mismatch | Does the model match the domain? | Look for complex type conversions at boundaries |
-| Implicit coupling | Are "unrelated" components secretly connected? | Check for shared config keys, magic strings, side effects |
-| Error propagation | Are errors lost or transformed? | Follow an error from throw to user/log — is context preserved? |
+| Pattern | Check | How to Detect | Typical ODC signature |
+|---------|-------|---------------|----------------------|
+| Leaky abstraction | Do consumers depend on internal behavior? | Grep for internal details used outside the component | Interface / Incorrect |
+| Shared mutable state | Is state accessed by multiple components? | Find global variables, singletons, shared caches; co-change couplings from `rca-hotspots.sh` | Timing/Serialization / Missing |
+| Temporal coupling | Must operations happen in a specific order? | Look for init(), setup(), "must call before" comments | Timing/Serialization or Relationship / Missing |
+| Missing invariant | Is there an assumption that's not enforced? | Find defensive null checks, "impossible" state handling | Checking or Function / Missing |
+| Abstraction mismatch | Does the model match the domain? | Look for complex type conversions at boundaries | Function/Class / Incorrect |
+| Implicit coupling | Are "unrelated" components secretly connected? | Check shared config keys, magic strings, side effects; co-change pairs with no import edge | Relationship / Missing |
+| Error propagation | Are errors lost or transformed? | Follow an error from throw to user/log — is context preserved? | Interface or Checking / Extraneous (swallowing) |

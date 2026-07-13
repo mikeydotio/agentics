@@ -155,6 +155,10 @@ READY_ACCEPT_PATTERN="${ISSUE_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Cr
 # to render. Overridable so tests can point it at a harmless stand-in binary.
 DOCTOR_LAUNCH_TPL="${ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan}"
 DOCTOR_WINDOW_NAME="${ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
+# `capture` subcommand (issue #87 live-verification aid): how many rendered rows of
+# a worktree window's scrollback to dump. Enough to show the recent exchange
+# without unbounded output.
+CAPTURE_LINES="${ISSUE_CAPTURE_LINES:-200}"
 DRY_RUN="${ISSUE_DRY_RUN:-}"
 ALLOW_CLOSED="${ISSUE_ALLOW_CLOSED:-}"
 
@@ -510,6 +514,27 @@ paste_prompt() {
   printf '%s' "$text" | tmux load-buffer -b "$buf" - 2>/dev/null || return 1
   tmux paste-buffer -p -d -b "$buf" -t "$pane" 2>/dev/null || return 1
   sleep "$PASTE_SETTLE_DELAY"
+}
+
+# pane_for_window <window-name> — READ-ONLY. Echo the pane id of the (active) pane
+# of the tmux window named <window-name>, searching every session on the server;
+# empty if no such window. Prefers the active pane, falling back to the first.
+pane_for_window() {
+  local wname="$1"
+  tmux list-panes -a -F '#{window_name}	#{pane_active}	#{pane_id}' 2>/dev/null \
+    | awk -F'\t' -v w="$wname" '
+        $1==w && $2==1 { print $3; found=1; exit }
+        $1==w && !first { first=$3 }
+        END { if (!found && first) print first }'
+}
+
+# capture_pane_transcript <target> [lines] — READ-ONLY. Echo the rendered
+# scrollback of a tmux pane as plain text, from <lines> rows back to the bottom
+# (default CAPTURE_LINES). `-p` prints without escape sequences. Returns non-zero
+# if the capture failed (e.g. the target no longer exists).
+capture_pane_transcript() {
+  local target="$1" lines="${2:-$CAPTURE_LINES}"
+  tmux capture-pane -p -t "$target" -S "-$lines" 2>/dev/null || return 1
 }
 
 # send_prompt_confirmed <pane> <text> <buffer> — two-phase confirmed handoff
@@ -967,10 +992,14 @@ cmd_doctor() {
           ("tmux new-window -d -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
+          "printf %s <multi-line probe> | tmux load-buffer -b issue-doctor -",
+          "tmux paste-buffer -p -d -b issue-doctor -t <pane>",
+          "tmux capture-pane -p -t <pane>",
           "tmux kill-window -t <window>"
         ],
         display: ("[issue] DRY RUN doctor: would spin a throwaway `" + $launch
-                  + "` in window " + $wname + ", check readiness, and tear it down.")
+                  + "` in window " + $wname + ", check readiness, paste a multi-line probe "
+                  + "to verify bracketed-paste delivery, and tear it down.")
       }'
     return 0
   fi
@@ -994,7 +1023,30 @@ cmd_doctor() {
   tier="$WAIT_READY_TIER"
   tail_evidence=$(pane_tail "$pane")
 
-  # Tear down the scratch window (best-effort — a failure never flips ok).
+  # Live multi-line paste probe (issue #87): paste a 3-line marker into the REAL
+  # TUI via the bracketed-paste path — WITHOUT submitting — then read the input box
+  # back. When the build's bracketed paste works, all three lines land as ONE block
+  # and the FIRST line sits on the `❯` input row; had delivery split at a newline,
+  # the first line would have submitted and only the last would remain in the box.
+  # Purely diagnostic and model-free (never presses Enter); only meaningful once the
+  # TUI is ready, so it's skipped otherwise.
+  local probe_ran=false probe_first_held=false probe_seen=0 probe_total=3
+  if [ "$readiness_confirmed" = true ]; then
+    local probe capture box_row marker
+    probe=$(printf 'issue87-probe-alpha\nissue87-probe-bravo\nissue87-probe-charlie')
+    if paste_prompt "$pane" "$probe" "issue-doctor"; then
+      probe_ran=true
+      capture=$(tmux capture-pane -p -t "$pane" 2>/dev/null || printf '')
+      box_row=$(input_box_text "$capture")
+      for marker in issue87-probe-alpha issue87-probe-bravo issue87-probe-charlie; do
+        case "$capture" in *"$marker"*) probe_seen=$((probe_seen + 1)) ;; esac
+      done
+      case "$box_row" in *issue87-probe-alpha*) probe_first_held=true ;; esac
+    fi
+  fi
+
+  # Tear down the scratch window (best-effort — a failure never flips ok). The
+  # probe text is discarded unsubmitted with the window.
   if [ -n "$window" ]; then
     tmux kill-window -t "$window" 2>/dev/null || true
   else
@@ -1007,17 +1059,72 @@ cmd_doctor() {
   else
     display="[issue] doctor: readiness NOT confirmed within the poll budget — the readiness marker may have drifted. See pane_tail."
   fi
+  if [ "$probe_ran" = true ]; then
+    if [ "$probe_first_held" = true ] && [ "$probe_seen" -eq "$probe_total" ]; then
+      display="$display Multi-line paste probe: OK — all $probe_total lines held as one un-submitted block."
+    else
+      display="$display Multi-line paste probe: SUSPECT (first-line-held=$probe_first_held, $probe_seen/$probe_total lines seen) — bracketed paste may not be landing."
+    fi
+  fi
 
   jq -n \
     --argjson ready "$readiness_confirmed" --arg tier "$tier" \
-    --arg tail "$tail_evidence" --arg display "$display" '
+    --arg tail "$tail_evidence" --arg display "$display" \
+    --argjson probe_ran "$probe_ran" --argjson probe_first "$probe_first_held" \
+    --argjson probe_seen "$probe_seen" --argjson probe_total "$probe_total" '
     {
       ok: true,
       readiness_confirmed: $ready,
       matched_tier: $tier
     }
+    + (if $probe_ran then {multiline_probe: {first_line_held: $probe_first, lines_seen: $probe_seen, lines_total: $probe_total}} else {} end)
     + (if $tail == "" then {} else {pane_tail: $tail} end)
     + {display: $display}'
+}
+
+# ---- subcommand: capture ----------------------------------------------------
+# capture <n> — READ-ONLY. Dump the recent rendered transcript of the live tmux
+# window for issue <n> (the `<repo-prefix>-<n>` window `do` opened), so you can
+# peek at what that worktree session received/did without switching windows — and,
+# after dispatching a multi-line prompt, confirm every line landed in the ONE
+# submitted message (issue #87 live check). Fragile by nature (the TUI render
+# wraps/box-draws), but distinctive per-line markers survive it. No GitHub calls;
+# opens/kills nothing.
+cmd_capture() {
+  if [ -z "$DRY_RUN" ]; then
+    [ -n "${TMUX:-}" ] || fail "issue capture requires tmux — run Claude inside a tmux session."
+  fi
+  local n="${1:-}"
+  case "$n" in
+    ''|*[!0-9]*) fail "usage: issue.sh capture <issue-number>" ;;
+  esac
+  local repo wname
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+  wname=$(resolve_wname "$n" "$repo")
+
+  # Dry-run: report the single read-only command it would run and stop.
+  if [ -n "$DRY_RUN" ]; then
+    jq -n --arg wname "$wname" --arg lines "$CAPTURE_LINES" '
+      {
+        ok: true, dry_run: true, window_name: $wname,
+        commands: [ ("tmux capture-pane -p -t <pane-of " + $wname + "> -S -" + $lines) ],
+        display: ("[issue] DRY RUN capture: would dump the last " + $lines
+                  + " rendered rows of the window " + $wname + ".")
+      }'
+    return 0
+  fi
+
+  local pane transcript
+  pane=$(pane_for_window "$wname")
+  [ -n "$pane" ] || fail "no live tmux window named \`$wname\` — dispatch it first with \`/issue do $n\`."
+  transcript=$(capture_pane_transcript "$pane") \
+    || fail "failed to capture pane \`$pane\` (window \`$wname\`)."
+
+  jq -n --arg wname "$wname" --arg pane "$pane" --arg tx "$transcript" '
+    {
+      ok: true, window_name: $wname, pane: $pane, transcript: $tx,
+      display: ("[issue] capture " + $wname + " (" + $pane + ") — recent rendered rows:\n\n" + $tx)
+    }'
 }
 
 # ---- subcommand: complete ---------------------------------------------------
@@ -1244,5 +1351,6 @@ case "${1:-}" in
   create)   shift; cmd_create "$@" ;;
   complete) shift; cmd_complete "$@" ;;
   doctor)   shift; cmd_doctor "$@" ;;
-  *)        fail "usage: issue.sh <list | dispatch <n> | view <n> | create --title <t> [--body-file <p>] | complete <plan|execute> <n> | doctor>" ;;
+  capture)  shift; cmd_capture "$@" ;;
+  *)        fail "usage: issue.sh <list | dispatch <n> | view <n> | create --title <t> [--body-file <p>] | complete <plan|execute> <n> | doctor | capture <n>>" ;;
 esac

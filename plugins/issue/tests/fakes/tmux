@@ -225,7 +225,22 @@ case "${1:-}" in
     if [ "$del" = true ]; then rm -f "$bfile" 2>/dev/null || true; fi
     ;;
   kill-window)       : ;;
+  list-panes)
+    # `list-panes -a -F <fmt>` — the `capture` verb enumerates windows→panes. Emit
+    # the seeded FAKE_TMUX_PANES (lines of "name<TAB>active<TAB>pane"), or nothing
+    # (→ no matching window found).
+    if [ -n "${FAKE_TMUX_PANES:-}" ]; then printf '%s\n' "$FAKE_TMUX_PANES"; fi
+    ;;
   capture-pane)
+    # -S (scrollback start) present → the `capture` verb dumping a window's rendered
+    # transcript: echo the seeded FAKE_TMUX_TRANSCRIPT and stop. Otherwise fall
+    # through to the box+fixture model the readiness/receipt + doctor-probe paths use.
+    for _a in "$@"; do
+      if [ "$_a" = "-S" ]; then
+        printf '%s\n' "${FAKE_TMUX_TRANSCRIPT:-}"
+        exit 0
+      fi
+    done
     case "${FAKE_TMUX_CAPTURE:-legacy}" in
       marker)
         cat <<'EOF'

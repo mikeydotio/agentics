@@ -15,7 +15,8 @@ per verb — so token cost stays low and the guard rails live in code, not prose
 | `/issue complete <n>` | Close `<n>` as *completed* and **safely** clean up its artifacts — merged branches (local + remote) and clean worktrees — after showing exactly what it will remove and asking once. |
 | `/issue <n>` | Run `view <n>`, then **offer** to work on it: decline → stop; accept → `do <n>`. |
 | `/issue` | List the repo's open issues, let you pick one, then run the `/issue <n>` flow on it. |
-| `/issue doctor` | Readiness self-test for `do`'s TUI handoff (run after a Claude Code upgrade). |
+| `/issue doctor` | Readiness self-test for `do`'s TUI handoff (run after a Claude Code upgrade); also probes that a multi-line paste lands as one block (issue #87). |
+| `/issue capture <n>` | **Read-only** peek at issue `<n>`'s live worktree window — dumps its recent rendered transcript so you can see what the dispatched session received/did (e.g. confirm a multi-line prompt landed as one message). |
 
 ## When to use
 
@@ -33,7 +34,8 @@ per verb — so token cost stays low and the guard rails live in code, not prose
 - **GitHub CLI** — `gh` installed and authenticated (`gh auth login`, or a `GH_TOKEN`) — for every
   verb.
 - A git checkout with a GitHub **origin** remote (used to resolve `owner/repo`).
-- **tmux** — required by `do` only (it opens a sibling window). The other verbs don't need it.
+- **tmux** — required by `do` and `capture` (they open/read a sibling window) and by `doctor`. The
+  other verbs don't need it.
 
 ## `do` — how it works
 
@@ -166,6 +168,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `ISSUE_PASTE_SETTLE_DELAY` | `0.2` | Settle (seconds) after each paste, **before** Enter, so the paste closes and the Enter submits instead of being absorbed as a newline (issue #82, the primary cure). Applies to the launch `send-keys -l` and the prompt's bracketed `paste-buffer` alike — for the latter it's now belt-and-suspenders, since the paste boundary is explicit (issue #87). Fractional. |
 | `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree). |
 | `ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
+| `ISSUE_CAPTURE_LINES` | `200` | Rows of scrollback `/issue capture <n>` dumps from the worktree window (`tmux capture-pane -S -<N>`). |
 
 > **Plan mode is forced by the `--permission-mode plan` launch flag, not keystrokes.** `-w` is
 > Claude Code's official `--worktree` switch (creates a named per-issue worktree — here named with

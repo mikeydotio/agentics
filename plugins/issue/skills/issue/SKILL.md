@@ -29,7 +29,8 @@ Parse `ARGUMENTS` (everything after `/issue`) — the first token is the verb:
 | `complete <n>` | Wrap it up | **Read `references/complete.md`** and follow it: `complete plan <n>` → one confirmation → `complete execute <n>`. |
 | a bare integer, e.g. `55` | View, then offer | **View + Offer** flow below. |
 | _(empty)_ | Pick one | **List → Pick** below, then **View + Offer** on the choice. |
-| `doctor` | Readiness self-test | Run `bin/issue.sh doctor`; show its `display`. A drift check after a Claude Code upgrade — reports which readiness tier matched. No GitHub side effects. |
+| `doctor` | Readiness self-test | Run `bin/issue.sh doctor`; show its `display`. A drift check after a Claude Code upgrade — reports which readiness tier matched and whether a multi-line paste lands as one block (issue #87). No GitHub side effects. |
+| `capture <n>` | Peek at the live session | Run `bin/issue.sh capture <n>`; show its `display` — the recent rendered transcript of issue `<n>`'s worktree window. Read-only: inspect what a dispatched session received/did (e.g. confirm a multi-line prompt landed as one message). No GitHub side effects. |
 | anything else | Malformed | Say one line: "Usage: `/issue <do <n> \| view <n> \| new <desc> \| complete <n> \| <n>>`", then stop. |
 
 ## View + Offer (`/issue <n>`)

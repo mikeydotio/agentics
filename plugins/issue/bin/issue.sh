@@ -58,9 +58,11 @@ LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # (issue #78), the GitHub self-reporting contract (issue #50) — comment the
 # finalized plan, word PRs to close the issue, comment PR links — and a directive
 # NOT to bump the version or deploy from its worktree (those happen later from
-# `main`), since this session always runs inside a per-issue worktree. Kept
-# single-line + ASCII (no backticks) so `tmux send-keys -l` types it verbatim
-# without key-interpretation.
+# `main`), since this session always runs inside a per-issue worktree. The default
+# is single-line + ASCII (no backticks) for readability, but delivery is via a
+# bracketed paste (paste_prompt), so a multi-line ISSUE_PROMPT override is safe —
+# an embedded newline stays text and the whole prompt submits as one message
+# (issue #87), not at the first line.
 PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. Begin by reading the issue and ALL of its comments (e.g. gh issue view <n> --comments) so you have the full discussion history. If the issue has been reopened, treat that as a signal that a previous fix was insufficient: review the earlier attempts and any linked PRs, understand why they fell short, and make sure your plan resolves the underlying problem rather than repeating them. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it. Do not bump the version or deploy from this worktree: do not run semver bump, deployit deploy, or any release/version step, and do not plan for them -- versioning and deployment happen later from the main branch, not here.}"
 # The "picked up" label applied to the issue at dispatch (issue #50). Set
 # ISSUE_LABEL="" to disable labeling entirely. Color/description are used
@@ -484,16 +486,37 @@ prompt_accepted() {
 
 # paste_text <pane> <text> — literal-paste <text>, then SETTLE so a bracketed
 # paste closes before any Enter (issue #82). Shared by the launch send and the
-# prompt send; sends NO Enter. Returns non-zero if the paste send itself failed.
+# doctor send — both type a SINGLE-LINE command into a SHELL, where bracketed
+# paste isn't guaranteed; the multi-line-safe prompt send uses paste_prompt below.
+# Sends NO Enter. Returns non-zero if the paste send itself failed.
 paste_text() {
   tmux send-keys -t "$1" -l "$2" 2>/dev/null || return 1
   sleep "$PASTE_SETTLE_DELAY"
 }
 
-# send_prompt_confirmed <pane> <text> — two-phase confirmed handoff (issue #82).
-#   Phase A: paste the prompt and confirm it was RECEIVED (the input box holds
-#            text); re-paste (bounded by SEND_RETRIES) ONLY if nothing landed —
-#            never blind-repaste.
+# paste_prompt <pane> <text> <buffer> — deliver <text> into a Claude TUI as ONE
+# bracketed paste, so an embedded newline stays TEXT instead of submitting the
+# prompt at its first line (issue #87 — `send-keys -l` sends a newline as a literal
+# Enter). Loads a private tmux buffer from stdin (no temp file), then pastes it
+# with -p (bracketed-paste markers → the TUI buffers the whole paste and never
+# submits mid-way) and -d (delete the private buffer after). No -r: tmux's default
+# LF→CR matches what a real terminal sends on a human paste, the path the TUI
+# already handles. Sends NO Enter; the settle preserves the #82 settle-before-Enter
+# invariant Phase B relies on. Only the PROMPT uses this — the launch/doctor sends
+# type single-line commands into a shell and keep paste_text. Returns non-zero if
+# either tmux stage failed (Phase A then skips its receipt poll and retries).
+paste_prompt() {
+  local pane="$1" text="$2" buf="$3"
+  printf '%s' "$text" | tmux load-buffer -b "$buf" - 2>/dev/null || return 1
+  tmux paste-buffer -p -d -b "$buf" -t "$pane" 2>/dev/null || return 1
+  sleep "$PASTE_SETTLE_DELAY"
+}
+
+# send_prompt_confirmed <pane> <text> <buffer> — two-phase confirmed handoff
+# (issue #82).
+#   Phase A: paste the prompt (as ONE bracketed paste via <buffer>, issue #87) and
+#            confirm it was RECEIVED (the input box holds text); re-paste (bounded
+#            by SEND_RETRIES) ONLY if nothing landed — never blind-repaste.
 #   Phase B: send Enter and confirm SUBMISSION (the box cleared); on a swallowed
 #            Enter re-send ENTER ALONE (bounded) — never re-paste, which would
 #            duplicate the prompt.
@@ -503,10 +526,10 @@ paste_text() {
 # the old "always Enter"), but the result is reported unconfirmed. Returns 0 only
 # once submission is confirmed.
 send_prompt_confirmed() {
-  local pane="$1" text="$2" received=false try=0
+  local pane="$1" text="$2" buf="$3" received=false try=0
   # Phase A — deliver + confirm receipt.
   while [ "$try" -le "$SEND_RETRIES" ]; do
-    if paste_text "$pane" "$text" && poll_input "$pane" text; then
+    if paste_prompt "$pane" "$text" "$buf" && poll_input "$pane" text; then
       received=true
       break
     fi
@@ -774,7 +797,8 @@ cmd_dispatch() {
           ("tmux new-window " + $detach + "-c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
-          ("tmux send-keys -t <pane> -l " + $prompt),
+          ("printf %s " + $prompt + " | tmux load-buffer -b issue-" + $issue + " -"),
+          ("tmux paste-buffer -p -d -b issue-" + $issue + " -t <pane>"),
           "tmux send-keys -t <pane> Enter"
         ] + (if $label == "" then [] else [
           ("gh label create " + $label + " --repo " + $repo + " --color " + $color
@@ -843,7 +867,7 @@ cmd_dispatch() {
   # actually consume it (working indicator / cleared input row)? This only informs
   # `prompt_accepted`; it never changes prompt_confirmed or re-sends (issue #67).
   local prompt_confirmed=false prompt_accepted=false
-  if send_prompt_confirmed "$pane" "$prompt"; then
+  if send_prompt_confirmed "$pane" "$prompt" "issue-$n"; then
     prompt_confirmed=true
     if prompt_accepted "$pane"; then
       prompt_accepted=true

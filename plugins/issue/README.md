@@ -67,14 +67,20 @@ a pre-built pick option that the skill presents via one `AskUserQuestion`. With 
      known idle-footer markers, and a **structural** fallback (input-box frame `─` **and** idle
      prompt glyph `❯`, held stable across polls) confirms readiness even when the footer copy has
      drifted entirely. A bounded blind fallback delay is the last resort so keystrokes aren't lost.
-   - Type and submit the prompt as a **two-phase confirmed handoff** (issue #82). First **paste**
-     the prompt and confirm it was **received** — the input box (the `❯` row, not the footer below
-     it) actually holds text — re-pasting only if nothing landed. Then **settle** briefly so the
-     bracketed paste closes, press **Enter**, and confirm **submission** — the box cleared. On a
-     swallowed Enter (the intermittent race this fixes) it re-sends **Enter alone**, never
-     re-pasting (which would duplicate the prompt). A non-gating acceptance check additionally
-     records whether a *ready* TUI consumed the prompt (`prompt_accepted`) without re-coupling
-     confirmation to fragile TUI copy.
+   - Type and submit the prompt as a **two-phase confirmed handoff** (issue #82). Delivery is a
+     **bracketed paste** (issue #87): the prompt is loaded into a private tmux buffer
+     (`load-buffer`) and pasted with `paste-buffer -p -d`, so an embedded newline in a **multi-line**
+     `ISSUE_PROMPT` stays **text** (the whole prompt submits as one message) rather than being
+     submitted at its first line the way `send-keys -l` would. First **paste** the prompt and
+     confirm it was **received** — the input box (the `❯` row, not the footer below it) actually
+     holds text — re-pasting only if nothing landed. Then **settle** briefly, press **Enter**, and
+     confirm **submission** — the box cleared. On a swallowed Enter (the intermittent race this
+     fixes) it re-sends **Enter alone**, never re-pasting (which would duplicate the prompt). A
+     non-gating acceptance check additionally records whether a *ready* TUI consumed the prompt
+     (`prompt_accepted`) without re-coupling confirmation to fragile TUI copy.
+     (The `do` launch command and the `doctor` self-test still type their single-line command into a
+     shell via `send-keys -l`, where bracketed paste isn't guaranteed — only the TUI-bound prompt
+     uses the buffer paste.)
      The default prompt briefs the child session to read the issue and **all** its comments for the
      full history, weigh a reopen as a signal a previous fix fell short, comment its finalized plan
      on the issue, word PRs to close it (`Closes #<n>`), and comment each PR link — those steps
@@ -139,7 +145,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode. |
-| `ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to read the issue and all its comments, weigh a reopen as a failed prior fix, plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), comment each PR link, and **never bump the version or deploy from the worktree** (that happens later from `main`). `<n>` → issue number. Deliberately has no `/plan` prefix. |
+| `ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to read the issue and all its comments, weigh a reopen as a failed prior fix, plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), comment each PR link, and **never bump the version or deploy from the worktree** (that happens later from `main`). `<n>` → issue number. **May be multi-line** — it's delivered as a bracketed paste (issue #87), so embedded newlines stay text. Deliberately has no `/plan` prefix. |
 | `ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`ISSUE_LABEL=`) to disable labeling entirely. |
 | `ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
 | `ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
@@ -157,7 +163,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `ISSUE_READY_TAIL_LINES` | `8` | Non-blank pane lines attached as `pane_tail` diagnostic evidence on the **warning** path only. |
 | `ISSUE_READY_ACCEPT_PATTERN` | _(working-indicator alternation)_ | Non-gating post-submit acceptance marker: informs the `prompt_accepted` field but never changes `prompt_confirmed` or triggers a resend. |
 | `ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt confirm/resend bounds. `CONFIRM_ATTEMPTS`/`_DELAY` bound **both** the receipt poll (the paste landed in the input box) and the submit poll (the box cleared); `SEND_RETRIES` bounds **both** the receipt re-paste and the submit re-Enter. |
-| `ISSUE_PASTE_SETTLE_DELAY` | `0.2` | Settle (seconds) after each literal paste, **before** Enter, so a bracketed paste closes and the Enter submits instead of being absorbed as a newline (issue #82, the primary cure). Fractional. |
+| `ISSUE_PASTE_SETTLE_DELAY` | `0.2` | Settle (seconds) after each paste, **before** Enter, so the paste closes and the Enter submits instead of being absorbed as a newline (issue #82, the primary cure). Applies to the launch `send-keys -l` and the prompt's bracketed `paste-buffer` alike — for the latter it's now belt-and-suspenders, since the paste boundary is explicit (issue #87). Fractional. |
 | `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree). |
 | `ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 

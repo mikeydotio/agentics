@@ -1,5 +1,5 @@
 {
-  "baseline": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+  "baseline": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
   "docs": {
     "modules/plugins-agents-agents-chunk-1.md": {
       "generator": "cartographer/4",
@@ -17,8 +17,8 @@
         "plugins/agents/agents/domain-researcher.md": "32a5ed047975d11391d015f6e79a7cb7b45370e1",
         "plugins/agents/agents/evaluator.md": "082350b18419ec31b4dd2d700dee1239012f56ad",
         "plugins/agents/agents/evidence-collector.md": "232c0bcdcd2d3d3d86f596fe2c517c1890ac9590",
-        "plugins/agents/agents/generator.md": "ce5e3ff4fc21bb701db1910eb780382945291489",
-        "plugins/agents/agents/hypothesis-challenger.md": "49dac36dfb6c0f7a022497710e490b2d0869881e"
+        "plugins/agents/agents/experimenter.md": "6d3ac09b7b5a11e829be708533530fcf93297a4c",
+        "plugins/agents/agents/generator.md": "ce5e3ff4fc21bb701db1910eb780382945291489"
       },
       "summary": "Shared agent contract (template + guardrails) plus 11 agents, accessibility-engineer through hypothesis-challenger.",
       "verified": null
@@ -28,20 +28,18 @@
       "module": "plugins/agents/agents (chunk 2)",
       "references_modules": [],
       "sources": {
-        "plugins/agents/agents/investigator.md": "3a140ee738ce520e566b8e61f683eabfca3433e6",
+        "plugins/agents/agents/hypothesis-challenger.md": "96e94fd0bc317aca8cd9447cf30db7f3c432c455",
+        "plugins/agents/agents/investigator.md": "fea0d23eef28f425a22d402d5374637ce64d84bb",
         "plugins/agents/agents/lawyer.md": "5fda3e7a2e1bdc8297d9be3b223c932af798f127",
         "plugins/agents/agents/map-repairer.md": "564b2ad94074890dcdf5a2a60ae0bb91b237d421",
         "plugins/agents/agents/map-verifier.md": "ac52315a17ab18080ad6ad89c57a77998e802aed",
         "plugins/agents/agents/observability-engineer.md": "eca36942ef2fc5771d811f8a7e758867d7207bf6",
         "plugins/agents/agents/performance-engineer.md": "846b109f5b2225e9084733564c9dfbd38df0a527",
         "plugins/agents/agents/project-manager.md": "e969875e8b4425656e79735a9a52baeaafed37d1",
-        "plugins/agents/agents/qa-engineer.md": "cf5566ed98b94145f5a4a2a60a3e18f8a75de330",
+        "plugins/agents/agents/qa-engineer.md": "2a34c3bba4b6218101fdf19e02036bbbba7ddc29",
         "plugins/agents/agents/reviewer.md": "0271c45f317b4ff3e824559b49f0a305938dea4f",
         "plugins/agents/agents/security-researcher.md": "ab64243cb5c0edbd1c34797b5941472a45e0732a",
-        "plugins/agents/agents/skeptic.md": "f961e8361a32ff2be468d16c71c9575ad2e84069",
-        "plugins/agents/agents/software-architect.md": "c3abdf88838589d5c78cfe5669e730737bf0195c",
-        "plugins/agents/agents/software-engineer.md": "8ebb8be26e64490f77669942f1b88c3bab9a2246",
-        "plugins/agents/agents/technical-writer.md": "fcec96880785ebb5409208d8d8d2abc35ef9f375"
+        "plugins/agents/agents/skeptic.md": "f961e8361a32ff2be468d16c71c9575ad2e84069"
       },
       "summary": "Shared agent library, investigator\u2013technical-writer: general specialists, atlas's map pair, forge's reviewer",
       "verified": null
@@ -51,6 +49,9 @@
       "module": "plugins/agents/agents (chunk 3)",
       "references_modules": [],
       "sources": {
+        "plugins/agents/agents/software-architect.md": "c3abdf88838589d5c78cfe5669e730737bf0195c",
+        "plugins/agents/agents/software-engineer.md": "8ebb8be26e64490f77669942f1b88c3bab9a2246",
+        "plugins/agents/agents/technical-writer.md": "fcec96880785ebb5409208d8d8d2abc35ef9f375",
         "plugins/agents/agents/triager.md": "4b91a0e95e560c1a4e48e6bee8d3ddd3ad2561d7",
         "plugins/agents/agents/validator.md": "e85b72f785ded4cdb4b1965161c2dd2abad5047f"
       },
@@ -74,7 +75,7 @@
       "module": "plugins/agents (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/agents/.claude-plugin/plugin.json": "8b72f069b276f7c9965b7fef799111d86953aa6a",
+        "plugins/agents/.claude-plugin/plugin.json": "4cdc2102ebc8a80a31c0fef39d28283e94e7bd4e",
         "plugins/agents/bin/validate-agents.sh": "ce55f55b8ac86af01f2fde7f9cad4ee9e6f7c9f6",
         "plugins/agents/skills/agents/SKILL.md": "a124fbbf7f5ad088ee35819abd2a57d151497678"
       },
@@ -86,9 +87,9 @@
       "module": "plugins/agents/references",
       "references_modules": [],
       "sources": {
-        "plugins/agents/references/agent-catalog.md": "f93292a997df80ef3a018c3b1471854af9ec9cb1",
+        "plugins/agents/references/agent-catalog.md": "263d8647f67125e159f5f8bf6d3c0c6324584636",
         "plugins/agents/references/agent-design-principles.md": "5403c125a741fe7f632141b408ed8605da796133",
-        "plugins/agents/references/cross-plugin-usage.md": "0085451323188046cb2513c52c2f0d3a500d48d3",
+        "plugins/agents/references/cross-plugin-usage.md": "959ade0800380a28dc776c446ca0a67ee9aba7d9",
         "plugins/agents/references/tool-audit.md": "b16db34d0e9301d6a9177aab1bb9a49cd664549c"
       },
       "summary": "Contract docs for the shared agent library \u2014 roster catalog, design quality bar, spawn protocol, tool audit",
@@ -113,9 +114,9 @@
         "plugins-semver-bin-chunk-1"
       ],
       "sources": {
-        "plugins/atlas/bin/atlas-cli": "0bac27b400e6931f4deb3a15db3d2999c8cd9e15"
+        "plugins/atlas/bin/atlas-cli": "3da1639b285c31b022b8c287941539ace3e1708b"
       },
-      "summary": "Implements atlas-cli's subcommands: scan/partition/extract, the Judgment Cache, and doc projection.",
+      "summary": "Deterministic Python CLI implementing atlas v2's structure extraction, judgment cache, ledger, and markdown projector.",
       "verified": null
     },
     "modules/plugins-atlas-bin-chunk-2.md": {
@@ -145,7 +146,7 @@
       "module": "plugins/atlas (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/atlas/.claude-plugin/plugin.json": "6549fb2295a89a48f538f072652204771cb3021f",
+        "plugins/atlas/.claude-plugin/plugin.json": "41db209a1356cb57f812bb176f23ddcf49797004",
         "plugins/atlas/README.md": "9cf94e438eac816b0bd995a72ef2217b7288ef3e",
         "plugins/atlas/hooks/hooks.json": "41851681fe5ce7fdd0fc14b33dd4868d38398e6a",
         "plugins/atlas/hooks/session-start.sh": "4277ada1b6f54bba1034edf015c622f6a3a3eb94",
@@ -161,7 +162,7 @@
       "sources": {
         "plugins/atlas/references/claude-md-injection.md": "96ea2bd6d2dc31b25caac57c09099c298c1da0ec",
         "plugins/atlas/references/design-v2.md": "17658b4dafbd2b35208f0f93ea1612eb3f61b21d",
-        "plugins/atlas/references/map-format.md": "180d8e724e10e9bfe42a4a9b314fb2c15eb6c9ee",
+        "plugins/atlas/references/map-format.md": "c32d47e8128fc854788438e0c656b072d357af92",
         "plugins/atlas/references/mapping-protocol.md": "574b60d5b22e025b7bc34f165cbdb2fadc0b74c4",
         "plugins/atlas/references/update-protocol.md": "7fbd5134f7bb12ed427d613759adb4ed0c593213"
       },
@@ -173,7 +174,7 @@
       "module": "plugins/atlas/tests (chunk 1)",
       "references_modules": [],
       "sources": {
-        "plugins/atlas/tests/helpers/setup.sh": "67dcb11d42fa2aa4316c6d95170130c6e0169ee8",
+        "plugins/atlas/tests/helpers/setup.sh": "96567a779d4fb3e2362c930d986faf2ec0071a2d",
         "plugins/atlas/tests/run-tests.sh": "febae8f36c0646a382a834d4bb81fac24f7ba8fb",
         "plugins/atlas/tests/test-branch.sh": "2445f98bad189f0e3461ab325f2b02324d1e0e53",
         "plugins/atlas/tests/test-commit.sh": "e5409959bdfdd6ce369bef3f40d7ff0374b5ae22",
@@ -209,7 +210,7 @@
         "plugins/atlas/tests/test-project.sh": "f5ed70c14b5590486e464f91ecbd5fd4171146aa",
         "plugins/atlas/tests/test-repair.sh": "4650cd406baa0f22472e1d9f5ffc972f752b6c67",
         "plugins/atlas/tests/test-scan.sh": "d6e16e7826cb57aed7cf3fd327a3dfd9501b2f61",
-        "plugins/atlas/tests/test-status.sh": "fdde9f2ee86018efefcd6e1794a0a90d04cf1be0"
+        "plugins/atlas/tests/test-status.sh": "46d6022614b6e222a0993e200ba047ee9fbc5889"
       },
       "summary": "Bash CLI tests pinning atlas v2 contracts: partition, judgment, ledger, lint, project, migrate, lock, status, repair.",
       "verified": null
@@ -232,7 +233,7 @@
       "module": "plugins/council",
       "references_modules": [],
       "sources": {
-        "plugins/council/.claude-plugin/plugin.json": "8022f3c59c56ec6aa383c5a141680c5db0ea1425",
+        "plugins/council/.claude-plugin/plugin.json": "75b6fdf27ebc73b1cc4693e2b5de93fa45e88ad6",
         "plugins/council/README.md": "6fc77ba8523cf7262b3d0a8f9f79586464cefc62",
         "plugins/council/references/archetypes.md": "c44c68234b14a4ac1f63ad6212ba15acf1677685",
         "plugins/council/references/council-protocol.md": "c0f8ed74139972454cb6d45d4b50ba47417c8cbb",
@@ -272,7 +273,7 @@
       "references_modules": [],
       "sources": {
         "plugins/deployit/bin/deployit-backend": "7938f381f5c77f195c95d8f7a120b4d38cd8fc7e",
-        "plugins/deployit/bin/deployit-cli": "ba3fed29a0db0680bfb9fd7e3c3f24aa55cac9d9"
+        "plugins/deployit/bin/deployit-cli": "bd116b7df05a9cd21831731a8740f87fcaf2f439"
       },
       "summary": "deployit's stdlib-only HTTP backend (listing/serve/delete) and CLI (archive/export/stage/publish to the index).",
       "verified": null
@@ -293,7 +294,7 @@
       "module": "plugins/deployit (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/deployit/.claude-plugin/plugin.json": "723abf317f8b7ccf512d2c8510d3dde771a3f2bb",
+        "plugins/deployit/.claude-plugin/plugin.json": "0f70d363c63cb4146748f11a3a27d1f9d2788895",
         "plugins/deployit/skills/deployit/SKILL.md": "61ac326fd6cb8ef2020cec7f05b0a81db14896e4"
       },
       "summary": "Deployit's plugin manifest and orchestrator skill: routes /deployit commands to the CLI and authors release notes.",
@@ -374,6 +375,7 @@
         "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "6b3bfa75c163b4144936d08ceb7c2f26fb025081",
         "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "483caf8c6d787b64d08bea97ad2796815d6f3f55",
         "plugins/deployit/tests/test-cli-version.sh": "d7a1daaa409feb77dbb59b51a4c1f76b58050f79",
+        "plugins/deployit/tests/test-cli-worktree-guard.sh": "0a96a9850aa9ed4e1730ae251fe7809691ebefce",
         "plugins/deployit/tests/test-gc.sh": "be01b59bafa19e9c5bda91c29d3ccd6101f9ad88",
         "plugins/deployit/tests/test-metadata-single-app.sh": "1f36ebce4b6cf9363f3e6045fb7afced5dcd2ef0",
         "plugins/deployit/tests/test-metadata.sh": "5c49e2f4a48015c86de20068bd861f6edde9103c",
@@ -487,7 +489,7 @@
       "module": "plugins/forge (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/forge/.claude-plugin/plugin.json": "497dbabccd1504f7b51e2ef6a3db73e911d02ec7",
+        "plugins/forge/.claude-plugin/plugin.json": "094f81f84f097d14c888ee59d0d7a3143420d570",
         "plugins/forge/README.md": "1ce02e4c6294d5613a305d8487b42132d669a063",
         "plugins/forge/tests/run-tests.sh": "ec21a7688fb6712b2f89b69aaa176c1bde7999b7"
       },
@@ -553,7 +555,7 @@
       "module": "plugins/freshen",
       "references_modules": [],
       "sources": {
-        "plugins/freshen/.claude-plugin/plugin.json": "9ed70693a672a4b1af9ac887d90c0bb49780029f",
+        "plugins/freshen/.claude-plugin/plugin.json": "2a275975dd66736fafaeb4323de02923fb93ee43",
         "plugins/freshen/bin/freshen.sh": "58f1e47f2d10aa68f58dafac3a83351d8ff0caa6",
         "plugins/freshen/hooks/hooks.json": "d6b0145c08230b99b9be1f9dbf838455b2dad6b6",
         "plugins/freshen/hooks/on-clear.bats": "477bcb483c51d61cf8e530d55323521a02ef14dd",
@@ -575,7 +577,7 @@
       "module": "plugins/greenlight",
       "references_modules": [],
       "sources": {
-        "plugins/greenlight/.claude-plugin/plugin.json": "84b5d5fc27ada54106a99691cc7c2de0ca87b3df",
+        "plugins/greenlight/.claude-plugin/plugin.json": "dcf77c15587bad40b145a11b98de7d40c718a6d8",
         "plugins/greenlight/README.md": "f930f291dc43f3be2ed0c5e0f98ea7e0b5980f09",
         "plugins/greenlight/hooks/greenlight.sh": "5a77823c3f947ef5d5dac09ef16812c5d6a4a5a3",
         "plugins/greenlight/hooks/hooks.json": "20cc2c86286ac87e52943958af770264e327a86c",
@@ -592,7 +594,7 @@
       "module": "plugins/hook-guard",
       "references_modules": [],
       "sources": {
-        "plugins/hook-guard/.claude-plugin/plugin.json": "e2b680e6c4facf11c9959e11c9586de0609d2170",
+        "plugins/hook-guard/.claude-plugin/plugin.json": "1d4a35dc01209686e3617699e5930e13ee7728d9",
         "plugins/hook-guard/hooks/hooks.json": "d22a3169ebee8171c0149fd33e18c5f191b39144",
         "plugins/hook-guard/hooks/session-start.bats": "d0fef980e4026dbe472957321842098e21b3b4b4",
         "plugins/hook-guard/hooks/session-start.sh": "4f29deec3b0e13b0c5ba7fcf07a718d30b638576",
@@ -608,56 +610,152 @@
       "module": "plugins/issue (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/issue/.claude-plugin/plugin.json": "2fbe5baeec060fe1bc88afd097a58c566769c166",
-        "plugins/issue/README.md": "69dd64e419dee9c34c27374e533802ac7997b7d8",
-        "plugins/issue/bin/issue.sh": "4c7088dfac642a3da65ea88a05378d50f5b1faae",
+        "plugins/issue/.claude-plugin/plugin.json": "9654c1b6d364bceade1f180af54a305a8c7912e4",
+        "plugins/issue/README.md": "70adbf01c15105d88704acf31c179329c778182f",
+        "plugins/issue/bin/issue.sh": "26ef55654364027cfed37fa0f9a9f7e02a394b99",
         "plugins/issue/references/complete.md": "e78243246be2041358cce327b932e1721898284c",
         "plugins/issue/references/new.md": "c2bc904a4f678b127beb57457f95b1ef5ab1db81",
-        "plugins/issue/skills/issue/SKILL.md": "94b5372ae281a1b05b5da9e5fa428cbe68bad6f8"
+        "plugins/issue/skills/issue/SKILL.md": "0f52d2aedff41f4a526332f5ab5a3688dab67802"
       },
       "summary": "GitHub-issue lifecycle toolkit: skill routes verbs to issue.sh, which owns all git/gh/tmux work and emits JSON.",
       "verified": null
     },
-    "modules/plugins-issue-tests.md": {
+    "modules/plugins-issue-tests-chunk-1.md": {
       "generator": "cartographer/4",
-      "module": "plugins/issue/tests",
+      "module": "plugins/issue/tests (chunk 1)",
       "references_modules": [],
       "sources": {
         "plugins/issue/tests/fakes/gh": "c762ce565897189d63ef650c2e2f73a3bfa0e0d8",
-        "plugins/issue/tests/fakes/tmux": "1378c9a28c50ece6a7aa00ee80983a0e7f390a37",
+        "plugins/issue/tests/fakes/tmux": "07e7ee72002196a2bf4e90976b028c54378a22f1",
         "plugins/issue/tests/lib.sh": "2eb10a47d3045ba9e6d7c1c953d1b9952abfa360",
-        "plugins/issue/tests/run-tests.sh": "c9ecbe69ff1c00f2d0108e90b1d0041fe66bf4c7",
+        "plugins/issue/tests/run-tests.sh": "c9ecbe69ff1c00f2d0108e90b1d0041fe66bf4c7"
+      },
+      "summary": "Offline test harness for the issue plugin: stateful fake gh/tmux, shared fixtures/asserts, runner.",
+      "verified": null
+    },
+    "modules/plugins-issue-tests-test.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/issue/tests/test*",
+      "references_modules": [],
+      "sources": {
         "plugins/issue/tests/test-arg-validation.sh": "52aa1da180368a683c351421dce3d79fc7c24e1d",
+        "plugins/issue/tests/test-autosubmit.sh": "81841a48492c4dbebaf32c43cb09a597fda9f112",
         "plugins/issue/tests/test-complete-execute.sh": "38287da1cc8334b5553d2f08a673943f2809d509",
         "plugins/issue/tests/test-complete-plan.sh": "b8cb085a2740ac6a4600d7fdaf960625efb717b2",
         "plugins/issue/tests/test-create.sh": "170d6c086487159620f780be54b39bafe0309fc4",
-        "plugins/issue/tests/test-dispatch-dryrun.sh": "ede282f4309f54ae0d0f2f7ae36f21ab6ffa3958",
-        "plugins/issue/tests/test-gitignore.sh": "d27cf5681485e1fbd5e7d8272ecdefb7acfcf799",
+        "plugins/issue/tests/test-dispatch-dryrun.sh": "960e0b1f4fdd347cc91f45958f3544df089eb6ca",
+        "plugins/issue/tests/test-gitignore.sh": "a32b8a684522fbb84cc53c71afc4a464d762fad8",
         "plugins/issue/tests/test-list-shaping.sh": "6d544dd4a10a7fc64543767287cfc966d398b5c9",
         "plugins/issue/tests/test-owner-repo.sh": "0badffd1d9e8bed05f6a865910a503466446f935",
         "plugins/issue/tests/test-preconditions.sh": "5ab10ab525d49d2197a578e88ec7640ff926f480",
-        "plugins/issue/tests/test-readiness.sh": "7abefdddf8ff0562bfce3e1d9836ddf8478ce078",
+        "plugins/issue/tests/test-readiness.sh": "2a7d77036470431e49371c1c57f1866202d8b419",
         "plugins/issue/tests/test-view.sh": "b9659671bf365ecf8cbcdfe8d6e3ecfaa3a0438c"
       },
-      "summary": "Bash test suite for the issue plugin (dispatch/complete/list/view) driven by fake gh & tmux binaries.",
+      "summary": "Per-verb regression tests for issue-cli (dispatch, complete, create, view, list) using fake gh/tmux harnesses.",
       "verified": null
     },
-    "modules/plugins-rca.md": {
+    "modules/plugins-rca-agent-overrides.md": {
       "generator": "cartographer/4",
-      "module": "plugins/rca",
+      "module": "plugins/rca/agent-overrides",
       "references_modules": [],
       "sources": {
-        "plugins/rca/.claude-plugin/plugin.json": "a921fbf8a55d1cb96c90b40ee8dd1f17328c0c71",
-        "plugins/rca/README.md": "65f996dd8e8f6f0627b43e7f2ddab8b68dd21b3b",
-        "plugins/rca/agent-overrides/architect-rca.md": "6c5765aa64e41195c3841b0775d1847fa4359c31",
-        "plugins/rca/agent-overrides/investigator-rca.md": "85ff269974b4953c0687a67583763f5f734c334f",
-        "plugins/rca/bin/rca-status.sh": "cbadac1feae9bd9f334eb9c03240664c43d7563f",
-        "plugins/rca/references/architectural-patterns.md": "b167fb9a7ba41edd6b8c4fe215fbbaf7bfb262d3",
-        "plugins/rca/references/rca-methodology.md": "a1711e6a044250dd1297f62b7382a107086990f6",
-        "plugins/rca/references/symptom-vs-root-cause.md": "7163bcfd24f1d5fe21ce30c56cb4b943441f2ca3",
-        "plugins/rca/skills/rca/SKILL.md": "c5271dfc51b0450cc67a901b66fc599a53601e88"
+        "plugins/rca/agent-overrides/evidence-collector-context.md": "f30f889d3c6de0bfd690a73049a5618f3fe1be34",
+        "plugins/rca/agent-overrides/experimenter-context.md": "d7c48695e0779460c5291892ad1831cb9e869688",
+        "plugins/rca/agent-overrides/hypothesis-challenger-context.md": "f9b8c82d607e104ea17863a71943fd23c43510e2",
+        "plugins/rca/agent-overrides/investigator-context.md": "b21c7081a15cb3a01a18aa4dc65d8dba358fbd7b",
+        "plugins/rca/agent-overrides/qa-engineer-context.md": "db2cb628dc4acb8893bf9b58fba7a7621b8b7ab4",
+        "plugins/rca/agent-overrides/software-architect-context.md": "f807d44a43a4e9c60730ff0eea717b6eea0fa88f",
+        "plugins/rca/agent-overrides/software-engineer-context.md": "a89aa6b5f43dbb3f872285a53708319035f38ae0",
+        "plugins/rca/agent-overrides/technical-writer-context.md": "6912747c1028262fc80e9442fada5775546d6b13"
       },
-      "summary": "Orchestrates five-phase root cause analysis: symptom, evidence, hypotheses, verification, remediation.",
+      "summary": "Per-step context briefs the rca skill injects into shared agents (evidence, experiment, fix, report, postmortem).",
+      "verified": null
+    },
+    "modules/plugins-rca-bin.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/rca/bin",
+      "references_modules": [],
+      "sources": {
+        "plugins/rca/bin/rca-bisect.sh": "3f1dd62d4e6a4c4e9c3fb2fec240471d7160e6e6",
+        "plugins/rca/bin/rca-forensics.sh": "19ae014dbe722a10414e0a029535c30171dd3702",
+        "plugins/rca/bin/rca-hotspots.sh": "6e1cb8e82362cb434cc11d69434fafaf193fb817",
+        "plugins/rca/bin/rca-repro.sh": "70e6989aca1ac22e008c7ceeddc3c218685c7637",
+        "plugins/rca/bin/rca-scaffold.sh": "c782b42d4f3d9e25b64c5d9a77507a753587728e",
+        "plugins/rca/bin/rca-stack.sh": "d8ebc3cd169089292a024946048151f58ba4f4c7",
+        "plugins/rca/bin/rca-status.sh": "330d49a9cf4a92ebab0c54542f1a043b20ebf4e0",
+        "plugins/rca/bin/rca-worktree.sh": "3f0be46cca8dcc840ac9d6b4de3f6e8c4288b1ce"
+      },
+      "summary": "Deterministic bash+jq CLI scripts backing rca: forensics, bisect, repro, hotspots, stack, scaffold, status, worktree.",
+      "verified": null
+    },
+    "modules/plugins-rca-misc.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/rca (misc)",
+      "references_modules": [],
+      "sources": {
+        "plugins/rca/.claude-plugin/plugin.json": "e592cc587f332374332260966588d163c551dede",
+        "plugins/rca/README.md": "62faa27cf38699a446a5ea5e487fe836278029a5"
+      },
+      "summary": "Plugin identity for /rca: manifest + README documenting the reproduction-gated root-cause pipeline and its guarantees.",
+      "verified": null
+    },
+    "modules/plugins-rca-references.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/rca/references",
+      "references_modules": [],
+      "sources": {
+        "plugins/rca/references/architectural-patterns.md": "fbf3235986780924c4477a2a1bd420de70909048",
+        "plugins/rca/references/fix-protocol.md": "7524b995ef4c4e83272dc8e151aeb6de33fffe0a",
+        "plugins/rca/references/git-forensics.md": "5d3fd0b357083289aa9bb2597e742c9e5679aaf0",
+        "plugins/rca/references/hypothesis-falsification.md": "1818d95ab450f99ca0e708f2b1776996459537ac",
+        "plugins/rca/references/issue-latching.md": "26869d12d8c68e3e0ca85382e978ebe9de9a2a95",
+        "plugins/rca/references/kt-intake.md": "e600ea6f0a22e636e6d083442199ece7cd5aa561",
+        "plugins/rca/references/odc-classification.md": "ff22bb3cd0da2980593dad9d238db7af2f0552c3",
+        "plugins/rca/references/postmortem-format.md": "81b16b0cc57d4cda1a6c2483aebaca8f5d46a7eb",
+        "plugins/rca/references/repro-gate.md": "a049b17ca59761b41c7e66c22b4e422602c03ff1",
+        "plugins/rca/references/symptom-vs-root-cause.md": "a823921936e5f86b4992b2a21f9d1d7a136998e2",
+        "plugins/rca/references/worktree-protocol.md": "46c8e2851d79361b2e383b87af28e7e03a7587b1"
+      },
+      "summary": "RCA methodology references: KT intake, git forensics, falsification, ODC verdicts, fix/postmortem protocols.",
+      "verified": null
+    },
+    "modules/plugins-rca-skills.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/rca/skills",
+      "references_modules": [],
+      "sources": {
+        "plugins/rca/skills/diagnose/SKILL.md": "452858ff9907956598ddfbdfd4ec83c6c5dd2e26",
+        "plugins/rca/skills/fix/SKILL.md": "df4eda98a53b8b32dcbfcd1a80a3532241025399",
+        "plugins/rca/skills/intake/SKILL.md": "62720791201b8f5e1dc4bab8a41240ee826875a1",
+        "plugins/rca/skills/locate/SKILL.md": "3a0467b4403695fea3087ccb238095fa57f60912",
+        "plugins/rca/skills/postmortem/SKILL.md": "500fd4f50fdd8445efffe31397da51b57aa15c81",
+        "plugins/rca/skills/rca/SKILL.md": "3b3e535a6745351cc7ca119c14528210c857754c",
+        "plugins/rca/skills/report/SKILL.md": "60f1dda4bd7d7ef5cd4b1934dad337e0973f1e11",
+        "plugins/rca/skills/reproduce/SKILL.md": "d11295e7253fc43d910d34d086e99e0f37ddab80"
+      },
+      "summary": "RCA orchestrator + its seven pipeline step skills: intake, reproduce, locate, diagnose, report, fix, postmortem.",
+      "verified": null
+    },
+    "modules/plugins-rca-tests.md": {
+      "generator": "cartographer/4",
+      "module": "plugins/rca/tests",
+      "references_modules": [],
+      "sources": {
+        "plugins/rca/tests/fakes/gh": "3f5fcd149b316d9a4b5f7d99670b11b3897c7653",
+        "plugins/rca/tests/fakes/story": "a1a043d102250be11e5d5584ed5434a4c4665317",
+        "plugins/rca/tests/lib.sh": "00588ba9dc8b10fa5e64f14160fa0ca694ed94cd",
+        "plugins/rca/tests/run-tests.sh": "77150dd1b081ab60a586ca2236db67904cbc0cbd",
+        "plugins/rca/tests/test-bisect.sh": "67d22a8b9a973f14685af297a30396c2ddaf8460",
+        "plugins/rca/tests/test-forensics.sh": "71748ca12d177c9d1ee95ff45f95d2ed343ccc24",
+        "plugins/rca/tests/test-hotspots.sh": "d19fee8aa0c71c53cca89f61d2729278fb048f5f",
+        "plugins/rca/tests/test-repro.sh": "ec77f8c871b709576c5b27d660a7d2e6a45e307f",
+        "plugins/rca/tests/test-scaffold.sh": "e0d27ff9d4f759d3b79db540330e5f91a8e808d4",
+        "plugins/rca/tests/test-skill-contract.sh": "d2141fb97212fc77f75b97d2a87a31ec0dc3f3ac",
+        "plugins/rca/tests/test-stack.sh": "ca5cf3155af2bb799387432ae3693f351158a7a8",
+        "plugins/rca/tests/test-status.sh": "51f40a01111063470c5e84ed24c71b9225c52d54",
+        "plugins/rca/tests/test-worktree.sh": "20ffed9e2d17616c80b5aabb6ba6153e88a579d3"
+      },
+      "summary": "Plain-bash test suite for rca's bin/ CLIs: git-fixture harness, fake gh/story CLIs, docs\u2194CLI contract guard.",
       "verified": null
     },
     "modules/plugins-reconcile-pr.md": {
@@ -665,7 +763,7 @@
       "module": "plugins/reconcile-pr",
       "references_modules": [],
       "sources": {
-        "plugins/reconcile-pr/.claude-plugin/plugin.json": "2cb64ff6430a4bcfba162a7930b2dbdeea94b9da",
+        "plugins/reconcile-pr/.claude-plugin/plugin.json": "2a5d5df8894b57bf2730e5bc57d781c16f6af2bc",
         "plugins/reconcile-pr/README.md": "f80668fbd527ffd096f174662ba67c34648f6ab5",
         "plugins/reconcile-pr/bin/reconcile-pr.sh": "e86472f23d63075a1fecd4fbe2f023d1e7e63cf7",
         "plugins/reconcile-pr/references/reconciliation.md": "1fc5dbd0d2f4d72aa1eae200b0f67521f51fdcc4",
@@ -689,7 +787,7 @@
       "module": "plugins/semver/bin (chunk 1)",
       "references_modules": [],
       "sources": {
-        "plugins/semver/bin/semver-cli": "13aa5d0b8c8deb4c82f0518e9a54fa41bd61d2b6"
+        "plugins/semver/bin/semver-cli": "29cd913ed8ed3fbdc90f3bf2fad2a0c1019213c3"
       },
       "summary": "Deterministic JSON-in/out CLI implementing semver's init, set, bump, tracking, auto-bump, repair, validate ops.",
       "verified": null
@@ -722,7 +820,7 @@
       "module": "plugins/semver (misc)",
       "references_modules": [],
       "sources": {
-        "plugins/semver/.claude-plugin/plugin.json": "16b5ebb317ee76929d76642bb2c4fee3088e0d11",
+        "plugins/semver/.claude-plugin/plugin.json": "74e01753fc6b7d4cd4f01ffc02ff628b5cd61fe3",
         "plugins/semver/README.md": "22ec64306da43a6a4e9b4b7a4270770508d3a7c0",
         "plugins/semver/skills/semver/SKILL.md": "11fab2c938ab5be0798d073f4328428d101c78c0"
       },
@@ -773,7 +871,8 @@
       "references_modules": [],
       "sources": {
         "plugins/semver/tests/test-router.sh": "b46148087b516791ba60aa331a954b1e396ac8c5",
-        "plugins/semver/tests/test-set.sh": "4e495ad362ab56e6d5d491abecd6da123c6bdc2a"
+        "plugins/semver/tests/test-set.sh": "4e495ad362ab56e6d5d491abecd6da123c6bdc2a",
+        "plugins/semver/tests/test-worktree-guard.sh": "61837a344a0f1433544ae798dcd851365daa6b4b"
       },
       "summary": "Bash tests for semver-router.sh's command routing/aliases and semver-cli's `set` (explicit-version) subcommand.",
       "verified": null
@@ -783,12 +882,12 @@
       "module": "root (misc)",
       "references_modules": [],
       "sources": {
-        ".claude-plugin/marketplace.json": "f36f8676b7fe7d6db4e8d6cec733a62acdc06841",
+        ".claude-plugin/marketplace.json": "a5cfc77ea519a68cc1f2282df86595cc46a6951c",
         ".semver/config.yaml": "34a5c2bfa206393f2256834b5bd999e9aec3f077",
         ".semver/hooks/post-bump/01-sync-plugin-versions.sh": "29c1f99416d5f42410c2da7ea59165ed979b2c80",
         "AGENTS.md": "04fef50d2517e57a411f7f23a09af90a44b24dba",
         "HANDOFF.md": "907df53e9f7c3f6e449693c13adab0e710396e13",
-        "Makefile": "926cb27a1499a300ddf88a0975e754ec445c37f6",
+        "Makefile": "d3bc36f1d74e6544e578193fd4243013bc9e5920",
         "README.md": "5f28be43c59b3bb49b0976dc3199d42abfee9fea",
         "docs/forge-workflow.md": "829219590927e60d40bc6b2e7d19bbedba22613d"
       },
@@ -815,54 +914,60 @@
       "module": "overview/ARCHITECTURE",
       "references_modules": [],
       "sources": {
-        "docs/atlas/modules/plugins-agents-agents-chunk-1.md": "26f5baa88725df5adc0e9c78de7843ff9a1042e2",
-        "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "ca030670e871f62db7b140b41cb28826dbcd952b",
-        "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "54aaf6c336b4983457db178c8b30c16531f13d38",
+        "docs/atlas/modules/plugins-agents-agents-chunk-1.md": "065fe444f9b560ddff3bda26a43905d23dba40fa",
+        "docs/atlas/modules/plugins-agents-agents-chunk-2.md": "afaafff3b3c905150e219b0691ca27fb5df3813d",
+        "docs/atlas/modules/plugins-agents-agents-chunk-3.md": "11239fbf8e653ca94a714d791c57c36e908e8a0d",
         "docs/atlas/modules/plugins-agents-agents-ux.md": "c01f936bc20b66925ad2801c4be17e3161d9a289",
-        "docs/atlas/modules/plugins-agents-misc.md": "05d36f4cfa2e299646dda9b62cf600ff94bba650",
-        "docs/atlas/modules/plugins-agents-references.md": "1eff07f91f67d123c4f55dee199f6c493d81c8b2",
+        "docs/atlas/modules/plugins-agents-misc.md": "2fe5178ace4ec68d553819078cd39bf9c081af5c",
+        "docs/atlas/modules/plugins-agents-references.md": "5896e19763a59e7dd120a1082eb185c6aa98c752",
         "docs/atlas/modules/plugins-atlas-agent-overrides.md": "4d1dad48609393ef8311cfcbc65966b1bb38febe",
-        "docs/atlas/modules/plugins-atlas-bin-chunk-1.md": "e2b19fb5988ab633012d76931631e82b5872ed72",
+        "docs/atlas/modules/plugins-atlas-bin-chunk-1.md": "0f80eda48c0c6ba31d7a7b527768a7147c26d021",
         "docs/atlas/modules/plugins-atlas-bin-chunk-2.md": "6d8aab0ab6b3ac819c4a5205fb9c8ad7f6ce9096",
         "docs/atlas/modules/plugins-atlas-helpers-ts-helper.md": "469d365d7180e706259a5a323708beaa21ccc97f",
-        "docs/atlas/modules/plugins-atlas-misc.md": "63591ba20c998f3a35a57d796c909e1de75df00b",
-        "docs/atlas/modules/plugins-atlas-references.md": "3ee390a3ede83da8fce921a6529154456831a447",
-        "docs/atlas/modules/plugins-atlas-tests-chunk-1.md": "1d4798201c1ad94362c47a560dc5ded9a0081917",
-        "docs/atlas/modules/plugins-atlas-tests-chunk-2.md": "8a7cf46ec3fc63ccb251851ada2432638341b79a",
+        "docs/atlas/modules/plugins-atlas-misc.md": "271992bdebcac2217cefafc05f2f70ef509e2169",
+        "docs/atlas/modules/plugins-atlas-references.md": "f10896e0aad21c257000ce61bf663b67f5959011",
+        "docs/atlas/modules/plugins-atlas-tests-chunk-1.md": "451661d1e46536be034e1e7069a9d62104a2b07c",
+        "docs/atlas/modules/plugins-atlas-tests-chunk-2.md": "c85b8df975facbfc03121c0185315ea0eafa7bbb",
         "docs/atlas/modules/plugins-atlas-tests-chunk-3.md": "bdbebf3c665e85168dcce04beb45ea1488e42e04",
-        "docs/atlas/modules/plugins-council.md": "4eba0787fdd5f846c07e65313ee6b075f21475d2",
+        "docs/atlas/modules/plugins-council.md": "c0e5770c6aea3bf9f5b5b29f62527ca2189f5220",
         "docs/atlas/modules/plugins-deployit-assets.md": "aa6ce2aee689858c7491087d56ccb44c63310dfa",
-        "docs/atlas/modules/plugins-deployit-bin-chunk-1.md": "345b9e98fd4cb52c0f9485820913487e0e1dbeeb",
+        "docs/atlas/modules/plugins-deployit-bin-chunk-1.md": "6ebfbbb1441be2b9e67cbe1ebd37963cdd5ebdaf",
         "docs/atlas/modules/plugins-deployit-bin-chunk-2.md": "e4a4c85f1bd7fac93142dd5d1512659ca1bd4c06",
-        "docs/atlas/modules/plugins-deployit-misc.md": "b45370230a4c8f6f1d58f4cbe2be77e8b5b8dd2e",
+        "docs/atlas/modules/plugins-deployit-misc.md": "15c7c58baae4d34cd900ac3618a2d44dfb5681b6",
         "docs/atlas/modules/plugins-deployit-references.md": "ccc52d0b57d350979ca6e0d662476118db0e9b61",
         "docs/atlas/modules/plugins-deployit-tests-chunk-1.md": "85887614887ce17e4167be7951ebd57239721687",
         "docs/atlas/modules/plugins-deployit-tests-chunk-2.md": "03a27f5326decdedb5fd20a6bfb6e435cd74067f",
-        "docs/atlas/modules/plugins-deployit-tests-chunk-3.md": "16b6f14379ff3be787209cd621115a21cfb7d99b",
+        "docs/atlas/modules/plugins-deployit-tests-chunk-3.md": "f2b0563f1c44abe44d0221b2886b0d5dc5cc3f14",
         "docs/atlas/modules/plugins-forge-agent-overrides.md": "93a5f727595bcce96a6efa407304e2d7f2930db3",
         "docs/atlas/modules/plugins-forge-bin-chunk-1.md": "36909a7a18e7b8f82ca7a55d57b475b8dacd6098",
         "docs/atlas/modules/plugins-forge-bin-chunk-2.md": "51070b3ccc9078b160fe5ce04283f7fd98293cc4",
         "docs/atlas/modules/plugins-forge-bin-chunk-3.md": "33d934c408257859bfd504b00308a22612425f58",
         "docs/atlas/modules/plugins-forge-hooks.md": "966b4c064d43f9460289aa22e7debce4a30704f5",
-        "docs/atlas/modules/plugins-forge-misc.md": "bb204f8164e2a90ece605752cd4ac73f19dbbad5",
+        "docs/atlas/modules/plugins-forge-misc.md": "fdad8172b8e6a37c6cdc4cd4a2707cc2b617bb84",
         "docs/atlas/modules/plugins-forge-references-chunk-1.md": "2afa3865c4fae1349519a6577ac53d714d15c84d",
         "docs/atlas/modules/plugins-forge-references-chunk-2.md": "87eae3702c7040ec3badecd02ee25f5419b4c151",
         "docs/atlas/modules/plugins-forge-skills.md": "03955da6003626919c72277f90450acbaae24630",
-        "docs/atlas/modules/plugins-freshen.md": "36ee76916bf57fc64cd6b539706411019c234697",
-        "docs/atlas/modules/plugins-greenlight.md": "5f2d470885c2601d0541cd3f4876f4001ca74c0f",
-        "docs/atlas/modules/plugins-hook-guard.md": "88befd5bddd2b14fede25eeb5618def6614ec555",
-        "docs/atlas/modules/plugins-issue-misc.md": "0fb19fdd0aeceb14a4640fcd48e4a3d359971f7d",
-        "docs/atlas/modules/plugins-issue-tests.md": "8171af4d41d513718f6e85f428c4779823480ff3",
-        "docs/atlas/modules/plugins-rca.md": "f75d2b6c0d838dbf409ec35f93aa0475b1f69993",
-        "docs/atlas/modules/plugins-reconcile-pr.md": "fda736e111b3fc16e29ace755b1194a9ee4fced7",
-        "docs/atlas/modules/plugins-semver-bin-chunk-1.md": "43db4365d275c874b9f3a8d2a537467ce80d098c",
+        "docs/atlas/modules/plugins-freshen.md": "569483f68a318090fc3c1705c5bc63ff2f275a5f",
+        "docs/atlas/modules/plugins-greenlight.md": "f218ac72d755ed243e3b630a5f4395baf4e43888",
+        "docs/atlas/modules/plugins-hook-guard.md": "de636b264fd17d838f38877ca0cc4fdf0c37921d",
+        "docs/atlas/modules/plugins-issue-misc.md": "2d7ec4f0cbf45495f97846218c4e67ff512a7e1f",
+        "docs/atlas/modules/plugins-issue-tests-chunk-1.md": "33e66a7b92998cd1639c1e16e7fba58504a3fdc7",
+        "docs/atlas/modules/plugins-issue-tests-test.md": "3e0d40982f04b770d8bd96b861c4ccd3de09b2b6",
+        "docs/atlas/modules/plugins-rca-agent-overrides.md": "0a2a34958f69f549dfaf6fac3154d4c5fd3a46b2",
+        "docs/atlas/modules/plugins-rca-bin.md": "3cdbf8dd21f5b87074dbfcfc2027a0b75a46909e",
+        "docs/atlas/modules/plugins-rca-misc.md": "c69686be31b4502579428e825d5d41bca2028e08",
+        "docs/atlas/modules/plugins-rca-references.md": "38f53622b9d2a1fd9ff345f478358aad3a56de85",
+        "docs/atlas/modules/plugins-rca-skills.md": "ac91f58984bdcd034a6be18263543efa0e2724af",
+        "docs/atlas/modules/plugins-rca-tests.md": "8d3d85eb4595c606a7361ed7d7a79174f7619447",
+        "docs/atlas/modules/plugins-reconcile-pr.md": "732c66273291a6ea1974c60b3f24b1a97102dfe2",
+        "docs/atlas/modules/plugins-semver-bin-chunk-1.md": "4f9432a741940ecc15f357b10e4bf232259ae92f",
         "docs/atlas/modules/plugins-semver-bin-chunk-2.md": "2f148213e6c84b2227668b2416293e665fb54558",
         "docs/atlas/modules/plugins-semver-hooks.md": "fc144ea7b9e4c74850f76cf9b413b8b88ab8b5b1",
-        "docs/atlas/modules/plugins-semver-misc.md": "8a74544406055efe8df5daefa4fbe42c53e6aa89",
+        "docs/atlas/modules/plugins-semver-misc.md": "4c8ea6c8b6fbc927d6ec04755da4e44dcfce9e26",
         "docs/atlas/modules/plugins-semver-references.md": "f7fd7ba435d49347ee01f2b65b47d08c34950d08",
         "docs/atlas/modules/plugins-semver-tests-chunk-1.md": "17811e6532744904637bf66b701436677ea36cd8",
-        "docs/atlas/modules/plugins-semver-tests-chunk-2.md": "fbfc73348f80cfb23228a74d1153afb07bf50f4e",
-        "docs/atlas/modules/root-misc.md": "0f8209b072ff49972641be87019ca4de21b4d114",
+        "docs/atlas/modules/plugins-semver-tests-chunk-2.md": "3f2b8472a7f41c205cf477363300f0bc94f15f52",
+        "docs/atlas/modules/root-misc.md": "00d2b60a9ffe754d193c5ebc128a8e33249016d5",
         "docs/atlas/modules/tests.md": "81be3d1395504312e71932a45906f2b64ac382ff"
       },
       "summary": "System architecture and cross-module relationships",
@@ -921,11 +1026,11 @@
     ],
     "docs/atlas/modules/plugins-atlas-bin-chunk-1.md": [
       "edge.semantic/771c95cee3e012f1cf647c74",
-      "module.gotchas/4e6dbdd043703d246aed8230",
-      "module.purpose/0d92a63b4f46ab9e54670b38",
-      "module.read_when/eee4584536ffb1eb66788ef4",
-      "module.summary/2b501c1586765c0044d263e2",
-      "module.type_notes/034a2508f1b97748172cc5fa",
+      "module.gotchas/c5c6915abbb4555f0d8465d4",
+      "module.purpose/1cb1bf6d30585c5558388845",
+      "module.read_when/bdb3a8ebac4944856ae5b6ee",
+      "module.summary/f50fc74e8072ac1fa73cf5f6",
+      "module.type_notes/bd3f862fb65ddc413fd8c1b0",
       "symbol.contract/0240e87e1c3848661a402003",
       "symbol.contract/058573ccd38f1816fff8b6f7",
       "symbol.contract/05c0f9f1f2244f154ce0e6d1",
@@ -1009,7 +1114,7 @@
       "symbol.contract/762b7e6df9c8135c0e31dce6",
       "symbol.contract/77d0e19f81488581bd2f2bd4",
       "symbol.contract/78ca2282bf25986c17a00168",
-      "symbol.contract/79ebed143893d8930376750c",
+      "symbol.contract/794a3949452fafb5e602d4d9",
       "symbol.contract/7d32295f17a46de3556dff49",
       "symbol.contract/7eaa1b38c70bf86bdbe11201",
       "symbol.contract/7f0a8a1f2b4ef7c9269e7fd0",
@@ -1084,6 +1189,7 @@
       "symbol.contract/f56355e39d0c1d0290f7b44d",
       "symbol.contract/f5730930849a9db59958eac2",
       "symbol.contract/fabb9bbf70098e41ac02385a",
+      "symbol.contract/fb10b78905d0a1a9512fe352",
       "symbol.contract/fb506266ce5c5962e9216eda",
       "symbol.contract/fbc7553275e2a6202350475a",
       "symbol.contract/fd68b84cfb76973519609b0a",
@@ -1473,19 +1579,62 @@
       "module.type_notes/8b1a52e8f257bb1a6767b13f",
       "symbol.contract/6f7751bba38b2bde421906c9"
     ],
-    "docs/atlas/modules/plugins-issue-tests.md": [
-      "module.gotchas/92f190ed1bdba3dbba7668c0",
-      "module.purpose/cd7132e3c537d836f754ba66",
-      "module.read_when/974bc31a5f370f3e9da283c5",
-      "module.summary/a83935556c44b1e94adf3fbf",
-      "module.type_notes/c7c06c144f980ddd15aed40d"
+    "docs/atlas/modules/plugins-issue-tests-chunk-1.md": [
+      "module.gotchas/98bf465f49a5d0d60a69eb78",
+      "module.purpose/461127fc702bde585b10b1c5",
+      "module.read_when/03534921369dea77e885649e",
+      "module.summary/8bda0bc47006982a18453c3f",
+      "module.type_notes/6e13aac6ddc1fdf001099e85"
     ],
-    "docs/atlas/modules/plugins-rca.md": [
-      "module.gotchas/1bc50c3d26235cbf79d3eb57",
-      "module.purpose/a298a29028f63e37735324d8",
-      "module.read_when/a881bcc62413481ba6c9f0c8",
-      "module.summary/778427eb810486bb761fa1be",
-      "module.type_notes/f5055491a55d5e5b4dca938c"
+    "docs/atlas/modules/plugins-issue-tests-test.md": [
+      "module.gotchas/e50055916aa4b19defbe5abf",
+      "module.purpose/8a7f433d5ca94126fda672a5",
+      "module.read_when/4179e9b7698e35423f869bcd",
+      "module.summary/3c3956174c5b6d5b3db936bd",
+      "module.type_notes/34889164ed3a5d911f5ebd9e"
+    ],
+    "docs/atlas/modules/plugins-rca-agent-overrides.md": [
+      "module.gotchas/7fa1d23e61c0b69048fe4a3e",
+      "module.purpose/f4b4a281f61a9bb3ae0848c4",
+      "module.read_when/25c7260fa9bcaae36d55112e",
+      "module.summary/f56b1ad9ae9f83ce8c335560",
+      "module.type_notes/280c58104ae390ab0f5800d2"
+    ],
+    "docs/atlas/modules/plugins-rca-bin.md": [
+      "module.gotchas/ada5444e771f17f39cf1675c",
+      "module.purpose/fdd85504325f18b4cb4e8788",
+      "module.read_when/c2ec0d619be148a3719bb742",
+      "module.summary/8759529a5980c18f90b97bc9",
+      "module.type_notes/eb1fad16b8cef108c91a3cfa",
+      "symbol.contract/528fd4ba6b244ab007917758"
+    ],
+    "docs/atlas/modules/plugins-rca-misc.md": [
+      "module.gotchas/20aacc115e51917e5530a2ee",
+      "module.purpose/c205b25bbb27919b99173cfa",
+      "module.read_when/3d5c63cd0438ca981ac83133",
+      "module.summary/22701c92d5ca63e3c8478b25",
+      "module.type_notes/a6871680255a128224f668b6"
+    ],
+    "docs/atlas/modules/plugins-rca-references.md": [
+      "module.gotchas/6001223395d9a19ea630551c",
+      "module.purpose/25f716255fb46c3d3b60013a",
+      "module.read_when/a91edc347558774df4aac0cb",
+      "module.summary/6eabc650ed543e9af548c10b",
+      "module.type_notes/0a7c7d11fcbc8ec7869a3712"
+    ],
+    "docs/atlas/modules/plugins-rca-skills.md": [
+      "module.gotchas/ffa14d62b0d92e119dddc59f",
+      "module.purpose/ca93354395fb385d7f83a7f9",
+      "module.read_when/8c91d936cb84e21503c01cb2",
+      "module.summary/6f84992edb9cda34f8747002",
+      "module.type_notes/cba2706bc5da14c99a105b9a"
+    ],
+    "docs/atlas/modules/plugins-rca-tests.md": [
+      "module.gotchas/ebf16d6ebd83c7e975858ca4",
+      "module.purpose/c597779fed608bfb5309896a",
+      "module.read_when/ea1068615b731aa6190008e2",
+      "module.summary/be70645cb1425ab775affe0b",
+      "module.type_notes/978eb49231ba7197180d5762"
     ],
     "docs/atlas/modules/plugins-reconcile-pr.md": [
       "module.gotchas/cec799535967df722015affe",
@@ -1495,11 +1644,11 @@
       "module.type_notes/862fb37561990c0b86031102"
     ],
     "docs/atlas/modules/plugins-semver-bin-chunk-1.md": [
-      "module.gotchas/8ce524b5a8827179844087f6",
-      "module.purpose/c360f4a1da42e879fe152cef",
-      "module.read_when/1bae62a66053170abf8fbcbe",
-      "module.summary/c7400f3a5c307215096db22a",
-      "module.type_notes/d33b5388a597d8a72fbbe2de",
+      "module.gotchas/2ae42d523d639b1c267bd70d",
+      "module.purpose/e450abfd784f533506b70b74",
+      "module.read_when/a0132fbde30c937d5e022458",
+      "module.summary/dae5b03357e0cf56ea3bcf1e",
+      "module.type_notes/9e014a4887c7d9ca0ae7b083",
       "symbol.contract/02714622e08b86c9f3d2e08e",
       "symbol.contract/032faae85117f528f364f7f2",
       "symbol.contract/0b42ffdaab8561679fa134b0",
@@ -1520,6 +1669,7 @@
       "symbol.contract/451c82f4888d97275b59ed65",
       "symbol.contract/4a23423e67aa03531a7587a6",
       "symbol.contract/55f38a650e862475a9378c0a",
+      "symbol.contract/59d5edff3b57873d78bfee3f",
       "symbol.contract/5d29b3c754f1c286bc72bff9",
       "symbol.contract/614b449d9058db2f0dcf13f6",
       "symbol.contract/6481860ba024a6b71e1b3a23",
@@ -1548,6 +1698,7 @@
       "symbol.contract/c0bdc88d3149027add71b82e",
       "symbol.contract/c5cac5fd5cb1a4ec75dbe35c",
       "symbol.contract/c63eeeabad80f0cb6087cb2e",
+      "symbol.contract/dd319da2f6c5dfe7af0256b5",
       "symbol.contract/dd3d3d7671977e449f8359e9",
       "symbol.contract/dfe25308e25fcac1e47ddbab",
       "symbol.contract/e90cb06b048d54ebd3438a16",
@@ -1619,9 +1770,9 @@
       "module.type_notes/53a318e3b42813a7da386d6d"
     ],
     "docs/atlas/overview/ARCHITECTURE.md": [
-      "overview.dataflow/62c073bd7a2f12d9909cba55",
-      "overview.index_facts/274a19d010f317ae6a5be483",
-      "overview.shape/372d3b9742e5551495fbaa3d"
+      "overview.dataflow/510fb75e586388d81cbca981",
+      "overview.index_facts/f6bf06572469ec08a12f0fc0",
+      "overview.shape/4a8f0ccde03274074c642e97"
     ]
   },
   "paths": {
@@ -1645,8 +1796,9 @@
     "plugins/agents/agents/domain-researcher.md": "modules/plugins-agents-agents-chunk-1.md",
     "plugins/agents/agents/evaluator.md": "modules/plugins-agents-agents-chunk-1.md",
     "plugins/agents/agents/evidence-collector.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/experimenter.md": "modules/plugins-agents-agents-chunk-1.md",
     "plugins/agents/agents/generator.md": "modules/plugins-agents-agents-chunk-1.md",
-    "plugins/agents/agents/hypothesis-challenger.md": "modules/plugins-agents-agents-chunk-1.md",
+    "plugins/agents/agents/hypothesis-challenger.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/investigator.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/lawyer.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/map-repairer.md": "modules/plugins-agents-agents-chunk-2.md",
@@ -1658,9 +1810,9 @@
     "plugins/agents/agents/reviewer.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/security-researcher.md": "modules/plugins-agents-agents-chunk-2.md",
     "plugins/agents/agents/skeptic.md": "modules/plugins-agents-agents-chunk-2.md",
-    "plugins/agents/agents/software-architect.md": "modules/plugins-agents-agents-chunk-2.md",
-    "plugins/agents/agents/software-engineer.md": "modules/plugins-agents-agents-chunk-2.md",
-    "plugins/agents/agents/technical-writer.md": "modules/plugins-agents-agents-chunk-2.md",
+    "plugins/agents/agents/software-architect.md": "modules/plugins-agents-agents-chunk-3.md",
+    "plugins/agents/agents/software-engineer.md": "modules/plugins-agents-agents-chunk-3.md",
+    "plugins/agents/agents/technical-writer.md": "modules/plugins-agents-agents-chunk-3.md",
     "plugins/agents/agents/triager.md": "modules/plugins-agents-agents-chunk-3.md",
     "plugins/agents/agents/ux-designer-cli.md": "modules/plugins-agents-agents-ux.md",
     "plugins/agents/agents/ux-designer-mobile.md": "modules/plugins-agents-agents-ux.md",
@@ -1792,6 +1944,7 @@
     "plugins/deployit/tests/test-cli-stage-macos-no-sparkle-tools.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-cli-stage-macos-sparkle.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-cli-version.sh": "modules/plugins-deployit-tests-chunk-3.md",
+    "plugins/deployit/tests/test-cli-worktree-guard.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-gc.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-metadata-single-app.sh": "modules/plugins-deployit-tests-chunk-3.md",
     "plugins/deployit/tests/test-metadata.sh": "modules/plugins-deployit-tests-chunk-3.md",
@@ -1915,30 +2068,72 @@
     "plugins/issue/references/complete.md": "modules/plugins-issue-misc.md",
     "plugins/issue/references/new.md": "modules/plugins-issue-misc.md",
     "plugins/issue/skills/issue/SKILL.md": "modules/plugins-issue-misc.md",
-    "plugins/issue/tests/fakes/gh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/fakes/tmux": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/lib.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/run-tests.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-arg-validation.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-complete-execute.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-complete-plan.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-create.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-dispatch-dryrun.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-gitignore.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-list-shaping.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-owner-repo.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-preconditions.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-readiness.sh": "modules/plugins-issue-tests.md",
-    "plugins/issue/tests/test-view.sh": "modules/plugins-issue-tests.md",
-    "plugins/rca/.claude-plugin/plugin.json": "modules/plugins-rca.md",
-    "plugins/rca/README.md": "modules/plugins-rca.md",
-    "plugins/rca/agent-overrides/architect-rca.md": "modules/plugins-rca.md",
-    "plugins/rca/agent-overrides/investigator-rca.md": "modules/plugins-rca.md",
-    "plugins/rca/bin/rca-status.sh": "modules/plugins-rca.md",
-    "plugins/rca/references/architectural-patterns.md": "modules/plugins-rca.md",
-    "plugins/rca/references/rca-methodology.md": "modules/plugins-rca.md",
-    "plugins/rca/references/symptom-vs-root-cause.md": "modules/plugins-rca.md",
-    "plugins/rca/skills/rca/SKILL.md": "modules/plugins-rca.md",
+    "plugins/issue/tests/fakes/gh": "modules/plugins-issue-tests-chunk-1.md",
+    "plugins/issue/tests/fakes/tmux": "modules/plugins-issue-tests-chunk-1.md",
+    "plugins/issue/tests/lib.sh": "modules/plugins-issue-tests-chunk-1.md",
+    "plugins/issue/tests/run-tests.sh": "modules/plugins-issue-tests-chunk-1.md",
+    "plugins/issue/tests/test-arg-validation.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-autosubmit.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-complete-execute.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-complete-plan.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-create.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-dispatch-dryrun.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-gitignore.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-list-shaping.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-owner-repo.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-preconditions.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-readiness.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/issue/tests/test-view.sh": "modules/plugins-issue-tests-test.md",
+    "plugins/rca/.claude-plugin/plugin.json": "modules/plugins-rca-misc.md",
+    "plugins/rca/README.md": "modules/plugins-rca-misc.md",
+    "plugins/rca/agent-overrides/evidence-collector-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/agent-overrides/experimenter-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/agent-overrides/hypothesis-challenger-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/agent-overrides/investigator-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/agent-overrides/qa-engineer-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/agent-overrides/software-architect-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/agent-overrides/software-engineer-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/agent-overrides/technical-writer-context.md": "modules/plugins-rca-agent-overrides.md",
+    "plugins/rca/bin/rca-bisect.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/bin/rca-forensics.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/bin/rca-hotspots.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/bin/rca-repro.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/bin/rca-scaffold.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/bin/rca-stack.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/bin/rca-status.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/bin/rca-worktree.sh": "modules/plugins-rca-bin.md",
+    "plugins/rca/references/architectural-patterns.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/fix-protocol.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/git-forensics.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/hypothesis-falsification.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/issue-latching.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/kt-intake.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/odc-classification.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/postmortem-format.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/repro-gate.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/symptom-vs-root-cause.md": "modules/plugins-rca-references.md",
+    "plugins/rca/references/worktree-protocol.md": "modules/plugins-rca-references.md",
+    "plugins/rca/skills/diagnose/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/skills/fix/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/skills/intake/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/skills/locate/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/skills/postmortem/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/skills/rca/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/skills/report/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/skills/reproduce/SKILL.md": "modules/plugins-rca-skills.md",
+    "plugins/rca/tests/fakes/gh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/fakes/story": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/lib.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/run-tests.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-bisect.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-forensics.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-hotspots.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-repro.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-scaffold.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-skill-contract.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-stack.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-status.sh": "modules/plugins-rca-tests.md",
+    "plugins/rca/tests/test-worktree.sh": "modules/plugins-rca-tests.md",
     "plugins/reconcile-pr/.claude-plugin/plugin.json": "modules/plugins-reconcile-pr.md",
     "plugins/reconcile-pr/README.md": "modules/plugins-reconcile-pr.md",
     "plugins/reconcile-pr/bin/reconcile-pr.sh": "modules/plugins-reconcile-pr.md",
@@ -1985,6 +2180,7 @@
     "plugins/semver/tests/test-prompt-hooks.sh": "modules/plugins-semver-tests-chunk-1.md",
     "plugins/semver/tests/test-router.sh": "modules/plugins-semver-tests-chunk-2.md",
     "plugins/semver/tests/test-set.sh": "modules/plugins-semver-tests-chunk-2.md",
+    "plugins/semver/tests/test-worktree-guard.sh": "modules/plugins-semver-tests-chunk-2.md",
     "tests/helpers.bash": "modules/tests.md",
     "tests/init.bats": "modules/tests.md",
     "tests/plugin-content-drift.sh": "modules/tests.md",
@@ -1998,8 +2194,8 @@
     ]
   },
   "structure": {
-    "index_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
-    "index_digest": "sha256:9467e7553ff519ea64e80b3ced1092f325d55149069173174e007f9211fa3c17",
+    "index_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+    "index_digest": "sha256:07cd6f5b29418ae247999a93a36b648da311bdc78ca85e372321fc48e86f0fbe",
     "symbols": {
       "plugins/atlas/bin/atlas-cli": [
         {
@@ -2216,7 +2412,7 @@
           "id": "plugins/atlas/bin/atlas-cli::cmd_ledger_finalize",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:a36f7eb9bf4a780aad3fad29260bc241db9c7ad3964d826ee83eb5ea5c637e61",
-          "span_hash": "sha256:eebed01261340afbfb530b77f97185e08d5b5665f284d617f97aba99f2df2f13"
+          "span_hash": "sha256:86ef916b60317ab2e0032446f15db5e3c6df518ef5a517499e5b18b394b6de4b"
         },
         {
           "id": "plugins/atlas/bin/atlas-cli::cmd_ledger_set_verified",
@@ -2294,13 +2490,13 @@
           "id": "plugins/atlas/bin/atlas-cli::compute_diff",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:add491f4a35e10ea86ce29b40956a3f3c6b08c2e680ebf33fdb3b219f377b88b",
-          "span_hash": "sha256:26334d1c8060fa814c980b5bd0871092b655569efc7af929e058665bbe07608d"
+          "span_hash": "sha256:0f69d726e5ef1fd7f3b2e6a687b12d3e8ce2bf6c2d09c4f85ca81f01832c55eb"
         },
         {
           "id": "plugins/atlas/bin/atlas-cli::compute_inputs_digest",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:bb283c4d119b6d532a8b51d7e04b23c386ed9f25415b331110aab5bd2e1994a4",
-          "span_hash": "sha256:78adf42dd1e4b3471843e90c32b76c10f32cd8002dd790a4f11c54b05b356451"
+          "span_hash": "sha256:7d2aa5d8a91138a18e2f271caa57365ed392452eee5d238e18dc76763f5194d6"
         },
         {
           "id": "plugins/atlas/bin/atlas-cli::compute_judgment_keys",
@@ -2511,12 +2707,6 @@
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:3d375ca18d4ee31e99bd5de0a07d49bfdfb5db66a19935cefb896451ed75ae3e",
           "span_hash": "sha256:b3e7a835e485d05ea1c29ce0ca9862c6fe9010870e1ec1020a1c35b15f12abbc"
-        },
-        {
-          "id": "plugins/atlas/bin/atlas-cli::git_tree_oid",
-          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "signature_hash": "sha256:95cda761228806c557f11ee902874cd3e0863a4a90e7bfd5e2d07dcbd4919092",
-          "span_hash": "sha256:a8f6e6e6411a79c03fd4921ed02e16c4f943f8f430467224785cef895f23552b"
         },
         {
           "id": "plugins/atlas/bin/atlas-cli::git_with_index_retry",
@@ -2789,6 +2979,12 @@
           "span_hash": "sha256:242d9947eda451febf44b78f00f95cc06ecd248d0263d3739e66f2f384d55029"
         },
         {
+          "id": "plugins/atlas/bin/atlas-cli::paths_digest",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:9a3cb23c7a8c5c938366367555f38213550422e962733ce83deaf577f7f7f813",
+          "span_hash": "sha256:26ae92fb4f0f58a120820fdc8bea1c71a29a518aab40978003100ae0c530c8e6"
+        },
+        {
           "id": "plugins/atlas/bin/atlas-cli::place",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:69f3b455d55b94b5b4dd942cb7d92315b29cbd7b48785993360db69d9d6a7b38",
@@ -2877,6 +3073,12 @@
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:7769a65cf537becc51b1858343820bd36e1b507f1fc37e31aa32e23dbc83587b",
           "span_hash": "sha256:3905781eab039e9146a67633cf21040db0262a9dffe7cbb13834ac0922975f6c"
+        },
+        {
+          "id": "plugins/atlas/bin/atlas-cli::scope_digest",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:02b2982dccbeb947ad645b1c1fd144632b06972719af67b0f25c1fa1c956950d",
+          "span_hash": "sha256:c70a062a560137a8fe02f8b4f155b49ec61fe11c9b3a1597ba59188745053138"
         },
         {
           "id": "plugins/atlas/bin/atlas-cli::serialize_frontmatter",
@@ -4193,6 +4395,12 @@
           "span_hash": "sha256:0796a1fa6b1f45e932383ff389b551c078882ab61470743b0d4fcaff6a46ef16"
         },
         {
+          "id": "plugins/deployit/bin/deployit-cli::_is_linked_worktree",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:5c5676c07ce98b18b8460d71870c881550c9a7206a847deea75cf19887621872",
+          "span_hash": "sha256:1e1a8b758fb599b75c530597b2aa5c6552745c86a680caa392da2bffb6a42f29"
+        },
+        {
           "id": "plugins/deployit/bin/deployit-cli::_kickstart_daemon",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:2e1c555d4c1a7d5822ce6c5ad6fa037b18b7f2503609d5809dce06bbc81f9aff",
@@ -4313,6 +4521,12 @@
           "span_hash": "sha256:de6c8e0f9156fdd8d7b6723c49980a62adff0e1ca826f5daad58e7756f4d42bc"
         },
         {
+          "id": "plugins/deployit/bin/deployit-cli::_refuse_if_worktree",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:9b8fc184bb1f7c6f474494f6fdaf19db0fbd51acb6a414d42475de78b929e558",
+          "span_hash": "sha256:53f51e194867d1738dbab2a81f70cf75a03a529ba322d989ccade88ce71bcbbf"
+        },
+        {
           "id": "plugins/deployit/bin/deployit-cli::_release_notes_path",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:8eb3bc5b05fd40e4e2c8ec940b1690f9ea35a7d8a72cc4d49b91bbaf07b387e0",
@@ -4323,6 +4537,12 @@
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:dfefdffa145c8c59b9f32b714760a6e9d7c9a2a070b329ce571ce0f3cf6956ce",
           "span_hash": "sha256:79e381e806aac4da64390085213148bf76db51b5699e0ad0076096b5a6c533e8"
+        },
+        {
+          "id": "plugins/deployit/bin/deployit-cli::_rev_parse",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:f6251162eea662e55f00152dbcc8f29b34b31a23c49447d91405119374a04436",
+          "span_hash": "sha256:4b77ed0b2b53adf989cd812c8bed077886589c704f4105ddb6526821bd2adf4e"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::_semver_active_version",
@@ -4430,13 +4650,13 @@
           "id": "plugins/deployit/bin/deployit-cli::cmd_bump",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:2c6a81ef1072c2180907350cf9d3a5b7d8968e1d28c13ac1737eeccff7bcade1",
-          "span_hash": "sha256:be520fc0e5420f9a293b534084a34f8191d839db105221567be04fb30efdbaf5"
+          "span_hash": "sha256:63459104f7bb0ac00292f7319f90392fb2bc4c119a80ce5ea6378592312e352c"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::cmd_deploy",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:35f5c146e87c7c7cbe46de3ad7f843e409cbf0bcb32202b50f8e6952461c20b7",
-          "span_hash": "sha256:4613a0ef6a432dde16d8956299ba2462b5c935d808dc06c47893bfbae63f0e8e"
+          "span_hash": "sha256:4e94876e5db46b1c444b7958f681f2b9c2bb4429577026165dc00fc291dd72af"
         },
         {
           "id": "plugins/deployit/bin/deployit-cli::cmd_gc",
@@ -4730,7 +4950,15 @@
           "id": "plugins/issue/bin/issue.sh::flush",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:505b06437c7abf0b58214bc738771c694a5e266f01786ae5dbf59e8c4eddceb2",
-          "span_hash": "sha256:fc3c62f77f3c14e3660930c39a02576c8d48eacb195b48f8e4208dfab713a0e2"
+          "span_hash": "sha256:28d72b6e51232f46a35eb72ea3b7282719ec6a91b154a2ca134c0983020853e8"
+        }
+      ],
+      "plugins/rca/bin/rca-hotspots.sh": [
+        {
+          "id": "plugins/rca/bin/rca-hotspots.sh::process",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:775c68b357114c2574a974ae497f05a6f0f213c420bfd423ba28e30abccaef10",
+          "span_hash": "sha256:6df3b79fb8279736fec08a517a3d764d9c432803400b33a5ddc67d71251797ec"
         }
       ],
       "plugins/semver/bin/semver-cli": [
@@ -4847,6 +5075,12 @@
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:03e1ef5f16fd60ac3d17ed5227737b7a02d97783da086517a60486f1b8c0c058",
           "span_hash": "sha256:ebced4152b7c544d35b342a8c042a4dcbb3b7a52a5958fb3277eba45594b4a31"
+        },
+        {
+          "id": "plugins/semver/bin/semver-cli::_is_readonly_command",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:4e28b6e0cbfd34734dd53ae2c0300a0c424215554dc3fec454fef03e1fb7f704",
+          "span_hash": "sha256:fca6ac5091e480b8d3019eed0ce2af309d6b49b56b052a5aa67d5cd917021aac"
         },
         {
           "id": "plugins/semver/bin/semver-cli::_q_dirty_tree",
@@ -5077,6 +5311,12 @@
           "span_hash": "sha256:658b05193a005297f4b893660cdc9f6184f362b7ed14df8e2e704fcc15c1cc97"
         },
         {
+          "id": "plugins/semver/bin/semver-cli::ensure_not_worktree",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:9c7c96294f8b77d4f5407099a6e35152b8765876314d414f2d55b7cb7f827ffd",
+          "span_hash": "sha256:38cb621d53ed32fa70f22dd49eace5be6c9ff2a42196821657c46c4f8aa92746"
+        },
+        {
           "id": "plugins/semver/bin/semver-cli::format_version",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:b58ced27245c437e54269718b0a40cf62ae3fc042e39148196d7ea389c0e196a",
@@ -5131,6 +5371,12 @@
           "span_hash": "sha256:1cceab49d2b6635c8a528de0a9357438e8cb62825e1fe156c106bda1b9d3ccb5"
         },
         {
+          "id": "plugins/semver/bin/semver-cli::is_linked_worktree",
+          "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "signature_hash": "sha256:3bdd4bd1b26606b16a70484d740feda92401e43dcc4b968d224971824c44482b",
+          "span_hash": "sha256:efee31bf12a2a5a144068874aff8685b0dc8e988d8865d34c13343229aa563dc"
+        },
+        {
           "id": "plugins/semver/bin/semver-cli::last_version_commit",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:355e9f7517d221075118d7481ff34330502dec94386a0b7b20623bb25b6496cb",
@@ -5140,7 +5386,7 @@
           "id": "plugins/semver/bin/semver-cli::main",
           "incident_edge_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "signature_hash": "sha256:2c4c5b0ebed3de9b574a3757903571ebf0dcaec6764f9f8d245ce0740a619321",
-          "span_hash": "sha256:55a69b0b18401cc4d1a5833ff6b1f36a47b04cb7cfce48b6bf5089a3f5fb9d13"
+          "span_hash": "sha256:d55fccdd87c6ed5d6dcb7c3652e5e1d7716c2f05060272aef695a6ce63c94b49"
         },
         {
           "id": "plugins/semver/bin/semver-cli::output",

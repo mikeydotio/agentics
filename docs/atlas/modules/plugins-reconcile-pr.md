@@ -4,7 +4,7 @@ summary: "State machine that rebases a PR onto its base in an isolated worktree 
 read_when: "Touching reconcile-pr's rebase machine, push guard, or conflict flow"
 sources:
   - path: plugins/reconcile-pr/.claude-plugin/plugin.json
-    blob: 2cb64ff6430a4bcfba162a7930b2dbdeea94b9da
+    blob: 2a5d5df8894b57bf2730e5bc57d781c16f6af2bc
   - path: plugins/reconcile-pr/README.md
     blob: f80668fbd527ffd096f174662ba67c34648f6ab5
   - path: plugins/reconcile-pr/bin/reconcile-pr.sh
@@ -34,7 +34,7 @@ sources:
   - path: plugins/reconcile-pr/tests/test-test-gate.sh
     blob: 4b3ddc876966351dc096132b684ecaa6d44cd6de
 generator: cartographer/4
-baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/reconcile-pr

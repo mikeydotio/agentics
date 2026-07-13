@@ -42,20 +42,6 @@
         "verifier": "map-verifier"
       }
     },
-    "module.gotchas/1bc50c3d26235cbf79d3eb57": {
-      "kind": "module.gotchas",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "",
-      "verify": {
-        "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "verdict": "pass",
-        "verifier": "map-verifier"
-      }
-    },
     "module.gotchas/1f4e61cbfc81ebd47d8407e2": {
       "kind": "module.gotchas",
       "provenance": {
@@ -80,6 +66,34 @@
       "value": "validate-agents.sh deliberately avoids two GNU/bash-4+ conveniences for macOS portability: it dedupes agent names with a newline-separated string instead of an associative array because macOS ships bash 3.2 (plugins/agents/bin/validate-agents.sh:28), and it strips the frontmatter's closing `---` with `sed '$d'` instead of `head -n -1`, which is GNU-only (plugins/agents/bin/validate-agents.sh:48).",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "module.gotchas/20aacc115e51917e5530a2ee": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "- The reproduce step is a FIRM GATE: no hypothesis work (bisect, falsification experiments, the fix's red\u2192green proof) proceeds without an automated failing repro test, overridable only by the user directly or via a /council-vote seating a qa-engineer \u2014 not by rca itself (plugins/rca/README.md:13-14,33-34).\n- rca never pushes, opens a PR, bumps versions, or deploys: the fix and any refactor land as separate commits on a feature branch, but publishing the result stays the caller's responsibility (plugins/rca/README.md:38-39).",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "module.gotchas/2ae42d523d639b1c267bd70d": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "FileLock's docstring says flock is Linux-only and mkdir is the macOS fallback, but _check_flock (plugins/semver/bin/semver-cli:453-459) only tests hasattr(fcntl, \"flock\") \u2014 true on macOS too \u2014 so the mkdir path is effectively unreachable on any POSIX system. Separately, ensure_not_worktree (plugins/semver/bin/semver-cli:227-240) now refuses any mutating subcommand (e.g. `bump execute`, `set execute`, `init execute`) when cwd is a linked worktree \u2014 a script or hook invoking semver-cli directly from a per-issue worktree must pass SEMVER_ALLOW_WORKTREE=1 or the call exits with error `in_worktree` instead of running.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -182,20 +196,6 @@
         "verifier": "map-verifier"
       }
     },
-    "module.gotchas/4e6dbdd043703d246aed8230": {
-      "kind": "module.gotchas",
-      "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "cmd_judgment_ingest reads stdin unconditionally (`raw = sys.stdin.read()`, plugins/atlas/bin/atlas-cli:2480) with no isatty() guard, unlike its sibling ingest commands cmd_verify_cache_write (plugins/atlas/bin/atlas-cli:1577) and cmd_judgment_verify_set (plugins/atlas/bin/atlas-cli:2670), both of which skip the read on a TTY \u2014 invoking `judgment ingest` interactively without piping input blocks waiting on stdin instead of treating it as an empty payload. A symbol.contract judgment cell is keyed on signature_hash + visibility, NOT the symbol body (plugins/atlas/bin/atlas-cli:2230), so editing a function's implementation without touching its signature leaves the cached contract prose unrefreshed by design. cmd_covers realpath()'s both the queried path and the repo root before computing containment specifically because macOS $TMPDIR is a symlink that would otherwise defeat the os.pardir containment check (plugins/atlas/bin/atlas-cli:1526-1529).",
-      "verify": {
-        "at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "verdict": "pass",
-        "verifier": "map-verifier"
-      }
-    },
     "module.gotchas/575db2aadbe348c2a2f0dfec": {
       "kind": "module.gotchas",
       "provenance": {
@@ -220,6 +220,20 @@
       "value": "The refresh button always POSTs /deployit/_internal/refresh before reloading even on pages where it's a no-op: \"the product-page GET does not pull on its own, and the listing GET pulls anyway (so the POST is a harmless belt-and-suspenders there)\" (plugins/deployit/assets/app.js:135-136). After a successful delete, the reload logic special-cases navigating home instead of reloading in place when a product page would otherwise show zero rows, to dodge a 404: \"A product page with no rows left would 404 on reload \u2014 go home.\" (plugins/deployit/assets/app.js:101). The keyboard-focus fallback that slides the swipe-delete track open relies on translateX(-50%) being exactly correct only because the track always holds exactly two equal-width pills: \"-50% is exactly one slot-width \u2014 no magic number\" (plugins/deployit/assets/app.css:33-35).",
       "verify": {
         "at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "module.gotchas/6001223395d9a19ea630551c": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "- Linked worktrees do NOT share untracked files, so an untracked repro test (and any fixture it needs) must be explicitly `--copy`'d into the worktree or bisect silently loses it (plugins/rca/references/worktree-protocol.md:28-30).\n- A repro test that passes at the fix step's RED gate means the tree drifted since diagnosis, not that the bug is already fixed \u2014 stop and re-orient rather than trust it (plugins/rca/references/fix-protocol.md:13-15).\n- \"N consecutive passes\" after a fix is a statistical claim, not proof: for a bug with true failure rate p, the chance N passes are coincidence is (1-p)^N (plugins/rca/references/repro-gate.md:49-50).\n- If git bisect's declared \"good\" ref already fails the test (`good_is_bad`), the known-good claim itself is wrong \u2014 go back to the KT grid's WHEN row instead of widening the bisect range blindly (plugins/rca/references/git-forensics.md:31-32).",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -364,16 +378,16 @@
         "verifier": "map-verifier"
       }
     },
-    "module.gotchas/8ce524b5a8827179844087f6": {
+    "module.gotchas/7fa1d23e61c0b69048fe4a3e": {
       "kind": "module.gotchas",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "FileLock's docstring says flock is Linux-only and mkdir is the macOS fallback, but _check_flock only tests hasattr(fcntl, \"flock\") (true on macOS too), so the mkdir path is effectively unreachable on any POSIX system (plugins/semver/bin/semver-cli:392,401-407).",
+      "value": "- evidence-collector-context.md is the only override serving two distinct rca steps (diagnose sweep and fix sibling-sweep) from a single file \u2014 the caller's prompt names which `## Section:` is active, not the file itself (plugins/rca/agent-overrides/evidence-collector-context.md:3).\n- experimenter-context.md requires the agent to refuse outright, rather than fall back to the main tree, when its prompt lacks a worktree path, since the worktree is the only place it may modify files (plugins/rca/agent-overrides/experimenter-context.md:15).",
       "verify": {
-        "at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -406,16 +420,16 @@
         "verifier": "map-verifier"
       }
     },
-    "module.gotchas/92f190ed1bdba3dbba7668c0": {
+    "module.gotchas/98bf465f49a5d0d60a69eb78": {
       "kind": "module.gotchas",
       "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "- test-gitignore.sh's unwritable-.gitignore case (add-failed path) is skipped entirely when running as root, since root bypasses Unix file-permission bits and could never trigger it (plugins/issue/tests/test-gitignore.sh:64-65).\n- dispatch_ready (test-readiness.sh) must route extra env overrides through `env \"$@\"` rather than a bare shell-assignment prefix, because a variable that expands to `name=value` is not recognized by bash as an assignment prefix (plugins/issue/tests/test-readiness.sh:20-22,33).\n- test-dispatch-dryrun.sh's empty-label case depends on `ISSUE_LABEL=\"\"` using the SUT's `-` (not `:-`) expansion, so an explicitly empty value disables labeling while an unset var still defaults \u2014 called out inline as deliberate (plugins/issue/tests/test-dispatch-dryrun.sh:93-94).\n- fakes/tmux's churn capture mode is re-exec'd per call with no in-process state, so it persists a counter file under $FAKE_TMUX_STATE (falling back to $RANDOM if unset) purely to guarantee successive captures differ (plugins/issue/tests/fakes/tmux:37-39).",
+      "value": "The first Enter tmux receives after `new-window` always submits (clears the input, sets $STATE/launched) regardless of FAKE_TMUX_ENTER_ABSORB \u2014 it's treated as the launch line, not a prompt, so absorb counts only apply to Enters that arrive afterward (plugins/issue/tests/fakes/tmux:28-31,106-110). The gh fake's default branch for an unrecognized subcommand prints a warning to stderr but still exits 0 (plugins/issue/tests/fakes/gh:82-83) \u2014 an unimplemented gh call silently 'succeeds' unless a test explicitly inspects stderr or FAKE_GH_LOG. capture-pane's default output (FAKE_TMUX_CAPTURE unset) is deliberately pinned byte-for-byte to the legacy single-line '  ? for shortcuts' fixture so every pre-#67 test keeps passing unchanged (plugins/issue/tests/fakes/tmux:13-15,159-160).",
       "verify": {
-        "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -458,6 +472,20 @@
       "value": "- _read_archive_build_number's macOS layout check was a real latent bug: every macOS deploy failed at the build-number read because only the iOS Info.plist path was checked, caught by the first real macOS deploy (plugins/deployit/tests/test-cli-archive-build-number.sh:4-6).\n- _read_config's TOML parsing has two live code paths \u2014 tomllib on Python 3.11+, a regex fallback below it \u2014 and this test runs whichever the ambient python3 provides, so the dev/CI python version silently picks the path under test (plugins/deployit/tests/test-cli-config-sparkle.sh:2-4).\n- Auto-prune's keep-cap is scoped by (bundle_id, platform, origin_base_url) together, so a same-app build on a different platform or a different origin survives pruning past the cap (plugins/deployit/tests/test-cli-deploy-autoprune.sh:2-5,120-123).\n- test-cli-deploy-release-wiring.sh asserts call ORDER by grepping deployit-cli's own source text (not runtime behavior) to guarantee _publish_github_release always runs after _append_to_index and _refresh_local_backend, so a failed deploy can never orphan a public GitHub release (plugins/deployit/tests/test-cli-deploy-release-wiring.sh:85-88).\n- An auth-classified push failure preserves the commit on a LOCAL branch named deploy/<id>-local and skips the PR fallback entirely \u2014 a different recovery path than ruleset/protected failures, which push the branch and open a PR (plugins/deployit/tests/test-cli-publish-preserve-on-failure.sh:125-128).\n- test-cli-rm.sh polls the bare origin's log for up to ~1s instead of reading once, because receive-pack's post-receive settle (quarantine migration + a detached maintenance run) can make a fresh reader briefly miss a just-pushed tip (plugins/deployit/tests/test-cli-rm.sh:84-93).",
       "verify": {
         "at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "module.gotchas/ada5444e771f17f39cf1675c": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "rca-repro.sh's run is intentionally a harness, not the test itself: a nonzero exit from --cmd is normal ok:true data (failure_rate up to 1.0), not a script error \u2014 only cmd_not_found (exit 127 on the first run) and timeout are real failures (plugins/rca/bin/rca-repro.sh:8-9,69-74). rca-bisect.sh's per-step wrapper maps build/setup failure and cmd exit 126/127 to skip(125), not bad(1) \u2014 only an in-range nonzero exit counts as a genuine regression (plugins/rca/bin/rca-bisect.sh:55-64). rca-status.sh's option_for has a catch-all default arm specifically to avoid an unset-variable crash under `set -u` that shipped in v1 (plugins/rca/bin/rca-status.sh:62-75). rca-scaffold.sh's init mutates the TARGET repo's top-level .gitignore as a side effect, idempotently appending .rca/ and .claude/worktrees/ if absent (plugins/rca/bin/rca-scaffold.sh:66-85). rca-worktree.sh's create deliberately leaves a failed worktree in place on setup-cmd failure for inspection, unlike rca-bisect.sh which always resets via an EXIT trap (plugins/rca/bin/rca-worktree.sh:87-99).",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -630,6 +658,20 @@
         "verifier": "map-verifier"
       }
     },
+    "module.gotchas/c5c6915abbb4555f0d8465d4": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "- scope_digest deliberately excludes docs/atlas/** and .atlas/** from a scope's content address (plugins/atlas/bin/atlas-cli:1964-1976) \u2014 a raw tree OID previously let the map's own committed output self-invalidate the ARCHITECTURE overview (issue #79); it now hashes only do_scan's mappable-file set.\n- incident_edge_digest hashes only *resolved* incoming call edges, dropping ambiguous ones on purpose (plugins/atlas/bin/atlas-cli:1932-1945) \u2014 common names like `run`/`get` defined in many files would otherwise thrash a symbol's load-bearing digest on every unrelated same-named definition.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "module.gotchas/cec799535967df722015affe": {
       "kind": "module.gotchas",
       "provenance": {
@@ -644,6 +686,20 @@
         "verifier": "map-verifier"
       }
     },
+    "module.gotchas/e50055916aa4b19defbe5abf": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Extra `KEY=VAL` env overrides passed to dispatch_ready/dispatch_autosubmit must go through `env \"$@\"` rather than a bare shell-assignment prefix, because a KEY=VAL string held in a positional parameter isn't recognized as an assignment prefix by bash (plugins/issue/tests/test-readiness.sh:20-22,33; mirrored plugins/issue/tests/test-autosubmit.sh:40). test-autosubmit.sh's absorb=1 and absorb=99 cases were checked in deliberately RED against the pre-fix script \u2014 asserting exactly one paste on retry, which the old re-paste-on-retry code fails (plugins/issue/tests/test-autosubmit.sh:71-72,85-86) \u2014 and only go green once issue #82's fix lands. test-gitignore.sh's unwritable-.gitignore case is skipped when running as root, since root bypasses Unix permission bits and can't reproduce the add-failed path (plugins/issue/tests/test-gitignore.sh:65-66). test-dispatch-dryrun.sh pins that ISSUE_LABEL=\"\" must use bash's `-` parameter-expansion form (not `:-`) so an explicit empty value disables labeling while an unset variable still defaults (plugins/issue/tests/test-dispatch-dryrun.sh:101-102).",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "module.gotchas/eb1a346232a7cdecf39ed71c": {
       "kind": "module.gotchas",
       "provenance": {
@@ -654,6 +710,20 @@
       "value": "The evaluator's post-execution integrity check is a known-incomplete heuristic (git diff --name-only): it cannot see an edit to a file the generator already touched, or a brand-new untracked file the evaluator itself creates \u2014 only bin/forge-integrity.sh's full content-hash check closes that gap, so the tool restriction (not the diff heuristic) is the real boundary (plugins/forge/agent-overrides/evaluator-context.md:12-16). Integrity-violation handling is asymmetric: if the generator's HEAD moves (i.e. it committed), the story is blocked for user review rather than auto-recovered, explicitly because 'a commit can't be safely un-made without risking other work' \u2014 a stricter response than other violations get (plugins/forge/agent-overrides/generator-context.md:3).",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "module.gotchas/ebf16d6ebd83c7e975858ca4": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Fixture trees are deliberately rooted at /private/tmp, never $TMPDIR \u2014 macOS Spotlight indexes $TMPDIR and stalls file-intensive git suites (plugins/rca/tests/lib.sh:6-7,39). test-repro.sh pins that a FAILING test command is still a SUCCESSFUL harness run (ok:true) \u2014 only harness-level errors (bad_args, timeout, cmd_not_found) set ok:false (plugins/rca/tests/test-repro.sh:2-4,8-9). test-bisect.sh pins that `git bisect reset` always runs, even proven by expecting a follow-up `git bisect log` to fail (plugins/rca/tests/test-bisect.sh:2-4,18-20). test-status.sh pins two prior defects so they can't regress: a corrupt/missing meta.json must yield state \"corrupt\" without a `set -u` crash, and every ladder rung must still produce a non-empty option label/description (plugins/rca/tests/test-status.sh:87,100-102). fakes/gh and fakes/story exist in this module but are not wired into any test-*.sh here \u2014 no FAKE_GH_LOG/FAKE_STORY_LOG or fakes-path reference exists outside the fakes' own definitions (plugins/rca/tests/fakes/gh:1-8, plugins/rca/tests/fakes/story:1-8), so they read as reserved for skill-level coverage this suite doesn't yet exercise.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -700,6 +770,20 @@
         "verifier": "map-verifier"
       }
     },
+    "module.gotchas/ffa14d62b0d92e119dddc59f": {
+      "kind": "module.gotchas",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "- Steps are dispatched by reading the target SKILL.md and following it inline \u2014 never via the Skill tool or a delegated subagent, because a subagent cannot spawn the step's own agents (plugins/rca/skills/rca/SKILL.md:105-107).\n- Worktree-destroy defaults flip between adjacent steps: locate defaults to KEEP because diagnose usually needs the same worktree next (plugins/rca/skills/locate/SKILL.md:71-73), while diagnose defaults to DESTROY unless the user explicitly asked to keep it (plugins/rca/skills/diagnose/SKILL.md:88-90).\n- fix's RED gate treats a passing repro as a hard stop, not success \u2014 a repro that passes at this point means the tree drifted since diagnosis, and the step must never \"fix\" a passing repro (plugins/rca/skills/fix/SKILL.md:19-21).\n- postmortem's issue close-out is deliberately restricted to posting a comment \u2014 closing the latched issue is left to the user, never done by RCA (plugins/rca/skills/postmortem/SKILL.md:29-33).",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "module.purpose/019c095792206a7b63f0704b": {
       "kind": "module.purpose",
       "provenance": {
@@ -724,18 +808,6 @@
         "verdict": "unverified"
       }
     },
-    "module.purpose/0d92a63b4f46ab9e54670b38": {
-      "kind": "module.purpose",
-      "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "atlas-cli is the single dependency-free Python script implementing every deterministic atlas v2 operation except CLI routing: scanning/partitioning the repo, extracting the Structure Index (do_extract, plugins/atlas/bin/atlas-cli:2050), maintaining the content-addressed Judgment Cache (judgment_key, plugins/atlas/bin/atlas-cli:2258; cmd_judgment_ingest, plugins/atlas/bin/atlas-cli:2472), and projecting judgment cells plus structure into the committed docs/atlas/ tree (render_module_doc, plugins/atlas/bin/atlas-cli:2935). The idea holding it together is content-addressing: a judgment key digests a cell's identity plus exactly the structural input that should invalidate it, so an unchanged symbol or module reuses its cached prose verbatim and the LLM is invoked only for the delta (plugins/atlas/bin/atlas-cli:2223-2236). Without this file atlas has no extraction, no judgment plumbing, and no renderer \u2014 cartographer agents would have no cells to fill and no docs would ever be produced.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.purpose/14405c768d1a5c2a63a0f29f": {
       "kind": "module.purpose",
       "provenance": {
@@ -744,6 +816,30 @@
         "model": "claude-sonnet-5"
       },
       "value": "This is the second half of forge/bin's script library: deterministic bash+jq guardrails that keep the execute loop's steady state (generate -> evaluate -> commit, repeated per story) safe to run unattended across many stories, sessions, and concurrent tmux panes. The unifying idea is replacing prose arithmetic and human-eyeballed judgment calls that references/execution-loop.md used to describe by hand \u2014 heartbeat staleness math, tamper detection, retry/runaway counters, diff truncation, handoff/mapping-skeleton assembly \u2014 with one deterministic script per concern, each returning a JSON verdict the model branches on rather than computes. If this module vanished the loop would lose its only defenses against concurrent-session races (plugins/forge/bin/forge-lock.sh), undetected generator/evaluator tampering (plugins/forge/bin/forge-integrity.sh), and counters that reset every context clear instead of persisting (plugins/forge/bin/forge-loop-state.sh) \u2014 exactly the failure modes each script's own header cites as the F-numbered bug it was written to close.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/1cb1bf6d30585c5558388845": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "atlas-cli is the deterministic backbone of atlas v2: one Python script that scans/partitions the repo, extracts structure (regex or an optional tree-sitter helper) into a JSON index, and drives a content-addressed Judgment Cache (judgments.json) whose keys hash a cell's identity plus only the structural input that should trigger re-judgment (plugins/atlas/bin/atlas-cli:2261) \u2014 so unchanged code reuses cached LLM prose and body-only edits cost nothing. Its projector (render_module_doc/render_overview_doc, plugins/atlas/bin/atlas-cli:2973) assembles every committed doc purely from structure plus cached cells, so a no-change rebuild calls no model. If it vanished, atlas would lose its extract/cache/project pipeline and fall back to full LLM re-authoring of every module doc on every update.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/25f716255fb46c3d3b60013a": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Encodes the evidence-and-verdict methodology RCA's orchestrator steps cite instead of duplicating: Kepner-Tregoe IS/IS-NOT intake (plugins/rca/references/kt-intake.md:9-16), deterministic git forensics handed to an investigator to interpret (plugins/rca/references/git-forensics.md:3-5), Zeller's hypothesis falsification requiring competing hypotheses (plugins/rca/references/hypothesis-falsification.md:16-17), and IBM ODC classification driving the surgical-vs-redesign fix verdict (plugins/rca/references/odc-classification.md:33-51). A shared defect/infection/failure vocabulary (plugins/rca/references/hypothesis-falsification.md:6-8) threads every doc, and the fix protocol enforces each gate between agent turns rather than letting the implementer self-gate (plugins/rca/references/fix-protocol.md:3-4).",
       "verify": {
         "verdict": "unverified"
       }
@@ -804,6 +900,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "The detailed protocol layer forge's step skills (a separate module) dispatch to for anything beyond \"call a script and branch on its JSON\" \u2014 the execution loop's full state machine, session locking, handoff/recovery formats, the storyhook CLI contract, severity/report conventions, and the interrogation questioning method. It keeps skill files thin: locking semantics, the execute loop's state-transition table, and storyhook's quirks (nested JSON envelopes, non-idempotent state/type registration, the permanently-unreachable project story) live here exactly once instead of being re-derived per skill. If these docs vanished, every step skill would have to reconstruct forge's crash-recovery, handoff, and storyhook-integration behavior from scratch, and the copies would inevitably drift out of sync with the actual bin/ scripts they describe.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/461127fc702bde585b10b1c5": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "This is the offline test harness for the issue plugin: fakes for `gh` and `tmux` (plugins/issue/tests/fakes/gh, plugins/issue/tests/fakes/tmux) let test-*.sh drive issue.sh's list/view/create/close/dispatch/complete flows deterministically, with no live GitHub or tmux server needed. lib.sh centralizes repo fixtures (mk_repo, mk_complete_repo) and assertion primitives so individual tests stay declarative, and run-tests.sh discovers and executes every test-*.sh, reporting pass/fail. The tmux fake is now stateful (issue #82): it models the Claude Code input box (paste appends, Enter submits, with an absorb-count and drop-paste knob) so a test can distinguish 'the prompt was received' from 'the prompt was submitted' \u2014 the exact race the #82 autosubmit fix guards against.",
       "verify": {
         "verdict": "unverified"
       }
@@ -916,6 +1024,18 @@
         "verdict": "unverified"
       }
     },
+    "module.purpose/8a7f433d5ca94126fda672a5": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "This module is the black-box regression suite for the issue-cli tool (a separate module under plugins/issue/bin), split one file per verb or failure mode rather than one monolithic script \u2014 each sources lib.sh for assert_eq/assert_contains/jqf helpers and mk_repo/mk_complete_repo git fixtures, then drives `bash \"$SCRIPT\" <verb> ...` and inspects the emitted JSON plus on-disk repo state. Several files exist specifically to pin down race conditions in issue-cli's terminal automation that a bare exit-code check would miss: test-readiness.sh guards against Claude Code footer-copy drift (issue #67) across multiple detection tiers, and test-autosubmit.sh is a paste/Enter-race regression (issue #82) whose absorb=1 and absorb=99 cases were checked in RED before the fix landed. Losing this module removes the only proof that issue-cli's destructive path (complete execute's safe-set branch/worktree deletion) and its precondition/argument-validation guard rails behave correctly without ever touching a real gh or tmux.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.purpose/9549f9effd50320c977b6743": {
       "kind": "module.purpose",
       "provenance": {
@@ -936,18 +1056,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "This chunk is the correctness backstop for deployit's most host-dependent, hardest-to-eyeball code paths \u2014 macOS DMG/Sparkle staging, Developer-ID/codesign gating, GitHub release publishing, and Xcode project metadata extraction \u2014 each test forcing one specific failure or edge case (a missing sign_update tool, an existing GH tag, an unsigned app, a monorepo vs. single-app project layout) deterministically via env-var seams or a faked `gh` binary rather than depending on real signing keys or network state. verify-live.sh is the odd one out: not a fixture-driven unit test but a smoke check that curls a running deployit instance to confirm a deploy actually shipped the expected markup/asset changes, since a clean exit elsewhere never proves the live server itself was updated. Collectively they guard the exact fragile edges \u2014 graceful signing degradation, GH's tag/target_commitish rejection, and version-resolution precedence \u2014 that would otherwise only surface once shipped to production.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.purpose/a298a29028f63e37735324d8": {
-      "kind": "module.purpose",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "This plugin is a root-cause-analysis pipeline: the orchestrator skill (plugins/rca/skills/rca/SKILL.md) drives five sequential phases \u2014 symptom intake, evidence collection, hypothesis formation, root cause verification, and remediation design \u2014 persisting each phase's output to `.rca/<slug>/` artifacts so an investigation can be resumed via plugins/rca/bin/rca-status.sh. It exists to counteract the pull toward quick, symptom-masking fixes: plugins/rca/agent-overrides/investigator-rca.md fuses the shared investigator agent's git-archaeology and architecture-analysis lenses for Phase 2, and plugins/rca/agent-overrides/architect-rca.md constrains the shared software-architect agent to design a structural fix (never write code) in Phase 5. If this module vanished there would be no systematic mechanism forcing multiple competing hypotheses, heuristic verification, and anti-pattern rejection before a fix ships \u2014 bugs would get patched where they're noticed rather than where they originate.",
       "verify": {
         "verdict": "unverified"
       }
@@ -1084,14 +1192,14 @@
         "verdict": "unverified"
       }
     },
-    "module.purpose/c360f4a1da42e879fe152cef": {
+    "module.purpose/c205b25bbb27919b99173cfa": {
       "kind": "module.purpose",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "semver-cli is the single deterministic, JSON-in/out Python executable behind the /semver skill: every subcommand (init, set, bump, tracking start/stop, auto-bump, repair, validate, recommend) is a pure function of cwd + .semver/config.yaml + git state, with all mutating writes serialized through a per-project FileLock (plugins/semver/bin/semver-cli:391-457). Its unifying idea is a gather/run/execute split \u2014 read-only assessment functions (cmd_*_run, _init_snapshot/_init_assess) surface AskUserQuestion-shaped blockers to the calling skill, while *_execute functions perform the actual git/file writes \u2014 so the skill layer never reimplements version-bump logic. If this file vanished, the /semver plugin would have no version tracking, bumping, tagging, changelog generation, or CLAUDE.md injection at all; nothing else in the repo re-implements it.",
+      "value": "The rca plugin drives a **known**, already-observed defect through a reproduction-gated scientific-debugging pipeline \u2014 intake, reproduce, locate, diagnose, report, fix, postmortem \u2014 refusing all hypothesis work (bisect, falsification experiments, the fix's red\u2192green proof) until an automated failing repro test exists as the oracle (plugins/rca/README.md:3-6,12-24,33-34). It is explicitly not a bug finder: its identity (plugins/rca/.claude-plugin/plugin.json:4) and README describe a fixer's pipeline that isolates all instrumentation and defect-toggling in a disposable worktree, produces a calibrated SURGICAL-vs-REDESIGN verdict, and ends in a committed blameless postmortem rather than a silent code change (plugins/rca/README.md:23-24,35-37). Without this module's manifest and README, /rca would have neither a registered plugin identity nor the documented guarantees \u2014 repro gate, worktree isolation, bisectable separate commits \u2014 that distinguish it from an ad hoc debugging session.",
       "verify": {
         "verdict": "unverified"
       }
@@ -1132,6 +1240,18 @@
         "verdict": "unverified"
       }
     },
+    "module.purpose/c597779fed608bfb5309896a": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "This is rca's bash-native test suite (no bats, the reconcile-pr harness pattern per plugins/rca/tests/lib.sh:2), giving each plugin/rca/bin/rca-*.sh script its own standalone test-*.sh built on shared fixture-repo and JSON-assertion helpers in lib.sh, discovered and run by run-tests.sh as part of the pre-push make test gate. Fixtures build throwaway git repos with planted regressions, churn patterns, or flaky/timeout-prone commands so each rca-*.sh's JSON contract (ok/error shapes) can be asserted with jq. test-skill-contract.sh additionally guards that every rca-<name>.sh flag referenced in the plugin's SKILL.md/references docs is documented in that script's own usage-comment block, catching docs/CLI drift the same way forge's WS8 guard does \u2014 without this suite, regressions in rca's CLI contracts or its doc/flag sync would ship silently.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.purpose/c72caa0c8e1ef8fc62b243e2": {
       "kind": "module.purpose",
       "provenance": {
@@ -1156,6 +1276,18 @@
         "verdict": "unverified"
       }
     },
+    "module.purpose/ca93354395fb385d7f83a7f9": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "The RCA plugin's orchestrator (plugins/rca/skills/rca/SKILL.md) is a thin state-machine router that reads investigation state from `.rca/<slug>/` artifacts and dispatches inline to one of seven step skills \u2014 it holds no reasoning of its own, only the routing table and the hard rules (firm repro gate, no production-code edits before APPROVAL.md, one AskUserQuestion per turn) that bind every step. What holds the seven steps together is a single reproduction-gated, hypothesis-falsification discipline: reproduce fails the investigation shut until an automated failing test exists, locate/diagnose form and falsify \u22652 competing root-cause hypotheses in a disposable worktree, and report/fix/postmortem gate escalating write access (an issue comment, then production code, then a committed doc) behind explicit artifact checkpoints. If this module vanished, RCA would have no resumable pipeline \u2014 each step's SKILL.md is the only place its gate checks, agent-spawn briefs, and artifact contracts are defined.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.purpose/cd283da0250cbb5944a30c08": {
       "kind": "module.purpose",
       "provenance": {
@@ -1164,18 +1296,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "greenlight is a PreToolUse hook that gates every Bash tool call through a three-tier decision pipeline (plugins/greenlight/hooks/greenlight.sh:1-20): deterministic allow for 150+ known-safe commands (plugins/greenlight/hooks/greenlight.sh:253-346), deterministic pass-with-warning for known-destructive ones (plugins/greenlight/hooks/greenlight.sh:353-406), and an opt-in Claude Haiku fallback for genuinely uncertain commands (plugins/greenlight/hooks/greenlight.sh:1151-1258). It exists so an autonomous inner loop (e.g. forge's execute step, called out by name in plugins/greenlight/README.md:5 and the story/git fast-path comments at plugins/greenlight/hooks/greenlight.sh:332-343) can run git/test/build commands without a human present for every call, while still surfacing genuine destructiveness (rm, sudo, chmod) for confirmation. Config is a flat YAML file bootstrapped from references/default-config.yaml on first run and re-read on every invocation, so behavior changes take effect without restarting Claude Code (plugins/greenlight/hooks/greenlight.sh:29-38, 70-87).",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.purpose/cd7132e3c537d836f754ba66": {
-      "kind": "module.purpose",
-      "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "This suite is the executable specification for the issue plugin's CLI surface (dispatch, complete plan/execute, create, list, view, doctor), replacing a live GitHub/tmux session with two knob-driven fakes (plugins/issue/tests/fakes/gh:1-31, plugins/issue/tests/fakes/tmux:1-39) so the whole flow runs offline and deterministically. Its heaviest investment is mk_complete_repo, a single realistic git fixture (merged/unmerged branches, a pushed merged PR-head branch, a clean worktree, a locked worktree) that both complete-plan and complete-execute tests reuse to prove destructive cleanup only ever touches the safe set (plugins/issue/tests/lib.sh:38-75). Without this module the plugin's guard-rail logic \u2014 branch/worktree deletion safety, the multi-tier readiness gate's drift-proofing, gitignore idempotency \u2014 would have no regression protection at all.",
       "verify": {
         "verdict": "unverified"
       }
@@ -1200,6 +1320,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "This is the agents plugin's own housekeeping layer, not the agent definitions themselves: the plugin.json manifest that registers the shared library as an installable plugin (plugins/agents/.claude-plugin/plugin.json), the /agents skill that lets a user list, describe, or validate the catalog (plugins/agents/skills/agents/SKILL.md), and validate-agents.sh, the structural linter that enforces the shared agent frontmatter contract (required fields, name/filename match, no duplicate names, read-only/tool consistency) across plugins/agents/agents/. Without it the shared library would have no plugin identity, no user-facing entry point, and no automated guard against frontmatter drift in the agent definitions other plugins depend on.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.purpose/e450abfd784f533506b70b74": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "semver-cli is the single deterministic, JSON-in/out Python executable behind the /semver skill: every subcommand (init, set, bump, tracking start/stop, auto-bump, repair, validate, recommend) is a pure function of cwd + .semver/config.yaml + git state, with all mutating writes serialized through a per-project FileLock (plugins/semver/bin/semver-cli:443-513). Its unifying idea is a gather/run/execute split \u2014 read-only assessment functions (_gather_bump_state, _init_snapshot/_init_assess) surface AskUserQuestion-shaped blockers to the calling skill while *_execute functions perform the actual git/file writes, and every mutating dispatch also passes through ensure_not_worktree (plugins/semver/bin/semver-cli:227), which refuses to run outside the main git working tree unless SEMVER_ALLOW_WORKTREE=1 is set. If this file vanished, the /semver plugin would have no version tracking, bumping, tagging, changelog generation, or CLAUDE.md injection at all; nothing else in the repo re-implements it.",
       "verify": {
         "verdict": "unverified"
       }
@@ -1252,6 +1384,18 @@
         "verdict": "unverified"
       }
     },
+    "module.purpose/f4b4a281f61a9bb3ae0848c4": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "These eight files layer rca-pipeline-specific briefs onto the shared general-purpose agents (plugins/agents/agents/) \u2014 naming which investigation step is active, which artifacts the dispatching skill has placed in the prompt (GRID.md, REPRO.md, DIAGNOSIS.md, REMEDIATION.md, etc.), and what the agent's report must contain \u2014 so one generic investigator/engineer/architect definition can be reused unmodified across rca's diagnose/locate/reproduce/fix/report/postmortem steps. Nearly all are read-only report generators; the rca skill (outside this module) owns every artifact write, and the three agents given write access (experimenter, qa-engineer, software-engineer) are each fenced to a single, narrowly scoped location. Without these overrides the shared agents would carry no RCA vocabulary or scope fence and could drift outside the artifact/worktree discipline the pipeline depends on.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.purpose/f62b8441485b6ca4ef37cc6e": {
       "kind": "module.purpose",
       "provenance": {
@@ -1288,6 +1432,18 @@
         "verdict": "unverified"
       }
     },
+    "module.purpose/fdd85504325f18b4cb4e8788": {
+      "kind": "module.purpose",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "This is the deterministic execution layer behind the rca pipeline: eight self-contained bash+jq scripts that do git archaeology (forensics, hotspots), drive automated bisection and repro-loop runs, detect a project's test stack, and manage the isolated worktree investigations bisect against, all emitting a uniform {ok:true|false,...,display} JSON envelope with snake_case error codes so the orchestrating skill never parses free text. Every script independently guards its own preconditions (jq/git present, inside a git repo, a worktree exists) rather than relying on a shared runtime, which is what lets the pipeline shell out to any one of them standalone or from a scratch worktree. Losing this module would strip /rca of its evidence-gathering and safe-regression-bisection primitives, forcing investigators back to raw git commands with no structured output for the pipeline to act on.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.read_when/00ff8e55b74f247fc4db5f23": {
       "kind": "module.read_when",
       "provenance": {
@@ -1296,6 +1452,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Editing forge's SessionStart/Stop hooks or .forge checkpoint behavior",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/03534921369dea77e885649e": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Changing the issue test fakes or the test runner",
       "verify": {
         "verdict": "unverified"
       }
@@ -1372,14 +1540,14 @@
         "verdict": "unverified"
       }
     },
-    "module.read_when/1bae62a66053170abf8fbcbe": {
+    "module.read_when/25c7260fa9bcaae36d55112e": {
       "kind": "module.read_when",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "Touching semver-cli's bump, set, init, tracking, or config logic",
+      "value": "Changing an rca agent's brief or write scope",
       "verify": {
         "verdict": "unverified"
       }
@@ -1416,6 +1584,30 @@
         "model": "claude-sonnet-5"
       },
       "value": "Touching deployit release, staging, metadata, gc tests, or live-deploy verification",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/3d5c63cd0438ca981ac83133": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Changing the rca plugin manifest or README",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/4179e9b7698e35423f869bcd": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Debugging issue-cli per-verb regression tests",
       "verify": {
         "verdict": "unverified"
       }
@@ -1600,6 +1792,18 @@
         "verdict": "unverified"
       }
     },
+    "module.read_when/8c91d936cb84e21503c01cb2": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Routing an rca pipeline step or editing gate logic",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.read_when/90b412bb1e2c6097865ba69b": {
       "kind": "module.read_when",
       "provenance": {
@@ -1612,18 +1816,6 @@
         "verdict": "unverified"
       }
     },
-    "module.read_when/974bc31a5f370f3e9da283c5": {
-      "kind": "module.read_when",
-      "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Touching issue plugin tests, fake gh/tmux harness, or dispatch/complete/list behavior",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.read_when/9970f149e8ee865ff043a202": {
       "kind": "module.read_when",
       "provenance": {
@@ -1632,6 +1824,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Touching forge's state detection, step-exit, or transition/verdict logging",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/a0132fbde30c937d5e022458": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Touching semver-cli bump, set, init, or tracking",
       "verify": {
         "verdict": "unverified"
       }
@@ -1660,14 +1864,14 @@
         "verdict": "unverified"
       }
     },
-    "module.read_when/a881bcc62413481ba6c9f0c8": {
+    "module.read_when/a91edc347558774df4aac0cb": {
       "kind": "module.read_when",
       "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "Touching the /rca skill, phase artifacts (.rca/<slug>/), references, or agent overrides",
+      "value": "Changing rca's methodology or postmortem format",
       "verify": {
         "verdict": "unverified"
       }
@@ -1728,6 +1932,30 @@
         "model": "claude-sonnet-5"
       },
       "value": "Changing forge's marketplace identity, README pipeline overview, or bats test runner",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/bdb3a8ebac4944856ae5b6ee": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Touching atlas-cli extraction, cache, or projector",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.read_when/c2ec0d619be148a3719bb742": {
+      "kind": "module.read_when",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Touching rca's bin scripts (forensics, bisect, repro)",
       "verify": {
         "verdict": "unverified"
       }
@@ -1804,14 +2032,14 @@
         "verdict": "unverified"
       }
     },
-    "module.read_when/eee4584536ffb1eb66788ef4": {
+    "module.read_when/ea1068615b731aa6190008e2": {
       "kind": "module.read_when",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "Touching atlas-cli subcommands, the extractor, Judgment Cache, or projector",
+      "value": "Debugging rca-*.sh CLI tests or the fixture harness",
       "verify": {
         "verdict": "unverified"
       }
@@ -1960,6 +2188,18 @@
         "verdict": "unverified"
       }
     },
+    "module.summary/22701c92d5ca63e3c8478b25": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Plugin identity for /rca: manifest + README documenting the reproduction-gated root-cause pipeline and its guarantees.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.summary/231705e50ccb990199342e3c": {
       "kind": "module.summary",
       "provenance": {
@@ -1968,18 +2208,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Automatic /clear + re-invocation via tmux: Stop/SessionStart hooks consume confirmed .freshen/ signal files.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.summary/2b501c1586765c0044d263e2": {
-      "kind": "module.summary",
-      "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Implements atlas-cli's subcommands: scan/partition/extract, the Judgment Cache, and doc projection.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2028,6 +2256,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Bash test suite for atlas-cli git/config/extract/covers/diffpack/doc/index/init/hook behaviors.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/3c3956174c5b6d5b3db936bd": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Per-verb regression tests for issue-cli (dispatch, complete, create, view, list) using fake gh/tmux harnesses.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2152,6 +2392,30 @@
         "verdict": "unverified"
       }
     },
+    "module.summary/6eabc650ed543e9af548c10b": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "RCA methodology references: KT intake, git forensics, falsification, ODC verdicts, fix/postmortem protocols.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/6f84992edb9cda34f8747002": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "RCA orchestrator + its seven pipeline step skills: intake, reproduce, locate, diagnose, report, fix, postmortem.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.summary/72ba14f99dbec330057e93ed": {
       "kind": "module.summary",
       "provenance": {
@@ -2164,14 +2428,26 @@
         "verdict": "unverified"
       }
     },
-    "module.summary/778427eb810486bb761fa1be": {
+    "module.summary/8759529a5980c18f90b97bc9": {
       "kind": "module.summary",
       "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "Orchestrates five-phase root cause analysis: symptom, evidence, hypotheses, verification, remediation.",
+      "value": "Deterministic bash+jq CLI scripts backing rca: forensics, bisect, repro, hotspots, stack, scaffold, status, worktree.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/8bda0bc47006982a18453c3f": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Offline test harness for the issue plugin: stateful fake gh/tmux, shared fixtures/asserts, runner.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2208,18 +2484,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Per-concern procedure docs behind /deployit \u2014 setup, platform deploys, proxy, semver bump guard, recovery",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.summary/a83935556c44b1e94adf3fbf": {
-      "kind": "module.summary",
-      "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Bash test suite for the issue plugin (dispatch/complete/list/view) driven by fake gh & tmux binaries.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2280,6 +2544,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Bash+python3 tests exercising deployit-cli/-backend via real git repos, fake gh, and DEPLOYIT_SKIP_* env sandboxing.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/be70645cb1425ab775affe0b": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Plain-bash test suite for rca's bin/ CLIs: git-fixture harness, fake gh/story CLIs, docs\u2194CLI contract guard.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2356,18 +2632,6 @@
         "verdict": "unverified"
       }
     },
-    "module.summary/c7400f3a5c307215096db22a": {
-      "kind": "module.summary",
-      "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Deterministic JSON-in/out CLI implementing semver's init, set, bump, tracking, auto-bump, repair, validate ops.",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.summary/cb7a34a03a6838cca2b5102c": {
       "kind": "module.summary",
       "provenance": {
@@ -2388,6 +2652,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "Bats tests for the tree-sitter helper, v2 update-flow economics, and the verify-cache staleness gate.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/dae5b03357e0cf56ea3bcf1e": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Deterministic JSON-in/out CLI implementing semver's init, set, bump, tracking, auto-bump, repair, validate ops.",
       "verify": {
         "verdict": "unverified"
       }
@@ -2440,6 +2716,30 @@
         "verdict": "unverified"
       }
     },
+    "module.summary/f50fc74e8072ac1fa73cf5f6": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Deterministic Python CLI implementing atlas v2's structure extraction, judgment cache, ledger, and markdown projector.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.summary/f56b1ad9ae9f83ce8c335560": {
+      "kind": "module.summary",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Per-step context briefs the rca skill injects into shared agents (evidence, experiment, fix, report, postmortem).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.summary/f5bbb0516cb42fc1480303e3": {
       "kind": "module.summary",
       "provenance": {
@@ -2488,14 +2788,14 @@
         "verdict": "unverified"
       }
     },
-    "module.type_notes/034a2508f1b97748172cc5fa": {
+    "module.type_notes/0a7c7d11fcbc8ec7869a3712": {
       "kind": "module.type_notes",
       "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "judgments.json is exclusively owned by this file: only write_judgments (plugins/atlas/bin/atlas-cli:2430), called from cmd_judgment_ingest (plugins/atlas/bin/atlas-cli:2472) and cmd_judgment_prune (plugins/atlas/bin/atlas-cli:2572), ever writes it; every other reader (load_judgments, plugins/atlas/bin/atlas-cli:2417) treats it as read-only. The Structure Index at .atlas/structure/index.json is a rebuildable cache, not a source of truth: load_or_build_index (plugins/atlas/bin/atlas-cli:2165) reuses it only while the cached commit and dirty_digest still match the working tree, otherwise do_extract (plugins/atlas/bin/atlas-cli:2050) recomputes it from scratch. .atlas/verify.json is likewise a CLI-owned cache \u2014 the comment at plugins/atlas/bin/atlas-cli:1553-1561 states the CLI recomputes lint/diff/fingerprint itself and only ingests opaque agent verdicts from stdin, so a mistyped payload can't poison it.",
+      "value": "Each doc owns one lifecycle artifact the orchestrator writes to .rca/<slug>/: kt-intake.md governs GRID.md (plugins/rca/references/kt-intake.md:55); git-forensics.md governs ORIGIN.md, facts-only with no causation claims (plugins/rca/references/git-forensics.md:74-79); hypothesis-falsification.md governs DIAGNOSIS.md (plugins/rca/references/hypothesis-falsification.md:67-73); repro-gate.md governs REPRO.md or the user/council-only OVERRIDE.md \u2014 the only two ways to satisfy the gate (plugins/rca/references/repro-gate.md:9-13); fix-protocol.md governs FIX.md (plugins/rca/references/fix-protocol.md:43-48); postmortem-format.md governs the committed docs/rca/<slug>.md plus a closing POSTMORTEM.md pointer (plugins/rca/references/postmortem-format.md:3-4,67). worktree-protocol.md carries the hard isolation invariant underlying all of it: production code in the main tree is never modified, even temporarily, before fix approval \u2014 all mutation (instrumentation, defect toggling, git bisect) happens only in the disposable rca/<slug> linked worktree (plugins/rca/references/worktree-protocol.md:3-6,40-47).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2548,6 +2848,18 @@
         "verdict": "unverified"
       }
     },
+    "module.type_notes/280c58104ae390ab0f5800d2": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Six of the eight override files are strictly read-only \u2014 the agent returns a report and the rca orchestrator (the dispatching skill, outside this module) persists it as the named artifact: hypothesis-challenger returns to the skill which writes CHALLENGE.md (plugins/rca/agent-overrides/hypothesis-challenger-context.md:35); investigator likewise for ORIGIN.md (plugins/rca/agent-overrides/investigator-context.md:17); software-architect for REPORT.md/REMEDIATION.md (plugins/rca/agent-overrides/software-architect-context.md:39); evidence-collector for both its sections (plugins/rca/agent-overrides/evidence-collector-context.md:35-36). The three exceptions each get a narrowly fenced write scope instead: experimenter may modify files only inside the disposable worktree `.claude/worktrees/rca/<slug>/worktree` (plugins/rca/agent-overrides/experimenter-context.md:12-15); qa-engineer may create only new test/fixture files, with the dispatching skill reverting any undeclared change found via `git status --porcelain` (plugins/rca/agent-overrides/qa-engineer-context.md:18-21); software-engineer may modify only what REMEDIATION.md scopes, must not commit, and must not touch version/changelog/deploy files (plugins/rca/agent-overrides/software-engineer-context.md:15-17,23-24); technical-writer's write scope is exactly one new file, `docs/rca/<slug>.md` (plugins/rca/agent-overrides/technical-writer-context.md:30-31).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.type_notes/318aad77fbd2f4cbf010921e": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2568,6 +2880,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "- `read_only: true` gates 8 of the 14 agents (investigator, lawyer, map-verifier, performance-engineer, security-researcher, skeptic, software-architect, reviewer) to Read/Grep/Glob(+Bash/WebSearch) only, with no Write/Edit tool granted \u2014 e.g. `plugins/agents/agents/investigator.md:4,8`.\n- `map-repairer` is the only write-capable pipeline-specific agent here, but its Edit-only tool list (no Write) restricts it to a single already-existing doc so untouched lines stay byte-identical \u2014 `plugins/agents/agents/map-repairer.md:4,70`.\n- `reviewer` is the chunk's only `pipeline: forge` agent; `map-repairer` and `map-verifier` are the chunk's only `pipeline: atlas` agents \u2014 `plugins/agents/agents/reviewer.md:6-7`, `plugins/agents/agents/map-repairer.md:6-7`, `plugins/agents/agents/map-verifier.md:6-7`.\n- Only these 3 pipeline-specific agents declare a prose `Lineage` line naming which general-tier agents they draw methodology from; the 11 general-tier agents in this chunk don't \u2014 `plugins/agents/agents/map-repairer.md:16`, `plugins/agents/agents/map-verifier.md:16`, `plugins/agents/agents/reviewer.md:16`.\n- Every agent's `<role>` body opens with the same Mandatory Initial Read `<files_to_read>` protocol before any other action \u2014 e.g. `plugins/agents/agents/investigator.md:16-17`.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.type_notes/34889164ed3a5d911f5ebd9e": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Every script sources `\"$(dirname \"$0\")/lib.sh\"` as its first statement and ends by calling `finish` (e.g. plugins/issue/tests/test-view.sh:5,36) \u2014 the shared assert_eq/assert_contains/jqf/mk_repo contract every file in this module depends on. The three tests that drive a REAL (non-dry-run) dispatch against tmux \u2014 test-autosubmit.sh, test-gitignore.sh, test-readiness.sh \u2014 share one harness shape: prepend tests/fakes onto PATH, set dummy TMUX/TMUX_PANE, disable labeling via ISSUE_LABEL=\"\", and zero every poll/settle delay so the run returns immediately (plugins/issue/tests/test-gitignore.sh:18-27; mirrored plugins/issue/tests/test-readiness.sh:23-35 and plugins/issue/tests/test-autosubmit.sh:28-42). Per-case FAKE_TMUX_STATE scratch dirs are created with `mktemp -d /tmp/issue-*.XXXXXX` and explicitly `rm -rf`'d after each case's assertions rather than via a shared trap/teardown (plugins/issue/tests/test-autosubmit.sh:59,66,74,80,88,95,104,109). FAKE_GH_* and FAKE_TMUX_* env vars are this module's sole channel for scripting the out-of-module fakes/gh and fakes/tmux binaries' canned responses (e.g. FAKE_GH_CLOSED_BY_PRS at plugins/issue/tests/test-complete-execute.sh:8, FAKE_TMUX_CAPTURE mode selection at plugins/issue/tests/test-readiness.sh:29).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2664,6 +2988,18 @@
         "model": "claude-sonnet-5"
       },
       "value": "HTML templates carry $-prefixed placeholders the backend substitutes before serving, never client-rendered: $ROWS in plugins/deployit/assets/listing.template.html:27 and plugins/deployit/assets/product.template.html:29, $PROJECT/$PLATFORM in plugins/deployit/assets/product.template.html:6, $INSTALL_HREF/$INSTALL_LABEL in plugins/deployit/assets/index.template.html:37, and $ITEMS in plugins/deployit/assets/appcast.template.xml:8. app.js's swipe-to-delete state (openRow, drag, suppressClick) is scoped inside a single IIFE closure, not attached to window \u2014 plugins/deployit/assets/app.js:1-13. The swipe pill width is an owned invariant: it lives only in the --action-w custom property (plugins/deployit/assets/app.css:1) and is read from the live DOM by slotWidth() (plugins/deployit/assets/app.js:16-19) rather than duplicated as a JS constant, per the comment at plugins/deployit/assets/app.js:8-9. Only rows carrying a `data-delete` attribute are swipeable, checked per-gesture at plugins/deployit/assets/app.js:33. The three ExportOptions plists are distinct per-platform configs, not one shared file: ExportOptions.ios.plist and ExportOptions.visionos.plist both pin method=development, thinning=none, compileBitcode=false, stripSwiftSymbols=false (plugins/deployit/assets/ExportOptions.ios.plist:5-14, plugins/deployit/assets/ExportOptions.visionos.plist:5-14), while ExportOptions.macos.plist uses method=developer-id with no thinning/bitcode keys (plugins/deployit/assets/ExportOptions.macos.plist:5-8). config.example.toml is a one-shot seed, not a live source of truth: \"Bootstrap writes this file the first time; subsequent runs preserve overrides\" (plugins/deployit/assets/config.example.toml:2), so edits here never retroactively change an already-bootstrapped install's config.toml.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.type_notes/6e13aac6ddc1fdf001099e85": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "The tmux fake's virtual state (input box, launched flag, absorb counter, paste log) lives under $STATE (FAKE_TMUX_STATE, default /tmp/issue-faketmux) and is reset only by `new-window` (plugins/issue/tests/fakes/tmux:76-82) \u2014 a dispatch's own first call starts clean but nothing purges state between unrelated invocations that skip new-window. A literal paste appends to both the input buffer and $STATE/pastes.log; an Enter clears (submits) the buffer except when FAKE_TMUX_ENTER_ABSORB still has counts left, in which case the Enter is swallowed and the counter decrements instead (plugins/issue/tests/fakes/tmux:106-118). FAKE_GH_LOG (plugins/issue/tests/fakes/gh:33) accumulates one line per `gh` invocation for the whole test process, not per-test, so assertions on call sequences must account for prior calls in the same test file. lib.sh's EXIT trap `_cleanup` (plugins/issue/tests/lib.sh:19-21) owns removal of every mk_repo/mk_complete_repo directory registered in `_TMP_REPOS`; both helpers create repos under /tmp rather than $TMPDIR specifically to dodge macOS Spotlight indexing stalls on file-intensive tests (plugins/issue/tests/lib.sh:5-7).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2776,6 +3112,18 @@
         "verdict": "unverified"
       }
     },
+    "module.type_notes/978eb49231ba7197180d5762": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Cleanup ownership: lib.sh's _TMP_DIRS array plus a trap on EXIT (_cleanup) owns every mktmp'd fixture dir and worktree, pruning git worktrees before rm -rf so a failed test never leaks state (plugins/rca/tests/lib.sh:24-33). Execution model: each test-*.sh is a fully standalone `bash test-*.sh` process that sources lib.sh fresh and exits non-zero on the first failed assertion \u2014 there is no shared state or ordering dependency between test files (plugins/rca/tests/lib.sh:2-4). fakes/gh and fakes/story are stub CLIs configured entirely through env vars (FAKE_GH_*, FAKE_STORY_*) and meant to be put ahead of the real gh/story on PATH for skill-level flows (plugins/rca/tests/fakes/gh:1-8, plugins/rca/tests/fakes/story:1-8), but no test-*.sh in this module currently invokes them.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.type_notes/98d54e8a0bf3ced70af7654f": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2784,6 +3132,30 @@
         "model": "claude-sonnet-5"
       },
       "value": "Every script here is a standalone bash CLI (`set -euo pipefail`) that always exits 0 and reports failure only via a JSON `ok`/`error` field, so callers branch on the JSON body, not the exit code (plugins/forge/bin/forge-crash-recover.sh:12-17, plugins/forge/bin/forge-dag-validate.sh:16-20). forge-dag-validate.sh's cycle search is written entirely in jq rather than bash because \"bash on macOS ships 3.2, which has no associative arrays\" (plugins/forge/bin/forge-dag-validate.sh:59-61). forge-agent-alignment-check.sh's real logic lives in an embedded python3 heredoc and degrades to a still-`ok:false`-shaped skip result when python3 is absent (plugins/forge/bin/forge-agent-alignment-check.sh:54-59). forge-close-project-story.sh is explicitly a best-effort hygiene action \u2014 its own header states the actual deadlock fix is forge-state.sh's read-only exclusion of `project_story` from its done-computation elsewhere in the pipeline (plugins/forge/bin/forge-close-project-story.sh:15-21).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.type_notes/9e014a4887c7d9ca0ae7b083": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Config (plugins/semver/bin/semver-cli:104) is a per-invocation, in-memory parse of .semver/config.yaml with string-typed values only \u2014 get_bool (plugins/semver/bin/semver-cli:137) is a literal \"true\" string comparison, so any other truthy-looking value reads as false. FileLock (plugins/semver/bin/semver-cli:443) is keyed by an md5 hash of project_dir and lives under /tmp for the process lifetime; every mutating command path acquires it as a context manager around the write+commit+tag critical section, e.g. cmd_set_execute (plugins/semver/bin/semver-cli:1804), _init_do_fresh (plugins/semver/bin/semver-cli:2408), _init_reinit (plugins/semver/bin/semver-cli:2642), cmd_bump_execute (plugins/semver/bin/semver-cli:1430). The SEMVER_BUMP_IN_PROGRESS re-entrancy guard is read at three entry points (plugins/semver/bin/semver-cli:1132, 1650, 2532) but never set anywhere in this file \u2014 the invoking hook/skill layer owns setting/clearing it around nested calls. ensure_not_worktree (plugins/semver/bin/semver-cli:227) runs once at main()'s dispatch point (plugins/semver/bin/semver-cli:3147), before any subcommand handler, and is skip-listed by _is_readonly_command (plugins/semver/bin/semver-cli:215) for current/validate/recommend/bump-gather/tracking-stop-gather/repair-diagnose \u2014 every other subcommand is treated as mutating by default (fail-safe), so a newly added read-only subcommand must be added to that allowlist or it will be wrongly refused inside a linked worktree.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
+    "module.type_notes/a6871680255a128224f668b6": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Per-investigation state persists to .rca/<slug>/ (gitignored) as the resume anchor for /clear + /rca continue, one directory per bug slug (plugins/rca/README.md:28-29). All repro/bisect/hypothesis-toggle instrumentation is confined to a disposable linked worktree under .claude/worktrees/rca/; investigation only writes .rca/ artifacts and new test files to the main tree, never touching it before a fix is explicitly approved (plugins/rca/README.md:35-37). A fix's behavior change and any follow-on refactor are committed separately on a feature branch, never main, keeping history bisectable (plugins/rca/README.md:38-39).",
       "verify": {
         "verdict": "unverified"
       }
@@ -2848,6 +3220,18 @@
         "verdict": "unverified"
       }
     },
+    "module.type_notes/bd3f862fb65ddc413fd8c1b0": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Judgment Cache keys (plugins/atlas/bin/atlas-cli:2261) are `<kind>/<24-hex>` hashes of the cell's identity anchor (symbol/module id) plus only the structural input that should trigger re-judgment \u2014 e.g. symbol.contract keys on signature_hash but never body text, so body-only edits are free and reuse cached prose. compute_judgment_keys/_key_index (plugins/atlas/bin/atlas-cli:2906) is the single source of truth mapping (kind, module, symbol) -> key for both judge-plan and the projector. VERIFY_KINDS (plugins/atlas/bin/atlas-cli:2285) restricts map-verifier sampling to the falsifiable, act-to-your-peril prose kinds (symbol.contract, symbol.load_bearing, module.gotchas, edge.semantic); cmd_judgment_verify_set (plugins/atlas/bin/atlas-cli:2681) only stamps pass/fail verdicts onto existing keys and never originates a cell's value. cmd_judgment_prune (plugins/atlas/bin/atlas-cli:2610) is the sole cache-shrink path \u2014 idempotent and git-reversible, dropping only orphaned keys. Partitioning (build_tree/decide/split_bucket, plugins/atlas/bin/atlas-cli:4144) is a deterministic recursive tree walk: directories under the file/byte caps become one partition, undersized directories coalesce into a '(misc)' bucket, and oversized buckets split by filename stem before falling back to greedy byte-capped chunking.",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.type_notes/c648462d32c346c70a9726b9": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2872,18 +3256,6 @@
         "verdict": "unverified"
       }
     },
-    "module.type_notes/c7c06c144f980ddd15aed40d": {
-      "kind": "module.type_notes",
-      "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "- Every test-*.sh sources lib.sh, which resolves SCRIPT to bin/issue.sh and exports ISSUE_GH_BIN to the fake gh, so every invocation of $SCRIPT under test talks to the fake, never live GitHub (plugins/issue/tests/lib.sh:13-17).\n- mk_repo creates throwaway repos under /tmp, not $TMPDIR, specifically to dodge macOS Spotlight's mds_stores indexing stalls on file-heavy git fixtures (plugins/issue/tests/lib.sh:5-6).\n- mk_complete_repo builds one fixed, heavily-commented fixture (issue 77, origin prefix \"rep\") encoding every `complete` guard-rail case \u2014 merged/unmerged branches, a pushed merged PR-head branch, a clean worktree, and a locked worktree \u2014 that test-complete-plan.sh and test-complete-execute.sh both reuse verbatim (plugins/issue/tests/lib.sh:38-75).\n- fakes/tmux implements only the subcommands cmd_dispatch/cmd_doctor need and selects capture-pane output via the FAKE_TMUX_CAPTURE tiers (legacy/marker/structural/modal/busy/churn) to drive the multi-tier readiness gate under test (plugins/issue/tests/fakes/tmux:41-86).\n- Real (non-dry-run) dispatch tests (test-gitignore.sh, test-readiness.sh) prepend the fake tmux's directory onto PATH and set dummy TMUX/TMUX_PANE plus zeroed poll delays so cmd_dispatch's polling loop runs headlessly and instantly (plugins/issue/tests/test-gitignore.sh:13-26, plugins/issue/tests/test-readiness.sh:23-35).\n- No test framework: fail_test/assert_eq/assert_contains/assert_not_contains/finish are hand-rolled in lib.sh, and jqf wraps `jq -r` for JSON field assertions (plugins/issue/tests/lib.sh:77-108).\n- run-tests.sh discovers test-*.sh by glob and accepts an optional substring filter as its sole argument (plugins/issue/tests/run-tests.sh:14-18).",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.type_notes/c9c4262909a4f42726e109f5": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2896,6 +3268,18 @@
         "verdict": "unverified"
       }
     },
+    "module.type_notes/cba2706bc5da14c99a105b9a": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "- REPRO.md/OVERRIDE.md is the reproduction-gate artifact: written exclusively by reproduce (plugins/rca/skills/reproduce/SKILL.md:12-17), and its existence is checked before locate (plugins/rca/skills/locate/SKILL.md:13-14) or diagnose (plugins/rca/skills/diagnose/SKILL.md:15) may proceed.\n- APPROVAL.md is written once, by report's caller gate, recording `decision: fix|handoff` (plugins/rca/skills/report/SKILL.md:55); fix refuses to run unless it records `fix` (plugins/rca/skills/fix/SKILL.md:12), and postmortem reads a `handoff` decision to frame its Status line as \"fix pending\" (plugins/rca/skills/postmortem/SKILL.md:12; plugins/rca/skills/report/SKILL.md:61-62).\n- The investigation's tier (`full`/`light`) is set once, in `meta.json`, during reproduce (plugins/rca/skills/reproduce/SKILL.md:75-80); FULL alone runs the standalone locate step (plugins/rca/skills/locate/SKILL.md:9), while LIGHT substitutes two inline forensics calls inside diagnose instead (plugins/rca/skills/diagnose/SKILL.md:20-27).\n- The disposable worktree is created by `rca-worktree.sh` from either locate (for bisect, plugins/rca/skills/locate/SKILL.md:33-34) or diagnose (for falsification experiments, plugins/rca/skills/diagnose/SKILL.md:49-50), and its liveness is tracked in `worktree.json` and surfaced by rca-status until an explicit destroy (plugins/rca/skills/locate/SKILL.md:71-74; plugins/rca/skills/diagnose/SKILL.md:88-90).\n- ISSUE.json is created once by intake when an issue is latched (plugins/rca/skills/intake/SKILL.md:43-44) and only ever appended to afterward \u2014 report and postmortem each log a posted comment into it, but neither ever closes the underlying issue (plugins/rca/skills/report/SKILL.md:41-42; plugins/rca/skills/postmortem/SKILL.md:29-33).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.type_notes/d0c4cee9942aedc636e6fc45": {
       "kind": "module.type_notes",
       "provenance": {
@@ -2904,18 +3288,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Hard Rule 1 requires every subcommand to route through semver-router.sh, with exactly four documented exceptions \u2014 the second-call execute paths `bump execute`, `tracking stop-execute`, `set execute`, and `init execute` \u2014 each invoked directly against semver-cli only after a Question Loop has resolved (plugins/semver/skills/semver/SKILL.md:16). Bump, Set, and Init share a single-round-trip 'happy path' lifecycle: their router `run` call (`bump run`, `set run`, `init run`) gathers state and executes inline when no interaction is needed (`executed: true`), falling back to a second explicit `*_execute` CLI call only when dirty-tree/wrong-branch/tag-conflict questions or a pre-bump prompt hook require user input (plugins/semver/skills/semver/SKILL.md:52-54,73-75,90-97). Init's non-clean path (`executed: false`, prior artifacts detected) branches into four mutually exclusive modes \u2014 fresh, enable, adopt, reinit \u2014 selected via a single `init_existing` question, where only reinit additionally requires a separately-collected `--version` flag (plugins/semver/skills/semver/SKILL.md:98-104).",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
-    "module.type_notes/d33b5388a597d8a72fbbe2de": {
-      "kind": "module.type_notes",
-      "provenance": {
-        "created_at_commit": "cb09ceb006e3fb4759a91d64d9e6655e67d04bf7",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Config (plugins/semver/bin/semver-cli:104) is a per-invocation, in-memory parse of .semver/config.yaml with string-typed values only \u2014 get_bool (semver-cli:137) is a literal \"true\" string comparison, so any other truthy-looking value reads as false. FileLock (semver-cli:391) is keyed by an md5 hash of project_dir and lives under /tmp for the process lifetime; every mutating command path acquires it as a context manager around the write+commit+tag critical section, e.g. cmd_set_execute (semver-cli:1752), _init_do_fresh (semver-cli:2356), _init_reinit (semver-cli:2590), cmd_bump_execute (semver-cli:1378). The SEMVER_BUMP_IN_PROGRESS re-entrancy guard is read at three entry points (semver-cli:1080, 1598, 2480) but never set anywhere in this file \u2014 the invoking hook/skill layer owns setting/clearing it around nested calls.",
       "verify": {
         "verdict": "unverified"
       }
@@ -3004,6 +3376,18 @@
         "verdict": "unverified"
       }
     },
+    "module.type_notes/eb1fad16b8cef108c91a3cfa": {
+      "kind": "module.type_notes",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Investigation state is filesystem-resident under .rca/<slug>/ (meta.json plus phase artifacts); rca-status.sh's resolve_state walks a fixed artifact ladder (GRID.md \u2192 REPRO.md/OVERRIDE.md \u2192 tier \u2192 ORIGIN.md \u2192 INCONCLUSIVE.md/DIAGNOSIS.md \u2192 REPORT.md/REMEDIATION.md \u2192 APPROVAL.md \u2192 FIX.md \u2192 POSTMORTEM.md) to derive state/dispatch, so state is never stored, only inferred by file presence (plugins/rca/bin/rca-status.sh:47-60). Worktree lifecycle is separate and lives at <root>/.claude/worktrees/rca/<slug>/, with the checkout at .../worktree on branch rca/<slug> (plugins/rca/bin/rca-worktree.sh:44-46); create() mirrors worktree.json into .rca/<slug>/ only when that investigation directory already exists (plugins/rca/bin/rca-worktree.sh:106). rca-bisect.sh requires that worktree to already exist (plugins/rca/bin/rca-bisect.sh:9,87-89) and always tears it down via an EXIT trap regardless of outcome (plugins/rca/bin/rca-bisect.sh:99). Every script runs under `set -euo pipefail` and fails closed with a jq-built {ok:false,error,detail} envelope keyed by a stable snake_case error code (e.g. plugins/rca/bin/rca-scaffold.sh:22).",
+      "verify": {
+        "verdict": "unverified"
+      }
+    },
     "module.type_notes/ef6bd1c81e5cca88a5ba15f0": {
       "kind": "module.type_notes",
       "provenance": {
@@ -3028,18 +3412,6 @@
         "verdict": "unverified"
       }
     },
-    "module.type_notes/f5055491a55d5e5b4dca938c": {
-      "kind": "module.type_notes",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "Investigation state lives entirely in `.rca/<slug>/` artifact files, never in memory: plugins/rca/bin/rca-status.sh:33 derives each investigation's status (running/complete/reviewed) purely from which of SYMPTOM.md, VERIFICATION.md, or REMEDIATION.md exist in its directory, so every phase must persist its output before the orchestrator can stop. Phase 2-4 investigative agents are contractually read-only and confined to writing inside `.rca/<slug>/` \u2014 stated as Hard Rule 7 in plugins/rca/skills/rca/SKILL.md:22 and re-enforced per-agent in plugins/rca/agent-overrides/investigator-rca.md:39. The Phase 5 software-architect override carries the opposite but equally strict constraint: it must never use Write/Edit on source code and may only write the remediation plan document into the investigation directory (plugins/rca/agent-overrides/architect-rca.md:60) \u2014 remediation here is a design artifact, not an applied fix. Artifact presence doubles as a phase-completion signal: VERIFICATION.md existing means Phase 4 is done and the investigation is ready for Phase 5 review (plugins/rca/skills/rca/SKILL.md:195), which rca-status.sh in turn reads as the 'complete' status before REMEDIATION.md later flips it to 'reviewed' (plugins/rca/bin/rca-status.sh:34).",
-      "verify": {
-        "verdict": "unverified"
-      }
-    },
     "module.type_notes/f52518a2407ecd601f86553f": {
       "kind": "module.type_notes",
       "provenance": {
@@ -3052,47 +3424,47 @@
         "verdict": "unverified"
       }
     },
-    "overview.dataflow/62c073bd7a2f12d9909cba55": {
+    "overview.dataflow/510fb75e586388d81cbca981": {
       "kind": "overview.dataflow",
       "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "A forge pipeline step (plugins-forge-skills) is representative of how a stateful action crosses this codebase. The router's SKILL.md calls forge-state.sh (plugins-forge-bin-chunk-3) to derive the current state purely from .forge/ artifact presence plus a storyhook query, then dispatches to the matching step skill. That step spawns a specialist from the shared agent library (plugins-agents-agents-chunk-1/2/3), inlining the matching plugins-forge-agent-overrides context so the generic role knows forge's artifact paths and story state; during execute, every Bash call the spawned agent issues is gated by greenlight's PreToolUse hook (plugins-greenlight). The step writes its .forge/ artifact and exits through the canonical step-exit path (forge-step-exit.sh, plugins-forge-bin-chunk-3): commit, update state.json, and queue a freshen signal file. Freshen's Stop hook (plugins-freshen) tmux-sends /clear plus the next invocation, confirmed by a pane read-back and guarded from runaway repetition by hook-guard's shared circuit breaker (plugins-hook-guard); the next session's SessionStart hook (plugins-forge-hooks) reads state.json and injects a resume summary, closing the loop without any state surviving in conversation context. Triage findings route through plugins-agents-agents-chunk-3's triager into either a FIX re-entry at plan or an ESCALATE pause for the human.\n\nAn /atlas update follows the same skeleton with a different payload: plugins-atlas-misc's orchestrator dispatches every CLI call through the single router in plugins-atlas-bin-chunk-2, which forwards to atlas-cli (plugins-atlas-bin-chunk-1) for scan/partition/extract \u2014 optionally shelling out to the standalone tree-sitter helper (plugins-atlas-helpers-ts-helper) for resolved call edges instead of regex-ambiguous ones. judge-plan computes exactly the content-addressed judgment keys invalidated by the diff; only those are handed to a cartographer agent (plugins-agents-agents-chunk-1), narrowed by plugins-atlas-agent-overrides' cell contract, which returns judgment cells rather than markdown. judgment ingest merges the cells into the cache, and project deterministically joins the structure index and judgment cache into the committed module docs and INDEX \u2014 a no-change rebuild never invokes the model at all.\n\nA /reconcile-pr run traces the codebase's other major flow shape: a deterministic bash script driving explicit state-machine subcommands, with the skill layer supplying only the judgments a script can't make. plugins-reconcile-pr's SKILL.md drives bin/reconcile-pr.sh through preflight \u2192 start \u2192 resolve/continue \u2192 test \u2192 push \u2192 comment \u2192 cleanup; start creates an isolated git worktree under .claude/worktrees/reconcile-pr/<pr>/ and records a meta.json (repo/base/head/remote_oid/base_oid) before any conflict work begins. On each conflict the script hands control back to the skill, which labels the conflicted hunks base_side/pr_side \u2014 relabeled from git's rebase-time inversion of ours/theirs \u2014 rather than resolving them itself; once the tree is conflict-free the skill verifies the reconciled tree preserves both sides' behavior, then the script runs the test gate and pushes under a force-push safety guard (a destination-ref check plus an explicit-OID --force-with-lease pinned to the remote_oid captured at start, never a bare --force) before the skill writes the summary comment. No shared agent from plugins/agents/agents/ is spawned anywhere in this flow, and every Bash command the skill issues while driving the script is still gated by greenlight's PreToolUse hook, the same as any other plugin.",
+      "value": "A forge pipeline step (plugins-forge-skills) is representative of how a stateful action crosses this codebase. The router's SKILL.md calls forge-state.sh (plugins-forge-bin-chunk-3) to derive the current state purely from .forge/ artifact presence plus a storyhook query, then dispatches to the matching step skill. That step spawns a specialist from the shared agent library (plugins-agents-agents-chunk-1/2/3), inlining the matching plugins-forge-agent-overrides context so the generic role knows forge's artifact paths and story state; during execute, every Bash call the spawned agent issues is gated by greenlight's PreToolUse hook (plugins-greenlight). The step writes its .forge/ artifact and exits through the canonical step-exit path (forge-step-exit.sh, plugins-forge-bin-chunk-3): commit, update state.json, and queue a freshen signal file. Freshen's Stop hook (plugins-freshen) tmux-sends /clear plus the next invocation, confirmed by a pane read-back and guarded from runaway repetition by hook-guard's shared circuit breaker (plugins-hook-guard); the next session's SessionStart hook (plugins-forge-hooks) reads state.json and injects a resume summary, closing the loop without any state surviving in conversation context. Triage findings route through plugins-agents-agents-chunk-3's triager into either a FIX re-entry at plan or an ESCALATE pause for the human.\n\nA /rca investigation now follows the same layered shape as forge, not the plugin's earlier five-phase single-skill design: rca's orchestrator (plugins-rca-skills) walks seven step skills \u2014 intake, reproduce, locate, diagnose, report, fix, postmortem \u2014 each invoking deterministic CLIs (plugins-rca-bin: forensics, bisect, repro, hotspots, stack, scaffold, status, worktree) for git archaeology and disposable-worktree hypothesis falsification, and spawning shared agents narrowed by per-step context in plugins-rca-agent-overrides (evidence, experiment, fix, report, postmortem). The pipeline is reproduction-gated \u2014 a defect must be confirmed to reproduce before fix work proceeds \u2014 and closes with an ODC-classified, committed blameless postmortem, per plugins-rca-references and plugins-rca-misc. State persists to .rca/<slug>/ artifacts exactly like forge's .forge/, confirming the skills/bin/agent-overrides fractal as the repo's default shape for multi-step pipeline plugins rather than a forge-only pattern.\n\nAn /atlas update follows the same skeleton with a different payload: plugins-atlas-misc's orchestrator dispatches every CLI call through the single router in plugins-atlas-bin-chunk-2, which forwards to atlas-cli (plugins-atlas-bin-chunk-1) for scan/partition/extract \u2014 optionally shelling out to the standalone tree-sitter helper (plugins-atlas-helpers-ts-helper) for resolved call edges instead of regex-ambiguous ones. judge-plan computes exactly the content-addressed judgment keys invalidated by the diff; only those are handed to a cartographer agent (plugins-agents-agents-chunk-1), narrowed by plugins-atlas-agent-overrides' cell contract, which returns judgment cells rather than markdown. judgment ingest merges the cells into the cache, and project deterministically joins the structure index and judgment cache into the committed module docs and INDEX \u2014 a no-change rebuild never invokes the model at all.\n\nA /reconcile-pr run traces the codebase's other major flow shape: a deterministic bash script driving explicit state-machine subcommands, with the skill layer supplying only the judgments a script can't make. plugins-reconcile-pr's SKILL.md drives bin/reconcile-pr.sh through preflight \u2192 start \u2192 resolve/continue \u2192 test \u2192 push \u2192 comment \u2192 cleanup; start creates an isolated git worktree under .claude/worktrees/reconcile-pr/<pr>/ and records a meta.json (repo/base/head/remote_oid/base_oid) before any conflict work begins. On each conflict the script hands control back to the skill, which labels the conflicted hunks base_side/pr_side \u2014 relabeled from git's rebase-time inversion of ours/theirs \u2014 rather than resolving them itself; once the tree is conflict-free the skill verifies the reconciled tree preserves both sides' behavior, then the script runs the test gate and pushes under a force-push safety guard (a destination-ref check plus an explicit-OID --force-with-lease pinned to the remote_oid captured at start, never a bare --force) before the skill writes the summary comment. No shared agent from plugins/agents/agents/ is spawned anywhere in this flow, and every Bash command the skill issues while driving the script is still gated by greenlight's PreToolUse hook, the same as any other plugin.",
       "verify": {
         "verdict": "unverified"
       }
     },
-    "overview.index_facts/274a19d010f317ae6a5be483": {
+    "overview.index_facts/f6bf06572469ec08a12f0fc0": {
       "kind": "overview.index_facts",
       "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
       "value": [
-        "Claude Code plugin marketplace; marketplace.json is the sole plugin registry.",
-        "12 plugins under plugins/<name>/; thin-router skills, deterministic bin/ scripts.",
-        "plugins/agents/agents/ is the shared agent library forge/rca/atlas/council spawn.",
-        "Artifact dirs .forge/ .rca/ .atlas/ .semver/ .freshen/; presence drives resume.",
-        "greenlight is a PreToolUse hook gating Bash: deterministic allow/warn plus AI.",
-        "Atlas v2 separates deterministic extraction/projection from LLM judgment cells.",
-        "reconcile-pr never force-pushes bare; uses explicit-OID --force-with-lease.",
-        "Plugins share no runtime code except agent library, semver stamp, freshen signals."
+        "Claude Code plugin marketplace; marketplace.json is the registry.",
+        "12 plugins; thin-router skills over deterministic bin/ CLIs.",
+        "plugins/agents/agents/ is the shared agent library.",
+        "Artifact dirs .forge/.rca/.atlas/.semver/.freshen/ drive resume.",
+        "rca: 7-step reproduction-gated root-cause pipeline.",
+        "greenlight: PreToolUse Bash gate (deterministic + AI).",
+        "Atlas v2 splits extraction/projection from LLM judgment.",
+        "reconcile-pr uses --force-with-lease, never bare force."
       ],
       "verify": {
         "verdict": "unverified"
       }
     },
-    "overview.shape/372d3b9742e5551495fbaa3d": {
+    "overview.shape/4a8f0ccde03274074c642e97": {
       "kind": "overview.shape",
       "provenance": {
-        "created_at_commit": "a4486d2b70ad4124762f9d777af6a7dc007bdc6c",
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
+        "model": "claude-sonnet"
       },
-      "value": "Agentics is a Claude Code plugin marketplace: `.claude-plugin/marketplace.json` registers twelve independently-versioned plugins (agents, atlas, council, deployit, forge, freshen, greenlight, hook-guard, issue, rca, reconcile-pr, semver), each living under `plugins/<name>/` with its own `plugins/<name>/.claude-plugin/plugin.json` manifest. Within every plugin the same layered pattern repeats: a thin-router `SKILL.md` (one `AskUserQuestion` at a time) dispatches to deterministic `bin/` scripts \u2014 bash+jq or stdlib-only python3 CLIs emitting one JSON object with an `ok`+`display` contract \u2014 for anything computable, and to `references/*.md` protocol docs for detailed procedure, so the skill itself stays a router rather than a procedure. Judgment that can't be computed (module purpose, release notes, triage verdicts) is usually pushed into an optional fourth layer: `agent-overrides/<name>-context.md` files that narrow a generic shared-agent role to the plugin's own state and artifact contract. reconcile-pr is the one plugin that skips this fourth layer entirely: it ships no `agent-overrides/` directory and spawns no shared agent, and its `SKILL.md` instead performs the handful of judgment calls a script can't make \u2014 conflict-side labeling, tree verification, summary prose \u2014 directly, collapsing the pattern to three layers for that plugin alone.\n\nThe one real code-sharing seam is `plugins/agents/agents/`, a library of self-contained agent spawn contracts (YAML frontmatter + role body) that forge, rca, atlas, and council all inline verbatim rather than importing at runtime \u2014 a consumer concatenates the shared agent file with its own override doc into one spawn prompt. Beyond that library, plugins are deliberately independent at the runtime-code level: deployit's CLI coordinates with semver only by discovering `semver-cli` as a subprocess (never an import) and is itself the sole writer of a shared git-backed build index, classifying each push failure (ruleset/protected \u2192 PR fallback; non-fast-forward \u2192 retry from a fresh origin/main; auth \u2192 preserve-and-fail without a PR attempt) so concurrent deploys can never corrupt it; atlas, forge, rca, and reconcile-pr each own a fully self-contained deterministic backend with no cross-plugin function calls. Large module-edge counts linking atlas/deployit bin scripts to the semver module are regex-extractor artifacts from common method-name collisions (`get`/`write`/`add`), not real call edges, and should not be read as runtime dependencies.\n\nState is never held in conversation context across a pipeline's steps; each stateful plugin owns a gitignored artifact directory instead (`.forge/`, `.rca/<slug>/`, `.atlas/`, `.semver/`, `.freshen/`), and every resumption decision is derived from which files are present. `plugins-reconcile-pr` varies this pattern rather than breaking it: state is scoped per pull request inside an isolated git worktree at `.claude/worktrees/reconcile-pr/<pr>/` (a `meta.json` plus a `conflicts.log`), and its `start` subcommand refuses to begin if that directory already exists, capping concurrency to one reconcile per PR; `plugins-issue-misc`, by contrast, is fully stateless \u2014 each `dispatch` run persists nothing at all. The remaining cross-cutting seams are hook-mediated rather than call-mediated: semver's post-bump hook one-way-stamps `VERSION` into every other plugin's manifest; freshen's Stop/SessionStart hooks are the sole tmux mechanism any plugin uses to `/clear` and re-invoke between steps, driven by a signal file a plugin queues rather than a direct call; hook-guard's shared circuit breaker is sourced by any plugin's Stop hook to halt runaway loops; and greenlight's PreToolUse hook gates every Bash tool call regardless of which plugin is active \u2014 including the git/gh commands that both reconcile-pr's rebase machine and the issue plugin's dispatch/complete flows run. This hook layer is where plugins actually touch each other at runtime \u2014 everywhere else, a plugin's `bin/` is a closed deterministic world.",
+      "value": "Agentics is a Claude Code plugin marketplace: `.claude-plugin/marketplace.json` registers twelve independently-versioned plugins (agents, atlas, council, deployit, forge, freshen, greenlight, hook-guard, issue, rca, reconcile-pr, semver), each living under `plugins/<name>/` with its own `plugins/<name>/.claude-plugin/plugin.json` manifest. Within every plugin the same layered pattern repeats: a thin-router `SKILL.md` (one `AskUserQuestion` at a time) dispatches to deterministic `bin/` scripts \u2014 bash+jq or stdlib-only python3 CLIs emitting one JSON object with an `ok`+`display` contract \u2014 for anything computable, and to `references/*.md` protocol docs for detailed procedure, so the skill itself stays a router rather than a procedure. Judgment that can't be computed (module purpose, release notes, triage verdicts, root-cause verdicts) is pushed into an optional fourth layer: `agent-overrides/<name>-context.md` files that narrow a generic shared-agent role to the plugin's own state and artifact contract. forge and rca are now the two plugins that fully exhibit this four-layer fractal \u2014 rca's earlier five-phase single-skill design was rebuilt into seven per-step skills (plugins-rca-skills), each paired to its own deterministic bin/ CLI (plugins-rca-bin) and per-step agent-overrides context (plugins-rca-agent-overrides), mirroring forge's skills/bin/agent-overrides split rather than being a one-off shape. reconcile-pr is the one plugin that skips the fourth layer entirely: it ships no `agent-overrides/` directory and spawns no shared agent, and its `SKILL.md` instead performs the handful of judgment calls a script can't make \u2014 conflict-side labeling, tree verification, summary prose \u2014 directly, collapsing the pattern to three layers for that plugin alone.\n\nThe one real code-sharing seam is `plugins/agents/agents/`, a library of self-contained agent spawn contracts (YAML frontmatter + role body) that forge, rca, atlas, and council all inline verbatim rather than importing at runtime \u2014 a consumer concatenates the shared agent file with its own override doc into one spawn prompt. Beyond that library, plugins are deliberately independent at the runtime-code level: deployit's CLI coordinates with semver only by discovering `semver-cli` as a subprocess (never an import) and is itself the sole writer of a shared git-backed build index; atlas, forge, rca, and reconcile-pr each own a fully self-contained deterministic backend with no cross-plugin function calls. Large module-edge counts linking atlas/deployit bin scripts to the semver module are regex-extractor artifacts from common method-name collisions (`get`/`write`/`add`), not real call edges, and should not be read as runtime dependencies.\n\nState is never held in conversation context across a pipeline's steps; each stateful plugin owns a gitignored artifact directory instead (`.forge/`, `.rca/<slug>/`, `.atlas/`, `.semver/`, `.freshen/`), and every resumption decision is derived from which files are present. `plugins-reconcile-pr` varies this pattern rather than breaking it: state is scoped per pull request inside an isolated git worktree at `.claude/worktrees/reconcile-pr/<pr>/`, and its `start` subcommand refuses to begin if that directory already exists, capping concurrency to one reconcile per PR; `plugins-issue-misc`, by contrast, is fully stateless \u2014 each `dispatch` run persists nothing at all. Atlas's own backend is the sharpest layer boundary in the repo: `plugins-atlas-bin-chunk-1`'s deterministic extractor produces a structure index (symbols, signatures, resolved/ambiguous call edges) entirely separately from the LLM-authored judgment cache it merges in \u2014 a cartographer agent only ever returns content-addressed judgment cells for the keys `judge-plan` says are invalidated by a diff, never markdown \u2014 and `project` deterministically joins structure + judgment into the committed docs, so a no-change rebuild never invokes a model at all. The remaining cross-cutting seams are hook-mediated rather than call-mediated: semver's post-bump hook one-way-stamps `VERSION` into every other plugin's manifest; freshen's Stop/SessionStart hooks are the sole tmux mechanism any plugin uses to `/clear` and re-invoke between steps; hook-guard's shared circuit breaker is sourced by any plugin's Stop hook to halt runaway loops; and greenlight's PreToolUse hook gates every Bash tool call regardless of which plugin is active. This hook layer is where plugins actually touch each other at runtime \u2014 everywhere else, a plugin's `bin/` is a closed deterministic world.",
       "verify": {
         "verdict": "unverified"
       }
@@ -4819,6 +5191,20 @@
         "verifier": "map-verifier"
       }
     },
+    "symbol.contract/528fd4ba6b244ab007917758": {
+      "kind": "symbol.contract",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Private awk helper in rca-hotspots.sh's co-change script: flushes per-commit files into fcount/pair, resets nf; not externally callable.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "symbol.contract/52c75805cb7bd78a5a2309bd": {
       "kind": "symbol.contract",
       "provenance": {
@@ -4997,6 +5383,20 @@
       "value": "Path to `.atlas/verify.json`, the persisted `/atlas verify` findings cache.",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "symbol.contract/59d5edff3b57873d78bfee3f": {
+      "kind": "symbol.contract",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Pure predicate: True iff `cwd` (default os.getcwd()) sits in a linked git worktree rather than the main tree; False if not in a repo.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }
@@ -5617,6 +6017,20 @@
         "verifier": "map-verifier"
       }
     },
+    "symbol.contract/794a3949452fafb5e602d4d9": {
+      "kind": "symbol.contract",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "sha256 digest of sorted (path,blob) pairs; empty set hashes to one stable constant, so convergence-to-empty never thrashes cache keys.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "symbol.contract/79d2e08e4b8ab2bd899120cb": {
       "kind": "symbol.contract",
       "provenance": {
@@ -5625,20 +6039,6 @@
         "model": "claude-sonnet-5"
       },
       "value": "Returns the current branch name via `git rev-parse --abbrev-ref HEAD`, or None if not resolvable.",
-      "verify": {
-        "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "verdict": "pass",
-        "verifier": "map-verifier"
-      }
-    },
-    "symbol.contract/79ebed143893d8930376750c": {
-      "kind": "symbol.contract",
-      "provenance": {
-        "created_at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
-        "generator": "cartographer/4",
-        "model": "claude-sonnet-5"
-      },
-      "value": "The tree OID for `HEAD:<treepath>`, or None if it doesn't resolve.",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
         "verdict": "pass",
@@ -7535,6 +7935,20 @@
         "verifier": "map-verifier"
       }
     },
+    "symbol.contract/dd319da2f6c5dfe7af0256b5": {
+      "kind": "symbol.contract",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Exits via output_error (never returns) if `args` is a mutating command run in a linked worktree, unless SEMVER_ALLOW_WORKTREE is set.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
     "symbol.contract/dd3d3d7671977e449f8359e9": {
       "kind": "symbol.contract",
       "provenance": {
@@ -8175,6 +8589,20 @@
       "value": "Reads judgments.json, or an empty v2-shaped store if absent/corrupt.",
       "verify": {
         "at_commit": "50c998d53e2ed58951ac5f794afd32bfa729f658",
+        "verdict": "pass",
+        "verifier": "map-verifier"
+      }
+    },
+    "symbol.contract/fb10b78905d0a1a9512fe352": {
+      "kind": "symbol.contract",
+      "provenance": {
+        "created_at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
+        "generator": "cartographer/4",
+        "model": "claude-sonnet"
+      },
+      "value": "Content-addresses a scope's mappable files (docs/atlas/**, .atlas/** already excluded), so the map's own output never self-invalidates it.",
+      "verify": {
+        "at_commit": "7387d3614aaae8d5a5bc156cf01c251d22b1dd45",
         "verdict": "pass",
         "verifier": "map-verifier"
       }

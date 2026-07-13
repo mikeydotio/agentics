@@ -4,11 +4,11 @@ summary: "Deployit's plugin manifest and orchestrator skill: routes /deployit co
 read_when: "Changing /deployit's command surface or router invocation rules"
 sources:
   - path: plugins/deployit/.claude-plugin/plugin.json
-    blob: 723abf317f8b7ccf512d2c8510d3dde771a3f2bb
+    blob: 0f70d363c63cb4146748f11a3a27d1f9d2788895
   - path: plugins/deployit/skills/deployit/SKILL.md
     blob: 61ac326fd6cb8ef2020cec7f05b0a81db14896e4
 generator: cartographer/4
-baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/deployit (misc)

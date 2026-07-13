@@ -4,19 +4,19 @@ summary: "GitHub-issue lifecycle toolkit: skill routes verbs to issue.sh, which 
 read_when: "Touching issue dispatch, complete cleanup, or new-issue filing flows"
 sources:
   - path: plugins/issue/.claude-plugin/plugin.json
-    blob: 2fbe5baeec060fe1bc88afd097a58c566769c166
+    blob: 9654c1b6d364bceade1f180af54a305a8c7912e4
   - path: plugins/issue/README.md
-    blob: 69dd64e419dee9c34c27374e533802ac7997b7d8
+    blob: 70adbf01c15105d88704acf31c179329c778182f
   - path: plugins/issue/bin/issue.sh
-    blob: 4c7088dfac642a3da65ea88a05378d50f5b1faae
+    blob: 26ef55654364027cfed37fa0f9a9f7e02a394b99
   - path: plugins/issue/references/complete.md
     blob: e78243246be2041358cce327b932e1721898284c
   - path: plugins/issue/references/new.md
     blob: c2bc904a4f678b127beb57457f95b1ef5ab1db81
   - path: plugins/issue/skills/issue/SKILL.md
-    blob: 94b5372ae281a1b05b5da9e5fa428cbe68bad6f8
+    blob: 0f52d2aedff41f4a526332f5ab5a3688dab67802
 generator: cartographer/4
-baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/issue (misc)
@@ -29,7 +29,7 @@ The issue plugin is a GitHub-issue lifecycle toolkit: a thin skill router dispat
 
 | Symbol | Kind | Location | Contract |
 | --- | --- | --- | --- |
-| `flush` | function | `plugins/issue/bin/issue.sh:262` | Flushes the pending worktree record (path, branch-or-'-', locked flag) once per porcelain block and at EOF; never emits when p is empty. |
+| `flush` | function | `plugins/issue/bin/issue.sh:280` | Flushes the pending worktree record (path, branch-or-'-', locked flag) once per porcelain block and at EOF; never emits when p is empty. |
 
 ## Load-bearing internals
 

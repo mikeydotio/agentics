@@ -28,9 +28,9 @@ sources:
   - path: plugins/atlas/tests/test-scan.sh
     blob: d6e16e7826cb57aed7cf3fd327a3dfd9501b2f61
   - path: plugins/atlas/tests/test-status.sh
-    blob: fdde9f2ee86018efefcd6e1794a0a90d04cf1be0
+    blob: 46d6022614b6e222a0993e200ba047ee9fbc5889
 generator: cartographer/4
-baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/atlas/tests (chunk 2)

@@ -8,13 +8,13 @@ sources:
   - path: plugins/atlas/references/design-v2.md
     blob: 17658b4dafbd2b35208f0f93ea1612eb3f61b21d
   - path: plugins/atlas/references/map-format.md
-    blob: 180d8e724e10e9bfe42a4a9b314fb2c15eb6c9ee
+    blob: c32d47e8128fc854788438e0c656b072d357af92
   - path: plugins/atlas/references/mapping-protocol.md
     blob: 574b60d5b22e025b7bc34f165cbdb2fadc0b74c4
   - path: plugins/atlas/references/update-protocol.md
     blob: 7fbd5134f7bb12ed427d613759adb4ed0c593213
 generator: cartographer/4
-baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/atlas/references

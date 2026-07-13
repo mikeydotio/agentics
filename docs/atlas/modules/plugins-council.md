@@ -4,7 +4,7 @@ summary: "Runs a 3-member sub-agent council — propose, vote, deliberate, IRV r
 read_when: "Touching /council-vote, its protocol, voting/IRV mechanics, or panel rubric"
 sources:
   - path: plugins/council/.claude-plugin/plugin.json
-    blob: 8022f3c59c56ec6aa383c5a141680c5db0ea1425
+    blob: 75b6fdf27ebc73b1cc4693e2b5de93fa45e88ad6
   - path: plugins/council/README.md
     blob: 6fc77ba8523cf7262b3d0a8f9f79586464cefc62
   - path: plugins/council/references/archetypes.md
@@ -20,7 +20,7 @@ sources:
   - path: plugins/council/skills/council-vote/evals/evals.json
     blob: 1023d8902ccef3f0bbefb50eedbb9e92debe984d
 generator: cartographer/4
-baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/council

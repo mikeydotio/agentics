@@ -7,8 +7,10 @@ sources:
     blob: b46148087b516791ba60aa331a954b1e396ac8c5
   - path: plugins/semver/tests/test-set.sh
     blob: 4e495ad362ab56e6d5d491abecd6da123c6bdc2a
+  - path: plugins/semver/tests/test-worktree-guard.sh
+    blob: 61837a344a0f1433544ae798dcd851365daa6b4b
 generator: cartographer/4
-baseline: cb09ceb006e3fb4759a91d64d9e6655e67d04bf7
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/semver/tests (chunk 2)

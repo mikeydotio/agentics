@@ -4,13 +4,13 @@ summary: "Plugin manifest, README, and SKILL.md orchestrator defining /semver's 
 read_when: "Changing /semver commands, routing, or plugin manifest identity"
 sources:
   - path: plugins/semver/.claude-plugin/plugin.json
-    blob: 16b5ebb317ee76929d76642bb2c4fee3088e0d11
+    blob: 74e01753fc6b7d4cd4f01ffc02ff628b5cd61fe3
   - path: plugins/semver/README.md
     blob: 22ec64306da43a6a4e9b4b7a4270770508d3a7c0
   - path: plugins/semver/skills/semver/SKILL.md
     blob: 11fab2c938ab5be0798d073f4328428d101c78c0
 generator: cartographer/4
-baseline: a4486d2b70ad4124762f9d777af6a7dc007bdc6c
+baseline: 7387d3614aaae8d5a5bc156cf01c251d22b1dd45
 ---
 
 # Module: plugins/semver (misc)

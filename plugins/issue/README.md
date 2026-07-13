@@ -57,7 +57,7 @@ a pre-built pick option that the skill presents via one `AskUserQuestion`. With 
      broader existing rule (e.g. `.claude/`) and is a no-op when already ignored. Best-effort: a
      write failure only leaves the pre-fix status quo (an untracked worktree dir), never an
      `ok:false`. Override the ignored path with `ISSUE_WORKTREE_IGNORE_PATH`.
-   - Launch `claude -w <repo-prefix>-<n> --permission-mode plan` (literal send + Enter) — the `-w`
+   - Launch `claude -w <repo-prefix>-<n> --permission-mode plan` (literal paste + settle + Enter) — the `-w`
      argument matches the window name, so the worktree is `.claude/worktrees/<repo-prefix>-<n>`; the
      `--permission-mode plan` flag opens the session **in plan mode deterministically**, with no
      keystrokes.
@@ -67,9 +67,14 @@ a pre-built pick option that the skill presents via one `AskUserQuestion`. With 
      known idle-footer markers, and a **structural** fallback (input-box frame `─` **and** idle
      prompt glyph `❯`, held stable across polls) confirms readiness even when the footer copy has
      drifted entirely. A bounded blind fallback delay is the last resort so keystrokes aren't lost.
-   - Type and submit the prompt, confirmed via a `capture-pane` read-back (resend if it never lands).
-     A non-gating acceptance check additionally records whether a *ready* TUI consumed the prompt
-     (`prompt_accepted`) without ever re-coupling confirmation to fragile TUI copy.
+   - Type and submit the prompt as a **two-phase confirmed handoff** (issue #82). First **paste**
+     the prompt and confirm it was **received** — the input box (the `❯` row, not the footer below
+     it) actually holds text — re-pasting only if nothing landed. Then **settle** briefly so the
+     bracketed paste closes, press **Enter**, and confirm **submission** — the box cleared. On a
+     swallowed Enter (the intermittent race this fixes) it re-sends **Enter alone**, never
+     re-pasting (which would duplicate the prompt). A non-gating acceptance check additionally
+     records whether a *ready* TUI consumed the prompt (`prompt_accepted`) without re-coupling
+     confirmation to fragile TUI copy.
      The default prompt briefs the child session to read the issue and **all** its comments for the
      full history, weigh a reopen as a signal a previous fix fell short, comment its finalized plan
      on the issue, word PRs to close it (`Closes #<n>`), and comment each PR link — those steps
@@ -151,7 +156,8 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `ISSUE_READY_FALLBACK_DELAY` | `3` | Extra settle (seconds) if **neither** tier confirms within the budget — a true last resort. |
 | `ISSUE_READY_TAIL_LINES` | `8` | Non-blank pane lines attached as `pane_tail` diagnostic evidence on the **warning** path only. |
 | `ISSUE_READY_ACCEPT_PATTERN` | _(working-indicator alternation)_ | Non-gating post-submit acceptance marker: informs the `prompt_accepted` field but never changes `prompt_confirmed` or triggers a resend. |
-| `ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt-submission confirm/resend bounds. |
+| `ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt confirm/resend bounds. `CONFIRM_ATTEMPTS`/`_DELAY` bound **both** the receipt poll (the paste landed in the input box) and the submit poll (the box cleared); `SEND_RETRIES` bounds **both** the receipt re-paste and the submit re-Enter. |
+| `ISSUE_PASTE_SETTLE_DELAY` | `0.2` | Settle (seconds) after each literal paste, **before** Enter, so a bracketed paste closes and the Enter submits instead of being absorbed as a newline (issue #82, the primary cure). Fractional. |
 | `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree). |
 | `ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 

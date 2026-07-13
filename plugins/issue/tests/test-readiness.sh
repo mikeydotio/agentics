@@ -28,7 +28,7 @@ dispatch_ready() {
          ISSUE_LABEL="" \
          FAKE_TMUX_CAPTURE="$mode" \
          ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
-         ISSUE_CONFIRM_DELAY=0 \
+         ISSUE_CONFIRM_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 \
          ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
          env "$@" \
          bash "$SCRIPT" dispatch "$n" 2>&1 )
@@ -129,14 +129,14 @@ assert_eq "$(jqf "$out" '[.commands[]|select(startswith("gh"))]|length')" "0" "d
 repo=$(mk_repo)
 out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
       ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=marker \
-      ISSUE_READY_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
+      ISSUE_READY_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "doctor marker: readiness confirmed"
 assert_eq "$(jqf "$out" .matched_tier)" "marker" "doctor marker: reports the marker tier"
 
 out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
       ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=structural \
-      ISSUE_READY_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
+      ISSUE_READY_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .matched_tier)" "structural" "doctor structural: reports the structural tier"
 

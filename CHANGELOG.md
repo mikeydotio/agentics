@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.29.0] - 2026-07-12
+
+### Fixed
+- guarantee prompt receipt + auto-submit in `do` (#82) (604c005)
+
+### Changed
+- Merge remote-tracking branch 'origin/main' into land-85 (e482f6e)
+- Merge pull request #88 from mikeydotio/feat/rca-v2 (74d2e83)
+
+### Documentation
+- document the two-phase confirmed prompt handoff (#82) (c284dfe)
+
+### Testing
+- make fake tmux stateful to observe receipt/submission (53a7f55)
+
+_[manual]_
+
 ## [v2.28.0] - 2026-07-12
 
 ### Added

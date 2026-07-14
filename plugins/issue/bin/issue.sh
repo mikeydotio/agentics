@@ -58,9 +58,11 @@ LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # (issue #78), the GitHub self-reporting contract (issue #50) — comment the
 # finalized plan, word PRs to close the issue, comment PR links — and a directive
 # NOT to bump the version or deploy from its worktree (those happen later from
-# `main`), since this session always runs inside a per-issue worktree. Kept
-# single-line + ASCII (no backticks) so `tmux send-keys -l` types it verbatim
-# without key-interpretation.
+# `main`), since this session always runs inside a per-issue worktree. The default
+# is single-line + ASCII (no backticks) for readability, but delivery is via a
+# bracketed paste (paste_prompt), so a multi-line ISSUE_PROMPT override is safe —
+# an embedded newline stays text and the whole prompt submits as one message
+# (issue #87), not at the first line.
 PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. Begin by reading the issue and ALL of its comments (e.g. gh issue view <n> --comments) so you have the full discussion history. If the issue has been reopened, treat that as a signal that a previous fix was insufficient: review the earlier attempts and any linked PRs, understand why they fell short, and make sure your plan resolves the underlying problem rather than repeating them. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it. Do not bump the version or deploy from this worktree: do not run semver bump, deployit deploy, or any release/version step, and do not plan for them -- versioning and deployment happen later from the main branch, not here.}"
 # The "picked up" label applied to the issue at dispatch (issue #50). Set
 # ISSUE_LABEL="" to disable labeling entirely. Color/description are used
@@ -153,6 +155,10 @@ READY_ACCEPT_PATTERN="${ISSUE_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Cr
 # to render. Overridable so tests can point it at a harmless stand-in binary.
 DOCTOR_LAUNCH_TPL="${ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan}"
 DOCTOR_WINDOW_NAME="${ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
+# `capture` subcommand (issue #87 live-verification aid): how many rendered rows of
+# a worktree window's scrollback to dump. Enough to show the recent exchange
+# without unbounded output.
+CAPTURE_LINES="${ISSUE_CAPTURE_LINES:-200}"
 DRY_RUN="${ISSUE_DRY_RUN:-}"
 ALLOW_CLOSED="${ISSUE_ALLOW_CLOSED:-}"
 
@@ -484,16 +490,58 @@ prompt_accepted() {
 
 # paste_text <pane> <text> — literal-paste <text>, then SETTLE so a bracketed
 # paste closes before any Enter (issue #82). Shared by the launch send and the
-# prompt send; sends NO Enter. Returns non-zero if the paste send itself failed.
+# doctor send — both type a SINGLE-LINE command into a SHELL, where bracketed
+# paste isn't guaranteed; the multi-line-safe prompt send uses paste_prompt below.
+# Sends NO Enter. Returns non-zero if the paste send itself failed.
 paste_text() {
   tmux send-keys -t "$1" -l "$2" 2>/dev/null || return 1
   sleep "$PASTE_SETTLE_DELAY"
 }
 
-# send_prompt_confirmed <pane> <text> — two-phase confirmed handoff (issue #82).
-#   Phase A: paste the prompt and confirm it was RECEIVED (the input box holds
-#            text); re-paste (bounded by SEND_RETRIES) ONLY if nothing landed —
-#            never blind-repaste.
+# paste_prompt <pane> <text> <buffer> — deliver <text> into a Claude TUI as ONE
+# bracketed paste, so an embedded newline stays TEXT instead of submitting the
+# prompt at its first line (issue #87 — `send-keys -l` sends a newline as a literal
+# Enter). Loads a private tmux buffer from stdin (no temp file), then pastes it
+# with -p (bracketed-paste markers → the TUI buffers the whole paste and never
+# submits mid-way) and -d (delete the private buffer after). No -r: tmux's default
+# LF→CR matches what a real terminal sends on a human paste, the path the TUI
+# already handles. Sends NO Enter; the settle preserves the #82 settle-before-Enter
+# invariant Phase B relies on. Only the PROMPT uses this — the launch/doctor sends
+# type single-line commands into a shell and keep paste_text. Returns non-zero if
+# either tmux stage failed (Phase A then skips its receipt poll and retries).
+paste_prompt() {
+  local pane="$1" text="$2" buf="$3"
+  printf '%s' "$text" | tmux load-buffer -b "$buf" - 2>/dev/null || return 1
+  tmux paste-buffer -p -d -b "$buf" -t "$pane" 2>/dev/null || return 1
+  sleep "$PASTE_SETTLE_DELAY"
+}
+
+# pane_for_window <window-name> — READ-ONLY. Echo the pane id of the (active) pane
+# of the tmux window named <window-name>, searching every session on the server;
+# empty if no such window. Prefers the active pane, falling back to the first.
+pane_for_window() {
+  local wname="$1"
+  tmux list-panes -a -F '#{window_name}	#{pane_active}	#{pane_id}' 2>/dev/null \
+    | awk -F'\t' -v w="$wname" '
+        $1==w && $2==1 { print $3; found=1; exit }
+        $1==w && !first { first=$3 }
+        END { if (!found && first) print first }'
+}
+
+# capture_pane_transcript <target> [lines] — READ-ONLY. Echo the rendered
+# scrollback of a tmux pane as plain text, from <lines> rows back to the bottom
+# (default CAPTURE_LINES). `-p` prints without escape sequences. Returns non-zero
+# if the capture failed (e.g. the target no longer exists).
+capture_pane_transcript() {
+  local target="$1" lines="${2:-$CAPTURE_LINES}"
+  tmux capture-pane -p -t "$target" -S "-$lines" 2>/dev/null || return 1
+}
+
+# send_prompt_confirmed <pane> <text> <buffer> — two-phase confirmed handoff
+# (issue #82).
+#   Phase A: paste the prompt (as ONE bracketed paste via <buffer>, issue #87) and
+#            confirm it was RECEIVED (the input box holds text); re-paste (bounded
+#            by SEND_RETRIES) ONLY if nothing landed — never blind-repaste.
 #   Phase B: send Enter and confirm SUBMISSION (the box cleared); on a swallowed
 #            Enter re-send ENTER ALONE (bounded) — never re-paste, which would
 #            duplicate the prompt.
@@ -503,10 +551,10 @@ paste_text() {
 # the old "always Enter"), but the result is reported unconfirmed. Returns 0 only
 # once submission is confirmed.
 send_prompt_confirmed() {
-  local pane="$1" text="$2" received=false try=0
+  local pane="$1" text="$2" buf="$3" received=false try=0
   # Phase A — deliver + confirm receipt.
   while [ "$try" -le "$SEND_RETRIES" ]; do
-    if paste_text "$pane" "$text" && poll_input "$pane" text; then
+    if paste_prompt "$pane" "$text" "$buf" && poll_input "$pane" text; then
       received=true
       break
     fi
@@ -774,7 +822,8 @@ cmd_dispatch() {
           ("tmux new-window " + $detach + "-c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
-          ("tmux send-keys -t <pane> -l " + $prompt),
+          ("printf %s " + $prompt + " | tmux load-buffer -b issue-" + $issue + " -"),
+          ("tmux paste-buffer -p -d -b issue-" + $issue + " -t <pane>"),
           "tmux send-keys -t <pane> Enter"
         ] + (if $label == "" then [] else [
           ("gh label create " + $label + " --repo " + $repo + " --color " + $color
@@ -843,7 +892,7 @@ cmd_dispatch() {
   # actually consume it (working indicator / cleared input row)? This only informs
   # `prompt_accepted`; it never changes prompt_confirmed or re-sends (issue #67).
   local prompt_confirmed=false prompt_accepted=false
-  if send_prompt_confirmed "$pane" "$prompt"; then
+  if send_prompt_confirmed "$pane" "$prompt" "issue-$n"; then
     prompt_confirmed=true
     if prompt_accepted "$pane"; then
       prompt_accepted=true
@@ -943,10 +992,14 @@ cmd_doctor() {
           ("tmux new-window -d -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
+          "printf %s <multi-line probe> | tmux load-buffer -b issue-doctor -",
+          "tmux paste-buffer -p -d -b issue-doctor -t <pane>",
+          "tmux capture-pane -p -t <pane>",
           "tmux kill-window -t <window>"
         ],
         display: ("[issue] DRY RUN doctor: would spin a throwaway `" + $launch
-                  + "` in window " + $wname + ", check readiness, and tear it down.")
+                  + "` in window " + $wname + ", check readiness, paste a multi-line probe "
+                  + "to verify bracketed-paste delivery, and tear it down.")
       }'
     return 0
   fi
@@ -970,7 +1023,30 @@ cmd_doctor() {
   tier="$WAIT_READY_TIER"
   tail_evidence=$(pane_tail "$pane")
 
-  # Tear down the scratch window (best-effort — a failure never flips ok).
+  # Live multi-line paste probe (issue #87): paste a 3-line marker into the REAL
+  # TUI via the bracketed-paste path — WITHOUT submitting — then read the input box
+  # back. When the build's bracketed paste works, all three lines land as ONE block
+  # and the FIRST line sits on the `❯` input row; had delivery split at a newline,
+  # the first line would have submitted and only the last would remain in the box.
+  # Purely diagnostic and model-free (never presses Enter); only meaningful once the
+  # TUI is ready, so it's skipped otherwise.
+  local probe_ran=false probe_first_held=false probe_seen=0 probe_total=3
+  if [ "$readiness_confirmed" = true ]; then
+    local probe capture box_row marker
+    probe=$(printf 'issue87-probe-alpha\nissue87-probe-bravo\nissue87-probe-charlie')
+    if paste_prompt "$pane" "$probe" "issue-doctor"; then
+      probe_ran=true
+      capture=$(tmux capture-pane -p -t "$pane" 2>/dev/null || printf '')
+      box_row=$(input_box_text "$capture")
+      for marker in issue87-probe-alpha issue87-probe-bravo issue87-probe-charlie; do
+        case "$capture" in *"$marker"*) probe_seen=$((probe_seen + 1)) ;; esac
+      done
+      case "$box_row" in *issue87-probe-alpha*) probe_first_held=true ;; esac
+    fi
+  fi
+
+  # Tear down the scratch window (best-effort — a failure never flips ok). The
+  # probe text is discarded unsubmitted with the window.
   if [ -n "$window" ]; then
     tmux kill-window -t "$window" 2>/dev/null || true
   else
@@ -983,17 +1059,72 @@ cmd_doctor() {
   else
     display="[issue] doctor: readiness NOT confirmed within the poll budget — the readiness marker may have drifted. See pane_tail."
   fi
+  if [ "$probe_ran" = true ]; then
+    if [ "$probe_first_held" = true ] && [ "$probe_seen" -eq "$probe_total" ]; then
+      display="$display Multi-line paste probe: OK — all $probe_total lines held as one un-submitted block."
+    else
+      display="$display Multi-line paste probe: SUSPECT (first-line-held=$probe_first_held, $probe_seen/$probe_total lines seen) — bracketed paste may not be landing."
+    fi
+  fi
 
   jq -n \
     --argjson ready "$readiness_confirmed" --arg tier "$tier" \
-    --arg tail "$tail_evidence" --arg display "$display" '
+    --arg tail "$tail_evidence" --arg display "$display" \
+    --argjson probe_ran "$probe_ran" --argjson probe_first "$probe_first_held" \
+    --argjson probe_seen "$probe_seen" --argjson probe_total "$probe_total" '
     {
       ok: true,
       readiness_confirmed: $ready,
       matched_tier: $tier
     }
+    + (if $probe_ran then {multiline_probe: {first_line_held: $probe_first, lines_seen: $probe_seen, lines_total: $probe_total}} else {} end)
     + (if $tail == "" then {} else {pane_tail: $tail} end)
     + {display: $display}'
+}
+
+# ---- subcommand: capture ----------------------------------------------------
+# capture <n> — READ-ONLY. Dump the recent rendered transcript of the live tmux
+# window for issue <n> (the `<repo-prefix>-<n>` window `do` opened), so you can
+# peek at what that worktree session received/did without switching windows — and,
+# after dispatching a multi-line prompt, confirm every line landed in the ONE
+# submitted message (issue #87 live check). Fragile by nature (the TUI render
+# wraps/box-draws), but distinctive per-line markers survive it. No GitHub calls;
+# opens/kills nothing.
+cmd_capture() {
+  if [ -z "$DRY_RUN" ]; then
+    [ -n "${TMUX:-}" ] || fail "issue capture requires tmux — run Claude inside a tmux session."
+  fi
+  local n="${1:-}"
+  case "$n" in
+    ''|*[!0-9]*) fail "usage: issue.sh capture <issue-number>" ;;
+  esac
+  local repo wname
+  repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
+  wname=$(resolve_wname "$n" "$repo")
+
+  # Dry-run: report the single read-only command it would run and stop.
+  if [ -n "$DRY_RUN" ]; then
+    jq -n --arg wname "$wname" --arg lines "$CAPTURE_LINES" '
+      {
+        ok: true, dry_run: true, window_name: $wname,
+        commands: [ ("tmux capture-pane -p -t <pane-of " + $wname + "> -S -" + $lines) ],
+        display: ("[issue] DRY RUN capture: would dump the last " + $lines
+                  + " rendered rows of the window " + $wname + ".")
+      }'
+    return 0
+  fi
+
+  local pane transcript
+  pane=$(pane_for_window "$wname")
+  [ -n "$pane" ] || fail "no live tmux window named \`$wname\` — dispatch it first with \`/issue do $n\`."
+  transcript=$(capture_pane_transcript "$pane") \
+    || fail "failed to capture pane \`$pane\` (window \`$wname\`)."
+
+  jq -n --arg wname "$wname" --arg pane "$pane" --arg tx "$transcript" '
+    {
+      ok: true, window_name: $wname, pane: $pane, transcript: $tx,
+      display: ("[issue] capture " + $wname + " (" + $pane + ") — recent rendered rows:\n\n" + $tx)
+    }'
 }
 
 # ---- subcommand: complete ---------------------------------------------------
@@ -1220,5 +1351,6 @@ case "${1:-}" in
   create)   shift; cmd_create "$@" ;;
   complete) shift; cmd_complete "$@" ;;
   doctor)   shift; cmd_doctor "$@" ;;
-  *)        fail "usage: issue.sh <list | dispatch <n> | view <n> | create --title <t> [--body-file <p>] | complete <plan|execute> <n> | doctor>" ;;
+  capture)  shift; cmd_capture "$@" ;;
+  *)        fail "usage: issue.sh <list | dispatch <n> | view <n> | create --title <t> [--body-file <p>] | complete <plan|execute> <n> | doctor | capture <n>>" ;;
 esac

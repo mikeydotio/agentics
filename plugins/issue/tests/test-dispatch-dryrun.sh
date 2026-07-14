@@ -18,6 +18,14 @@ assert_contains "$cmds" "issue #42 in this repo" "default prompt substituted"
 # must NOT start with /plan (that routes to a /plan skill, e.g. forge's planner).
 assert_not_contains "$cmds" "BTab" "no shift-tab keystrokes (plan mode via flag)"
 assert_not_contains "$cmds" "/plan" "prompt no longer routes through the /plan skill"
+# issue #87: the prompt is delivered as ONE bracketed paste (load-buffer +
+# paste-buffer -p -d), NOT `send-keys -l` — so an embedded newline in a multi-line
+# ISSUE_PROMPT stays text instead of submitting at its first line. The launch line
+# still uses send-keys -l (single-line, into a shell), so the negative below is
+# scoped to the prompt text, not a blanket send-keys -l ban.
+assert_contains "$cmds" "tmux load-buffer -b issue-42 -" "prompt loaded into a private tmux buffer"
+assert_contains "$cmds" "tmux paste-buffer -p -d -b issue-42 -t <pane>" "prompt pasted bracketed (-p) then buffer deleted (-d)"
+assert_eq "$(jqf "$out" '[.commands[] | select(test("send-keys.*-l") and test("issue #42 in this repo"))] | length')" "0" "prompt is NOT delivered via send-keys -l"
 # Window is named "<repo-prefix>-<n>": origin fake/repo -> "rep-42".
 assert_eq "$(jqf "$out" .window_name)" "rep-42" "window_name is <repo-prefix>-<n>"
 assert_contains "$cmds" "-n rep-42" "new-window carries the -n <name> flag"

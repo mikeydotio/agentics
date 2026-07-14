@@ -123,6 +123,12 @@ assert_contains "$dcmds" "new-window -d -n hi-doctor" "doctor dry-run: opens a d
 assert_contains "$dcmds" "true --permission-mode plan" "doctor dry-run: launches the (overridden) throwaway command"
 assert_contains "$dcmds" "kill-window" "doctor dry-run: tears the scratch window down"
 assert_eq "$(jqf "$out" '[.commands[]|select(startswith("gh"))]|length')" "0" "doctor dry-run: no gh side effects"
+# issue #87: the doctor real path now also pastes a multi-line probe (via the
+# bracketed-paste delivery) and reads the box back, to verify the installed build
+# keeps a multi-line paste as one un-submitted block. The dry-run lists that probe.
+assert_contains "$dcmds" "tmux load-buffer -b issue-doctor -" "doctor dry-run: lists the probe buffer load"
+assert_contains "$dcmds" "tmux paste-buffer -p -d -b issue-doctor -t <pane>" "doctor dry-run: lists the bracketed probe paste"
+assert_contains "$dcmds" "tmux capture-pane -p -t <pane>" "doctor dry-run: lists the box read-back"
 
 # --- doctor: real run reports the matched tier --------------------------------
 # marker capture → "marker" tier; structural capture → "structural" tier.
@@ -133,6 +139,12 @@ out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "doctor marker: readiness confirmed"
 assert_eq "$(jqf "$out" .matched_tier)" "marker" "doctor marker: reports the marker tier"
+# issue #87: the multi-line paste probe landed as one block — the FIRST line sits
+# on the ❯ input row and all three marker lines are present (bracketed paste kept
+# the newlines as text; had it split, only the last line would remain in the box).
+assert_eq "$(jqf "$out" .multiline_probe.first_line_held)" "true" "doctor marker: probe's first line held in the box (not submitted)"
+assert_eq "$(jqf "$out" .multiline_probe.lines_seen)" "3" "doctor marker: all 3 probe lines received as one block"
+assert_eq "$(jqf "$out" .multiline_probe.lines_total)" "3" "doctor marker: probe reports its line total"
 
 out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
       ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=structural \

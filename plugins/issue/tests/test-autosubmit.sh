@@ -52,6 +52,16 @@ count_pastes() {
 # box was submitted/cleared).
 box_content() { cat "$1/input" 2>/dev/null || printf ''; }
 
+# prompt_submits <state-dir> — how many PROMPT-phase submits the fake recorded
+# (issue #87). A prompt delivered as one bracketed paste submits exactly once; a
+# multi-line prompt sent via `send-keys -l` submits once per embedded newline.
+prompt_submits() { cat "$1/prompt_submits" 2>/dev/null || printf '0'; }
+
+# submitted <state-dir> — the content of the LAST prompt submit (the whole
+# multi-line prompt when it landed as one block; only its final line when it was
+# split at a newline).
+submitted() { cat "$1/submitted" 2>/dev/null || printf ''; }
+
 # --- Case 1: happy path — Enter submits first try, single paste ----------------
 # absorb=0: the prompt is received and the very first Enter submits it. Guards the
 # common path — must stay green before and after the fix.
@@ -106,6 +116,29 @@ out=$(dispatch_autosubmit "$repo" 45 "$state" FAKE_TMUX_DROP_PASTE=1 ISSUE_SEND_
 assert_eq "$(jqf "$out" .prompt_confirmed)" "false" "drop: prompt_confirmed:false (paste never landed)"
 assert_eq "$(jqf "$out" 'has("warning")')" "true" "drop: warning present"
 assert_eq "$(count_pastes "$state" 'autosubmit-probe-45')" "3" "drop: prompt re-pasted SEND_RETRIES+1 = 3 times"
+rm -rf "$state"
+
+# --- Case 5: a MULTI-LINE prompt must land as ONE submission (issue #87) --------
+# `send-keys -l` sends an embedded newline as a literal Enter, so a multi-line
+# ISSUE_PROMPT would be SUBMITTED at its first newline (the rest typed into a fresh
+# prompt). The fix delivers the prompt as one bracketed paste (load-buffer +
+# paste-buffer -p), so every line lands together and a single trailing Enter
+# submits the whole thing. This asserts EXACTLY one prompt submit whose content
+# holds both the first and last lines: RED with `send-keys -l` (splits →
+# prompt_submits==3, submitted holds only the last line), GREEN with the buffer
+# paste. dispatch_autosubmit's `env "$@"` overrides its fixed one-line probe.
+repo=$(mk_repo)
+state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
+out=$(dispatch_autosubmit "$repo" 46 "$state" \
+      "ISSUE_PROMPT=$(printf 'ml-first-<n>\nml-middle\nml-last-<n>')")
+assert_eq "$(jqf "$out" .ok)" "true" "multiline: ok:true"
+assert_eq "$(jqf "$out" .prompt_confirmed)" "true" "multiline: prompt_confirmed"
+assert_eq "$(jqf "$out" 'has("warning")')" "false" "multiline: no warning"
+assert_eq "$(prompt_submits "$state")" "1" "multiline: submitted exactly ONCE (no premature submit at a newline)"
+assert_contains "$(submitted "$state")" "ml-first-46" "multiline: the submission holds the FIRST line"
+assert_contains "$(submitted "$state")" "ml-last-46" "multiline: the submission holds the LAST line"
+assert_eq "$(box_content "$state")" "" "multiline: input box cleared (submitted)"
+assert_eq "$(count_pastes "$state" 'ml-first-46')" "1" "multiline: prompt delivered exactly once"
 rm -rf "$state"
 
 finish

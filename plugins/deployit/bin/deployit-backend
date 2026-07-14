@@ -139,7 +139,7 @@ _ROW_TEMPLATE = string.Template("""<li class="$archived_class"$data_href_attr$da
       $title_block
       <div class="actions-slot"><div class="action-track"><a class="install" href="$install_href">$install_label</a>$delete_button</div></div>
     </div>
-    <div class="sub">$origin_host · $commit · $rel$older_html</div>
+    <div class="sub">$origin_host · $commit · $rel$older_html$post_test_badge</div>
   </div>
 </li>""")
 
@@ -162,7 +162,8 @@ def _product_path(bundle_id: str, platform: str) -> str:
     return f"/deployit/p/{urllib.parse.quote(bundle_id, safe='')}/{platform}/"
 
 
-def _render_row(build, *, older_count: int, link_to_product: bool, is_local: bool) -> str:
+def _render_row(build, *, older_count: int, link_to_product: bool, is_local: bool,
+                post_test_badge: str = "") -> str:
     href, label = _install_link(build)
     project = html.escape(build["project"])
     platform = html.escape(_platform_display(build["platform"]))
@@ -203,6 +204,7 @@ def _render_row(build, *, older_count: int, link_to_product: bool, is_local: boo
         commit=html.escape(build["commit"][:7]),
         rel=html.escape(_relative_time(build["timestamp"])),
         older_html=older_html,
+        post_test_badge=post_test_badge,
         delete_button=delete_button,
     )
 
@@ -245,6 +247,54 @@ def _read_build_meta(root: Path, build_id: str):
     return json.loads(meta_path.read_text())
 
 
+# Out-of-band post-deploy test status (issue #90). Written by the deploy CLI /
+# bin/deployit-posttest under <state>/posttest/<id>.json — deliberately OUTSIDE
+# serve/<id>/ so a mid-run write can't resurrect a build gc/rm deleted, nor tear
+# _meta.json. The page renders whatever status is present; a build that predates
+# the feature (no status file) simply shows no badge.
+_POST_TEST_LABELS = {
+    "passed": "Tests passed",
+    "failed": "Tests failed",
+    "error": "Test run error",
+    "running": "Tests running…",
+    "not_configured": "No post-deploy tests",
+}
+
+
+def _read_post_test_status(root: Path, build_id: str):
+    path = root / "posttest" / f"{build_id}.json"
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _post_test_kind(status) -> str:
+    kind = (status or {}).get("status")
+    return kind if kind in _POST_TEST_LABELS else ""
+
+
+def _post_test_landing_html(status) -> str:
+    """Block-level status badge for the per-build landing page ('' when absent)."""
+    kind = _post_test_kind(status)
+    if not kind:
+        return ""
+    return (f'<p class="posttest posttest-{kind}">'
+            f'{html.escape(_POST_TEST_LABELS[kind])}</p>')
+
+
+def _post_test_row_html(status) -> str:
+    """Compact inline badge appended to a listing/product row subline ('' when
+    absent, e.g. foreign builds whose status lives on their origin Mac)."""
+    kind = _post_test_kind(status)
+    if not kind:
+        return ""
+    return (f' · <span class="posttest-inline posttest-{kind}">'
+            f'{html.escape(_POST_TEST_LABELS[kind])}</span>')
+
+
 def _render_build_landing(root: Path, build) -> bytes:
     href, label = _install_link(build)
     tmpl = string.Template((root / "_plugin_root" / "assets" / "index.template.html").read_text())
@@ -256,6 +306,7 @@ def _render_build_landing(root: Path, build) -> bytes:
         BUILD_NUMBER=html.escape(build["build_number"]),
         COMMIT=html.escape(build["commit"][:7]),
         TIMESTAMP=html.escape(build["timestamp"]),
+        POST_TEST_STATUS=_post_test_landing_html(_read_post_test_status(root, build["id"])),
         INSTALL_HREF=html.escape(href, quote=True),
         INSTALL_LABEL=label,
         TRUST_NOTE=(
@@ -295,8 +346,9 @@ def _render_listing(root: Path, local_host: str) -> bytes:
     for b in newest:
         key = (b.get("bundle_id"), b.get("platform"))
         is_local = base_url is not None and b.get("origin_base_url") == base_url
+        badge = _post_test_row_html(_read_post_test_status(root, b["id"]))
         rows.append(_render_row(b, older_count=counts[key], link_to_product=True,
-                                is_local=is_local))
+                                is_local=is_local, post_test_badge=badge))
     template_path = root / "_plugin_root" / "assets" / "listing.template.html"
     tmpl = string.Template(template_path.read_text())
     return tmpl.substitute(
@@ -346,7 +398,8 @@ def _render_product(root: Path, bundle_id: str, platform: str):
     base_url = _read_base_url(root)
     matches.sort(key=lambda b: b["timestamp"], reverse=True)
     rows = [_render_row(b, older_count=0, link_to_product=False,
-                        is_local=base_url is not None and b.get("origin_base_url") == base_url)
+                        is_local=base_url is not None and b.get("origin_base_url") == base_url,
+                        post_test_badge=_post_test_row_html(_read_post_test_status(root, b["id"])))
             for b in matches]
     sparkle_block = _render_sparkle_block(bundle_id, platform, matches)
     template_path = root / "_plugin_root" / "assets" / "product.template.html"

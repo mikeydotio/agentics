@@ -1303,6 +1303,104 @@ def _publish_github_release(plugin_root: Path, cwd: Path, state: Path, build_id:
                 "display": f"release: deployit-release produced no JSON (exit {res.returncode})"}
 
 
+# --- Out-of-band post-deploy tests (issue #90) -----------------------------
+# A long UI suite cannot run inside a synchronous PreToolUse hook (Claude Code
+# kills those at ~60s). So a project opts in with a convention script
+# <project>/.deployit/post-deploy-test.sh (mirroring the .deployit/ExportOptions
+# convention); after a build is fully published we spawn bin/deployit-posttest
+# DETACHED to run it, streaming to a per-build log and recording a status file
+# the web build page renders. Status + log live OUTSIDE serve/<id>/ so a mid-run
+# write can't resurrect a build that gc/rm deleted, nor tear _meta.json.
+
+POST_TEST_SCRIPT_REL = ".deployit/post-deploy-test.sh"
+
+
+def _post_test_status_path(state: Path, build_id: str) -> Path:
+    return state / "posttest" / f"{build_id}.json"
+
+
+def _post_test_log_path(state: Path, build_id: str) -> Path:
+    return state / "logs" / f"posttest-{build_id}.log"
+
+
+def _write_post_test_status(status_file: Path, record: dict) -> None:
+    """Atomic status write (temp + os.replace), shared discipline with
+    bin/deployit-posttest so the backend never reads a half-written file."""
+    status_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = status_file.with_name(f"{status_file.name}.tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(record, indent=2))
+    os.replace(tmp, status_file)
+
+
+def _prune_post_test_artifacts(state: Path, build_id: str) -> None:
+    """Delete a build's post-test status + log when the build itself is pruned
+    (gc/rm), so they don't orphan under <state>/posttest and <state>/logs."""
+    _post_test_status_path(state, build_id).unlink(missing_ok=True)
+    _post_test_log_path(state, build_id).unlink(missing_ok=True)
+
+
+def _spawn_post_deploy_test(state: Path, plugin_root: Path, project_dir: Path,
+                            build_id: str, install_url: str) -> dict:
+    """Kick off the project's post-deploy test suite OUT OF BAND, returning a
+    small dict for the deploy display. Never raises — a post-test concern must
+    never affect the already-published build.
+
+    Absent script -> record `not_configured` and say so (a test gate must never
+    be a silent no-op). Present -> spawn bin/deployit-posttest DETACHED:
+    start_new_session so it outlives this CLI process AND the ~60s hook / tool
+    timeout, and ALL stdio to DEVNULL so the deploy's own Bash tool returns
+    immediately rather than blocking on the child's inherited stdout pipe (the
+    exact trap #90 escapes). Honors DEPLOYIT_SKIP_POSTTEST (tests/offline)."""
+    status_file = _post_test_status_path(state, build_id)
+    log_file = _post_test_log_path(state, build_id)
+    script = project_dir / POST_TEST_SCRIPT_REL
+    # The build is ALREADY published by the time we run — no post-test
+    # bookkeeping failure (a full disk, an unwritable state dir) may propagate
+    # out and fail an otherwise-successful deploy.
+    try:
+        if not script.is_file():
+            _write_post_test_status(status_file, {
+                "build_id": build_id, "status": "not_configured",
+                "started_at": None, "finished_at": None,
+            })
+            return {"status": "not_configured", "script": str(script)}
+
+        if os.environ.get("DEPLOYIT_SKIP_POSTTEST"):
+            return {"status": "skipped", "script": str(script),
+                    "log_path": str(log_file), "status_file": str(status_file)}
+
+        started_at = _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+        helper = plugin_root / "bin" / "deployit-posttest"
+        cmd = ["python3", str(helper),
+               "--script", str(script),
+               "--project-dir", str(project_dir),
+               "--build-id", build_id,
+               "--status-file", str(status_file),
+               "--log-file", str(log_file),
+               "--state-dir", str(state),
+               "--install-url", install_url]
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        # Initial `running` marker so the build page reflects the run
+        # immediately; the detached helper rewrites this file with the final
+        # outcome minutes on.
+        _write_post_test_status(status_file, {
+            "build_id": build_id, "status": "running", "pid": proc.pid,
+            "started_at": started_at, "finished_at": None,
+            "exit_code": None, "log_path": str(log_file),
+        })
+        return {"status": "running", "pid": proc.pid,
+                "log_path": str(log_file), "status_file": str(status_file)}
+    except Exception as exc:  # never fail the deploy over a post-test concern
+        return {"status": "error", "detail": str(exc),
+                "log_path": str(log_file), "status_file": str(status_file)}
+
+
 def cmd_bootstrap(args):
     args.plugin_root = args.plugin_root.resolve()
     state = _state_dir()
@@ -1426,6 +1524,10 @@ def cmd_deploy(args):
 
     install_url = f"{base_url}/{build_id}/"
     listing_url = f"{base_url}/"
+    # Out-of-band post-deploy test (issue #90): fire-and-forget AFTER the build
+    # is fully published, so a long suite runs free of the ~60s hook/tool
+    # timeout. Never raises; the deploy is already done regardless of outcome.
+    post_test = _spawn_post_deploy_test(state, args.plugin_root, cwd, build_id, install_url)
     display = (
         f"deployed: {entry['project']} {entry['platform']} "
         f"{entry['marketing_version']} (build {entry['build_number']})\n"
@@ -1436,6 +1538,7 @@ def cmd_deploy(args):
         "build_id": build_id,
         "install_url": install_url,
         "listing_url": listing_url,
+        "post_test": post_test.get("status"),
     }
     # Sparkle: when this build was EdDSA-signed, surface the appcast feed and the
     # public key so the developer can wire SUFeedURL / SUPublicEDKey into the app.
@@ -1475,6 +1578,20 @@ def cmd_deploy(args):
     elif publish.get("pr_url"):
         result["index_pr_url"] = publish["pr_url"]
         display += f"\nindex:    published via PR — {publish['pr_url']}"
+    # Post-deploy test outcome. `running` is the norm (the suite is still going
+    # out-of-band); the build page shows the pass/fail badge when it finishes.
+    # `not_configured` is stated loudly so a missing gate is never a silent no-op.
+    pt = post_test.get("status")
+    if pt == "running":
+        display += (f"\npost_test: running out-of-band → {post_test['log_path']}"
+                    "\n           (pass/fail appears on the build page when it finishes)")
+    elif pt == "not_configured":
+        display += ("\npost_test: no .deployit/post-deploy-test.sh — skipped"
+                    "\n           (add one to run your test suite after every deploy)")
+    elif pt == "skipped":
+        display += "\npost_test: skipped (DEPLOYIT_SKIP_POSTTEST)"
+    elif pt == "error":
+        display += f"\npost_test: FAILED to start — {post_test.get('detail', '')}"
     result["display"] = display
     ok(result)
 
@@ -1747,6 +1864,7 @@ def cmd_gc(args):
             if d.exists():
                 _shutil.rmtree(d)
                 removed += 1
+            _prune_post_test_artifacts(state, bid)
         if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
             _refresh_local_backend(cfg["server"]["port"])
 
@@ -1814,6 +1932,7 @@ def cmd_rm(args):
             if d.exists():
                 _shutil.rmtree(d, ignore_errors=True)
                 removed += 1
+            _prune_post_test_artifacts(state, bid)
         if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
             _refresh_local_backend(cfg["server"]["port"])
 

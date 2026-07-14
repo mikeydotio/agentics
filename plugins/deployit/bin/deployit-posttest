@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""deployit-posttest — run a project's post-deploy test suite out-of-band.
+
+Spawned DETACHED by ``bin/deployit-cli`` (``cmd_deploy``) after a build is fully
+published, so a long UI suite runs free of Claude Code's ~60s PreToolUse hook
+timeout and the deploy tool's own timeout (issue #90). This process is the
+authoritative writer of the build's post-test *outcome*; the deploy CLI only
+writes the initial ``running`` marker before spawning us so the web page reflects
+the run immediately.
+
+Contract:
+  * We run ``<project>/.deployit/post-deploy-test.sh`` via ``bash``, holding a
+    ``caffeinate -i`` assertion for our whole lifetime so idle-sleep can't
+    suspend a 15-20 min suite.
+  * The suite's stdout+stderr stream to the per-build log.
+  * On completion we atomically rewrite the status file:
+      exit 0        -> "passed"
+      exit non-zero -> "failed"   (the suite ran and reported failure)
+      couldn't run  -> "error"    (we couldn't even launch the script)
+  * We NEVER exit non-zero for a test failure and never raise past ``main``: a
+    post-test outcome must not look like a deploy failure to anything watching.
+
+The project script owns BOTH running the suite AND reporting failures (e.g.
+filing a GitHub issue per failing test). We pass context via env:
+  DEPLOYIT_BUILD_ID, DEPLOYIT_PROJECT_DIR, DEPLOYIT_INSTALL_URL,
+  DEPLOYIT_STATE_DIR, DEPLOYIT_TEST_LOG, DEPLOYIT_POST_TEST_STATUS_FILE
+"""
+
+import argparse
+import datetime as _dt
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+
+def _now() -> str:
+    return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _write_status_atomic(status_file: Path, record: dict) -> None:
+    """Write the status JSON atomically (temp + os.replace) so the backend
+    never reads a half-written file while polling the build page."""
+    status_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp = status_file.with_name(f"{status_file.name}.tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(record, indent=2))
+    os.replace(tmp, status_file)
+
+
+def _read_status(status_file: Path) -> dict:
+    try:
+        return json.loads(status_file.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def main() -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("--script", required=True)
+    p.add_argument("--project-dir", required=True)
+    p.add_argument("--build-id", required=True)
+    p.add_argument("--status-file", required=True)
+    p.add_argument("--log-file", required=True)
+    p.add_argument("--state-dir", required=True)
+    p.add_argument("--install-url", default="")
+    args = p.parse_args()
+
+    status_file = Path(args.status_file)
+    log_file = Path(args.log_file)
+
+    # Resolve to absolute paths NOW, before we hand the child a different cwd
+    # (the suite runs with cwd=project_dir): a relative --script would otherwise
+    # be looked up against the project dir and vanish.
+    script = Path(args.script).resolve()
+    project_dir = str(Path(args.project_dir).resolve())
+
+    # Preserve the started_at the deploy CLI stamped on the `running` marker so
+    # the elapsed time on the page is honest; fall back if the marker is gone.
+    prior = _read_status(status_file)
+    base = {
+        "build_id": args.build_id,
+        "pid": os.getpid(),
+        "started_at": prior.get("started_at") or _now(),
+        "log_path": str(log_file),
+    }
+
+    if not script.is_file():
+        _write_status_atomic(status_file, {
+            **base, "status": "error", "finished_at": _now(), "exit_code": None,
+            "detail": f"post-deploy test script not found: {script}",
+        })
+        return 0
+
+    child_env = {
+        **os.environ,
+        "DEPLOYIT_BUILD_ID": args.build_id,
+        "DEPLOYIT_PROJECT_DIR": project_dir,
+        "DEPLOYIT_INSTALL_URL": args.install_url,
+        "DEPLOYIT_STATE_DIR": args.state_dir,
+        "DEPLOYIT_TEST_LOG": str(log_file),
+        "DEPLOYIT_POST_TEST_STATUS_FILE": str(status_file),
+    }
+
+    # Hold an idle-sleep assertion for our whole lifetime. `-w <our pid>` makes
+    # caffeinate exit when we do; we never wait on it and it can't perturb the
+    # suite's own exit code (which we read directly from `bash`). Absent on
+    # non-macOS (tests) — fall back to a bare run.
+    caffeinate = None
+    if shutil.which("caffeinate"):
+        try:
+            caffeinate = subprocess.Popen(
+                ["caffeinate", "-i", "-w", str(os.getpid())],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            caffeinate = None
+
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(log_file, "w") as logf:
+            logf.write(f"# deployit post-deploy test — {args.build_id}\n")
+            logf.write(f"# started {base['started_at']} — cwd {args.project_dir}\n")
+            logf.write(f"# script  {script}\n\n")
+            logf.flush()
+            proc = subprocess.run(
+                ["bash", str(script)],
+                cwd=project_dir,
+                env=child_env,
+                stdin=subprocess.DEVNULL,
+                stdout=logf,
+                stderr=subprocess.STDOUT,
+            )
+        exit_code = proc.returncode
+        _write_status_atomic(status_file, {
+            **base,
+            "status": "passed" if exit_code == 0 else "failed",
+            "finished_at": _now(),
+            "exit_code": exit_code,
+        })
+    except OSError as exc:
+        _write_status_atomic(status_file, {
+            **base, "status": "error", "finished_at": _now(), "exit_code": None,
+            "detail": f"could not launch post-deploy test: {exc}",
+        })
+    finally:
+        if caffeinate is not None and caffeinate.poll() is None:
+            caffeinate.terminate()
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as exc:  # never surface as a deploy failure
+        sys.stderr.write(f"deployit-posttest: unexpected error: {exc}\n")
+        sys.exit(0)

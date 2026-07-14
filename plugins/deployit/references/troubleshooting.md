@@ -26,6 +26,9 @@
 | Sparkle says "you're up to date" despite a newer build | `CFBundleVersion` did not increase between builds (Sparkle compares `sparkle:version`) | Ensure the host repo bumps the build number per build; deployit reads `CFBundleVersion` from the archived `Info.plist`. |
 | visionOS deploy fails: scheme not found | Consuming repo has no visionOS target | Add a visionOS target to the Xcode project, or do not pass `--platform visionos`. |
 | Build-number regresses (e.g. build 10 after build 15) | Archive pre-action called twice (once by pre-action, once by deploy script) | Remove any explicit bump-script call from the deploy wrapper. The Archive pre-action already fires for `xcodebuild archive`. |
+| Deploy shows `post_test: no .deployit/post-deploy-test.sh — skipped` but you expected a suite to run | The opt-in script is missing or mis-named (deployit looks for exactly `<project>/.deployit/post-deploy-test.sh`) | Create it at that path (see `references/post-deploy-tests.md`). It runs out-of-band after every deploy; a `not_configured` badge on the build page means the same thing. |
+| Build page shows `Tests running…` long after the suite should have finished | The detached run was killed (e.g. machine slept/rebooted mid-suite) or the script hangs | The status JSON at `<state>/posttest/<build_id>.json` carries `pid` + `started_at` — `kill -0 <pid>` to check liveness. Check `<state>/logs/posttest-<build_id>.log` for where it stalled; re-deploy to re-run. |
+| Post-deploy test reports `error` (not `failed`) | deployit couldn't launch the script (unreadable, or `bash` unavailable) | Confirm `.deployit/post-deploy-test.sh` is a readable shell script; run `bash .deployit/post-deploy-test.sh` by hand to reproduce. |
 
 ## Log locations
 

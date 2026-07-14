@@ -23,6 +23,11 @@
   dd { margin: 0; color: var(--fg); font-variant-numeric: tabular-nums; }
   a.install { display: block; background: var(--accent); color: #fff; text-align: center; font-weight: 600; padding: 14px; border-radius: 12px; text-decoration: none; margin-bottom: 20px; }
   code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .posttest { display: inline-block; font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 8px; margin: 0 0 20px; }
+  .posttest-passed { background: #16a34a22; color: #16a34a; }
+  .posttest-failed, .posttest-error { background: #dc262622; color: #dc2626; }
+  .posttest-running { background: #d9770622; color: #d97706; }
+  .posttest-not_configured { background: #6b6b6b22; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -34,6 +39,7 @@
     <dt>Commit</dt><dd><code>$COMMIT</code></dd>
     <dt>Built</dt><dd>$TIMESTAMP</dd>
   </dl>
+  $POST_TEST_STATUS
   <a class="install" href="$INSTALL_HREF">$INSTALL_LABEL</a>
   $TRUST_NOTE
 </main>

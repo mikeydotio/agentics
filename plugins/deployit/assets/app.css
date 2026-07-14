@@ -42,6 +42,13 @@ li:has(.swipe-delete:focus-visible) .action-track { transform: translateX(-50%);
 .meta-line { color: var(--muted); font-size: 13px; }
 .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .older { color: var(--muted); font-size: 13px; }
+/* Out-of-band post-deploy test badge (issue #90): a compact status pill in the
+   row subline. Colour by outcome; translucent fills read on light and dark. */
+.posttest-inline { font-weight: 600; }
+.posttest-inline.posttest-passed { color: #16a34a; }
+.posttest-inline.posttest-failed, .posttest-inline.posttest-error { color: #dc2626; }
+.posttest-inline.posttest-running { color: #d97706; }
+.posttest-inline.posttest-not_configured { color: var(--muted); }
 /* Install/Download and Delete are the same pill: equal fixed width (sized for the
    longest label, "Download"), same height and corner radius. Flex centering keeps
    the label exactly centered regardless of text. */

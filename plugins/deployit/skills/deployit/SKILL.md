@@ -134,6 +134,19 @@ Every macOS `deploy` also publishes a GitHub release on the **app's own repo**
   download that opens without the Gatekeeper prompt, configure notarization
   (`[macos] notarize`). Full details in `references/github-release.md`.
 
+## Post-deploy tests
+
+If the project has a `.deployit/post-deploy-test.sh`, every `deploy` runs it
+**out-of-band** after the build is fully published: deployit spawns it detached
+(so a 15–20 min suite runs free of the ~60s hook/tool timeout), streams it to a
+per-build log, and the deploy `display` ends with a `post_test:` line — either
+`running out-of-band → <log>` or `no .deployit/post-deploy-test.sh — skipped`.
+The pass/fail badge appears on the build page when the suite finishes; the script
+owns any failure reporting (e.g. filing an issue per failing test). Surface the
+`post_test:` line to the user but do **not** wait on the suite. Long suites belong
+here; keep a fast (<60s) blocking gate as a PreToolUse hook. Full details in
+`references/post-deploy-tests.md`.
+
 ## Question loop
 
 When the CLI returns a `questions` array (e.g., multiple schemes match the
@@ -155,6 +168,7 @@ appended to the original command.
 - `references/ios.md` — iOS specifics: signing, UDID registration, Trust flow
 - `references/macos.md` — macOS Developer-ID signing + notarytool
 - `references/github-release.md` — macOS GitHub release: version/tag rules, notes, notarization, recovery
+- `references/post-deploy-tests.md` — out-of-band post-deploy test suites via `.deployit/post-deploy-test.sh`
 - `references/sparkle.md` — macOS Sparkle auto-update: appcast + EdDSA signing + app wiring
 - `references/visionos.md` — visionOS specifics (mostly ≡ iOS)
 - `references/tailscale-serve.md` — proxy config + Mac App Store variant quirks

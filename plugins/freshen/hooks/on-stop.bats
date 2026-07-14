@@ -52,6 +52,7 @@ SHIM
   export PANE_CONFIRM_ATTEMPTS=2
   export PANE_CONFIRM_DELAY=0.01
   export PANE_SEND_RETRIES=1
+  export PANE_PASTE_SETTLE_DELAY=0
 }
 
 teardown() {
@@ -65,7 +66,7 @@ send_count() {
 run_on_stop() {
   ( cd "$TEST_DIR" && \
     CLAUDE_PLUGIN_ROOT="$FRESHEN_ROOT" TMUX=1 TMUX_PANE="%1" \
-    PANE_CONFIRM_ATTEMPTS="$PANE_CONFIRM_ATTEMPTS" PANE_CONFIRM_DELAY="$PANE_CONFIRM_DELAY" PANE_SEND_RETRIES="$PANE_SEND_RETRIES" \
+    PANE_CONFIRM_ATTEMPTS="$PANE_CONFIRM_ATTEMPTS" PANE_CONFIRM_DELAY="$PANE_CONFIRM_DELAY" PANE_SEND_RETRIES="$PANE_SEND_RETRIES" PANE_PASTE_SETTLE_DELAY="$PANE_PASTE_SETTLE_DELAY" \
     STATE_DIR="$STATE_DIR" TMUX_CALL_LOG="$TMUX_CALL_LOG" \
     bash "$HOOK" < /dev/null )
 }
@@ -108,7 +109,9 @@ run_on_stop() {
   : > "$STATE_DIR/pane_content"
   run run_on_stop
   [ "$status" -eq 0 ]
-  [ "$(send_count)" = "1" ]
+  # /clear is now delivered as a paste + a separate Enter (so the Enter can be
+  # resent alone on a swallowed submit, #86): 2 send-keys calls.
+  [ "$(send_count)" = "2" ]
   [ -f "$TEST_DIR/.freshen/.clear-pending" ]
   run grep -c 'sending /clear' "$TEST_DIR/.freshen/transitions.log"
   [ "$output" = "1" ]

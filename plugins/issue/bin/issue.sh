@@ -62,6 +62,13 @@ LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # single-line + ASCII (no backticks) so `tmux send-keys -l` types it verbatim
 # without key-interpretation.
 PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. Begin by reading the issue and ALL of its comments (e.g. gh issue view <n> --comments) so you have the full discussion history. If the issue has been reopened, treat that as a signal that a previous fix was insufficient: review the earlier attempts and any linked PRs, understand why they fell short, and make sure your plan resolves the underlying problem rather than repeating them. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it. Do not bump the version or deploy from this worktree: do not run semver bump, deployit deploy, or any release/version step, and do not plan for them -- versioning and deployment happen later from the main branch, not here.}"
+# Extra clause a caller appends to the handoff prompt (daemon-caller seam).
+# Appended VERBATIM with a single space separator, AFTER <n>/<name> templating
+# of the base prompt — the extra itself undergoes NO substitution. Like
+# PROMPT_TPL, keep it single-line + ASCII (no backticks): tmux send-keys -l
+# types it into the child session literally. Empty/unset leaves the prompt
+# byte-identical to the PROMPT_TPL rendering.
+PROMPT_EXTRA="${ISSUE_PROMPT_EXTRA:-}"
 # The "picked up" label applied to the issue at dispatch (issue #50). Set
 # ISSUE_LABEL="" to disable labeling entirely. Color/description are used
 # only when the label doesn't yet exist in the repo (create-if-missing). Uses
@@ -756,6 +763,9 @@ cmd_dispatch() {
   # wname start with "-", producing a leading-dash launch arg — see WINDOW_NAME_TPL.)
   launch_cmd=$(render_template "$LAUNCH_TPL" "$n" "$wname")
   prompt=$(render_template "$PROMPT_TPL" "$n" "$wname")
+  # Caller clause (PROMPT_EXTRA): appended verbatim after templating, so the
+  # extra never undergoes <n>/<name> substitution. Single-space separator.
+  [ -n "$PROMPT_EXTRA" ] && prompt="$prompt $PROMPT_EXTRA"
 
   # Read-only: is the per-issue worktree dir already gitignored (issue #55)?
   # Computed here so both the dry-run preview and the real write can report it.
@@ -784,7 +794,7 @@ cmd_dispatch() {
       {
         ok: true, dry_run: true,
         issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
-        window_name: $wname, label: $label,
+        window_name: $wname, label: $label, prompt: $prompt,
         gitignore: (if $ignore_status == "already-ignored" then "already-ignored" else "would-add" end),
         commands: ([
           ("tmux new-window " + $target + $detach + "-c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),

@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.30.0] - 2026-07-14
+
+### Added
+- ISSUE_PROMPT_EXTRA appends a caller clause to the handoff prompt (0f69ec8)
+- ISSUE_TARGET_SESSION dispatches into a named tmux session (177b8d2)
+
+### Changed
+- Merge pull request #89 from mikeydotio/atlas/update-7387d36 (fe6e538)
+- Merge pull request #85 from mikeydotio/worktree-age-82 (7387d36)
+
+### Documentation
+- update to v2.29.0 (58 cells re-judged; rca-v2 split into 6 modules + issue-tests into 2; semver worktree-guard, issue autosubmit) (f19cbed)
+
+_[manual]_
+
 ## [v2.29.0] - 2026-07-12
 
 ### Fixed

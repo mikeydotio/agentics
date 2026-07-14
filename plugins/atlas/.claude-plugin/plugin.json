@@ -1,6 +1,6 @@
 {
   "name": "atlas",
-  "version": "2.29.0",
+  "version": "2.30.0",
   "description": "Committed markdown codebase maps for agentic tools — full mapping plus git-aware incremental updates via a blob-SHA dependency ledger, with a token-budgeted always-loaded INDEX and staleness-aware session hooks",
   "author": {
     "name": "mikeydotio"

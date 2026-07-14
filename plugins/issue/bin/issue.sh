@@ -64,6 +64,13 @@ LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
 # an embedded newline stays text and the whole prompt submits as one message
 # (issue #87), not at the first line.
 PROMPT_TPL="${ISSUE_PROMPT:-Investigate and plan a fix for GitHub issue #<n> in this repo. Begin by reading the issue and ALL of its comments (e.g. gh issue view <n> --comments) so you have the full discussion history. If the issue has been reopened, treat that as a signal that a previous fix was insufficient: review the earlier attempts and any linked PRs, understand why they fell short, and make sure your plan resolves the underlying problem rather than repeating them. When your plan is finalized and approved, post the full plan as a Markdown comment on issue #<n> using gh before you start implementing. Ensure every pull request you open closes the issue by including \"Closes #<n>\" in its body, and comment a link to each PR on issue #<n> after you push it. Do not bump the version or deploy from this worktree: do not run semver bump, deployit deploy, or any release/version step, and do not plan for them -- versioning and deployment happen later from the main branch, not here.}"
+# Extra clause a caller appends to the handoff prompt (daemon-caller seam).
+# Appended VERBATIM with a single space separator, AFTER <n>/<name> templating
+# of the base prompt — the extra itself undergoes NO substitution. Like
+# PROMPT_TPL, keep it single-line + ASCII (no backticks): tmux send-keys -l
+# types it into the child session literally. Empty/unset leaves the prompt
+# byte-identical to the PROMPT_TPL rendering.
+PROMPT_EXTRA="${ISSUE_PROMPT_EXTRA:-}"
 # The "picked up" label applied to the issue at dispatch (issue #50). Set
 # ISSUE_LABEL="" to disable labeling entirely. Color/description are used
 # only when the label doesn't yet exist in the repo (create-if-missing). Uses
@@ -83,6 +90,15 @@ WINDOW_NAME_TPL="${ISSUE_WINDOW_NAME:-}"
 # handoff still lands in the right window without stealing focus. Set
 # ISSUE_FOREGROUND=1 to switch focus to the new window instead.
 FOREGROUND="${ISSUE_FOREGROUND:-}"
+# Target tmux session for the dispatch window (daemon-caller seam). Default
+# (empty) opens the window in the CALLER'S current session, which is why the
+# $TMUX/$TMUX_PANE hard preconditions exist. When set (e.g. "moshtail"),
+# `tmux new-window` gains `-t "<session>:"` (trailing colon = the session as a
+# whole, so tmux picks the next free window index) and those preconditions are
+# SKIPPED — the caller may be a daemon outside tmux entirely. Safe because
+# every follow-up send-keys/capture-pane already targets the new pane by its
+# captured id, which is server-global, never "the current window".
+TARGET_SESSION="${ISSUE_TARGET_SESSION:-}"
 # Per-issue git-worktree hygiene (issue #55). `claude -w <n>` (the launch flag)
 # creates a worktree under this path; dispatch idempotently ensures the path is
 # gitignored so it never dirties the parent repo's `git status`. The CONTAINER
@@ -755,8 +771,10 @@ cmd_dispatch() {
   # default launch command interpolates <name> = wname.
   local launch_cmd prompt
 
-  # Step 1: tmux precondition (relaxed under dry-run so it runs headlessly).
-  if [ -z "$DRY_RUN" ]; then
+  # Step 1: tmux precondition (relaxed under dry-run so it runs headlessly, and
+  # under ISSUE_TARGET_SESSION — a daemon caller outside tmux dispatches into a
+  # NAMED session, so its own tmux context is irrelevant).
+  if [ -z "$DRY_RUN" ] && [ -z "$TARGET_SESSION" ]; then
     [ -n "${TMUX:-}" ] || fail "issue requires tmux — run Claude inside a tmux session."
     [ -n "${TMUX_PANE:-}" ] || fail "issue requires \$TMUX_PANE — run Claude inside a tmux pane."
   fi
@@ -793,6 +811,9 @@ cmd_dispatch() {
   # wname start with "-", producing a leading-dash launch arg — see WINDOW_NAME_TPL.)
   launch_cmd=$(render_template "$LAUNCH_TPL" "$n" "$wname")
   prompt=$(render_template "$PROMPT_TPL" "$n" "$wname")
+  # Caller clause (PROMPT_EXTRA): appended verbatim after templating, so the
+  # extra never undergoes <n>/<name> substitution. Single-space separator.
+  [ -n "$PROMPT_EXTRA" ] && prompt="$prompt $PROMPT_EXTRA"
 
   # Read-only: is the per-issue worktree dir already gitignored (issue #55)?
   # Computed here so both the dry-run preview and the real write can report it.
@@ -804,6 +825,11 @@ cmd_dispatch() {
   local detach="-d "
   [ -n "$FOREGROUND" ] && detach=""
 
+  # Session target: "-t <session>: " when ISSUE_TARGET_SESSION is set, else "".
+  # Kept in sync with the real new-window invocation in Step 5 below.
+  local target=""
+  [ -n "$TARGET_SESSION" ] && target="-t $TARGET_SESSION: "
+
   # Dry-run: all read-only checks above ran for real; emit the planned commands
   # and stop before any side effect.
   if [ -n "$DRY_RUN" ]; then
@@ -812,14 +838,14 @@ cmd_dispatch() {
       --arg wname "$wname" --arg launch "$launch_cmd" --arg prompt "$prompt" \
       --arg label "$LABEL" --arg color "$LABEL_COLOR" --arg desc "$LABEL_DESC" \
       --arg ignore_status "$ignore_status" \
-      --arg detach "$detach" '
+      --arg detach "$detach" --arg target "$target" '
       {
         ok: true, dry_run: true,
         issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
-        window_name: $wname, label: $label,
+        window_name: $wname, label: $label, prompt: $prompt,
         gitignore: (if $ignore_status == "already-ignored" then "already-ignored" else "would-add" end),
         commands: ([
-          ("tmux new-window " + $detach + "-c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
+          ("tmux new-window " + $target + $detach + "-c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
           ("printf %s " + $prompt + " | tmux load-buffer -b issue-" + $issue + " -"),
@@ -845,6 +871,9 @@ cmd_dispatch() {
   # Detached by default so the caller's focus stays put; opt in to focus-follow
   # with ISSUE_FOREGROUND=1. Keystrokes below target $pane by id regardless.
   [ -z "$FOREGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
+  # Open in the named target session when set (daemon-caller seam). Prepended so
+  # the flag order matches the dry-run command string above.
+  [ -n "$TARGET_SESSION" ] && new_window_args=(-t "$TARGET_SESSION:" "${new_window_args[@]}")
   if ! pane=$(tmux new-window "${new_window_args[@]}" 2>/dev/null) || [ -z "$pane" ]; then
     fail "failed to open a new tmux window."
   fi

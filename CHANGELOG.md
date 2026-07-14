@@ -3,6 +3,29 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.31.0] - 2026-07-14
+
+### Added
+- render post-deploy test status on build pages (issue #90) (ebaf9fe)
+- run post-deploy tests out-of-band (issue #90) (bb9521c)
+- live multi-line delivery checks — `capture` verb + doctor probe (#87) (6c4b062)
+
+### Fixed
+- deliver-once + Enter-only retry in pane_send_and_confirm (#86) (8c22d5e)
+- deliver multi-line ISSUE_PROMPT via bracketed paste (#87) (04b591b)
+
+### Changed
+- Merge pull request #94 from mikeydotio/feat/issue-daemon-seams (5539ca2)
+- Merge pull request #93 from mikeydotio/worktree-age-90 (5d1dc79)
+- Merge pull request #92 from mikeydotio/fix/freshen-pane-confirm-repaste-86 (c30e50b)
+- Merge pull request #91 from mikeydotio/worktree-age-87 (c1d07d3)
+
+### Documentation
+- document out-of-band post-deploy tests (issue #90) (63ca5b7)
+- record why freshen keeps the last-line liveness probe (#86) (206b3ea)
+
+_[manual]_
+
 ## [v2.30.0] - 2026-07-14
 
 ### Added

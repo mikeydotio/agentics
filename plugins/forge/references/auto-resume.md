@@ -159,10 +159,13 @@ sweep.
 Both hooks now confirm the send via `plugins/freshen/lib/pane-confirm.sh`, a bounded
 `tmux capture-pane -p` poll + resend loop:
 
-1. Send the keys (`"keys"` mode: one `send-keys <text> Enter` call, for short control sequences
-   like `/clear`; `"literal"` mode: `send-keys -l <text>` then a *separate* `send-keys … Enter`
-   call, for arbitrary re-invocation command strings — both calls must succeed for the send to
-   count as attempted, closing F041's exact gap).
+1. Deliver the text **once**, then a *separate* Enter to submit, with a short settle
+   (`PANE_PASTE_SETTLE_DELAY`, default 0.2s) in between so a bracketed paste closes and the Enter
+   is read as "submit" rather than absorbed as a newline (the issue #82 race, adopted defensively).
+   The paste is one `send-keys <text>` call in `"keys"` mode (short control sequences like
+   `/clear`) or one `send-keys -l <text>` call in `"literal"` mode (arbitrary re-invocation command
+   strings). Both the paste *and* the Enter must succeed for the send to count as attempted,
+   closing F041's exact gap.
 2. Poll `capture-pane -p` (a handful of attempts, ~300ms apart) for evidence the sent text no
    longer sits, unsubmitted, on the pane's last non-blank line — i.e. it left the input box. This
    is deliberately agnostic to what Claude Code's TUI renders once a command is accepted (an
@@ -170,8 +173,10 @@ Both hooks now confirm the send via `plugins/freshen/lib/pane-confirm.sh`, a bou
    claim that still meaningfully distinguishes "the pane reacted" from "the pane never processed
    it at all" (the busy/wedged-pane failure mode). A failed `capture-pane` call itself (dead pane,
    bad target) is treated as *not yet confirmed*, never as success.
-3. On failure to confirm, resend (bounded — a couple of extra attempts) rather than giving up
-   after one try or polling forever.
+3. On failure to confirm, re-send the **Enter alone** (bounded — a couple of extra attempts),
+   **never re-pasting the text**: re-pasting would duplicate the command in the input box (issue
+   #86, the sibling of the #82 re-paste-on-retry bug). Only a paste that never landed (the
+   `send-keys` call itself errored) is retried as a paste.
 
 **What changes on an unconfirmed send:**
 
@@ -190,6 +195,39 @@ Both hooks now confirm the send via `plugins/freshen/lib/pane-confirm.sh`, a bou
   independent of the re-invoke's success.
 
 Every send/confirm decision is also recorded in `.freshen/transitions.log` — see below.
+
+### Why freshen does not adopt #82's input-row submission confirm (issue #86)
+
+Issue #82 fixed the same *re-paste-on-retry* footgun in `/issue do`'s prompt handoff
+(`plugins/issue/bin/issue.sh`). That fix goes further than freshen's: it confirms the prompt was
+*received* (scoping the read-back to the `❯` input **row**, since the real TUI renders a footer
+*below* the box that makes a last-non-blank-line check vacuous), then submits, then confirms the box
+*cleared*. Issue #86 asked whether freshen should adopt that stronger confirm too. **It must not** —
+and the reason is structural, not a matter of taste:
+
+- **`/issue do` targets a *separate, live* pane.** It opens a new tmux window running an idle
+  `claude` TUI that processes keystrokes *immediately*, so an in-hook `capture-pane` can observe
+  both receipt and submission. Its input-row confirm is correct *there*.
+- **freshen targets *its own* pane** (`$TMUX_PANE` — the very Claude Code session whose Stop /
+  SessionStart hook is running). Per this repo's `CLAUDE.md` ("Hook ordering"), keystrokes sent by a
+  hook are buffered and *"aren't acted on until all of that turn's hooks finish."* Submission is
+  therefore **causally gated on the hook batch returning** and is *unobservable* from inside the
+  hook — the confirm poll runs synchronously *within* that batch, so it can never observe an effect
+  gated on its own termination.
+- **The pipeline depends on the confirm staying fast.** `on-stop.sh` must set `.clear-pending`
+  *before* `/clear` is processed, or `on-clear.sh` (which fires when `/clear` runs) finds no
+  `.clear-pending` and skips the re-invoke. A receipt/submission confirm scoped to the input row
+  would *hang* whenever the TUI echoes the typed text mid-hook → the poll times out → `.clear-pending`
+  is never set → the already-sent `/clear` still wipes context → the re-invoke is skipped → the whole
+  auto-resume cycle is stranded until the 2-hour stale-signal sweep. No timing path rescues this.
+
+So freshen adopts only the **safe** #82 mechanics — deliver-once + Enter-only resend + the paste
+settle — and keeps its last-non-blank-line check as an intentionally weak *liveness probe*. Under the
+deferred-hook model the genuinely load-bearing branch is the `capture-pane`-**failure** path (a
+dead/unreachable pane → resend); the content-based check is vacuous-but-safe (freshen's own TUI
+renders the same footer-below-box layout #82 diagnosed, so the last non-blank line is the footer and
+the check confirms fast in every reachable-pane case). The input-row confirm would only become
+correct if freshen ever sent to a *separate live pane* the way `issue.sh` does — it does not today.
 
 ## Transition Audit Log (F047)
 

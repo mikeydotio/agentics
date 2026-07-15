@@ -59,10 +59,11 @@ a pre-built pick option that the skill presents via one `AskUserQuestion`. With 
      broader existing rule (e.g. `.claude/`) and is a no-op when already ignored. Best-effort: a
      write failure only leaves the pre-fix status quo (an untracked worktree dir), never an
      `ok:false`. Override the ignored path with `ISSUE_WORKTREE_IGNORE_PATH`.
-   - Launch `claude -w <repo-prefix>-<n> --permission-mode plan` (literal paste + settle + Enter) — the `-w`
-     argument matches the window name, so the worktree is `.claude/worktrees/<repo-prefix>-<n>`; the
-     `--permission-mode plan` flag opens the session **in plan mode deterministically**, with no
-     keystrokes.
+   - Launch `claude -w <repo-prefix>-<n> --permission-mode plan --model opusplan` (literal paste +
+     settle + Enter) — the `-w` argument matches the window name, so the worktree is
+     `.claude/worktrees/<repo-prefix>-<n>`; the `--permission-mode plan` flag opens the session
+     **in plan mode deterministically**, with no keystrokes; `--model opusplan` runs Opus while
+     planning and switches to Sonnet for execution (#97).
    - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
      worktree first), then type the prompt. Detection is **two-tier** so a Claude-Code footer-copy
      change can't false-negative it (issue #67): a **fast path** matches a broadened alternation of
@@ -146,7 +147,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode. |
+| `ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan --model opusplan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode; `--model opusplan` plans on Opus, executes on Sonnet (#97). |
 | `ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to read the issue and all its comments, weigh a reopen as a failed prior fix, plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), comment each PR link, and **never bump the version or deploy from the worktree** (that happens later from `main`). `<n>` → issue number. **May be multi-line** — it's delivered as a bracketed paste (issue #87), so embedded newlines stay text. Deliberately has no `/plan` prefix. |
 | `ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`ISSUE_LABEL=`) to disable labeling entirely. |
 | `ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
@@ -166,7 +167,7 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `ISSUE_READY_ACCEPT_PATTERN` | _(working-indicator alternation)_ | Non-gating post-submit acceptance marker: informs the `prompt_accepted` field but never changes `prompt_confirmed` or triggers a resend. |
 | `ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt confirm/resend bounds. `CONFIRM_ATTEMPTS`/`_DELAY` bound **both** the receipt poll (the paste landed in the input box) and the submit poll (the box cleared); `SEND_RETRIES` bounds **both** the receipt re-paste and the submit re-Enter. |
 | `ISSUE_PASTE_SETTLE_DELAY` | `0.2` | Settle (seconds) after each paste, **before** Enter, so the paste closes and the Enter submits instead of being absorbed as a newline (issue #82, the primary cure). Applies to the launch `send-keys -l` and the prompt's bracketed `paste-buffer` alike — for the latter it's now belt-and-suspenders, since the paste boundary is explicit (issue #87). Fractional. |
-| `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree). |
+| `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan --model opusplan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree; otherwise mirrors the dispatch launch flags). |
 | `ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 | `ISSUE_CAPTURE_LINES` | `200` | Rows of scrollback `/issue capture <n>` dumps from the worktree window (`tmux capture-pane -S -<N>`). |
 
@@ -178,7 +179,8 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 > `Shift+Tab` guesswork. That flag sets the *initial* mode only — you can still `Shift+Tab` out of
 > plan mode once you've approved the plan. The prompt intentionally does **not** begin with `/plan`:
 > that is a slash command that routes to a registered `/plan` skill (e.g. forge's planner), not
-> Claude's built-in plan mode.
+> Claude's built-in plan mode. `--model opusplan` (#97) pairs with this: the child session plans on
+> Opus and switches to Sonnet once it exits plan mode to execute.
 
 See `skills/issue/SKILL.md` for the verb routing, `bin/issue.sh` for every subcommand's
 deterministic sequence, and `references/new.md` / `references/complete.md` for the `new` and

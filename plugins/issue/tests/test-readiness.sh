@@ -130,6 +130,18 @@ assert_contains "$dcmds" "tmux load-buffer -b issue-doctor -" "doctor dry-run: l
 assert_contains "$dcmds" "tmux paste-buffer -p -d -b issue-doctor -t <pane>" "doctor dry-run: lists the bracketed probe paste"
 assert_contains "$dcmds" "tmux capture-pane -p -t <pane>" "doctor dry-run: lists the box read-back"
 
+# --- doctor: DEFAULT launch template pins plan mode + opusplan (#97) -----------
+# No override this time, so the doctor's binary precondition resolves `claude`;
+# a stand-in on PATH keeps this hermetic (dry-run only `command -v`s it, never runs it).
+repo=$(mk_repo)
+stub_bin=$(mktemp -d /tmp/issue-doctor-stub.XXXXXX)
+ln -s "$(command -v true)" "$stub_bin/claude"
+out=$(cd "$repo" && PATH="$stub_bin:$PATH" ISSUE_DRY_RUN=1 bash "$SCRIPT" doctor 2>&1)
+rm -rf "$stub_bin"
+assert_eq "$(jqf "$out" .ok)" "true" "doctor default: dry-run ok:true"
+assert_contains "$(jqf "$out" '.commands | join("\n")')" "claude --permission-mode plan --model opusplan" \
+  "doctor default: launch keeps parity with dispatch — plan mode + opusplan model"
+
 # --- doctor: real run reports the matched tier --------------------------------
 # marker capture → "marker" tier; structural capture → "structural" tier.
 repo=$(mk_repo)

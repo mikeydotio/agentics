@@ -12,7 +12,7 @@ assert_eq "$(jqf "$out" .ok)" "true" "dryrun ok:true"
 assert_eq "$(jqf "$out" .dry_run)" "true" "dryrun flag"
 assert_eq "$(jqf "$out" .issue)" "42" "dryrun issue number"
 cmds="$(jqf "$out" '.commands | join("\n")')"
-assert_contains "$cmds" "claude -w rep-42 --permission-mode plan" "default launch names worktree like the window (<repo-prefix>-<n>), plan mode via flag"
+assert_contains "$cmds" "claude -w rep-42 --permission-mode plan --model opusplan" "default launch names worktree like the window (<repo-prefix>-<n>), plan mode via flag, opusplan model (#97)"
 assert_contains "$cmds" "issue #42 in this repo" "default prompt substituted"
 # Plan mode is now the launch flag, not keystrokes: no Shift+Tab, and the prompt
 # must NOT start with /plan (that routes to a /plan skill, e.g. forge's planner).
@@ -89,7 +89,7 @@ ovr_cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_contains "$ovr_cmds" "-n wip-7" "custom window name in new-window"
 # The window-name override flows into the default launch's <name>, renaming the
 # worktree too — window and worktree stay in sync.
-assert_contains "$ovr_cmds" "claude -w wip-7 --permission-mode plan" "window-name override renames the worktree too"
+assert_contains "$ovr_cmds" "claude -w wip-7 --permission-mode plan --model opusplan" "window-name override renames the worktree too"
 
 # closed issue -> ok:false (dry-run still validates state)
 out=$(cd "$repo" && ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED bash "$SCRIPT" dispatch 42 2>&1)

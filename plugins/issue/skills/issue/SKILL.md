@@ -73,8 +73,9 @@ Parse `ARGUMENTS` (everything after `/issue`) — the first token is the verb:
      it (fenced) as diagnostic evidence.
 
 On success a new window (`<repo-prefix>-<number>`, e.g. `age-42`) is running
-`claude -w <repo-prefix>-<number> --permission-mode plan` in a fresh worktree named the **same** as
-the window (`.claude/worktrees/age-42`) — in plan mode, prompt already submitted. The helper also
+`claude -w <repo-prefix>-<number> --permission-mode plan --model opusplan` in a fresh worktree named
+the **same** as the window (`.claude/worktrees/age-42`) — in plan mode on the opusplan model (Opus
+plans, Sonnet executes), prompt already submitted. The helper also
 **marks the issue `in-progress`** on GitHub (best-effort; a failure adds a `warning`, never
 `ok:false`). Nothing further is needed from you.
 
@@ -82,10 +83,11 @@ the window (`.claude/worktrees/age-42`) — in plan mode, prompt already submitt
 
 - **`do` requires tmux** (the helper hard-fails otherwise); **all verbs need an authenticated
   `gh`** CLI.
-- The `do` launch command (`claude -w <name> --permission-mode plan`) and handoff prompt are sent
-  verbatim and overridable via `ISSUE_LAUNCH_CMD` / `ISSUE_PROMPT`; the window/worktree name is
-  `ISSUE_WINDOW_NAME` (renames both). Plan mode comes from the `--permission-mode plan` flag — **not**
-  a `/plan` prompt prefix. The helper owns these; don't rewrite them here.
+- The `do` launch command (`claude -w <name> --permission-mode plan --model opusplan`) and handoff
+  prompt are sent verbatim and overridable via `ISSUE_LAUNCH_CMD` / `ISSUE_PROMPT`; the window/worktree
+  name is `ISSUE_WINDOW_NAME` (renames both). Plan mode comes from the `--permission-mode plan` flag —
+  **not** a `/plan` prompt prefix — and `--model opusplan` makes the child plan on Opus and execute on
+  Sonnet (#97). The helper owns these; don't rewrite them here.
 - **GitHub write-backs live in the helper — never call `gh`/`git` yourself.** `do`'s default prompt
   briefs the child session to read the issue and **all** its comments for the full history, weigh a
   reopen as a signal a previous fix fell short, comment its finalized plan on the issue, word every

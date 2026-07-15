@@ -12,13 +12,15 @@
 #   dispatch <n>         Open a new tmux window (named "<repo-prefix>-<n>", e.g.
 #                        "age-42") in the current session — DETACHED by default so
 #                        the caller's focus stays put — `cd` it to the repo
-#                        root, launch `claude -w <name> --permission-mode plan`
-#                        (the official --worktree switch creates a per-issue git
-#                        worktree named the SAME as the window, so it must run
-#                        from a git-tracked location; --permission-mode plan
-#                        starts the session in plan mode deterministically, no
-#                        keystrokes), gate on claude becoming ready, then type +
-#                        submit the prompt.
+#                        root, launch `claude -w <name> --permission-mode plan
+#                        --model opusplan` (the official --worktree switch
+#                        creates a per-issue git worktree named the SAME as the
+#                        window, so it must run from a git-tracked location;
+#                        --permission-mode plan starts the session in plan mode
+#                        deterministically, no keystrokes; --model opusplan runs
+#                        Opus while planning and Sonnet once executing, issue
+#                        #97), gate on claude becoming ready, then type + submit
+#                        the prompt.
 #
 # ok-vs-warning boundary (dispatch): steps 0–4 are HARD preconditions — a failure
 # emits {ok:false} and exits before ANY side effect. From step 5 (the first
@@ -50,7 +52,7 @@ LIST_LIMIT="${ISSUE_LIST_LIMIT:-50}"
 # WINDOW_NAME_TPL below), so `claude -w <name>` names the worktree the SAME as
 # the tmux window (e.g. "age-42") rather than the bare issue number. <n> (the
 # issue number) is still substituted, so a custom override may use either.
-LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan}"
+LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan --model opusplan}"
 # The handoff prompt is the ONLY lever the dispatcher has over the child session,
 # which is what actually plans, implements, and opens PRs. So it carries the
 # briefs the child can't get any other way: read the issue AND all its comments
@@ -168,8 +170,10 @@ PASTE_SETTLE_DELAY="${ISSUE_PASTE_SETTLE_DELAY:-0.2}"
 READY_ACCEPT_PATTERN="${ISSUE_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Crunching|tokens|to interrupt}"
 # `doctor` subcommand (issue #67, direction #5): a throwaway readiness self-test.
 # Its launch OMITS `-w` (no worktree, no git side effect) — it only needs the TUI
-# to render. Overridable so tests can point it at a harmless stand-in binary.
-DOCTOR_LAUNCH_TPL="${ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan}"
+# to render — but otherwise mirrors the dispatch launch flags, so a flag a future
+# claude rejects at startup fails here first, not in a real dispatch (issue #97).
+# Overridable so tests can point it at a harmless stand-in binary.
+DOCTOR_LAUNCH_TPL="${ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan --model opusplan}"
 DOCTOR_WINDOW_NAME="${ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
 # `capture` subcommand (issue #87 live-verification aid): how many rendered rows of
 # a worktree window's scrollback to dump. Enough to show the recent exchange

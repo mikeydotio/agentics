@@ -31,6 +31,11 @@ Config at `~/.config/greenlight/config.yaml` (auto-initialized on first run from
 | `ai_show_rationale` | `false` | Inject the AI's rationale into context when it approves a command |
 | `custom_allow` | _(empty)_ | Space-separated commands to always allow |
 | `custom_pass` | _(empty)_ | Space-separated commands to always pass |
+| `plan_explorer_enabled` | `true` | Master switch for the plan-explorer policy (below) |
+| `plan_explorer_scratch_prefix` | `greenlight/scratch-` | Branch prefix marking a disposable scratch worktree |
+| `plan_explorer_worktree_segment` | `.claude/worktrees` | Path segment a scratch worktree must live under |
+| `plan_explorer_uncertain` | `deny` | Uncertain command in explorer mode: `deny` / `allow` / `ai` |
+| `plan_explorer_model` | `claude-sonnet-5` | Default model for spawned explorers |
 
 ## Management
 
@@ -45,6 +50,7 @@ Use `/greenlight` to manage at runtime:
 /greenlight allow make               Always allow 'make'
 /greenlight block terraform          Always pass 'terraform' to user
 /greenlight test "curl -s ..."       Dry-run through the hook
+/greenlight explore "<task>"         Launch a governed plan explorer
 /greenlight reset                    Restore defaults
 ```
 
@@ -52,8 +58,37 @@ Use `/greenlight` to manage at runtime:
 
 Opt-in — run `/greenlight ai on` (or set `ai_enabled: true`) to turn it on. Set `ANTHROPIC_API_KEY` in your environment. When enabled and a command is uncertain, greenlight calls the configured model (`claude-haiku-4-5` by default — must be a structured-outputs-capable model) with a structured prompt asking "Is this command potentially destructive?" and gets `{answer: boolean, rationale: string}` back. The rationale is only shown to the user when `ai_show_rationale: true`.
 
+## Plan-Explorer Autonomy
+
+Planning benefits from autonomous exploration, but Claude Code plan mode
+hard-blocks every edit (no hook can override that) — so edit-capable autonomy
+has to live in a *spawned* session. `greenlight explore "<task>"` launches a
+headless Sonnet `claude -p` explorer in a **disposable git worktree** running in
+`dontAsk`, where this hook becomes its sole safety arbiter (tagged via the
+`GREENLIGHT_PLAN_EXPLORER=1` env var it sets on the child).
+
+In that mode greenlight:
+
+- **allows** exploration (readonly tools + safe bash) and edits **inside the
+  scratch worktree** — the explorer can read, run tests/builds, and experiment
+  with code changes freely, because that work is thrown away before a plan is
+  written;
+- **hard-denies** (with a corrective reason the headless explorer can act on)
+  edits to the real tree, destructive/privileged commands, and — by default —
+  commands it can't confirm are safe.
+
+The worktree (a `greenlight/scratch-*` branch under `.claude/worktrees/`) and
+its branch are removed when the explorer finishes; only the findings survive.
+The launcher is `bin/greenlight-explore.sh` and is reusable by other tools —
+forge's `research` step calls it when `governed_explorer` is enabled.
+
+Everything above is gated on `GREENLIGHT_PLAN_EXPLORER=1`; a normal session sees
+no behavior change whatsoever.
+
 ## Requirements
 
 - `jq` (JSON parsing)
 - `curl` (AI fallback API calls)
 - `ANTHROPIC_API_KEY` environment variable (for AI fallback; optional)
+- `git` + `python3` (plan-explorer path resolution) and the `claude` CLI (to
+  spawn explorers) — only needed when using `greenlight explore`

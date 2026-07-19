@@ -614,9 +614,9 @@ worktree_ignore_status() {
 }
 
 # append_worktree_ignore <dir> — idempotent, BEST-EFFORT write of the worktree
-# ignore rule to <dir>/.gitignore. Mirrors the canonical pattern in
-# plugins/atlas/bin/atlas-cli (trailing-newline fix, blank separator, comment,
-# rule). Echoes "added" on success, "already-ignored" if the exact rule is
+# ignore rule to <dir>/.gitignore. Uses the canonical gitignore-append pattern
+# (trailing-newline fix, blank separator, comment, rule). Echoes "added" on
+# success, "already-ignored" if the exact rule is
 # already present, or "add-failed" on any write error — and NEVER aborts the
 # caller (a failure degrades the dispatch to the pre-fix status quo, an untracked
 # worktree dir, not a hard failure).

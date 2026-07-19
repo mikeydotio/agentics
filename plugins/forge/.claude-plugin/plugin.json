@@ -1,6 +1,6 @@
 {
   "name": "forge",
-  "version": "2.31.0",
+  "version": "2.32.0",
   "description": "Unified idea-to-deployment pipeline — interrogation, research, design, planning, autonomous execution, review, validation, triage, documentation, and deployment with freshen-based context clearing between steps",
   "author": {
     "name": "mikeydotio"

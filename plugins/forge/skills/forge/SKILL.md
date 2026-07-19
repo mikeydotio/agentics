@@ -299,9 +299,17 @@ Graceful stop:
   "max_stories_per_session": 1,
   "max_sessions": 200,
   "max_total_retries": 100,
-  "heartbeat_window_minutes": 30
+  "heartbeat_window_minutes": 30,
+  "governed_explorer": false
 }
 ```
+
+`governed_explorer` (default `false`) opts the **research** step into greenlight
+plan explorers: for a codebase-oriented track it runs a headless Sonnet
+`claude -p` explorer in a disposable worktree (governed by the greenlight gate)
+and folds its findings into synthesis. Off by default — it spawns a real model
+and costs tokens/latency, exactly like the `ai_enabled` tradeoff in greenlight's
+own config. See `skills/research/SKILL.md` Step 2b.
 
 **How the runaway safeguards relate (F097):** `max_retries` caps attempts on a SINGLE story (4
 attempts — 1 initial + up to 3 retries — before it blocks). `max_total_retries` caps the sum of

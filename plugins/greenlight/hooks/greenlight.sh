@@ -66,6 +66,12 @@ CFG_CUSTOM_PASS=""
 CFG_LOG_FILE=""
 CFG_VERBOSE="false"
 CFG_DISABLED_MODES="bypassPermissions"
+# Plan-explorer policy (only consulted when GREENLIGHT_PLAN_EXPLORER=1)
+CFG_PLAN_EXPLORER_ENABLED="true"
+CFG_PLAN_EXPLORER_SCRATCH_PREFIX="greenlight/scratch-"
+CFG_PLAN_EXPLORER_WORKTREE_SEGMENT=".claude/worktrees"
+CFG_PLAN_EXPLORER_UNCERTAIN="deny"
+CFG_PLAN_EXPLORER_MODEL="claude-sonnet-5"
 
 read_config() {
   local val
@@ -84,6 +90,11 @@ if [[ -f "$CONFIG_FILE" ]]; then
   CFG_LOG_FILE="$(read_config log_file "$CFG_LOG_FILE")"
   CFG_VERBOSE="$(read_config verbose "$CFG_VERBOSE")"
   CFG_DISABLED_MODES="$(read_config disabled_modes "$CFG_DISABLED_MODES")"
+  CFG_PLAN_EXPLORER_ENABLED="$(read_config plan_explorer_enabled "$CFG_PLAN_EXPLORER_ENABLED")"
+  CFG_PLAN_EXPLORER_SCRATCH_PREFIX="$(read_config plan_explorer_scratch_prefix "$CFG_PLAN_EXPLORER_SCRATCH_PREFIX")"
+  CFG_PLAN_EXPLORER_WORKTREE_SEGMENT="$(read_config plan_explorer_worktree_segment "$CFG_PLAN_EXPLORER_WORKTREE_SEGMENT")"
+  CFG_PLAN_EXPLORER_UNCERTAIN="$(read_config plan_explorer_uncertain "$CFG_PLAN_EXPLORER_UNCERTAIN")"
+  CFG_PLAN_EXPLORER_MODEL="$(read_config plan_explorer_model "$CFG_PLAN_EXPLORER_MODEL")"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -119,6 +130,111 @@ pass_silent() {
   exit 0
 }
 
+deny() {
+  local reason="$1"
+  log_decision "DENY" "${TOOL_NAME}: ${reason}"
+  jq -n --arg reason "$reason" \
+    '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":$reason}}'
+  exit 0
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  PLAN-EXPLORER CONTEXT
+#  A `claude -p` explorer (spawned by greenlight-explore) runs headless in
+#  dontAsk, tagged GREENLIGHT_PLAN_EXPLORER=1. In that context — and ONLY then —
+#  this hook applies the plan-explorer policy: allow exploration + edits inside
+#  a disposable scratch worktree; deny edits to the real tree, destructive
+#  commands, and (by default) uncertain commands. Every helper below is a no-op
+#  for a normal session, so behavior there is unchanged.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# The explorer's working directory, as reported by Claude Code (falls back to
+# the hook process's own cwd).
+CWD_INPUT="$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)"
+[[ -z "$CWD_INPUT" ]] && CWD_INPUT="$PWD"
+
+EXPLORER_MODE=false
+if [[ "${GREENLIGHT_PLAN_EXPLORER:-}" == "1" && "$CFG_PLAN_EXPLORER_ENABLED" == "true" ]]; then
+  EXPLORER_MODE=true
+fi
+
+# Canonicalize a path (resolving symlinks and `..`) relative to the explorer's
+# cwd, even when the leaf does not exist yet (a new file). Explorer-only, so the
+# python3 spawn is off the normal hot path. Empty output = "could not resolve",
+# which every caller treats as NOT writable (fail-safe → deny).
+gl_realpath() {
+  python3 - "$CWD_INPUT" "$1" <<'PY' 2>/dev/null
+import os, sys
+cwd, p = sys.argv[1], sys.argv[2]
+if not os.path.isabs(p):
+    p = os.path.join(cwd, p)
+sys.stdout.write(os.path.realpath(p))
+PY
+}
+
+# If <dir> sits in a disposable scratch worktree, echo that worktree's canonical
+# root and return 0; else return 1. A worktree qualifies only when BOTH its
+# branch carries the scratch prefix AND its path lies under the worktree segment
+# — so a stray same-named branch checked out in the main tree can't unlock edits.
+scratch_worktree_root() {
+  local dir="$1" top branch
+  top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || return 1
+  branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+  case "$branch" in
+    "${CFG_PLAN_EXPLORER_SCRATCH_PREFIX}"*) ;;
+    *) return 1 ;;
+  esac
+  case "$top" in
+    *"/${CFG_PLAN_EXPLORER_WORKTREE_SEGMENT}/"*) ;;
+    *) return 1 ;;
+  esac
+  gl_realpath "$top"
+}
+
+# May a plan explorer write to <target>? Writable iff the resolved target is
+# inside the explorer's scratch worktree, OR under no git working tree at all
+# (e.g. /tmp). A target inside any NON-scratch git tree is refused.
+target_is_writable() {
+  local rtarget wt tdir trepo
+  rtarget="$(gl_realpath "$1")"
+  [[ -z "$rtarget" ]] && return 1   # unresolved → fail safe
+
+  if wt="$(scratch_worktree_root "$CWD_INPUT")" && [[ -n "$wt" ]]; then
+    [[ "$rtarget" == "$wt" || "$rtarget" == "$wt"/* ]] && return 0
+  fi
+
+  tdir="$(dirname "$rtarget")"
+  if trepo="$(git -C "$tdir" rev-parse --show-toplevel 2>/dev/null)"; then
+    trepo="$(gl_realpath "$trepo")"
+    [[ "$rtarget" == "$trepo" || "$rtarget" == "$trepo"/* ]] && return 1
+  fi
+  return 0   # not under any git tree → allowed (scratch / tmp / outside repo)
+}
+
+# Guidance appended to edit/write denials so the headless explorer self-corrects.
+SCRATCH_HINT() {
+  printf 'Create or switch to a disposable scratch worktree (branch %s<name> under %s/) and work there; those changes are discarded before the plan is written.' \
+    "$CFG_PLAN_EXPLORER_SCRATCH_PREFIX" "$CFG_PLAN_EXPLORER_WORKTREE_SEGMENT"
+}
+
+# Edit/Write/MultiEdit/NotebookEdit in explorer mode: every target path must be
+# writable, else deny. Exits with a decision.
+explorer_check_edit() {
+  local paths p
+  paths="$(printf '%s' "$INPUT" | jq -r \
+    '[.tool_input.file_path?, (.tool_input.edits[]?.file_path?)] | map(select(. != null and . != "")) | .[]' 2>/dev/null)"
+  if [[ -z "$paths" ]]; then
+    deny "greenlight: could not determine the ${TOOL_NAME} target during plan exploration, so it was refused. $(SCRATCH_HINT)"
+  fi
+  while IFS= read -r p; do
+    [[ -z "$p" ]] && continue
+    if ! target_is_writable "$p"; then
+      deny "greenlight: plan exploration may not edit '${p}' — it is outside your disposable scratch worktree. $(SCRATCH_HINT)"
+    fi
+  done <<< "$paths"
+  allow "plan exploration: edit within scratch worktree"
+}
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  PERMISSION MODE GATE
 #  Skip all evaluation when running in a disabled permission mode.
@@ -145,6 +261,12 @@ case "$TOOL_NAME" in
     ;;
   Bash)
     ;; # fall through to Bash analysis
+  Edit|Write|MultiEdit|NotebookEdit)
+    # Normal sessions: greenlight has never gated edits — defer to the built-in
+    # permission system (unchanged). Plan explorers: enforce the scratch-worktree
+    # boundary.
+    $EXPLORER_MODE && explorer_check_edit
+    exit 0 ;;
   *)
     exit 0 ;; # pass to normal permissions
 esac
@@ -210,6 +332,20 @@ redir_stripped="$(printf '%s\n' "$UNQUOTED_COMMAND" | sed -E '
   s/[0-9]*>+\/dev\/null//g
 ')"
 if printf '%s\n' "$redir_stripped" | grep -qE '>>?[^&]|>>$|>[[:space:]]|>$'; then
+  if $EXPLORER_MODE; then
+    # Each redirection target must land in a writable location, else deny.
+    _redir_targets="$(printf '%s\n' "$redir_stripped" | grep -oE '>>?[[:space:]]*[^[:space:]|&;<>()]+' | sed -E 's/^>>?[[:space:]]*//')"
+    if [[ -z "$_redir_targets" ]]; then
+      deny "greenlight: could not parse the redirection target during plan exploration. $(SCRATCH_HINT)"
+    fi
+    while IFS= read -r _t; do
+      [[ -z "$_t" || "$_t" == "/dev/null" ]] && continue
+      if ! target_is_writable "$_t"; then
+        deny "greenlight: plan exploration may not write to '${_t}' — outside your scratch worktree. $(SCRATCH_HINT)"
+      fi
+    done <<< "$_redir_targets"
+    allow "plan exploration: redirection within scratch worktree"
+  fi
   pass_silent "file-writing redirection detected"
 fi
 
@@ -1414,6 +1550,27 @@ fi
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  DECISION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Plan explorer: only an entirely readonly/safe command is auto-allowed. A
+# destructive/privileged command is denied outright; an uncertain one is denied
+# by default (configurable). File-writing redirection was already resolved above.
+if $EXPLORER_MODE; then
+  if $any_destructive; then
+    deny "greenlight: '${DESTRUCTIVE_CMD}' is destructive/privileged and is not permitted during plan exploration."
+  fi
+  if $all_safe; then
+    allow "plan exploration: readonly/safe command"
+  fi
+  case "$CFG_PLAN_EXPLORER_UNCERTAIN" in
+    allow)
+      allow "plan exploration: uncertain command allowed by config" ;;
+    ai)
+      [[ "$CFG_AI_ENABLED" == "true" ]] && ai_check "$COMMAND"
+      deny "greenlight: could not confirm '${COMMAND}' is safe for plan exploration." ;;
+    *)
+      deny "greenlight: '${COMMAND}' can't be confirmed safe for plan exploration; rephrase it, or do the work with an allowed tool inside your scratch worktree." ;;
+  esac
+fi
 
 if $all_safe; then
   allow "Bash: safe readonly command(s)"

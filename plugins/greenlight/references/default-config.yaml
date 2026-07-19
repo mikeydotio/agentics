@@ -34,6 +34,39 @@ ai_timeout: 10
 # command, which adds transcript noise on a long autonomous run.
 ai_show_rationale: false
 
+# ── Plan-explorer autonomy ──────────────────────────────────────────────
+# These keys only take effect for a session tagged GREENLIGHT_PLAN_EXPLORER=1
+# (a `claude -p` explorer spawned by greenlight-explore). For any normal
+# session they are inert — greenlight behaves exactly as it does without them.
+#
+# A plan explorer runs headless in `dontAsk`, where this hook is the ONLY thing
+# that can approve a call. The policy allows exploration and edits inside a
+# disposable scratch worktree, and hard-denies (with guidance) edits to the
+# real tree, destructive commands, and — by default — uncertain commands.
+
+# Master switch for the plan-explorer policy.
+plan_explorer_enabled: true
+
+# Branch-name prefix that marks a disposable scratch worktree. Edits are only
+# permitted when the explorer's worktree is on a branch with this prefix AND
+# lives under the worktree segment below.
+plan_explorer_scratch_prefix: greenlight/scratch-
+
+# Path segment that must appear in a scratch worktree's toplevel (belt-and-
+# suspenders with the branch prefix, so a stray same-named branch in the main
+# tree can't unlock edits).
+plan_explorer_worktree_segment: .claude/worktrees
+
+# What to do with a command the deterministic checks can't place, in explorer
+# mode: deny (safe default — the explorer self-corrects from the reason),
+# allow (trust the isolation of the worktree), or ai (route to the AI fallback
+# fitness check; requires ai_enabled + ANTHROPIC_API_KEY).
+plan_explorer_uncertain: deny
+
+# Default model for greenlight-explore's spawned explorers. Must be a valid
+# model alias/name; Sonnet is the right size for autonomous exploration.
+plan_explorer_model: claude-sonnet-5
+
 # Custom always-allow commands (space-separated base command names)
 # Example: custom_allow: make tsc webpack
 custom_allow:

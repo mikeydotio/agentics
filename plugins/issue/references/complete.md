@@ -45,8 +45,14 @@ yourself.**
 
 ## Guard rails (enforced by the script, not you)
 
-- Only **fully-merged** branches are deleted (`git branch -d` refuses unmerged as
-  a backstop); the default/protected branches are never touched.
+- Only **fully-merged** branches are deleted — merged-ness is judged against a
+  freshly-fetched `origin/<base>` **or** local `<base>` (their union), so a
+  GitHub-side merge with a lagging local `<base>` is still recognised (issue #99).
+  The gentle `git branch -d` is tried first (its own merged check is the backstop)
+  and escalates to `git branch -D` **only** when the branch is re-confirmed merged
+  into that base but `-d` refuses because local `<base>` lags; the commits survive
+  in `<base>`, so the forced ref-delete loses nothing. Default/protected branches
+  are never touched.
 - Only **clean, unlocked, non-current** worktrees are removed (`git worktree
   remove` without `--force` refuses dirty/current as a backstop).
 - Remote branch deletion happens **only** for the head branches of MERGED PRs that

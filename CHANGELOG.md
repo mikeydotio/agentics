@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.32.0] - 2026-07-18
+
+### Added
+- governed-explorer path in research step (Wave 3) (e491efa)
+- plan-explorer launcher + /greenlight explore (Wave 2) (d75523c)
+- plan-explorer gate policy (Wave 1) (96701b6)
+
+### Changed
+- Merge pull request #96 from mikeydotio/fix/test-prompt-extra-delivery (d899fb0)
+- Merge pull request #95 from mikeydotio/release/v2.31.0 (15e1bbf)
+
+### Documentation
+- document plan-explorer autonomy (0d521b8)
+- spec for plan-explorer autonomy (e58e0e7)
+
+### Testing
+- align prompt-extra assertions with #87's load-buffer delivery (7870537)
+
+_[manual]_
+
 ## [v2.31.0] - 2026-07-14
 
 ### Added

@@ -34,6 +34,31 @@ override). Each receives IDEA.md and a focused research prompt.
 
 Each researcher writes findings to `.forge/research/`. File naming: `.forge/research/<topic>.md`.
 
+### 2b. Governed codebase exploration (optional)
+
+When the idea builds on an **existing codebase** and `.forge/config.json` has
+`"governed_explorer": true`, complement the (web/domain) researchers above with a
+greenlight plan explorer that actually *runs code* to answer a grounded
+question — how a module is wired, whether an approach is feasible, what a change
+would touch. The explorer is a headless Sonnet `claude -p` session in a
+disposable worktree; the greenlight gate lets it explore and experiment there
+but denies edits to the real tree, so it is safe to run unattended.
+
+For each codebase question (1–2 is plenty), call the deterministic seam:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-research-explore.sh \
+  --topic "<short-slug>" --task "<the concrete codebase question>"
+# → JSON: {enabled, ran, topic, out, launcher}
+```
+
+Branch on the JSON: if `.enabled` is `false` (flag off) or `.ran` is `false`
+(launcher unavailable), skip silently and continue — this is strictly additive.
+When it runs, findings land in `.forge/research/codebase-<topic>.md`, which Step
+3's synthesis folds in like any other researcher's file. This sub-phase runs
+entirely before the step Exit, so the disposable worktree is already gone by the
+time `.forge/` is committed; nothing extra to stage.
+
 ### 3. Synthesize
 
 After all researchers complete, synthesize findings into `.forge/research/SUMMARY.md`:

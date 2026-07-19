@@ -27,6 +27,7 @@ Parse the ARGUMENTS after `/greenlight` to determine the action:
 | `block <cmd>` | Add command to always-pass (block) list |
 | `unallow <cmd>` | Remove command from always-allow list |
 | `unblock <cmd>` | Remove command from always-pass list |
+| `explore <task>` | Launch a governed Sonnet explorer in a disposable worktree |
 | `test <command>` | Dry-run a command through the hook |
 | `log` | Show recent log entries |
 | `log clear` | Clear the log file |
@@ -136,6 +137,30 @@ Remove a command from the `custom_allow` list.
 
 ### /greenlight unblock <command-name>
 Remove a command from the `custom_pass` list.
+
+## Plan-Explorer Commands
+
+### /greenlight explore <task>
+Launch a **governed plan-mode explorer**: a headless Sonnet `claude -p` session
+that researches the codebase autonomously inside a *disposable* git worktree.
+The explorer runs in `dontAsk`, so the greenlight hook is its sole safety
+arbiter — it may read, run safe commands, and experiment with edits **inside the
+throwaway worktree**, but the hook hard-denies edits to the real tree and
+destructive commands. The worktree and its `greenlight/scratch-*` branch are
+removed when the explorer finishes; only the findings survive.
+
+Dispatch to the launcher and report the findings it captured:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/greenlight-explore.sh run --task "<the task>"
+# → prints JSON: {ok, findings, worktree, branch, model, kept}
+```
+Then read and summarize the file at `.findings`. Useful flags: `--model <name>`
+(default from `plan_explorer_model`), `--out <file>` (write findings to a known
+path — forge uses this to drop them into `.forge/research/`), `--keep` (leave
+the worktree for debugging), `--base <ref>`, `--timeout <sec>`.
+
+Requires an authenticated `claude` CLI and a git repo. Configure the policy via
+the `plan_explorer_*` keys (see Config File above).
 
 ## Utility Commands
 

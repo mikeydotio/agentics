@@ -44,7 +44,7 @@ loudly detected: the regression test (name it), a lint rule, an assertion/invari
 explicit, a type constraint, a documented contract. "Be more careful" is not an action.>
 
 ## Lessons
-<What this taught about the codebase. Candidates for CLAUDE.md gotchas / atlas map notes.>
+<What this taught about the codebase. Candidates for CLAUDE.md gotchas.>
 ```
 
 ## Issue comment (condensed)
@@ -53,14 +53,11 @@ One comment: Summary, Root cause (chain in 3-4 lines), Fix commits or HANDOFF po
 Preventative action, link to the committed postmortem. Storyhook comments go through
 `story comment <id>` as plain text (JSON-safe: let the CLI handle quoting).
 
-## Lesson offers (one AskUserQuestion each, max two)
+## Lesson offer (one AskUserQuestion)
 
-1. **CLAUDE.md gotcha** — when the lesson is a durable constraint an agent would otherwise
-   re-trip on ("X must be validated at Y", "never call A before B"). Offer the exact one-line
-   addition; the user approves before any CLAUDE.md edit.
-2. **Atlas map** — when the project has `docs/atlas/` and the lesson is map-worthy (a
-   load-bearing symbol, a gotcha in a mapped module): suggest `/atlas update` after the fix
-   commits land. Suggest only; never run it.
+**CLAUDE.md gotcha** — when the lesson is a durable constraint an agent would otherwise
+re-trip on ("X must be validated at Y", "never call A before B"). Offer the exact one-line
+addition; the user approves before any CLAUDE.md edit.
 
 ## Completion & cleanup
 

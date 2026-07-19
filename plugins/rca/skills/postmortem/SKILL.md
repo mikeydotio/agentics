@@ -1,6 +1,6 @@
 ---
 name: postmortem
-description: RCA step 7 — commit the blameless postmortem to docs/rca/, post the closing issue comment, offer the CLAUDE.md/atlas lesson, and clean up worktrees and artifacts.
+description: RCA step 7 — commit the blameless postmortem to docs/rca/, post the closing issue comment, offer the CLAUDE.md lesson, and clean up worktrees and artifacts.
 argument-hint: "[slug]"
 ---
 
@@ -32,12 +32,11 @@ If latched: post the condensed postmortem comment (per postmortem-format.md) and
 `ISSUE.json`. Do NOT close the issue — commenting is RCA's only issue write; closing is the
 user's call (say so once).
 
-## 3. Lesson offers (max two questions, one each)
+## 3. Lesson offer
 
-Per postmortem-format.md: (a) offer the exact one-line CLAUDE.md gotcha when the lesson is a
-durable constraint — the user approves before any CLAUDE.md edit; (b) when the project has
-`docs/atlas/` and the lesson is map-worthy, suggest `/atlas update` after the commits land —
-suggest only, never run it. Skip either offer when it plainly doesn't apply.
+Per postmortem-format.md: offer the exact one-line CLAUDE.md gotcha when the lesson is a
+durable constraint — the user approves before any CLAUDE.md edit. Skip the offer when it
+plainly doesn't apply.
 
 ## 4. Cleanup
 

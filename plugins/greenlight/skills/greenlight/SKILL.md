@@ -170,6 +170,11 @@ ai_enabled: false
 ai_model: claude-haiku-4-5
 ai_timeout: 10
 ai_show_rationale: false
+plan_explorer_enabled: true
+plan_explorer_scratch_prefix: greenlight/scratch-
+plan_explorer_worktree_segment: .claude/worktrees
+plan_explorer_uncertain: deny
+plan_explorer_model: claude-sonnet-5
 custom_allow:
 custom_pass:
 log_file:

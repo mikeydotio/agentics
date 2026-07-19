@@ -18,6 +18,10 @@ setup() {
 
 teardown() {
   rm -rf "$TEST_HOME"
+  # Plan-explorer fixtures live outside $TMPDIR (see mk_fixture) to keep git
+  # repos off Spotlight's index; clean them here.
+  [ -n "${XROOT:-}" ] && rm -rf "$XROOT"
+  return 0
 }
 
 # Feed a Bash tool_use through the hook.
@@ -62,6 +66,63 @@ set_config() {
   local tmp
   tmp=$(mktemp)
   sed "s/^${key}:.*/${key}: ${value}/" "$TEST_HOME/.config/greenlight/config.yaml" > "$tmp" && mv "$tmp" "$TEST_HOME/.config/greenlight/config.yaml"
+}
+
+# ─── Plan-explorer fixtures & drivers ────────────────────────────────────
+#
+# The plan-explorer policy keys off a real git branch + worktree layout, so
+# these helpers build an actual repo with a `main` branch and a scratch
+# worktree on a `greenlight/scratch-*` branch under `.claude/worktrees/`.
+# Fixtures live under /tmp (NOT $TMPDIR) so a burst of small git repos never
+# backs up Spotlight's mds_stores. Sets globals REPO and WT; teardown removes
+# XROOT.
+mk_fixture() {
+  XROOT="$(mktemp -d /tmp/glx.XXXXXX)"
+  REPO="$XROOT/repo"
+  git init -q -b main "$REPO" 2>/dev/null || { mkdir -p "$REPO"; git init -q "$REPO"; git -C "$REPO" symbolic-ref HEAD refs/heads/main; }
+  git -C "$REPO" config user.email t@t.io
+  git -C "$REPO" config user.name tester
+  ( cd "$REPO" && printf 'x\n' > tracked.txt && git add tracked.txt && git commit -qm init )
+  mkdir -p "$REPO/.claude/worktrees"
+  WT="$REPO/.claude/worktrees/greenlight-scratch-t"
+  git -C "$REPO" worktree add -q -b greenlight/scratch-t "$WT" HEAD
+}
+
+# Edit/Write/NotebookEdit: single file_path. $1 file_path, $2 cwd, $3 tool, $4 explorer(1/0)
+run_edit_x() {
+  local fp="$1" cwd="$2" tool="${3:-Edit}" exp="${4:-1}"
+  local json envargs=()
+  json="$(jq -cn --arg fp "$fp" --arg cwd "$cwd" --arg t "$tool" \
+    '{tool_name:$t, tool_input:{file_path:$fp}, permission_mode:"dontAsk", cwd:$cwd}')"
+  [ "$exp" = "1" ] && envargs=(GREENLIGHT_PLAN_EXPLORER=1)
+  run env HOME="$TEST_HOME" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" "${envargs[@]}" bash "$HOOK" <<< "$json"
+}
+
+# MultiEdit: single file_path + edits[]. $1 file_path, $2 cwd
+run_multiedit_x() {
+  local fp="$1" cwd="$2"
+  local json
+  json="$(jq -cn --arg fp "$fp" --arg cwd "$cwd" \
+    '{tool_name:"MultiEdit", tool_input:{file_path:$fp, edits:[{old_string:"a",new_string:"b"}]}, permission_mode:"dontAsk", cwd:$cwd}')"
+  run env HOME="$TEST_HOME" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GREENLIGHT_PLAN_EXPLORER=1 bash "$HOOK" <<< "$json"
+}
+
+# Bash as explorer: $1 command, $2 cwd
+run_bash_x() {
+  local cmd="$1" cwd="$2"
+  local json
+  json="$(jq -cn --arg c "$cmd" --arg cwd "$cwd" \
+    '{tool_name:"Bash", tool_input:{command:$c}, permission_mode:"dontAsk", cwd:$cwd}')"
+  run env HOME="$TEST_HOME" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GREENLIGHT_PLAN_EXPLORER=1 bash "$HOOK" <<< "$json"
+}
+
+# Arbitrary non-enumerated tool as explorer: $1 tool_name, $2 cwd
+run_tool_x() {
+  local tool="$1" cwd="$2"
+  local json
+  json="$(jq -cn --arg t "$tool" --arg cwd "$cwd" \
+    '{tool_name:$t, tool_input:{}, permission_mode:"dontAsk", cwd:$cwd}')"
+  run env HOME="$TEST_HOME" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GREENLIGHT_PLAN_EXPLORER=1 bash "$HOOK" <<< "$json"
 }
 
 # --- Config auto-init ---
@@ -311,4 +372,189 @@ EOF
   if [ -n "$output" ]; then
     echo "$output" | jq . >/dev/null
   fi
+}
+
+# ─── Plan-explorer policy (GREENLIGHT_PLAN_EXPLORER=1) ────────────────────
+#
+# Active ONLY when the env var is set. A spawned `claude -p` explorer runs in
+# dontAsk mode where the hook is the sole arbiter: it ALLOWs exploration and
+# edits inside a disposable scratch worktree, and DENYs (with guidance) edits
+# to the real tree, destructive commands, and uncertain commands.
+
+reason() { echo "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null; }
+
+# --- Edit-family: path fitness ---
+
+@test "explorer: editing a tracked file off-scratch is DENIED" {
+  mk_fixture
+  run_edit_x "$REPO/tracked.txt" "$REPO"
+  [ "$(decision)" = "deny" ]
+  [ -n "$(reason)" ]
+}
+
+@test "explorer: creating a new untracked file in the repo tree off-scratch is DENIED" {
+  mk_fixture
+  run_edit_x "$REPO/brand-new.txt" "$REPO" "Write"
+  [ "$(decision)" = "deny" ]
+}
+
+@test "explorer: editing a file INSIDE the scratch worktree is ALLOWED" {
+  mk_fixture
+  run_edit_x "$WT/tracked.txt" "$WT"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: writing a brand-new file inside the scratch worktree is ALLOWED" {
+  mk_fixture
+  run_edit_x "$WT/scratch-notes.md" "$WT" "Write"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: writing under /tmp is ALLOWED (outside any repo tree)" {
+  mk_fixture
+  run_edit_x "/tmp/gl-explorer-out.txt" "$REPO" "Write"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: an absolute path escaping the worktree into the main tree is DENIED" {
+  mk_fixture
+  # cwd is the scratch worktree, but the target points back into the real repo
+  run_edit_x "$REPO/tracked.txt" "$WT"
+  [ "$(decision)" = "deny" ]
+}
+
+@test "explorer: a symlink inside the worktree resolving to the main tree is DENIED" {
+  mk_fixture
+  ln -s "$REPO/tracked.txt" "$WT/link-to-real.txt"
+  run_edit_x "$WT/link-to-real.txt" "$WT"
+  [ "$(decision)" = "deny" ]
+}
+
+@test "explorer: MultiEdit inside the worktree is ALLOWED, in the main tree is DENIED" {
+  mk_fixture
+  run_multiedit_x "$WT/tracked.txt" "$WT"
+  [ "$(decision)" = "allow" ]
+  run_multiedit_x "$REPO/tracked.txt" "$REPO"
+  [ "$(decision)" = "deny" ]
+}
+
+@test "explorer: NotebookEdit inside the worktree is ALLOWED" {
+  mk_fixture
+  run_edit_x "$WT/nb.ipynb" "$WT" "NotebookEdit"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: a relative file_path resolves against cwd (worktree) and is ALLOWED" {
+  mk_fixture
+  run_edit_x "tracked.txt" "$WT"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: a relative file_path in the main tree cwd is DENIED" {
+  mk_fixture
+  run_edit_x "tracked.txt" "$REPO"
+  [ "$(decision)" = "deny" ]
+}
+
+# --- Bash: exploration vs mutation ---
+
+@test "explorer: readonly bash is ALLOWED" {
+  mk_fixture
+  run_bash_x "ls -la" "$REPO"
+  [ "$(decision)" = "allow" ]
+  run_bash_x "git status" "$WT"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: a destructive command is DENIED even inside the worktree" {
+  mk_fixture
+  run_bash_x "rm -rf build" "$WT"
+  [ "$(decision)" = "deny" ]
+  [ -n "$(reason)" ]
+}
+
+@test "explorer: git push is DENIED" {
+  mk_fixture
+  run_bash_x "git push origin main" "$WT"
+  [ "$(decision)" = "deny" ]
+}
+
+@test "explorer: an uncertain command is DENIED by default" {
+  mk_fixture
+  run_bash_x "npx some-random-tool" "$WT"
+  [ "$(decision)" = "deny" ]
+}
+
+@test "explorer: safe build/test commands are ALLOWED even off-scratch (write only build artifacts)" {
+  mk_fixture
+  run_bash_x "cargo build" "$REPO"
+  [ "$(decision)" = "allow" ]
+  run_bash_x "make test" "$REPO"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: shell redirection to a target inside the worktree is ALLOWED" {
+  mk_fixture
+  run_bash_x "echo hello > out.txt" "$WT"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: shell redirection to a tracked file in the main tree is DENIED" {
+  mk_fixture
+  run_bash_x "echo pwned > tracked.txt" "$REPO"
+  [ "$(decision)" = "deny" ]
+}
+
+@test "explorer: shell redirection to /tmp is ALLOWED" {
+  mk_fixture
+  run_bash_x "echo hi > /tmp/gl-redir-out.txt" "$REPO"
+  [ "$(decision)" = "allow" ]
+}
+
+# --- Other tools & readonly ---
+
+@test "explorer: Read is ALLOWED" {
+  mk_fixture
+  run_tool_x "Read" "$WT"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: a non-enumerated tool defers (no decision; dontAsk then denies)" {
+  mk_fixture
+  run_tool_x "SomeFutureTool" "$WT"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- Config knobs ---
+
+@test "explorer: plan_explorer_uncertain=allow flips uncertain to ALLOW" {
+  mk_fixture
+  set_config plan_explorer_uncertain allow
+  run_bash_x "npx some-random-tool" "$WT"
+  [ "$(decision)" = "allow" ]
+}
+
+@test "explorer: plan_explorer_enabled=false disables the policy entirely" {
+  mk_fixture
+  set_config plan_explorer_enabled false
+  run_edit_x "$REPO/tracked.txt" "$REPO"
+  # policy off → Edit falls through to normal (silent) handling
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- Non-regression: absent the env var, behavior is unchanged ---
+
+@test "non-regression: without the explorer env var, Edit passes through silently" {
+  mk_fixture
+  run_edit_x "$REPO/tracked.txt" "$REPO" "Edit" 0
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "non-regression: without the explorer env var, rm -rf still warns via context (no deny)" {
+  run_bash "rm -rf important_dir"
+  [ "$(decision)" != "deny" ]
+  has_context
 }

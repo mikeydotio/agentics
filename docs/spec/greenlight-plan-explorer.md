@@ -195,7 +195,7 @@ plan_explorer_worktree_segment: .claude/worktrees
 - `plugins/greenlight/tests/greenlight.bats` — plan-explorer truth table + non-regression guard.
 - `plugins/greenlight/README.md` — plan-explorer section.
 - `plugins/forge/skills/research/SKILL.md` (+ any bin) — governed-explorer path (Wave 3, re-confirm).
-- `CLAUDE.md` roadmap note; `docs/atlas` update suggested post-merge.
+- `CLAUDE.md` roadmap note.
 
 ## 6. Invariants / non-regression
 

@@ -21,7 +21,7 @@ gated fix, and a durable lesson.
   fix         RED → implement (behavior only) → GREEN → full suite → fix: commit →
               sibling-pattern sweep → optional separate refactor: commit (two hats)
   postmortem  committed blameless postmortem (docs/rca/<slug>.md) + preventative action;
-              CLAUDE.md / atlas lesson offers; cleanup
+              CLAUDE.md lesson offer; cleanup
 ```
 
 Investigation depth is tiered: `/rca full <desc>` / `/rca light <desc>` skip the triage

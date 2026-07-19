@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run all bats test files for the forge plugin.
 #
-# Unlike semver/deployit/atlas (which use a custom `test_*`-function
+# Unlike semver/deployit (which use a custom `test_*`-function
 # discovery harness), forge's suites are real bats files that live
 # alongside the scripts they test in bin/ and hooks/ rather than in a
 # dedicated tests/ directory — so this runner just points bats at both.

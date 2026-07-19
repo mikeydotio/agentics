@@ -26,8 +26,7 @@ Agentics is a Claude Code plugin marketplace (`mikeydotio/agentics`) providing p
 
 | Plugin | Skill | Purpose |
 |--------|-------|---------|
-| agents | `/agents` | Shared agent library — 29 research-backed specialist agent definitions (16 general-purpose, 3 platform-specific UX, 10 pipeline-specific) used by forge, rca, atlas, and future plugins. |
-| atlas | `/atlas` | Committed codebase maps for agentic tools: docs/atlas/ with a token-budgeted INDEX (@imported via CLAUDE.md) + per-module docs. v2 is a deterministic **projection** — a script extracts structure, the LLM produces only content-addressed *judgment* cells (docs/atlas/judgments.json), and `project` renders the docs; a no-change rebuild calls no model. Hybrid extraction (tree-sitter helper or regex fallback); git-aware updates re-judge only the delta; staleness-tiered SessionStart hook. See references/design-v2.md. Uses shared agents (cartographer-as-annotator, map-verifier). |
+| agents | `/agents` | Shared agent library — 28 research-backed specialist agent definitions (17 general-purpose, 3 platform-specific UX, 8 pipeline-specific) used by forge, rca, and future plugins. |
 | forge | `/forge` | Unified idea-to-deployment pipeline: interrogation → research → design → planning → decompose → execute → review → validate → triage → document → deploy. Uses shared agents from the `agents` plugin. FIX/ESCALATE triage loop. Has SessionStart and Stop hooks. |
 | rca | `/rca` | Reproduction-gated RCA for known defects: KT IS/IS-NOT intake → firm repro gate (automated failing test; user/council override only) → git forensics (bisect/blame/pickaxe/hotspots via bin/ scripts) → competing-hypothesis falsification in disposable worktrees → ODC classification + surgical-vs-redesign verdict → caller gate (fix now vs hand off) → two-hats gated fix → committed blameless postmortem (docs/rca/). Orchestrator + 7 step subskills (forge-style direct-Read dispatch); latches GitHub/storyhook issues; uses shared agents (qa-engineer, investigator, evidence-collector, experimenter, hypothesis-challenger, software-architect, software-engineer, technical-writer). |
 | reconcile-pr | `/reconcile-pr` | Rebase a GitHub PR onto its base branch as a hybrid state machine (`bin/reconcile-pr.sh`): preflight → start → resolve/continue loop → test → push → comment → cleanup. Deterministic script owns every git/gh mechanic + the force-push safety gate (destination-ref guard, explicit-OID `--force-with-lease`, never bare `--force`, never a protected branch); the SKILL only drives conflict resolution (base_side/pr_side zdiff3 labeling), behavior verification, and the summary. Isolated worktree under `.claude/worktrees/`. Refuses fork PRs in v1. |
@@ -150,21 +149,3 @@ When you notice the user has completed a logical unit of work, suggest running `
 ### Configuration
 Versioning settings are in `.semver/config.yaml`. Do not modify this file unless the user explicitly asks to change semver settings.
 <!-- semver:end -->
-
-<!-- atlas:start -->
-## Codebase Map (atlas)
-
-@docs/atlas/INDEX.md
-
-- The imported INDEX above is this project's codebase map. Use its routing
-  table: read the listed module doc before working in that area.
-- Prefer the map to rediscovery. A module doc already captures its area's
-  purpose, API, load-bearing symbols, relationships, and gotchas — the
-  orientation you would otherwise rebuild by exploring. Read the routed doc
-  first; explore further only for task-specific detail it doesn't cover.
-- The map covers code structure only; build/test/workflow guidance lives in
-  the rest of this file.
-- After committing changes to mapped source files, suggest running
-  `/atlas update` — including when exploration surfaced a durable, map-worthy
-  fact (a gotcha, a load-bearing symbol) the map was missing.
-<!-- atlas:end -->

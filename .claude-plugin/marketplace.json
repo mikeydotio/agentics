@@ -53,11 +53,6 @@
       "source": "./plugins/council"
     },
     {
-      "name": "atlas",
-      "description": "Committed markdown codebase maps for agentic tools — full mapping plus git-aware incremental updates via a blob-SHA dependency ledger, with a token-budgeted always-loaded INDEX and staleness-aware session hooks",
-      "source": "./plugins/atlas"
-    },
-    {
       "name": "issue",
       "description": "GitHub-issue lifecycle toolkit: /issue do <n> dispatches an issue to a fresh plan-mode Claude session in a new tmux window + per-issue worktree; /issue new interrogates then files an issue; /issue view <n> prints it; /issue complete <n> closes it and safely cleans up merged branches + worktrees; /issue <n> views then offers to work on it",
       "source": "./plugins/issue"

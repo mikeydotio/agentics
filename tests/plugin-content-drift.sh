@@ -11,8 +11,8 @@
 # internally consistent with the stale VERSION. This guard closes that gap.
 #
 # HOW: git blob OIDs *are* content hashes, so `git diff <tag> HEAD -- <paths>`
-# is a content-hash-vs-version check for free (same idiom plugins/atlas/bin/
-# atlas-cli relies on). The invariant: the shipped runtime bytes under plugins/**
+# is a content-hash-vs-version check for free. The invariant: the shipped
+# runtime bytes under plugins/**
 # must not differ from the release tag v<VERSION> unless VERSION has advanced.
 # The moment you change shipped content you must `/semver bump` (which retags at
 # the new HEAD) or this fails the pre-push gate.

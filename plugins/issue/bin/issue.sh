@@ -253,17 +253,56 @@ local_branch_exists() { git show-ref --verify --quiet "refs/heads/$1"; }
 # remote_branch_exists <branch>
 remote_branch_exists() { [ -n "$(git ls-remote --heads origin "$1" 2>/dev/null)" ]; }
 
-# branch_is_merged <branch> <base> — true iff <branch> is fully merged into
-# <base> (a local branch or, failing that, origin/<base>). If neither base ref
-# exists, returns FALSE — the safe default: an un-comparable branch is NOT
-# considered merged, so it is never auto-deleted.
+# freshen_base_ref <base> — BEST-EFFORT, quiet network refresh of the base
+# branch's remote-tracking ref (refs/remotes/origin/<base>) so branch_is_merged
+# compares against an up-to-date origin/<base>. In daemon-managed repos the merge
+# lands on GitHub and local <base> is never pulled, so without this a
+# genuinely-merged branch reads as unmerged (issue #99). The explicit refspec (with
+# a leading + to match the default clone behaviour) guarantees the remote-tracking
+# ref updates regardless of the remote's configured fetch refspecs. Offline /
+# no-remote / any failure is swallowed — branch_is_merged then falls back to
+# whatever refs already exist, exactly as before. NEVER mutates local branches,
+# the index, or the worktree; call it ONCE per complete run before collect_targets.
+freshen_base_ref() {
+  local base="$1"
+  git fetch --quiet origin "+refs/heads/$base:refs/remotes/origin/$base" >/dev/null 2>&1 || true
+}
+
+# branch_is_merged <branch> <base> — true iff <branch>'s tip is an ancestor of a
+# usable <base> ref, tested as the UNION of origin/<base> and local <base>: merged
+# if it is an ancestor of EITHER. origin/<base> is checked FIRST because in a
+# daemon-managed repo the merge lands on the remote and local <base> can lag
+# indefinitely (issue #99) — callers freshen origin/<base> once per run
+# (freshen_base_ref) before relying on this. If NEITHER base ref exists, returns
+# FALSE — the safe default: an un-comparable branch is NOT considered merged, so it
+# is never auto-deleted. A genuinely unmerged branch is an ancestor of neither ref,
+# so it stays refused. Callers guard every use with local_branch_exists, so
+# refs/heads/<branch> always resolves.
 branch_is_merged() {
-  local branch="$1" base="$2" baseref=""
-  if   git show-ref --verify --quiet "refs/heads/$base";          then baseref="$base"
-  elif git show-ref --verify --quiet "refs/remotes/origin/$base"; then baseref="origin/$base"
-  else return 1
-  fi
-  git branch --merged "$baseref" 2>/dev/null | sed 's/^[*+ ]*//' | grep -qxF "$branch"
+  local branch="$1" base="$2" ref
+  for ref in "refs/remotes/origin/$base" "refs/heads/$base"; do
+    if git show-ref --verify --quiet "$ref" \
+       && git merge-base --is-ancestor "refs/heads/$branch" "$ref" 2>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# delete_merged_local_branch <branch> <base> — delete a LOCAL branch the plan has
+# already classed deletable. Tries the gentle `git branch -d` first (which keeps
+# git's own merged-into-HEAD/upstream backstop for the common fresh-base case); if
+# that refuses AND our authoritative union check still says the branch is merged
+# into a base ref (fresh origin/<base> or local <base>, issue #99), escalate to
+# `git branch -D`. The branch's commits survive in <base>'s history, so the forced
+# ref delete loses nothing, and re-running branch_is_merged guards a scan→delete
+# race (a branch that advanced past base since the scan fails the re-check and is
+# NOT forced). Returns 0 on delete, non-zero otherwise (caller records failed).
+delete_merged_local_branch() {
+  local branch="$1" base="$2"
+  git branch -d "$branch" >/dev/null 2>&1 && return 0
+  branch_is_merged "$branch" "$base" || return 1
+  git branch -D "$branch" >/dev/null 2>&1
 }
 
 # collect_targets <n> <repo> — READ-ONLY. Emit TSV describing every cleanup
@@ -1191,6 +1230,9 @@ cmd_complete_plan() {
   repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
   state=$(complete_issue_state "$n" "$repo")
   default=$(default_branch)
+  # Freshen origin/<default> once so merged-ness is judged against ground truth,
+  # not a local <default> that daemon-managed repos never pull (issue #99).
+  freshen_base_ref "$default"
   targets=$(collect_targets "$n" "$repo")
   rows_json=$(printf '%s' "$targets" | jq -R -s 'split("\n") | map(select(length>0) | split("\t"))')
 
@@ -1254,6 +1296,9 @@ cmd_complete_execute() {
   repo=$(origin_owner_repo) || fail "no GitHub origin remote found (git remote get-url origin)."
   state=$(complete_issue_state "$n" "$repo")
   default=$(default_branch)
+  # Freshen origin/<default> once so merged-ness (and the -d→-D delete escalation)
+  # is judged against ground truth, not a stale local <default> (issue #99).
+  freshen_base_ref "$default"
   targets=$(collect_targets "$n" "$repo")
 
   local -a commands=() removed_wt=() removed_bl=() removed_br=() failed=()
@@ -1298,7 +1343,7 @@ cmd_complete_execute() {
         if [ "$a" = "local" ]; then
           if [ -n "$DRY_RUN" ]; then
             commands+=("git branch -d $c"); removed_bl+=("$c")
-          elif git branch -d "$c" >/dev/null 2>&1; then
+          elif delete_merged_local_branch "$c" "$default"; then
             removed_bl+=("$c")
           else
             failed+=("branch:$c(local)")

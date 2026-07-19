@@ -74,6 +74,57 @@ mk_complete_repo() {
   printf '%s' "$repo"
 }
 
+# mk_stale_base_repo — build a repo reproducing the issue #99 condition and echo
+# its path. The issue under test is 88 (owner/repo fake/repo -> prefix "rep" ->
+# wname "rep-88"). A worktree branch is merged into origin/main on a SEPARATE
+# clone (standing in for the GitHub side) while THIS repo's local main is never
+# pulled, so local main permanently LAGS origin/main:
+#   worktree-rep-88   own commit, merged only on origin/main, NO upstream
+#                     -> pre-fix: mis-skipped `local, unmerged`; post-fix: deletable
+#   worktree-88       own commit, never merged -> genuinely unmerged (negative guard)
+# Leave FAKE_GH_CLOSED_BY_PRS unset (default []) so only the worktree-branch path
+# is exercised. `git branch -d worktree-rep-88` REFUSES here (no upstream + stale
+# local main), so the delete depends on the -d->-D escalation.
+mk_stale_base_repo() {
+  local origdir origin remote repo
+  origdir="$(mktemp -d /tmp/issue-stale-origin.XXXXXX)"
+  mkdir -p "$origdir/fake"
+  origin="$origdir/fake/repo.git"
+  git init -q --bare -b main "$origin"
+  repo="$(mktemp -d /tmp/issue-stale-local.XXXXXX)"
+  remote="$(mktemp -d /tmp/issue-stale-remote.XXXXXX)"
+  _TMP_REPOS+=("$repo" "$origdir" "$remote")
+  (
+    # local clone where `issue complete` runs; its main starts at init
+    cd "$repo" || exit 1
+    git init -q -b main
+    git config user.email t@t; git config user.name t
+    git remote add origin "$origin"
+    echo a > f; git add f; git commit -qm init
+    git push -qu origin main
+    git remote set-head origin main >/dev/null 2>&1 || true
+
+    # merged-on-origin worktree branch: own commit, pushed WITHOUT -u (no upstream)
+    git checkout -q -b worktree-rep-88 main
+    echo w > wfile; git add wfile; git commit -qm "feat: issue 88 work"
+    git push -q origin worktree-rep-88
+    git checkout -q main
+
+    # genuinely-unmerged worktree branch: own commit, never merged (guard)
+    git checkout -q -b worktree-88 main
+    echo u > ufile; git add ufile; git commit -qm "wip: issue 88 unmerged"
+    git checkout -q main
+
+    # GitHub-side stand-in: a separate clone merges worktree-rep-88 into main and
+    # pushes, advancing origin/main. THIS repo never pulls, so its local main lags.
+    git clone -q "$origin" "$remote"
+    git -C "$remote" config user.email t@t; git -C "$remote" config user.name t
+    git -C "$remote" merge -q --no-ff origin/worktree-rep-88 -m "Merge PR #88"
+    git -C "$remote" push -q origin main
+  ) >/dev/null 2>&1
+  printf '%s' "$repo"
+}
+
 _FAILED=0
 fail_test() { printf 'FAIL: %s\n' "$1" >&2; _FAILED=1; }
 

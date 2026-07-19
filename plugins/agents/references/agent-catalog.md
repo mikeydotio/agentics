@@ -52,13 +52,6 @@ Complete roster of agents available in the shared library at `plugins/agents/age
 | [evidence-collector](../agents/evidence-collector.md) | Read, Grep, Glob, Bash | yes | 7-category evidence taxonomy, facts-only discipline. Draws from Investigator + Observability + Data + Security. |
 | [hypothesis-challenger](../agents/hypothesis-challenger.md) | Read, Grep, Glob, Bash | yes | 6 challenge strategies (incl. experiment-design review), absorbs archaeologist + analyst + remediation roles. Draws from Skeptic + Architect + Security + Experimenter. |
 
-### Atlas Pipeline
-
-| Name | Tools | R/O | Description |
-|------|-------|-----|-------------|
-| [cartographer](../agents/cartographer.md) | Read, Write, Grep, Glob | no | Maps one module into an insight-dense analysis: grounded relationships, ranked load-bearing symbols, routing metadata; output medium (doc, cells, summary) set by the consumer context. Draws from Architect + Investigator + Technical Writer. |
-| [map-verifier](../agents/map-verifier.md) | Read, Grep, Glob | yes | Adversarial claim sampling against actual code (symbols, edge direction, deps, invariants) with machine-readable verdicts. Draws from Hypothesis Challenger + Skeptic + Evaluator. |
-
 ## Team Composition by Project Type
 
 | Project Type | Recommended Agents |

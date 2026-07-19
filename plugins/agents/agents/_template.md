@@ -11,7 +11,7 @@ description: <one-line description of role and core capabilities>
 tools: <comma-separated list from: Read, Write, Edit, Bash, Grep, Glob, WebSearch, WebFetch>
 color: <terminal color: green, red, blue, yellow, orange, purple, cyan>
 tier: general | platform-variant | pipeline-specific
-pipeline: forge | rca | atlas | null
+pipeline: forge | rca | null
 read_only: true | false
 platform: cli | web | mobile | null
 tags: [subset of: design, review, implementation, testing, investigation, challenge, documentation, operations, legal, research]

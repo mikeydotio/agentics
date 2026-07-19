@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.33.0] - 2026-07-18
+
+### Added
+- launch /issue do sessions with --model opusplan (#97) (81f0682)
+
+### Changed
+- Merge pull request #100 from mikeydotio/feat/greenlight-plan-explorer (26ec630)
+- Merge pull request #98 from mikeydotio/worktree-age-97 (aff5560)
+
+_[manual]_
+
 ## [v2.32.0] - 2026-07-18
 
 ### Added

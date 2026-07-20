@@ -28,6 +28,11 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+# Running `python3 bin/deployit-backend` puts bin/ at sys.path[0] implicitly;
+# insert it explicitly too so a future SourceFileLoader-based test (see
+# deployit-release's same idiom) can import this file without executing it as
+# __main__ and still resolve `import deployit_appcast`, its sibling.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import deployit_appcast
 
 

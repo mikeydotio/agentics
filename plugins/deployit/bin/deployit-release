@@ -21,6 +21,14 @@ Inputs:
   --prerelease              mark the release as a pre-release
   --clobber                 replace an existing release's asset + notes
   --attach PATH             extra asset to upload (repeatable, e.g. the .dmg)
+  --appcast-signature SIG   publish a single-item Sparkle appcast.xml release
+                            asset, enclosure pointing at this release's zip.
+                            SIG is the EdDSA signature computed over --zip's
+                            exact bytes at deploy time (deployit-cli passes
+                            the tailnet appcast's signature — the release zip
+                            and the Sparkle zip are byte-identical). Requires
+                            --zip: --app re-archives via ditto, which is not
+                            byte-reproducible and would invalidate SIG.
   --[no-]require-developer-id  require a Developer ID signature (default: require)
   --dry-run                 print the gh command(s) as JSON; touch nothing
 
@@ -32,13 +40,22 @@ Env overrides (mirror bin/deployit-cli):
 """
 
 import argparse
+import datetime as _dt
 import json
 import os
 import re
+import shutil as _shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+# Running `python3 bin/deployit-release` puts bin/ at sys.path[0] implicitly,
+# but tests SourceFileLoader-import this file in-process without ever
+# executing it as __main__ (see test-release-version-resolution.sh) — insert
+# bin/ explicitly so `import deployit_appcast`, its sibling, always resolves.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import deployit_appcast
 
 
 def ok(payload):
@@ -96,21 +113,46 @@ def _semver_prefix(project_dir: Path) -> str:
     return config.get("version_prefix", "") if config else ""
 
 
-def _read_app_short_version(app_path: Path):
-    """CFBundleShortVersionString (the marketing version) from the app's Info.plist,
-    or None. macOS nests Info.plist under Contents/; iOS/visionOS keep it at the
-    bundle root — check both so any extracted bundle resolves."""
+def _read_app_plist_string(app_path: Path, key: str):
+    """A single string value from the app's Info.plist via PlistBuddy, or None
+    when the plist can't be found or the key isn't set. macOS nests Info.plist
+    under Contents/; iOS/visionOS keep it at the bundle root — check both so
+    any extracted bundle resolves."""
     candidates = [app_path / "Contents" / "Info.plist", app_path / "Info.plist"]
     plist = next((p for p in candidates if p.is_file()), None)
     if plist is None:
         return None
     res = subprocess.run(
-        ["/usr/libexec/PlistBuddy", "-c", "Print :CFBundleShortVersionString", str(plist)],
+        ["/usr/libexec/PlistBuddy", "-c", f"Print :{key}", str(plist)],
         capture_output=True, text=True,
     )
     if res.returncode != 0:
         return None
     return res.stdout.strip() or None
+
+
+def _read_app_short_version(app_path: Path):
+    """CFBundleShortVersionString (the marketing version) from the app's Info.plist."""
+    return _read_app_plist_string(app_path, "CFBundleShortVersionString")
+
+
+def _read_app_bundle_version(app_path: Path):
+    """CFBundleVersion (the build number Sparkle compares as sparkle:version)
+    from the app's Info.plist. Read from the same already-built bundle whose
+    zip is the release asset, so it matches the tailnet appcast's version
+    exactly (both trace back to the identical Info.plist)."""
+    return _read_app_plist_string(app_path, "CFBundleVersion")
+
+
+def _github_asset_name(name: str) -> str:
+    """Normalize a filename to what GitHub is guaranteed to store it as: GitHub
+    rewrites spaces (and other unsafe characters) in uploaded release-asset
+    filenames, so a raw local filename can silently mismatch the download URL
+    an appcast enclosure predicts. Normalizing ourselves before upload — and
+    uploading under that exact name — keeps the enclosure URL correct
+    regardless of GitHub's precise rewrite rule, as long as our result is
+    already safe (idempotent under any further rewriting)."""
+    return re.sub(r"[^A-Za-z0-9._-]", ".", name)
 
 
 def _resolve_version_and_tag(project_dir: Path, app_path: Path):
@@ -128,6 +170,44 @@ def _resolve_version_and_tag(project_dir: Path, app_path: Path):
     prefix = _semver_prefix(project_dir)
     tag = version if (not prefix or version.startswith(prefix)) else f"{prefix}{version}"
     return version, tag, source
+
+
+# --- GitHub-release appcast (issue #111) ------------------------------------
+
+def _build_appcast_asset(app_path: Path, repo: str, tag: str, asset_name: str,
+                         asset_length: int, signature: str, fallback_version: str,
+                         tmpd: Path):
+    """Render a single-item Sparkle appcast.xml for the GitHub-release channel
+    and write it to tmpd/appcast.xml. `asset_name`/`asset_length` describe the
+    zip asset that will actually be uploaded (already GitHub-safe-normalized
+    and sized by the caller) — the enclosure URL is built from `asset_name` so
+    it always matches what GitHub stores. Version fields are read straight
+    from `app_path`'s own Info.plist (the same already-built bundle whose zip
+    is the asset), so they match the tailnet appcast's exactly; a missing
+    CFBundleShortVersionString falls back to the resolved release `version`.
+    Returns (appcast_path, enclosure_url)."""
+    enclosure_url = f"https://github.com/{repo}/releases/download/{tag}/{asset_name}"
+    short_version = _read_app_short_version(app_path) or fallback_version
+    bundle_version = _read_app_bundle_version(app_path) or ""
+    item = deployit_appcast.render_item(
+        title=f"{app_path.stem} {short_version}",
+        pubdate=deployit_appcast.rfc822(_dt.datetime.now().astimezone().isoformat()),
+        version=bundle_version,
+        short_version=short_version,
+        enclosure_url=enclosure_url,
+        length=asset_length,
+        ed_signature=signature,
+    )
+    template_path = Path(__file__).resolve().parent.parent / "assets" / "appcast.template.xml"
+    appcast_text = deployit_appcast.render_appcast(
+        template_path.read_text(),
+        title=f"{app_path.stem} (macOS)",
+        link=f"https://github.com/{repo}",
+        items=item,
+    )
+    appcast_path = tmpd / "appcast.xml"
+    appcast_path.write_text(appcast_text)
+    return appcast_path, enclosure_url
 
 
 # --- signing ----------------------------------------------------------------
@@ -239,6 +319,7 @@ def build_parser():
     p.add_argument("--prerelease", action="store_true")
     p.add_argument("--clobber", action="store_true")
     p.add_argument("--attach", action="append", default=[])
+    p.add_argument("--appcast-signature", dest="appcast_signature")
     p.add_argument("--require-developer-id", action="store_true", default=True,
                    dest="require_developer_id")
     p.add_argument("--no-require-developer-id", action="store_false",
@@ -252,6 +333,10 @@ def main(argv):
 
     if bool(args.app) == bool(args.zip):
         fail("provide exactly one of --app PATH or --zip PATH")
+    if args.appcast_signature and args.app:
+        fail("--appcast-signature requires --zip (not --app): the signature was "
+             "computed over --zip's exact bytes, and --app re-archives via ditto, "
+             "which is not byte-reproducible — that would invalidate it")
     notes = Path(args.notes_file)
     if not notes.is_file():
         fail(f"--notes-file not found: {notes}")
@@ -287,6 +372,27 @@ def main(argv):
         title = args.title or tag
         assets = [str(upload_zip)] + [str(a) for a in args.attach]
 
+        # GitHub-release Sparkle appcast (issue #111): a single item pointing at
+        # this release's zip, so an app whose SUFeedURL is
+        # .../releases/latest/download/appcast.xml has a reachable feed with a
+        # reachable enclosure. Appended to `assets` so it uploads/clobbers
+        # alongside the zip in both the create and clobber paths below —
+        # idempotent for free.
+        appcast_url = None
+        appcast_enclosure_url = None
+        if args.appcast_signature:
+            asset_name = _github_asset_name(upload_zip.name)
+            upload_for_appcast = upload_zip
+            if asset_name != upload_zip.name:
+                upload_for_appcast = tmpd / asset_name
+                _shutil.copy2(upload_zip, upload_for_appcast)
+                assets[0] = str(upload_for_appcast)
+            appcast_path, appcast_enclosure_url = _build_appcast_asset(
+                app_path, repo, tag, asset_name, upload_for_appcast.stat().st_size,
+                args.appcast_signature, version, tmpd)
+            assets.append(str(appcast_path))
+            appcast_url = f"https://github.com/{repo}/releases/latest/download/appcast.xml"
+
         exists = False
         tag_present = False
         if not args.dry_run:
@@ -316,9 +422,13 @@ def main(argv):
             cmds.append(create)
 
         if args.dry_run:
-            ok({"display": f"[dry-run] would publish {tag} to {repo}",
-                "tag": tag, "version": version, "version_source": source, "repo": repo,
-                "commands": cmds})
+            payload = {"display": f"[dry-run] would publish {tag} to {repo}",
+                      "tag": tag, "version": version, "version_source": source, "repo": repo,
+                      "commands": cmds}
+            if appcast_url:
+                payload["appcast_url"] = appcast_url
+                payload["appcast_enclosure_url"] = appcast_enclosure_url
+            ok(payload)
             return
 
         release_url = None
@@ -336,9 +446,13 @@ def main(argv):
                                   capture_output=True, text=True)
             release_url = view.stdout.strip() if view.returncode == 0 else f"{repo}@{tag}"
 
-        ok({"display": f"published release {tag} ({version}, via {source}) -> {release_url}",
-            "tag": tag, "version": version, "version_source": source, "repo": repo,
-            "release_url": release_url})
+        payload = {"display": f"published release {tag} ({version}, via {source}) -> {release_url}",
+                  "tag": tag, "version": version, "version_source": source, "repo": repo,
+                  "release_url": release_url}
+        if appcast_url:
+            payload["appcast_url"] = appcast_url
+            payload["appcast_enclosure_url"] = appcast_enclosure_url
+        ok(payload)
 
 
 if __name__ == "__main__":

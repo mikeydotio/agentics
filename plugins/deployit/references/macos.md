@@ -138,9 +138,15 @@ product pages with iOS, rendering as `<Project> · macOS · <version>` with a
 
 macOS apps can update themselves via an EdDSA-signed Sparkle appcast that
 deployit generates and serves. It is opt-in (`[macos.sparkle] enabled = true`)
-and additionally produces a `.zip` enclosure alongside the `.dmg`. Full setup —
-key generation, sharing one key across Macs, SPM, Info.plist keys, and testing —
-is in **`references/sparkle.md`**.
+and additionally produces a `.zip` enclosure alongside the `.dmg`. When a build
+is also GitHub-released, the same signed zip and a second appcast publish to
+the release too — `.../releases/latest/download/appcast.xml` is the feed a
+*distributed* app should point at, since (unlike the tailnet feed) it's
+reachable from anywhere. Every macOS deploy inspects the built app for
+Sparkle wiring and warns on a config-vs-app mismatch, independent of whether
+Sparkle is enabled. Full setup — key generation, sharing one key across Macs,
+SPM, Info.plist keys, the two feed URLs, and testing — is in
+**`references/sparkle.md`**.
 
 ## GitHub release
 
@@ -148,9 +154,10 @@ Every macOS deploy also publishes a GitHub release of the Developer-ID-signed ap
 (zipped) to the app's own repo, alongside the tailnet download page. The notes are
 agent-authored; the version/tag comes from semver or `CFBundleShortVersionString`.
 For a download that opens without the Gatekeeper prompt, enable notarization above
-(the `.app` is notarized + stapled before zipping). Full details — version rules,
-recovery semantics, `--clobber-release`, and running the publisher by hand — are in
-**`references/github-release.md`**.
+(the `.app` is notarized + stapled before zipping). A Sparkle-signed build also gets
+an `appcast.xml` release asset — see "Auto-update (Sparkle)" above. Full details —
+version rules, recovery semantics, `--clobber-release`, the appcast asset, and
+running the publisher by hand — are in **`references/github-release.md`**.
 
 ## Notarization failures
 

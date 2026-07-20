@@ -34,7 +34,16 @@ notary_profile = ""
 [macos.sparkle]
 # Opt-in Sparkle auto-update. When enabled, each macOS deploy also produces a
 # .zip of the .app, EdDSA-signs it, and exposes a per-product appcast feed at
-# <base_url>/p/<bundle_id>/macos/appcast.xml. The .dmg stays the manual download.
+# <base_url>/p/<bundle_id>/macos/appcast.xml (tailnet-only). The .dmg stays the
+# manual download. Every macOS deploy also inspects the built app for Sparkle
+# wiring and warns on a config-vs-app mismatch, regardless of this flag.
+#
+# When a GitHub release is ALSO published for a signed build ([github] release
+# below), the same signed .zip and a second appcast publish there too, at
+# https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml — the
+# feed a distributed app should actually point SUFeedURL at, since it (unlike
+# the tailnet one) is reachable from anywhere. No separate toggle; withheld
+# automatically for a [github] prerelease (see references/sparkle.md).
 enabled = false
 # Path to Sparkle's `sign_update` tool. Empty = search PATH and common SPM /
 # Homebrew locations (see references/sparkle.md). Env override:
@@ -59,7 +68,9 @@ public_ed_key = ""
 # app checkout's own `origin` remote. On by default — set false to disable, or
 # pass `/deployit deploy --no-release` for a one-off skip.
 release = true
-# Mark releases as pre-releases.
+# Mark releases as pre-releases. A signed build's appcast.xml is withheld for
+# a prerelease (see [macos.sparkle] above) — releases/latest/download/... only
+# ever resolves to the newest non-prerelease release.
 prerelease = false
 # Also upload the .dmg as a second release asset (the .zip is always attached).
 attach_dmg = false

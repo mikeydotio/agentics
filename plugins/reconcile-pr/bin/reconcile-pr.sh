@@ -79,8 +79,16 @@ validate_pr() {  # validate_pr <n>
 }
 
 need_repo() {
-  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) \
+  # Anchor REPO_ROOT to the MAIN worktree (parent of the shared git common dir),
+  # independent of CWD. `--show-toplevel` is worktree-relative, so from inside the
+  # reconcile worktree it mislocated state_dir and every subcommand reported the
+  # reconcile as lost (#108). `--git-common-dir` resolves to <main>/.git from any
+  # linked worktree; its dirname is the main repo root where `start` anchors state.
+  local common
+  common=$(git rev-parse --git-common-dir 2>/dev/null) \
     || fail "not inside a git repository."
+  REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$common")" && pwd -P) \
+    || fail "could not resolve repository root from git common dir ($common)."
 }
 
 require_gh() {

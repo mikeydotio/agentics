@@ -12,7 +12,8 @@ assert_eq "$(jqf "$out" .ok)" "true" "dryrun ok:true"
 assert_eq "$(jqf "$out" .dry_run)" "true" "dryrun flag"
 assert_eq "$(jqf "$out" .issue)" "42" "dryrun issue number"
 cmds="$(jqf "$out" '.commands | join("\n")')"
-assert_contains "$cmds" "claude -w rep-42 --permission-mode plan --model opusplan" "default launch names worktree like the window (<repo-prefix>-<n>), plan mode via flag, opusplan model (#97)"
+assert_contains "$cmds" "claude --permission-mode plan --model opusplan" "default launch omits -w (dispatch already created the worktree, issue #107), plan mode via flag, opusplan model (#97)"
+assert_not_contains "$cmds" "claude -w" "default launch never re-creates a worktree via -w (issue #107)"
 assert_contains "$cmds" "issue #42 in this repo" "default prompt substituted"
 # Plan mode is now the launch flag, not keystrokes: no Shift+Tab, and the prompt
 # must NOT start with /plan (that routes to a /plan skill, e.g. forge's planner).
@@ -29,12 +30,20 @@ assert_eq "$(jqf "$out" '[.commands[] | select(test("send-keys.*-l") and test("i
 # Window is named "<repo-prefix>-<n>": origin fake/repo -> "rep-42".
 assert_eq "$(jqf "$out" .window_name)" "rep-42" "window_name is <repo-prefix>-<n>"
 assert_contains "$cmds" "-n rep-42" "new-window carries the -n <name> flag"
-# The core of issue #52: the worktree (claude -w <name>) arg IS the window name.
-assert_contains "$cmds" "claude -w $(jqf "$out" .window_name)" "worktree arg equals window_name"
-# The helper uses git's resolved toplevel (on macOS /tmp -> /private/tmp), which
-# it also reports as .dir — assert the new-window targets exactly that.
+# issue #107: dispatch creates the worktree ITSELF (git worktree add) off a
+# freshly-fetched origin/<default> — no longer via `claude -w`. The branch is
+# worktree-<window_name>, at .claude/worktrees/<window_name> under the repo root
+# (.dir, git's resolved toplevel — on macOS /tmp -> /private/tmp).
 reported_dir="$(jqf "$out" .dir)"
-assert_contains "$cmds" "new-window -d -c $reported_dir" "new-window targets reported repo root (detached)"
+worktree_path="$(jqf "$out" .worktree_path)"
+assert_eq "$worktree_path" "$reported_dir/.claude/worktrees/rep-42" "worktree_path is <repo-root>/.claude/worktrees/<window_name>"
+assert_eq "$(jqf "$out" .worktree_branch)" "worktree-rep-42" "worktree_branch is worktree-<window_name>"
+assert_eq "$(jqf "$out" .base_branch)" "main" "base_branch defaults to main"
+assert_contains "$cmds" "git fetch --quiet origin +refs/heads/main:refs/remotes/origin/main" "dry-run previews the origin fetch"
+assert_contains "$cmds" "git worktree add --no-track -b worktree-rep-42 $worktree_path origin/main" "dry-run previews the worktree-add (symbolic origin/main — no OID resolved, no fetch actually run)"
+# The new window (and the claude launch inside it) are rooted IN the new
+# worktree now, not the repo root.
+assert_contains "$cmds" "new-window -d -c $worktree_path" "new-window targets the NEW worktree path (detached)"
 # Default is DETACHED (-d) so the caller's focus stays on the current window (#54).
 assert_contains "$cmds" "new-window -d" "default opens the window detached (keeps focus)"
 
@@ -69,15 +78,17 @@ assert_eq "$(jqf "$out" '[.commands[]|select(test("gitignore"))]|length')" "0" "
 out=$(cd "$repo" && ISSUE_DRY_RUN=1 ISSUE_FOREGROUND=1 bash "$SCRIPT" dispatch 42 2>&1)
 fg_cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_not_contains "$fg_cmds" "new-window -d" "foreground opt-out drops -d (focus follows)"
-assert_contains "$fg_cmds" "new-window -c $reported_dir" "foreground opt-out uses plain new-window"
+assert_contains "$fg_cmds" "new-window -c $worktree_path" "foreground opt-out uses plain new-window, still rooted in the worktree"
 
-# custom launch/prompt templates substitute <n>
+# custom launch/prompt templates substitute <n> (issue #107: a custom
+# ISSUE_LAUNCH_CMD must NOT include -w — the worktree already exists by launch
+# time — so this example folds <n> into a harmless custom flag instead).
 out=$(cd "$repo" && ISSUE_DRY_RUN=1 \
-      ISSUE_LAUNCH_CMD="claude -w feature-<n>" \
+      ISSUE_LAUNCH_CMD="claude --append-system-prompt issue-<n>" \
       ISSUE_PROMPT="fix <n> now" \
       bash "$SCRIPT" dispatch 9 2>&1)
 cmds="$(jqf "$out" '.commands | join("\n")')"
-assert_contains "$cmds" "claude -w feature-9" "custom launch substituted"
+assert_contains "$cmds" "claude --append-system-prompt issue-9" "custom launch substituted"
 assert_contains "$cmds" "fix 9 now" "custom prompt substituted"
 
 # custom window name override substitutes <n>
@@ -87,9 +98,12 @@ out=$(cd "$repo" && ISSUE_DRY_RUN=1 \
 assert_eq "$(jqf "$out" .window_name)" "wip-7" "custom window name override"
 ovr_cmds="$(jqf "$out" '.commands | join("\n")')"
 assert_contains "$ovr_cmds" "-n wip-7" "custom window name in new-window"
-# The window-name override flows into the default launch's <name>, renaming the
-# worktree too — window and worktree stay in sync.
-assert_contains "$ovr_cmds" "claude -w wip-7 --permission-mode plan --model opusplan" "window-name override renames the worktree too"
+# The window-name override flows into the worktree branch/path (issue #107) —
+# window and worktree stay in sync, same guarantee as before, just derived via
+# worktree-add instead of the old launch-command <name> substitution.
+assert_eq "$(jqf "$out" .worktree_branch)" "worktree-wip-7" "window-name override renames the worktree branch too"
+assert_contains "$(jqf "$out" .worktree_path)" "/.claude/worktrees/wip-7" "window-name override renames the worktree path too"
+assert_contains "$ovr_cmds" "git worktree add --no-track -b worktree-wip-7" "worktree-add command uses the overridden name"
 
 # closed issue -> ok:false (dry-run still validates state)
 out=$(cd "$repo" && ISSUE_DRY_RUN=1 FAKE_GH_STATE=CLOSED bash "$SCRIPT" dispatch 42 2>&1)

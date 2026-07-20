@@ -27,13 +27,18 @@ dispatch_real() {
 }
 
 # --- (a) fresh repo: the rule is added and the dir is genuinely ignored -------
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_real "$repo" 42)
 assert_eq "$(jqf "$out" .ok)" "true" "fresh: ok:true"
 assert_eq "$(jqf "$out" .gitignore)" "added" "fresh: gitignore reports added"
 assert_contains "$(cat "$repo/.gitignore")" "$RULE" "fresh: rule written to .gitignore"
 ( cd "$repo" && git check-ignore -q ".claude/worktrees/42" ) \
   && : || fail_test "fresh: git check-ignore does not ignore the worktree leaf"
+# issue #107: dispatch now genuinely CREATES the worktree (git worktree add),
+# so this is the first point #55's end-to-end guarantee is actually testable —
+# the real worktree dir must not show up as untracked in git status.
+assert_not_contains "$(cd "$repo" && git status --porcelain)" ".claude/worktrees" \
+  "fresh: real worktree dir does not appear in git status (genuinely ignored)"
 
 # --- (b) idempotency: a second dispatch is a no-op, no duplicate line ---------
 out=$(dispatch_real "$repo" 43)
@@ -43,7 +48,7 @@ count=$(grep -cxF "$RULE" "$repo/.gitignore")
 assert_eq "$count" "1" "second: rule present exactly once (no duplicate)"
 
 # --- (c) pre-existing broad `.claude/` rule: file left byte-for-byte untouched -
-broad=$(mk_repo)
+broad=$(mk_dispatch_repo)
 printf 'node_modules/\n.claude/\n' > "$broad/.gitignore"
 before=$(cat "$broad/.gitignore")
 out=$(dispatch_real "$broad" 7)
@@ -51,7 +56,7 @@ assert_eq "$(jqf "$out" .gitignore)" "already-ignored" "broad: reports already-i
 assert_eq "$(cat "$broad/.gitignore")" "$before" "broad: .gitignore left unmodified"
 
 # --- (d) .gitignore with no trailing newline: appended cleanly ----------------
-nonl=$(mk_repo)
+nonl=$(mk_dispatch_repo)
 printf 'node_modules/' > "$nonl/.gitignore"   # deliberately no trailing \n
 out=$(dispatch_real "$nonl" 9)
 assert_eq "$(jqf "$out" .gitignore)" "added" "no-newline: gitignore added"
@@ -64,7 +69,7 @@ assert_eq "$(grep -cxF "$RULE" "$nonl/.gitignore")" "1" "no-newline: rule on its
 # --- (e) failure path: an unwritable .gitignore degrades to add-failed, ok:true
 # Skip under root, which bypasses file permission bits.
 if [ "$(id -u)" != "0" ]; then
-  ro=$(mk_repo)
+  ro=$(mk_dispatch_repo)
   printf 'node_modules/\n' > "$ro/.gitignore"
   chmod 0444 "$ro/.gitignore"
   out=$(dispatch_real "$ro" 11)

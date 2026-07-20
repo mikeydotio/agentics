@@ -65,7 +65,7 @@ submitted() { cat "$1/submitted" 2>/dev/null || printf ''; }
 # --- Case 1: happy path — Enter submits first try, single paste ----------------
 # absorb=0: the prompt is received and the very first Enter submits it. Guards the
 # common path — must stay green before and after the fix.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
 out=$(dispatch_autosubmit "$repo" 42 "$state")
 assert_eq "$(jqf "$out" .ok)" "true" "happy: ok:true"
@@ -80,7 +80,7 @@ rm -rf "$state"
 # race). The fix must recover by re-sending Enter — NOT by re-pasting the prompt.
 # The old code re-pastes on retry, duplicating the prompt: this asserts EXACTLY
 # one paste, so it fails (RED) until the fix lands.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
 out=$(dispatch_autosubmit "$repo" 43 "$state" FAKE_TMUX_ENTER_ABSORB=1)
 assert_eq "$(jqf "$out" .prompt_confirmed)" "true" "absorb1: confirmed after Enter-only retry"
@@ -94,7 +94,7 @@ rm -rf "$state"
 # fix must report prompt_confirmed:false + a warning, and — since receipt WAS
 # confirmed — must NOT re-paste (only re-send Enter). The old code re-pastes on
 # each retry (3 pastes with SEND_RETRIES=2): assert one paste (RED until fixed).
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
 out=$(dispatch_autosubmit "$repo" 44 "$state" FAKE_TMUX_ENTER_ABSORB=99 ISSUE_SEND_RETRIES=2)
 assert_eq "$(jqf "$out" .prompt_confirmed)" "false" "dead: prompt_confirmed:false (never submitted)"
@@ -110,7 +110,7 @@ rm -rf "$state"
 # prompt_confirmed:false. The old code has no receipt phase and its vacuous
 # last-line check reads the footer, so it FALSELY reports prompt_confirmed:true
 # after a single (dropped) paste — this case proves that vacuous-confirm hole.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
 out=$(dispatch_autosubmit "$repo" 45 "$state" FAKE_TMUX_DROP_PASTE=1 ISSUE_SEND_RETRIES=2)
 assert_eq "$(jqf "$out" .prompt_confirmed)" "false" "drop: prompt_confirmed:false (paste never landed)"
@@ -127,7 +127,7 @@ rm -rf "$state"
 # holds both the first and last lines: RED with `send-keys -l` (splits →
 # prompt_submits==3, submitted holds only the last line), GREEN with the buffer
 # paste. dispatch_autosubmit's `env "$@"` overrides its fixed one-line probe.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
 out=$(dispatch_autosubmit "$repo" 46 "$state" \
       "ISSUE_PROMPT=$(printf 'ml-first-<n>\nml-middle\nml-last-<n>')")

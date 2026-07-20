@@ -15,6 +15,10 @@ FAKE_GH="$TESTS_DIR/fakes/gh"
 
 # Point the helper at the fake gh for every test by default.
 export ISSUE_GH_BIN="$FAKE_GH"
+# Defensive: dispatch now runs a real `git fetch` (issue #107). If a future
+# fixture regression ever points it at a real https:// origin, this stops it
+# from blocking on a credential prompt — it fails fast instead.
+export GIT_TERMINAL_PROMPT=0
 
 _TMP_REPOS=()
 _cleanup() { local d; for d in "${_TMP_REPOS[@]:-}"; do [ -n "$d" ] && rm -rf "$d"; done; }
@@ -33,6 +37,73 @@ mk_repo() {
     [ "$origin" != "-" ] && git remote add origin "$origin"
   ) >/dev/null 2>&1
   printf '%s' "$dir"
+}
+
+# mk_dispatch_repo — build a repo for REAL (non-dry-run) `dispatch` tests, echo
+# its path. Issue #107: dispatch now runs a real `git fetch` + `git worktree
+# add` before opening the window, so (unlike plain mk_repo, whose fake
+# https://github.com/... origin can never be fetched offline and whose HEAD is
+# unborn) this fixture needs an origin that ACTUALLY resolves without network:
+# a LOCAL bare origin at fake/repo.git (owner/repo -> fake/repo -> prefix
+# "rep") with one commit already pushed to main and origin/HEAD set, so
+# `origin/main` fetches and `default_branch()` resolves to "main" purely
+# offline. Use this (not mk_repo) for any test that drives a REAL dispatch.
+mk_dispatch_repo() {
+  local origdir origin repo
+  origdir="$(mktemp -d /tmp/issue-dispatch-origin.XXXXXX)"
+  mkdir -p "$origdir/fake"
+  origin="$origdir/fake/repo.git"
+  git init -q --bare -b main "$origin"
+  repo="$(mktemp -d /tmp/issue-dispatch.XXXXXX)"
+  _TMP_REPOS+=("$repo" "$origdir")
+  (
+    cd "$repo" || exit 1
+    git init -q -b main
+    git config user.email t@t; git config user.name t
+    git remote add origin "$origin"
+    echo a > f; git add f; git commit -qm init
+    git push -qu origin main
+    git remote set-head origin main >/dev/null 2>&1 || true
+  ) >/dev/null 2>&1
+  printf '%s' "$repo"
+}
+
+# mk_stale_dispatch_repo — build a repo reproducing the issue #107 condition for
+# `dispatch` tests and echo its path: a LOCAL bare origin (fake/repo.git) that a
+# SEPARATE clone advances past THIS repo's local main — which is never pulled,
+# so it permanently LAGS origin/main, exactly like mk_stale_base_repo (issue
+# #99) but with NO pre-made worktree-* branches, so a dispatch test is free to
+# create its own for any issue number without colliding. `dispatch` itself does
+# the only fetch this repo ever performs; the caller can independently verify
+# staleness via `git ls-remote origin main` (never the local tracking ref).
+mk_stale_dispatch_repo() {
+  local origdir origin remote repo
+  origdir="$(mktemp -d /tmp/issue-dispatch-stale-origin.XXXXXX)"
+  mkdir -p "$origdir/fake"
+  origin="$origdir/fake/repo.git"
+  git init -q --bare -b main "$origin"
+  repo="$(mktemp -d /tmp/issue-dispatch-stale-local.XXXXXX)"
+  remote="$(mktemp -d /tmp/issue-dispatch-stale-remote.XXXXXX)"
+  _TMP_REPOS+=("$repo" "$origdir" "$remote")
+  (
+    cd "$repo" || exit 1
+    git init -q -b main
+    git config user.email t@t; git config user.name t
+    git remote add origin "$origin"
+    echo a > f; git add f; git commit -qm init
+    git push -qu origin main
+    git remote set-head origin main >/dev/null 2>&1 || true
+
+    # GitHub-side stand-in: a separate clone advances origin/main with a NEW
+    # commit. THIS repo never pulls, so its local main permanently lags.
+    git clone -q "$origin" "$remote"
+    git -C "$remote" config user.email t@t; git -C "$remote" config user.name t
+    echo b > "$remote/g"
+    git -C "$remote" add g
+    git -C "$remote" commit -qm "advance origin main"
+    git -C "$remote" push -q origin main
+  ) >/dev/null 2>&1
+  printf '%s' "$repo"
 }
 
 # mk_complete_repo — build a realistic repo for `complete` tests, echo its path.

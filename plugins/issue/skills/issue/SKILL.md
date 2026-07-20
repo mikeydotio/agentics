@@ -72,10 +72,13 @@ Parse `ARGUMENTS` (everything after `/issue`) — the first token is the verb:
      so the user should glance at the new window. When a `pane_tail` accompanies the warning, include
      it (fenced) as diagnostic evidence.
 
-On success a new window (`<repo-prefix>-<number>`, e.g. `age-42`) is running
-`claude -w <repo-prefix>-<number> --permission-mode plan --model opusplan` in a fresh worktree named
-the **same** as the window (`.claude/worktrees/age-42`) — in plan mode on the opusplan model (Opus
-plans, Sonnet executes), prompt already submitted. The helper also
+On success the helper has already fetched `origin/<default>` and created a fresh git worktree
+(`.claude/worktrees/age-42` on branch `worktree-age-42`) based on that tip — never a possibly-stale
+local branch (issue #107) — then opened a new window (`<repo-prefix>-<number>`, e.g. `age-42`)
+rooted **in** that worktree, running `claude --permission-mode plan --model opusplan` in plan mode
+on the opusplan model (Opus plans, Sonnet executes), prompt already submitted. If the fetch couldn't
+confirm a fresh tip (offline, or `origin/<default>` never resolved), `ok:true` still carries a
+`warning` naming how stale the base might be. The helper also
 **marks the issue `in-progress`** on GitHub (best-effort; a failure adds a `warning`, never
 `ok:false`). Nothing further is needed from you.
 
@@ -83,11 +86,13 @@ plans, Sonnet executes), prompt already submitted. The helper also
 
 - **`do` requires tmux** (the helper hard-fails otherwise); **all verbs need an authenticated
   `gh`** CLI.
-- The `do` launch command (`claude -w <name> --permission-mode plan --model opusplan`) and handoff
-  prompt are sent verbatim and overridable via `ISSUE_LAUNCH_CMD` / `ISSUE_PROMPT`; the window/worktree
-  name is `ISSUE_WINDOW_NAME` (renames both). Plan mode comes from the `--permission-mode plan` flag —
-  **not** a `/plan` prompt prefix — and `--model opusplan` makes the child plan on Opus and execute on
-  Sonnet (#97). The helper owns these; don't rewrite them here.
+- The `do` launch command (`claude --permission-mode plan --model opusplan`) and handoff prompt are
+  sent verbatim and overridable via `ISSUE_LAUNCH_CMD` / `ISSUE_PROMPT`; the window/worktree name is
+  `ISSUE_WINDOW_NAME` (renames both). **A custom `ISSUE_LAUNCH_CMD` must NOT include `-w`/`--worktree`**
+  — the helper already created the worktree itself before launching (issue #107), so `-w` would try to
+  create a second, colliding one. Plan mode comes from the `--permission-mode plan` flag — **not** a
+  `/plan` prompt prefix — and `--model opusplan` makes the child plan on Opus and execute on Sonnet
+  (#97). The helper owns these; don't rewrite them here.
 - **GitHub write-backs live in the helper — never call `gh`/`git` yourself.** `do`'s default prompt
   briefs the child session to read the issue and **all** its comments for the full history, weigh a
   reopen as a signal a previous fix fell short, comment its finalized plan on the issue, word every
@@ -95,9 +100,9 @@ plans, Sonnet executes), prompt already submitted. The helper also
   the worktree** (versioning/deployment happen later from `main`; the semver/deployit CLIs also
   hard-refuse inside a worktree). `complete`'s cleanup (close, worktree/branch removal) and `new`'s
   filing are likewise the helper's job.
-- **Worktree hygiene (automatic):** `do` idempotently gitignores `.claude/worktrees/` so the
-  per-issue worktrees never dirty `git status` (reported in the `gitignore` field; never affects
-  `ok`).
+- **Worktree hygiene (automatic):** `do` idempotently gitignores `.claude/worktrees/` **before**
+  creating the worktree, so the per-issue worktrees never dirty `git status` (reported in the
+  `gitignore` field; never affects `ok`).
 - `ISSUE_DRY_RUN=1` previews `dispatch`, `create`, and `complete execute` without side effects (used
   by the tests); you generally won't need it interactively.
 </content>

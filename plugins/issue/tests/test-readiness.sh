@@ -38,7 +38,7 @@ dispatch_ready() {
 # The `marker` fake renders a plan-mode idle pane whose footer says
 # "plan mode on (shift+tab to cycle)" and does NOT contain "for shortcuts". The
 # broadened default READY_PATTERN matches it via "mode on"/"to cycle".
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 42 marker)
 assert_eq "$(jqf "$out" .ok)" "true" "T1 marker: ok:true"
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "T1 marker: readiness confirmed via broadened marker"
@@ -49,7 +49,7 @@ assert_not_contains "$out" "for shortcuts" "T1 marker: confirmed without the sta
 # The `structural` fake has the input-box frame '─' AND the idle glyph '❯' but a
 # footer matching NONE of the known markers → readiness must come from the
 # structural tier once the static pane stabilises.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 43 structural)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "T2 structural: readiness confirmed with no known footer marker"
 assert_eq "$(jqf "$out" 'has("warning")')" "false" "T2 structural: NO warning"
@@ -58,7 +58,7 @@ assert_eq "$(jqf "$out" 'has("warning")')" "false" "T2 structural: NO warning"
 # The `modal` fake draws '─' rules (a trust dialog) but has NO '❯' idle glyph.
 # The structural tier must refuse to confirm — else the handoff prompt would be
 # typed into a modal.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 44 modal)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "false" "T2-guard modal: framed static modal does NOT confirm readiness"
 assert_eq "$(jqf "$out" 'has("warning")')" "true" "T2-guard modal: unconfirmed readiness raises a warning"
@@ -67,7 +67,7 @@ assert_eq "$(jqf "$out" 'has("warning")')" "true" "T2-guard modal: unconfirmed r
 # "esc to interrupt" is a BUSY marker (Claude generating), not idle-ready. It is
 # deliberately absent from READY_PATTERN, and the busy fake has no frame/glyph, so
 # neither tier should confirm.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 45 busy)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "false" "T5 busy: 'esc to interrupt' is not treated as idle-ready"
 
@@ -75,7 +75,7 @@ assert_eq "$(jqf "$out" .readiness_confirmed)" "false" "T5 busy: 'esc to interru
 # The `churn` fake changes content every capture (a counter), with no marker and
 # no frame → readiness never confirms, but the prompt still leaves the input line
 # (prompt_confirmed:true), and the warning path attaches diagnostic evidence.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-churn.XXXXXX)
 out=$(dispatch_ready "$repo" 46 churn FAKE_TMUX_STATE="$state")
 rm -rf "$state"
@@ -89,7 +89,7 @@ assert_contains "$(jqf "$out" .pane_tail)" "building worktree" "T3 churn: pane_t
 # --- T4: legacy '? for shortcuts' still confirms (back-compat) -----------------
 # The fake's DEFAULT (no FAKE_TMUX_CAPTURE) is the legacy "  ? for shortcuts"
 # line — the broadened READY_PATTERN still matches it, so old builds keep working.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 47 legacy)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "T4 legacy: '? for shortcuts' still confirms readiness"
 assert_eq "$(jqf "$out" 'has("warning")')" "false" "T4 legacy: no warning"
@@ -97,7 +97,7 @@ assert_eq "$(jqf "$out" 'has("warning")')" "false" "T4 legacy: no warning"
 # --- T6: a no-warning (success) dispatch carries NO pane_tail key --------------
 # Locks the success payload: pane_tail must be warning-only so the byte-stable
 # success JSON can't drift and break the dryrun/gitignore contract assertions.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 48 marker)
 assert_eq "$(jqf "$out" 'has("pane_tail")')" "false" "T6 success: no pane_tail on the clean success payload"
 assert_eq "$(jqf "$out" 'has("prompt_accepted")')" "true" "T6 success: prompt_accepted field always present"
@@ -106,7 +106,7 @@ assert_eq "$(jqf "$out" 'has("prompt_accepted")')" "true" "T6 success: prompt_ac
 # Force READY_PATTERN to match nothing; the `marker` capture still has the frame
 # '─' and idle glyph '❯', so the STRUCTURAL tier must carry readiness. This is the
 # core #67 guarantee: readiness no longer depends on ANY footer copy.
-repo=$(mk_repo)
+repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 49 marker ISSUE_READY_PATTERN='__no_such_marker__')
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "drift-proof: structural tier confirms with READY_PATTERN matching nothing"
 assert_eq "$(jqf "$out" 'has("warning")')" "false" "drift-proof: no warning"

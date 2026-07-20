@@ -180,14 +180,20 @@ repo's build-number pre-action handles bumping it).
 
 ## Limitations & notes
 
-- **The `.zip` is not notarized** on either channel. deployit notarizes/staples
-  the `.dmg` (when enabled), but the Sparkle `.zip` enclosure — tailnet or
-  GitHub release, same bytes — carries the same Developer-ID-signed `.app`
-  without a stapled ticket. A freshly auto-updated app may show the Gatekeeper
-  "unidentified developer" prompt once, which is more visible on the
-  GitHub-release channel since that's the one real (non-tailnet) users hit.
-  The EdDSA signature still guarantees update integrity. To avoid the prompt,
-  notarize the `.app` before it ships (outside the current flow).
+- **Notarization of the `.zip` tracks `[github] release`, not just
+  `[macos] notarize`.** The Sparkle `.zip`, the GitHub-release `.zip`, and the
+  GitHub-appcast enclosure are the same file — and `_stage_macos` only staples
+  a notarization ticket onto the `.app` *before* zipping when **both**
+  `release` (on for that deploy — the default) **and** `notarize = true` are
+  set, since stapling is otherwise only worth doing for the GitHub-release
+  `.app`. So with the common config (GitHub releases + notarization both on,
+  as in this project's own deploys), every Sparkle-zip surface is notarized —
+  no Gatekeeper prompt. Deploying with `--no-release`/`[github] release =
+  false` (Sparkle-only, no GitHub release) skips the staple even with
+  `notarize = true`, so that build's `.zip` carries the Developer-ID signature
+  without a stapled ticket, and a freshly auto-updated app may show the
+  Gatekeeper "unidentified developer" prompt once. The EdDSA signature
+  guarantees update integrity either way.
 - **Best-effort signing.** If `sign_update` or the key is missing, the deploy
   still succeeds — it ships the `.dmg` and skips the appcast for that build (a
   warning is logged to `~/Library/Logs/deployit/backend.err.log` / the deploy
@@ -196,5 +202,4 @@ repo's build-number pre-action handles bumping it).
 - **Key rotation.** If you generate a new key pair, ship an app update that
   embeds the new `SUPublicEDKey` *before* retiring the old key, or existing
   installs can't verify the switch.
-```
 

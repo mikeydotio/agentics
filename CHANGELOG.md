@@ -3,6 +3,40 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.34.0] - 2026-07-20
+
+### Added
+- publish the Sparkle appcast to the GitHub release (22ca74a)
+- detect Sparkle in the built macOS app and warn on mismatch (22e50d6)
+
+### Fixed
+- base new work on the freshest origin tip, not stale local HEAD (35dfc2e)
+- anchor REPO_ROOT to the main worktree, not ambient CWD (9e2f30f)
+- recognise remotely-merged branches when local main lags (#99) (9021fdb)
+
+### Changed
+- Update CLAUDE.md to direct bump+release on every PR merge (1e0e904)
+- Merge pull request #112 from mikeydotio/worktree-age-111 (cf010c7)
+- extract Sparkle appcast RSS rendering into a shared module (2f35251)
+- Merge pull request #110 from mikeydotio/worktree-age-107 (a0f7334)
+- Merge pull request #109 from mikeydotio/worktree-age-108 (d6b846f)
+- anchor origin_owner_repo to REPO_ROOT (8cab49d)
+- Merge pull request #105 from mikeydotio/worktree-age-104 (bf4d47e)
+- remove the atlas map-update lesson affordance (4ccf84d)
+- remove the atlas plugin, generated map, and wiring (a36eb35)
+- Merge pull request #103 from mikeydotio/fix/99-complete-merged-branch-stale-base (518ba67)
+- Merge pull request #101 from mikeydotio/release/v2.33.0 (650f2c0)
+
+### Documentation
+- correct Sparkle .zip notarization claim; drop stray fence (6ac52da)
+- note CWD-independent state anchoring (b9699eb)
+- scrub dangling atlas references in comments/specs (afa0a1f)
+
+### Maintenance
+- drop atlas-only shared agents (b083e6d)
+
+_[manual]_
+
 ## [v2.33.0] - 2026-07-18
 
 ### Added

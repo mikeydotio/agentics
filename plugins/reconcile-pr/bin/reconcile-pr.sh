@@ -101,7 +101,7 @@ require_gh() {
 # origin_owner_repo — echo "<owner>/<repo>" from the origin remote, or non-zero.
 origin_owner_repo() {
   local url
-  url=$(git remote get-url origin 2>/dev/null) || return 1
+  url=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) || return 1
   url="${url%.git}"; url="${url%/}"
   if [[ "$url" =~ [:/]([^/:]+)/([^/]+)$ ]]; then
     printf '%s/%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"

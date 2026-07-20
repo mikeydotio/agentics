@@ -27,7 +27,11 @@
 # Isolation: all rebase work happens in a dedicated git worktree under
 # <repo>/.claude/worktrees/reconcile-pr/<pr>/worktree — the user's own checkout
 # is never touched. That path is already gitignored (`.claude/worktrees/`).
-# State (meta.json, conflicts.log) lives beside it.
+# State (meta.json, conflicts.log) lives beside it. Every subcommand anchors
+# REPO_ROOT to that MAIN worktree via `git rev-parse --git-common-dir`
+# (need_repo), never CWD — the reconcile worktree is itself a linked
+# worktree, so a CWD-relative anchor (`--show-toplevel`) would mislocate
+# state whenever a subcommand is run from inside it (#108).
 #
 # Rebase runs with `-c merge.conflictStyle=zdiff3` so every conflict hunk carries
 # the common-ancestor block. During a rebase HEAD/ours = base and theirs = the PR
@@ -79,8 +83,16 @@ validate_pr() {  # validate_pr <n>
 }
 
 need_repo() {
-  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) \
+  # Anchor REPO_ROOT to the MAIN worktree (parent of the shared git common dir),
+  # independent of CWD. `--show-toplevel` is worktree-relative, so from inside the
+  # reconcile worktree it mislocated state_dir and every subcommand reported the
+  # reconcile as lost (#108). `--git-common-dir` resolves to <main>/.git from any
+  # linked worktree; its dirname is the main repo root where `start` anchors state.
+  local common
+  common=$(git rev-parse --git-common-dir 2>/dev/null) \
     || fail "not inside a git repository."
+  REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$common")" && pwd -P) \
+    || fail "could not resolve repository root from git common dir ($common)."
 }
 
 require_gh() {
@@ -93,7 +105,7 @@ require_gh() {
 # origin_owner_repo — echo "<owner>/<repo>" from the origin remote, or non-zero.
 origin_owner_repo() {
   local url
-  url=$(git remote get-url origin 2>/dev/null) || return 1
+  url=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null) || return 1
   url="${url%.git}"; url="${url%/}"
   if [[ "$url" =~ [:/]([^/:]+)/([^/]+)$ ]]; then
     printf '%s/%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"

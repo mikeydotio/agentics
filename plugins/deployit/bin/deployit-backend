@@ -15,7 +15,6 @@ Stdlib only. Designed to be supervised by launchd.
 
 import argparse
 import datetime as _dt
-import email.utils as _eut
 import html
 import json
 import mimetypes
@@ -28,6 +27,8 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+import deployit_appcast
 
 
 _BUILD_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -95,12 +96,6 @@ def _relative_time(iso: str) -> str:
     if secs < 3600:  return f"{secs // 60}m ago"
     if secs < 86400: return f"{secs // 3600}h ago"
     return f"{secs // 86400}d ago"
-
-
-def _rfc822(iso: str) -> str:
-    """Format an ISO-8601 timestamp as an RFC-822 date for an appcast <pubDate>.
-    Uses email.utils so the day/month names are always RFC-English."""
-    return _eut.format_datetime(_dt.datetime.fromisoformat(iso))
 
 
 def _install_link(build):
@@ -416,19 +411,12 @@ def _render_product(root: Path, bundle_id: str, platform: str):
     return 200, body
 
 
-_APPCAST_ITEM_TEMPLATE = string.Template("""    <item>
-      <title>$title</title>
-      <pubDate>$pubdate</pubDate>
-      <sparkle:version>$version</sparkle:version>
-      <sparkle:shortVersionString>$short_version</sparkle:shortVersionString>
-      <enclosure url="$zip_url" length="$zip_length" type="application/octet-stream" sparkle:edSignature="$ed_signature" />
-    </item>""")
-
-
 def _render_appcast(root: Path, bundle_id: str):
     """Return (200, xml) for a macOS product's Sparkle appcast, or (404, None)
     when the product has no EdDSA-signed builds. Lists every non-archived macOS
-    build of bundle_id that carries a `sparkle` object, newest-first."""
+    build of bundle_id that carries a `sparkle` object, newest-first. Rendering
+    itself (escaping, template substitution) lives in deployit_appcast, shared
+    with deployit-release's GitHub-release feed."""
     data = _read_index(root)
     matches = [b for b in data["builds"]
                if b.get("bundle_id") == bundle_id
@@ -441,24 +429,24 @@ def _render_appcast(root: Path, bundle_id: str):
     items = []
     for b in matches:
         sp = b["sparkle"]
-        items.append(_APPCAST_ITEM_TEMPLATE.substitute(
-            title=html.escape(f'{b["project"]} {_version_label(b)}'),
-            pubdate=html.escape(_rfc822(b["timestamp"])),
-            version=html.escape(str(sp.get("version", ""))),
-            short_version=html.escape(str(sp.get("short_version", ""))),
-            zip_url=html.escape(sp["zip_url"], quote=True),
-            zip_length=html.escape(str(sp.get("zip_length", ""))),
-            ed_signature=html.escape(sp["ed_signature"], quote=True),
+        items.append(deployit_appcast.render_item(
+            title=f'{b["project"]} {_version_label(b)}',
+            pubdate=deployit_appcast.rfc822(b["timestamp"]),
+            version=sp.get("version", ""),
+            short_version=sp.get("short_version", ""),
+            enclosure_url=sp["zip_url"],
+            length=sp.get("zip_length", ""),
+            ed_signature=sp["ed_signature"],
         ))
     newest = matches[0]
     product_url = (f"{newest['origin_base_url']}/p/"
                    f"{urllib.parse.quote(bundle_id, safe='')}/macos/")
     template_path = root / "_plugin_root" / "assets" / "appcast.template.xml"
-    tmpl = string.Template(template_path.read_text())
-    body = tmpl.substitute(
-        TITLE=html.escape(f'{newest["project"]} (macOS)'),
-        LINK=html.escape(product_url, quote=True),
-        ITEMS="\n".join(items),
+    body = deployit_appcast.render_appcast(
+        template_path.read_text(),
+        title=f'{newest["project"]} (macOS)',
+        link=product_url,
+        items="\n".join(items),
     ).encode()
     return 200, body
 

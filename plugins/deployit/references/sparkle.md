@@ -5,13 +5,57 @@ update themselves in place. The work splits in two:
 
 - **deployit's half (automatic once enabled):** each `macos` deploy also zips
   the `.app`, signs the zip with your EdDSA key, and serves a per-product
-  appcast at `<base_url>/p/<bundle_id>/macos/appcast.xml`. The `.dmg` stays the
-  manual "Download" on the web UI.
+  appcast at `<base_url>/p/<bundle_id>/macos/appcast.xml` (tailnet-only). When
+  a GitHub release is also published for that deploy, the same signed zip and
+  a second appcast are attached to the release too — see "Two appcast
+  channels" below.
 - **Your app's half (one-time wiring):** add the Sparkle framework, point its
-  feed at the deployit appcast URL, and embed the matching public key.
+  feed at whichever appcast URL matches your distribution channel, and embed
+  the matching public key.
 
 This is opt-in. Until you enable it (below), macOS deploys behave exactly as
 before — a `.dmg` download, no appcast.
+
+## Two appcast channels
+
+A signed macOS build can be reachable in two different ways, each with its
+own appcast:
+
+| Channel | Feed URL | Reachable from |
+|---|---|---|
+| Tailnet | `<base_url>/p/<bundle_id>/macos/appcast.xml` | only devices on your tailnet — dev/test installs |
+| GitHub release | `https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml` | anywhere — real distributed users |
+
+The GitHub-release feed is published **automatically** whenever a build is
+both EdDSA-signed (`[macos.sparkle] enabled = true`) and a GitHub release is
+published for it (`[github] release = true`, the default — see
+`references/github-release.md`) — no separate toggle. It carries a single
+`<item>` for the current release; the `<enclosure>` points at that release's
+zip asset (`.../releases/download/<tag>/<Project>.zip`), which is the exact
+same EdDSA-signed bytes as the tailnet zip (deployit reuses one signed archive
+for both). deployit reports both URLs (when applicable) after a deploy.
+
+**A distributed (Developer-ID) app should point `SUFeedURL` at the GitHub
+feed, not the tailnet one** — the tailnet appcast's enclosure is only
+reachable while your origin Mac is up and on the tailnet (see "Limitations &
+notes" below), which silently breaks auto-update for anyone off it. If your
+project builds separate local/distribution configurations (e.g. an xcconfig
+per scheme), point the distribution build's `SU_FEED_URL` at the GitHub feed
+and keep the tailnet feed only for local/dev builds.
+
+**Caveat — pre-releases:** `.../releases/latest/download/...` only ever
+resolves to the newest **non-prerelease** release. If `[github] prerelease =
+true` (or `--prerelease`) is set for a deploy, deployit withholds the
+GitHub-release appcast for that build and warns — publishing one would create
+a feed URL that can never resolve to it.
+
+**Config-vs-app detection.** Every macOS deploy inspects the built `.app` for
+Sparkle wiring (an embedded `Sparkle.framework`, and `SUFeedURL`/
+`SUPublicEDKey` in its Info.plist) independent of `[macos.sparkle] enabled`,
+and warns loudly on any mismatch — most importantly, an app that *is*
+Sparkle-wired while `enabled` is `false`, which otherwise fails silently (no
+appcast, no error). `enabled` still decides whether an appcast is actually
+produced, since signing needs the configured key.
 
 ## 1. Generate an EdDSA key pair (once, ever)
 
@@ -79,19 +123,29 @@ Link `Sparkle` to your app target.
 
 ## 5. Info.plist keys
 
+Pick the feed URL for your distribution channel (see "Two appcast channels"
+above) — tailnet for dev/test builds, GitHub release for anything you ship to
+other people:
+
 ```xml
 <key>SUFeedURL</key>
+<!-- tailnet (dev/test only): -->
 <string>https://<host>.<tailnet>.ts.net/deployit/p/<bundle_id>/macos/appcast.xml</string>
+<!-- GitHub release (distributed users): -->
+<string>https://github.com/<owner>/<repo>/releases/latest/download/appcast.xml</string>
 <key>SUPublicEDKey</key>
 <string><the public key from step 1></string>
 <key>SUEnableAutomaticChecks</key>
 <true/>
 ```
 
-deployit prints the exact `appcast` URL and `SUPublicEDKey` after each signed
-deploy, and shows them on the product page (`/deployit/p/<bundle_id>/macos/`).
-The feed is only reachable while the origin Mac is up and on the tailnet (same
-caveat as install links — see `references/tailscale-serve.md`).
+deployit prints both `appcast` URLs (tailnet always; GitHub release when one
+was published for the build) and `SUPublicEDKey` after each signed deploy, and
+shows the tailnet one on the product page
+(`/deployit/p/<bundle_id>/macos/`). The tailnet feed is only reachable while
+the origin Mac is up and on the tailnet (same caveat as install links — see
+`references/tailscale-serve.md`); the GitHub-release feed is reachable from
+anywhere.
 
 ## 6. Add a "Check for Updates…" affordance
 
@@ -126,12 +180,20 @@ repo's build-number pre-action handles bumping it).
 
 ## Limitations & notes
 
-- **The `.zip` is not notarized.** deployit notarizes/staples the `.dmg` (when
-  enabled), but the Sparkle `.zip` enclosure carries the same Developer-ID-signed
-  `.app` without a stapled ticket. A freshly auto-updated app may show the
-  Gatekeeper "unidentified developer" prompt once. The EdDSA signature still
-  guarantees update integrity. To avoid the prompt, notarize the `.app` before
-  it ships (outside the current flow).
+- **Notarization of the `.zip` tracks `[github] release`, not just
+  `[macos] notarize`.** The Sparkle `.zip`, the GitHub-release `.zip`, and the
+  GitHub-appcast enclosure are the same file — and `_stage_macos` only staples
+  a notarization ticket onto the `.app` *before* zipping when **both**
+  `release` (on for that deploy — the default) **and** `notarize = true` are
+  set, since stapling is otherwise only worth doing for the GitHub-release
+  `.app`. So with the common config (GitHub releases + notarization both on,
+  as in this project's own deploys), every Sparkle-zip surface is notarized —
+  no Gatekeeper prompt. Deploying with `--no-release`/`[github] release =
+  false` (Sparkle-only, no GitHub release) skips the staple even with
+  `notarize = true`, so that build's `.zip` carries the Developer-ID signature
+  without a stapled ticket, and a freshly auto-updated app may show the
+  Gatekeeper "unidentified developer" prompt once. The EdDSA signature
+  guarantees update integrity either way.
 - **Best-effort signing.** If `sign_update` or the key is missing, the deploy
   still succeeds — it ships the `.dmg` and skips the appcast for that build (a
   warning is logged to `~/Library/Logs/deployit/backend.err.log` / the deploy
@@ -140,5 +202,4 @@ repo's build-number pre-action handles bumping it).
 - **Key rotation.** If you generate a new key pair, ship an app update that
   embeds the new `SUPublicEDKey` *before* retiring the old key, or existing
   installs can't verify the switch.
-```
 

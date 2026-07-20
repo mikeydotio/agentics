@@ -614,6 +614,59 @@ def _read_archive_build_number(archive_path: Path, project: str) -> str:
     return res.stdout.strip()
 
 
+def _read_plist_string(plist: Path, key: str):
+    """A single string value from a plist via PlistBuddy, or None when the
+    plist is missing or the key isn't set (PlistBuddy exits non-zero for a
+    missing key — that's an expected outcome here, not an error)."""
+    if not plist.is_file():
+        return None
+    res = subprocess.run(
+        ["/usr/libexec/PlistBuddy", "-c", f"Print :{key}", str(plist)],
+        capture_output=True, text=True,
+    )
+    return res.stdout.strip() if res.returncode == 0 else None
+
+
+def _detect_sparkle_in_app(app_path: Path) -> dict:
+    """Inspect a built macOS .app for Sparkle wiring, independent of whether
+    [macos.sparkle] is enabled in config.toml: is Sparkle.framework embedded,
+    and does the app's own Info.plist declare SUFeedURL / SUPublicEDKey.
+    Purely advisory (issue #111) — used to warn on a config-vs-app mismatch.
+    Never gates appcast production, which requires the configured signing
+    key/tool regardless of what the app itself carries."""
+    plist = app_path / "Contents" / "Info.plist"
+    return {
+        "framework": (app_path / "Contents" / "Frameworks" / "Sparkle.framework").exists(),
+        "feed_url": _read_plist_string(plist, "SUFeedURL"),
+        "public_ed_key": _read_plist_string(plist, "SUPublicEDKey"),
+    }
+
+
+def _sparkle_mismatch_warnings(sparkle_detect: dict, enabled: bool) -> list:
+    """Compare what `_detect_sparkle_in_app` found against `[macos.sparkle]
+    enabled` and return human-readable warnings for every mismatch (issue
+    #111's config-vs-app-vs-appcast triangle). Empty list when they agree.
+    Pure function — no I/O — so cmd_deploy's warning surfacing is directly
+    testable without a full deploy."""
+    warnings = []
+    if enabled and not sparkle_detect["framework"]:
+        warnings.append(
+            "macos.sparkle.enabled=true but the built app has no "
+            "Sparkle.framework — the appcast will be signed, but the app "
+            "has no way to check it.")
+    if not enabled and sparkle_detect["framework"]:
+        feed = sparkle_detect.get("feed_url") or "(no SUFeedURL set)"
+        warnings.append(
+            f"the built app is Sparkle-wired (SUFeedURL: {feed}) but "
+            "macos.sparkle.enabled is false — no appcast is being "
+            "produced; auto-update will silently not work.")
+    if enabled and sparkle_detect["framework"] and not sparkle_detect.get("feed_url"):
+        warnings.append(
+            "Sparkle.framework is embedded but the app's Info.plist has "
+            "no SUFeedURL — auto-update can't locate the appcast.")
+    return warnings
+
+
 def _xcodebuild_export(archive_path: Path, export_dir: Path, plugin_root: Path, platform: str):
     # Prefer an explicit override or a project-local
     # .deployit/ExportOptions.<platform>.plist before the bundled default,
@@ -826,7 +879,9 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     [macos.sparkle] is enabled) also produce an EdDSA-signed .zip for Sparkle
     auto-update. When `release` is set, also stage a `<Project>.zip` of the
     signed bundle as the GitHub-release asset (notarizing+stapling the .app
-    first when notarization is configured). Writes _meta.json. Returns
+    first when notarization is configured). Always inspects the built app for
+    Sparkle wiring (issue #111), independent of `enabled`, so cmd_deploy can
+    warn on a config-vs-app mismatch. Writes _meta.json. Returns
     (dmg_name, dmg_url)."""
     sparkle_cfg = sparkle_cfg or {}
     dst = state / "serve" / build_id
@@ -857,6 +912,11 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     ], capture_output=True, text=True)
     if res.returncode != 0:
         fail(f"hdiutil create failed: {res.stderr.strip() or res.stdout.strip()}")
+
+    # Sparkle detection (issue #111): inspect the built app itself, independent
+    # of [macos.sparkle] enabled, so cmd_deploy can warn on a config-vs-app
+    # mismatch instead of silently no-op'ing either direction.
+    sparkle_detect = _detect_sparkle_in_app(staging_app)
 
     # Sparkle (opt-in): zip + EdDSA-sign the .app before it's removed below.
     sparkle_meta = None
@@ -907,6 +967,7 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
         meta["sparkle"] = sparkle_meta
     if release_zip_name:
         meta["release_zip"] = release_zip_name
+    meta["sparkle_detect"] = sparkle_detect
     (dst / "_meta.json").write_text(json.dumps(meta, indent=2))
     return dmg_name, dmg_url
 
@@ -1256,7 +1317,15 @@ def _publish_github_release(plugin_root: Path, cwd: Path, state: Path, build_id:
     """Invoke bin/deployit-release to publish the staged release zip, returning its
     JSON result (or an {ok: False, ...} dict). Never raises: a release failure
     must not roll back the already-deployed tailnet build. Honors
-    DEPLOYIT_SKIP_RELEASE_PUBLISH (no-op ok) for tests/offline runs."""
+    DEPLOYIT_SKIP_RELEASE_PUBLISH (no-op ok) for tests/offline runs.
+
+    When this build was EdDSA-signed for Sparkle (meta["sparkle"] present — the
+    release zip and the Sparkle zip are byte-identical, see _stage_macos),
+    also asks deployit-release to publish a GitHub-release appcast.xml (issue
+    #111), passing the already-computed signature so the release process
+    never needs the private key. Withheld when `prerelease` is set:
+    .../releases/latest/download/... only ever resolves to the newest
+    non-prerelease release, so a prerelease's appcast would never be fetched."""
     serve = state / "serve" / build_id
     try:
         meta = json.loads((serve / "_meta.json").read_text())
@@ -1295,12 +1364,25 @@ def _publish_github_release(plugin_root: Path, cwd: Path, state: Path, build_id:
         if dmg and (serve / dmg).is_file():
             cmd += ["--attach", str(serve / dmg)]
 
+    appcast_skipped_prerelease = False
+    sparkle_meta = meta.get("sparkle")
+    if sparkle_meta:
+        if prerelease:
+            appcast_skipped_prerelease = True
+        else:
+            cmd += ["--appcast-signature", sparkle_meta["ed_signature"]]
+
     res = subprocess.run(cmd, capture_output=True, text=True)
     try:
-        return json.loads(res.stdout)
+        result = json.loads(res.stdout)
     except json.JSONDecodeError:
         return {"ok": False, "stderr": res.stderr.strip() or res.stdout.strip(),
                 "display": f"release: deployit-release produced no JSON (exit {res.returncode})"}
+    if appcast_skipped_prerelease and result.get("ok"):
+        result["appcast_skipped"] = (
+            "prerelease mode: releases/latest/download/appcast.xml would never "
+            "resolve to a prerelease, so no GitHub-release appcast was published")
+    return result
 
 
 # --- Out-of-band post-deploy tests (issue #90) -----------------------------
@@ -1504,6 +1586,7 @@ def cmd_deploy(args):
     entry["archived"] = False
     entry["notes"] = None
     entry.pop("release_zip", None)  # tailnet index doesn't track the GitHub asset
+    sparkle_detect = entry.pop("sparkle_detect", None)  # advisory only (issue #111); not shared
 
     publish = _append_to_index(state, entry, idx=_index_cfg(cfg))
     _refresh_local_backend(cfg["server"]["port"])
@@ -1540,6 +1623,18 @@ def cmd_deploy(args):
         "listing_url": listing_url,
         "post_test": post_test.get("status"),
     }
+    # Sparkle config-vs-app mismatch warnings (issue #111). Detection is purely
+    # advisory: it never gates whether the appcast is produced — `enabled`
+    # remains the sole actuator, since signing needs the configured key/tool —
+    # but a mismatch must never be a silent no-op.
+    if sparkle_detect is not None:
+        sp_cfg = cfg.get("macos", {}).get("sparkle", {})
+        sparkle_warnings = _sparkle_mismatch_warnings(sparkle_detect, bool(sp_cfg.get("enabled")))
+        if sparkle_warnings:
+            result["sparkle_warnings"] = sparkle_warnings
+            for w in sparkle_warnings:
+                display += f"\nwarning:  {w}"
+                sys.stderr.write(f"deployit: WARNING — {w}\n")
     # Sparkle: when this build was EdDSA-signed, surface the appcast feed and the
     # public key so the developer can wire SUFeedURL / SUPublicEDKey into the app.
     if entry.get("sparkle"):
@@ -1563,6 +1658,14 @@ def cmd_deploy(args):
             result["release_error"] = rel.get("display") or "release publish failed"
             display += (f"\nrelease:  FAILED — {result['release_error']}"
                         "\n          (build is deployed; fix the cause and re-deploy to publish)")
+        # GitHub-release appcast (issue #111): a stable, publicly reachable feed
+        # for a distributed Developer-ID app, alongside the tailnet-only one.
+        if rel.get("appcast_url"):
+            result["github_appcast_url"] = rel["appcast_url"]
+            display += f"\nappcast:  {rel['appcast_url']} (GitHub release)"
+        if rel.get("appcast_skipped"):
+            display += f"\nwarning:  {rel['appcast_skipped']}"
+            sys.stderr.write(f"deployit: WARNING — {rel['appcast_skipped']}\n")
     # Index publish outcome. A direct push (or an auto-merged PR) lands the entry
     # on the shared index immediately; when auto-merge is off and a ruleset
     # blocked the push, the entry is pending on an open PR — the build is already

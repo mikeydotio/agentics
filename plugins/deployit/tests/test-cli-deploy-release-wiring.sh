@@ -4,7 +4,11 @@
 # deployit-release (fake gh), honours DEPLOYIT_SKIP_RELEASE_PUBLISH, and degrades
 # gracefully when no zip was staged. Plus a source guard that the publish runs
 # AFTER the index append + backend refresh (so a failed deploy never orphans a
-# public release).
+# public release). Also (issue #111): when the staged build was EdDSA-signed for
+# Sparkle, _publish_github_release passes --appcast-signature through to
+# deployit-release (which appends appcast.xml to the uploaded assets) UNLESS
+# prerelease is set, in which case the appcast is withheld — .../releases/
+# latest/download/... never resolves to a prerelease.
 set -euo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
@@ -86,6 +90,34 @@ src = (plugin_root / "bin" / "deployit-cli").read_text()
 call = src.index("rel = _publish_github_release(")
 assert src.index("_append_to_index(state, entry") < call, "publish must follow index append"
 assert src.index('_refresh_local_backend(cfg["server"]["port"])') < call, "publish must follow refresh"
+
+# 6) Sparkle-signed build: --appcast-signature flows through to deployit-release,
+#    which uploads appcast.xml alongside the zip and returns appcast_url.
+os.environ["DEPLOYIT_SKIP_SPARKLE_SIGN"] = "1"
+mod._stage_macos(state, plugin_root, "bid3", make_app(), meta, False, "",
+                 {"enabled": True}, release=True)
+meta3 = json.loads((state / "serve" / "bid3" / "_meta.json").read_text())
+assert meta3.get("sparkle", {}).get("ed_signature") == "TEST-ED-SIGNATURE-DO-NOT-SHIP==", meta3
+
+(root / "gh.log").write_text("")
+rel = mod._publish_github_release(plugin_root, proj, state, "bid3", notes,
+                                  clobber=False, prerelease=False, attach_dmg=False)
+assert rel.get("ok"), rel
+assert rel.get("appcast_url") == "https://github.com/me/Hello/releases/latest/download/appcast.xml", rel
+log = (root / "gh.log").read_text()
+create_line = next(l for l in log.splitlines() if l.startswith("release create"))
+assert "appcast.xml" in create_line, f"appcast.xml not uploaded: {create_line}"
+
+# 7) prerelease withholds the appcast (latest/download never resolves to one).
+(root / "gh.log").write_text("")
+rel = mod._publish_github_release(plugin_root, proj, state, "bid3", notes,
+                                  clobber=False, prerelease=True, attach_dmg=False)
+assert rel.get("ok"), rel
+assert "appcast_url" not in rel, rel
+assert "prerelease" in rel.get("appcast_skipped", ""), rel
+log = (root / "gh.log").read_text()
+create_line = next(l for l in log.splitlines() if l.startswith("release create"))
+assert "appcast.xml" not in create_line, f"appcast.xml must not upload for a prerelease: {create_line}"
 
 print("ok")
 PY

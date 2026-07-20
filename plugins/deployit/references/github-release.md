@@ -76,6 +76,21 @@ default (e.g. re-deploying the same version). To replace the existing release's
 asset and notes, pass `/deployit deploy --clobber-release` or set
 `[github] clobber = true`.
 
+## Sparkle appcast asset (issue #111)
+
+When the build was EdDSA-signed for Sparkle (`[macos.sparkle] enabled = true`
+— see `references/sparkle.md`), the release also carries an `appcast.xml`
+asset alongside the `.zip`, so `.../releases/latest/download/appcast.xml` is a
+stable, publicly reachable Sparkle feed with a reachable `<enclosure>` (the
+same release's `.zip`) — no separate config flag; it's automatic whenever both
+Sparkle signing and the GitHub release are on for a build. The zip's GitHub
+asset name is normalized (unsafe characters, including spaces, replaced with
+`.`) before upload so the enclosure URL always matches what GitHub stores.
+Withheld when the release is a prerelease, since `latest/download` never
+resolves to one. `appcast.xml` flows through the same idempotent
+create/clobber paths as the `.zip` — a redeploy or `--clobber-release`
+refreshes it in place.
+
 ## Running the publisher by hand
 
 `bin/deployit-release` is standalone. To publish (or re-publish) from a signed
@@ -92,7 +107,10 @@ bin/deployit-release \
 
 Useful flags: `--repo OWNER/REPO` (override the parsed remote), `--clobber`,
 `--prerelease`, `--attach <file>` (extra asset, e.g. the `.dmg`),
-`--no-require-developer-id` (publish a non-Developer-ID build anyway).
+`--no-require-developer-id` (publish a non-Developer-ID build anyway),
+`--appcast-signature SIG` (publish the Sparkle appcast asset above; requires
+`--zip`, since the signature was computed over its exact bytes — `--app`
+re-archives via `ditto`, which is not byte-reproducible).
 
 Env overrides mirror the CLI: `DEPLOYIT_GH_BIN` (path to `gh`),
 `DEPLOYIT_SKIP_CODESIGN_VERIFY` (treat the app as validly signed — tests only).

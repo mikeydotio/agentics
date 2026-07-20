@@ -9,27 +9,53 @@
 #                        Emits {ok, count, repo, issues:[{number,title,url,
 #                        option:{label,description}}], display}. Side-effect free.
 #
-#   dispatch <n>         Open a new tmux window (named "<repo-prefix>-<n>", e.g.
-#                        "age-42") in the current session — DETACHED by default so
-#                        the caller's focus stays put — `cd` it to the repo
-#                        root, launch `claude -w <name> --permission-mode plan
-#                        --model opusplan` (the official --worktree switch
-#                        creates a per-issue git worktree named the SAME as the
-#                        window, so it must run from a git-tracked location;
-#                        --permission-mode plan starts the session in plan mode
-#                        deterministically, no keystrokes; --model opusplan runs
-#                        Opus while planning and Sonnet once executing, issue
-#                        #97), gate on claude becoming ready, then type + submit
-#                        the prompt.
+#   dispatch <n>         Fetch origin/<default> (best-effort — see the
+#                        base-freshness tiers below, issue #107), create a NEW
+#                        git worktree at .claude/worktrees/<name> on branch
+#                        worktree-<name> based on that fresh tip, open a new tmux
+#                        window (named "<repo-prefix>-<n>", e.g. "age-42") rooted
+#                        IN that worktree — DETACHED by default so the caller's
+#                        focus stays put — launch plain `claude --permission-mode
+#                        plan --model opusplan` (no `-w`: dispatch already
+#                        created the worktree itself, so new work always starts
+#                        from the latest origin tip rather than the checkout's
+#                        possibly-stale local HEAD; --permission-mode plan starts
+#                        the session in plan mode deterministically, no
+#                        keystrokes; --model opusplan runs Opus while planning
+#                        and Sonnet once executing, issue #97), gate on claude
+#                        becoming ready, then type + submit the prompt. The
+#                        worktree is left UNLOCKED (unlike claude -w's own
+#                        worktrees) so `complete` can reclaim it later.
+#
+# Base-freshness tiers (issue #107 — `do` must always build new work on the
+# latest origin tip, never a stale local branch a daemon-managed repo never
+# pulls): FRESH (the fetch above succeeded and origin/<default> resolves) →
+# base_fresh:true, no warning. CACHED (the fetch failed but a PRIOR
+# origin/<default> ref already exists) → base_fresh:false + a warning naming the
+# cached OID — still based on origin, just possibly a poll behind. HEAD-FALLBACK
+# (origin/<default> has never resolved at all — offline AND never fetched) →
+# base_fresh:false + a loud warning that the freshness guarantee was NOT met;
+# ISSUE_REQUIRE_FRESH_BASE=1 turns this tier into a hard {ok:false} instead of a
+# warning, for callers that need the guarantee enforced rather than reported.
 #
 # ok-vs-warning boundary (dispatch): steps 0–4 are HARD preconditions — a failure
-# emits {ok:false} and exits before ANY side effect. From step 5 (the first
-# `tmux new-window`) onward the window already exists, so a failure to confirm
-# readiness or prompt submission degrades to {ok:true, warning, ...} rather than
-# ok:false — reporting ok:false there would falsely imply nothing happened.
+# emits {ok:false} and exits before ANY side effect. Step 5 (gitignore) is
+# best-effort and never fails. Step 6 (fetch + resolve base) degrades through the
+# three freshness tiers above rather than failing, UNLESS ISSUE_REQUIRE_FRESH_BASE
+# is set (HEAD-fallback then hard-fails) or no base commit can be resolved at all
+# (fully offline + unborn HEAD). Steps 7–8 (worktree creation, then the tmux
+# window) are HARD FAILS — but unlike the pre-#107 flow, a window-open failure now
+# rolls back the just-created worktree/branch (step 7 ran first this time), so a
+# failed dispatch still leaves no litter. From step 9 (launch) onward the window
+# already exists, so a failure to confirm readiness or prompt submission degrades
+# to {ok:true, warning, ...} rather than ok:false — reporting ok:false there would
+# falsely imply nothing happened.
 #
-# The step-5.5 `.gitignore` write for the per-issue worktree dir (issue #55) is a
-# best-effort, idempotent hygiene write that runs AFTER the window opens; it can
+# The `.gitignore` write for the per-issue worktree dir (issue #55) is a
+# best-effort, idempotent hygiene write that runs BEFORE the worktree is created
+# (moved earlier by issue #107 — it used to run after the window opened, back
+# when `claude -w` created the worktree instead of dispatch itself) — the
+# untracked worktree dir must never dirty `git status`, even transiently. It can
 # never flip ok to false (a failure just reports gitignore:"add-failed").
 #
 # All timing/behaviour is env-overridable (see the config block) so the flow is
@@ -48,11 +74,13 @@ set -euo pipefail
 # ---- config (all env-overridable) -------------------------------------------
 GH="${ISSUE_GH_BIN:-gh}"
 LIST_LIMIT="${ISSUE_LIST_LIMIT:-50}"
-# Launch command. <name> renders to the resolved window/worktree name (see
-# WINDOW_NAME_TPL below), so `claude -w <name>` names the worktree the SAME as
-# the tmux window (e.g. "age-42") rather than the bare issue number. <n> (the
-# issue number) is still substituted, so a custom override may use either.
-LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude -w <name> --permission-mode plan --model opusplan}"
+# Launch command, run INSIDE the worktree dispatch already created (see
+# cmd_dispatch) — so it must NOT include `-w`/`--worktree`: that flag would try
+# to create ANOTHER worktree at the path <name> names, colliding with the one
+# dispatch just made (issue #107). <name> still renders to the resolved
+# window/worktree name and <n> to the issue number, for a custom override that
+# wants either (e.g. folding the name into a system prompt).
+LAUNCH_TPL="${ISSUE_LAUNCH_CMD:-claude --permission-mode plan --model opusplan}"
 # The handoff prompt is the ONLY lever the dispatcher has over the child session,
 # which is what actually plans, implements, and opens PRs. So it carries the
 # briefs the child can't get any other way: read the issue AND all its comments
@@ -83,8 +111,9 @@ LABEL_COLOR="${ISSUE_LABEL_COLOR:-fbca04}"
 LABEL_DESC="${ISSUE_LABEL_DESC:-Actively being worked on}"
 # New-window (and worktree) name. Default (computed in cmd_dispatch): first 3
 # alphanumerics of the repo name, lowercased, + "-<n>" (e.g. "age-42"). Set this
-# to override in full; supports the <n> placeholder. Because the default launch
-# command renders <name> from this value, overriding it renames the worktree too.
+# to override in full; supports the <n> placeholder. cmd_dispatch derives BOTH
+# the worktree path (.claude/worktrees/<wname>) and branch (worktree-<wname>)
+# from this resolved name, so overriding it renames the worktree too.
 WINDOW_NAME_TPL="${ISSUE_WINDOW_NAME:-}"
 # Focus policy: the new window is created DETACHED (-d) by default so the user's
 # focus stays on their current window. Every follow-up send-keys/capture-pane
@@ -101,11 +130,13 @@ FOREGROUND="${ISSUE_FOREGROUND:-}"
 # every follow-up send-keys/capture-pane already targets the new pane by its
 # captured id, which is server-global, never "the current window".
 TARGET_SESSION="${ISSUE_TARGET_SESSION:-}"
-# Per-issue git-worktree hygiene (issue #55). `claude -w <n>` (the launch flag)
-# creates a worktree under this path; dispatch idempotently ensures the path is
-# gitignored so it never dirties the parent repo's `git status`. The CONTAINER
-# dir is ignored (not a per-issue `<n>` leaf), so the rule stays correct
-# regardless of how the worktree leaf is named.
+# Per-issue git-worktree hygiene (issue #55) AND the worktree container itself
+# (issue #107: dispatch now creates each worktree directly under this path via
+# `git worktree add`, rather than delegating to `claude -w`). Dispatch
+# idempotently ensures the path is gitignored — BEFORE creating the worktree —
+# so it never dirties the parent repo's `git status`. The CONTAINER dir is
+# ignored (not a per-issue `<n>` leaf), so the rule stays correct regardless of
+# how the worktree leaf is named.
 WORKTREE_IGNORE_PATH="${ISSUE_WORKTREE_IGNORE_PATH:-.claude/worktrees/}"
 WORKTREE_IGNORE_COMMENT="# issue per-issue git worktrees (ephemeral — never commit)"
 # Readiness gate before typing the prompt (issue #67). Two independent tiers, so
@@ -169,10 +200,12 @@ PASTE_SETTLE_DELAY="${ISSUE_PASTE_SETTLE_DELAY:-0.2}"
 # or triggers a resend (that would resurrect the very cry-wolf warning #67 fixes).
 READY_ACCEPT_PATTERN="${ISSUE_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Crunching|tokens|to interrupt}"
 # `doctor` subcommand (issue #67, direction #5): a throwaway readiness self-test.
-# Its launch OMITS `-w` (no worktree, no git side effect) — it only needs the TUI
-# to render — but otherwise mirrors the dispatch launch flags, so a flag a future
-# claude rejects at startup fails here first, not in a real dispatch (issue #97).
-# Overridable so tests can point it at a harmless stand-in binary.
+# Its launch creates NO worktree/git side effect (dispatch now creates the
+# worktree itself via `git worktree add` before launching claude, issue #107) —
+# doctor just needs the TUI to render in the current directory — but otherwise
+# mirrors the dispatch launch flags, so a flag a future claude rejects at
+# startup fails here first, not in a real dispatch (issue #97). Overridable so
+# tests can point it at a harmless stand-in binary.
 DOCTOR_LAUNCH_TPL="${ISSUE_DOCTOR_LAUNCH_CMD:-claude --permission-mode plan --model opusplan}"
 DOCTOR_WINDOW_NAME="${ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
 # `capture` subcommand (issue #87 live-verification aid): how many rendered rows of
@@ -181,6 +214,11 @@ DOCTOR_WINDOW_NAME="${ISSUE_DOCTOR_WINDOW_NAME:-hi-doctor}"
 CAPTURE_LINES="${ISSUE_CAPTURE_LINES:-200}"
 DRY_RUN="${ISSUE_DRY_RUN:-}"
 ALLOW_CLOSED="${ISSUE_ALLOW_CLOSED:-}"
+# issue #107: when set, a HEAD-fallback base (origin/<default> never resolvable —
+# offline AND never fetched) hard-fails dispatch instead of warning-and-proceeding
+# — for callers that must enforce the "always built on the latest origin tip"
+# guarantee rather than merely have it reported.
+REQUIRE_FRESH_BASE="${ISSUE_REQUIRE_FRESH_BASE:-}"
 
 # ---- JSON emitters ----------------------------------------------------------
 # fail <message> — emit {ok:false, display} and exit non-zero. The skill halts
@@ -822,7 +860,7 @@ cmd_dispatch() {
     [ -n "${TMUX_PANE:-}" ] || fail "issue requires \$TMUX_PANE — run Claude inside a tmux pane."
   fi
 
-  # Step 2: repo dir (also satisfies claude -w's git-tracked-location requirement).
+  # Step 2: repo dir (worktree creation below needs a git-tracked location).
   local dir
   dir=$(git rev-parse --show-toplevel 2>/dev/null) || fail "not inside a git repository."
 
@@ -842,16 +880,19 @@ cmd_dispatch() {
     fail "issue #$n is closed on $repo (set ISSUE_ALLOW_CLOSED=1 to dispatch anyway)."
   fi
 
-  # Compute the name used for BOTH the tmux window and the git worktree:
-  # "<repo-prefix>-<n>" (e.g. "age-42"), or the ISSUE_WINDOW_NAME override. Shared
-  # with `complete`, which resolves the same name to find what to clean up.
-  local wname
+  # Compute the name used for the tmux window, the worktree dir leaf, AND the
+  # worktree branch: "<repo-prefix>-<n>" (e.g. "age-42"), or the
+  # ISSUE_WINDOW_NAME override. Shared with `complete`, which resolves the same
+  # name to find what to clean up.
+  local wname default wt_container worktree_path worktree_branch
   wname=$(resolve_wname "$n" "$repo")
+  default=$(default_branch)
+  wt_container="${WORKTREE_IGNORE_PATH%/}"
+  worktree_path="$dir/$wt_container/$wname"
+  worktree_branch="worktree-$wname"
 
-  # Render launch/prompt now that wname is known. The default launch command
-  # resolves <name> -> wname, so `claude -w <name>` names the worktree the same
-  # as the window. (A pathological override yielding an empty prefix would make
-  # wname start with "-", producing a leading-dash launch arg — see WINDOW_NAME_TPL.)
+  # Render launch/prompt now that wname is known (issue #107: the default launch
+  # no longer takes <name> — see LAUNCH_TPL — but a custom override may still).
   launch_cmd=$(render_template "$LAUNCH_TPL" "$n" "$wname")
   prompt=$(render_template "$PROMPT_TPL" "$n" "$wname")
   # Caller clause (PROMPT_EXTRA): appended verbatim after templating, so the
@@ -864,31 +905,37 @@ cmd_dispatch() {
   ignore_status=$(worktree_ignore_status "$dir")
 
   # Detached by default (keeps the caller's focus); "-d " unless FOREGROUND is set.
-  # Kept in sync with the real new-window invocation in Step 5 below.
+  # Kept in sync with the real new-window invocation in Step 8 below.
   local detach="-d "
   [ -n "$FOREGROUND" ] && detach=""
 
   # Session target: "-t <session>: " when ISSUE_TARGET_SESSION is set, else "".
-  # Kept in sync with the real new-window invocation in Step 5 below.
+  # Kept in sync with the real new-window invocation in Step 8 below.
   local target=""
   [ -n "$TARGET_SESSION" ] && target="-t $TARGET_SESSION: "
 
   # Dry-run: all read-only checks above ran for real; emit the planned commands
-  # and stop before any side effect.
+  # SYMBOLICALLY (no fetch, no OID resolution, no HEAD touch — a dry-run repo may
+  # have an unborn HEAD or an unfetched origin) and stop before any side effect.
   if [ -n "$DRY_RUN" ]; then
     jq -n \
       --arg issue "$n" --arg title "$title" --arg repo "$repo" --arg dir "$dir" \
       --arg wname "$wname" --arg launch "$launch_cmd" --arg prompt "$prompt" \
       --arg label "$LABEL" --arg color "$LABEL_COLOR" --arg desc "$LABEL_DESC" \
       --arg ignore_status "$ignore_status" \
-      --arg detach "$detach" --arg target "$target" '
+      --arg detach "$detach" --arg target "$target" \
+      --arg default "$default" --arg wtpath "$worktree_path" --arg wtbranch "$worktree_branch" '
       {
         ok: true, dry_run: true,
         issue: ($issue | tonumber), title: $title, repo: $repo, dir: $dir,
         window_name: $wname, label: $label, prompt: $prompt,
+        base_branch: $default, base_ref: ("origin/" + $default),
+        worktree_branch: $wtbranch, worktree_path: $wtpath,
         gitignore: (if $ignore_status == "already-ignored" then "already-ignored" else "would-add" end),
         commands: ([
-          ("tmux new-window " + $target + $detach + "-c " + $dir + " -n " + $wname + " -P -F #{pane_id}"),
+          ("git fetch --quiet origin +refs/heads/" + $default + ":refs/remotes/origin/" + $default),
+          ("git worktree add --no-track -b " + $wtbranch + " " + $wtpath + " origin/" + $default),
+          ("tmux new-window " + $target + $detach + "-c " + $wtpath + " -n " + $wname + " -P -F #{pane_id}"),
           ("tmux send-keys -t <pane> -l " + $launch),
           "tmux send-keys -t <pane> Enter",
           ("printf %s " + $prompt + " | tmux load-buffer -b issue-" + $issue + " -"),
@@ -900,17 +947,75 @@ cmd_dispatch() {
           ("gh issue edit " + $issue + " --repo " + $repo + " --add-label " + $label)
         ] end)),
         display: ("[issue] DRY RUN for #" + $issue + " (" + $title
-                  + "): would open a new tmux window named " + $wname + " in " + $dir
+                  + "): would fetch " + ("origin/" + $default) + ", create worktree "
+                  + $wtpath + " (branch " + $wtbranch + "), open a new tmux window named "
+                  + $wname
                   + (if $label == "" then "" else ", mark the issue " + $label end)
                   + " and run the listed commands.")
       }'
     return 0
   fi
 
-  # Step 5: open the window (first side effect). Hard-fail is still safe here —
-  # window creation is atomic; a failure leaves nothing to clean up.
+  # Step 5: idempotently gitignore the per-issue worktree CONTAINER dir (issue
+  # #55), BEFORE the worktree materializes (issue #107 moved this earlier — it
+  # used to run after the window opened, back when `claude -w` created the
+  # worktree; now dispatch creates it directly, so the untracked dir must never
+  # dirty `git status` even transiently). Best-effort — a write failure NEVER
+  # flips dispatch to ok:false (worst case is the pre-#55 status quo) and is
+  # never rolled back (idempotent/harmless either way).
+  local gitignore_result="already-ignored"
+  if [ "$ignore_status" = "not-ignored" ]; then
+    gitignore_result=$(append_worktree_ignore "$dir")
+  fi
+
+  # Step 6: fetch origin/<default> (best-effort, quiet — the freshen_base_ref
+  # idiom used by `complete`, rc-checked here) and resolve the commit the new
+  # worktree will be based on. Three tiers (issue #107 — see the header comment
+  # for the full rationale): FRESH (fetch ok + ref resolves), CACHED (fetch
+  # failed but a prior origin/<default> ref exists), HEAD-FALLBACK (origin/
+  # <default> has never resolved — offline and never fetched). All git calls are
+  # fully quieted so stray output can't corrupt the final JSON payload.
+  local fetch_rc=0
+  git fetch --quiet origin "+refs/heads/$default:refs/remotes/origin/$default" \
+    >/dev/null 2>&1 || fetch_rc=$?
+
+  local base_oid="" base_fresh=false base_note=""
+  if base_oid=$(git rev-parse --verify --quiet "refs/remotes/origin/$default^{commit}" 2>/dev/null) \
+     && [ -n "$base_oid" ]; then
+    if [ "$fetch_rc" -eq 0 ]; then
+      base_fresh=true
+    else
+      base_note="couldn't refresh origin/$default (offline?); based on last-known origin/$default @ ${base_oid:0:8}"
+    fi
+  elif base_oid=$(git rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null) && [ -n "$base_oid" ]; then
+    base_note="could not determine origin/$default; new work is based on the local checkout, NOT the latest origin tip"
+    if [ -n "$REQUIRE_FRESH_BASE" ]; then
+      fail "could not determine a fresh origin/$default and ISSUE_REQUIRE_FRESH_BASE is set — refusing to dispatch on a possibly-stale base."
+    fi
+  else
+    fail "cannot resolve a base commit for the new worktree (no origin/$default and HEAD has no commits)."
+  fi
+
+  # Step 7: create the worktree off the resolved base commit — the first
+  # genuinely irreversible side effect, so a precise pre-check first. Left
+  # UNLOCKED, deliberately DIVERGING from claude -w's own (locked) worktrees:
+  # `complete`'s collect_targets skips locked worktrees with no unlock step, so a
+  # locked worktree here would never be reclaimed once the session ends —
+  # unlocked lets `complete` reap it via its existing `removable` path.
+  if git show-ref --verify --quiet "refs/heads/$worktree_branch" || [ -e "$worktree_path" ]; then
+    fail "a worktree or branch for \`$wname\` already exists — already dispatched? Clean it up first with \`/issue complete $n\`."
+  fi
+  local wt_err
+  if ! wt_err=$(git worktree add --no-track -b "$worktree_branch" "$worktree_path" "$base_oid" 2>&1); then
+    fail "failed to create worktree at $worktree_path: $(printf '%s' "$wt_err" | tail -n 2)"
+  fi
+
+  # Step 8: open the window (rooted IN the new worktree, not the repo root).
+  # Unlike the pre-#107 flow, the worktree now exists BEFORE this step — a
+  # failure here rolls back the worktree/branch so a failed dispatch still
+  # leaves no litter.
   local new_window_args pane window
-  new_window_args=(-c "$dir" -n "$wname" -P -F '#{pane_id}')
+  new_window_args=(-c "$worktree_path" -n "$wname" -P -F '#{pane_id}')
   # Detached by default so the caller's focus stays put; opt in to focus-follow
   # with ISSUE_FOREGROUND=1. Keystrokes below target $pane by id regardless.
   [ -z "$FOREGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
@@ -918,6 +1023,9 @@ cmd_dispatch() {
   # the flag order matches the dry-run command string above.
   [ -n "$TARGET_SESSION" ] && new_window_args=(-t "$TARGET_SESSION:" "${new_window_args[@]}")
   if ! pane=$(tmux new-window "${new_window_args[@]}" 2>/dev/null) || [ -z "$pane" ]; then
+    git worktree remove --force "$worktree_path" >/dev/null 2>&1 || true
+    git worktree prune >/dev/null 2>&1 || true
+    git branch -D "$worktree_branch" >/dev/null 2>&1 || true
     fail "failed to open a new tmux window."
   fi
   window=$(tmux display-message -p -t "$pane" '#{window_id}' 2>/dev/null || printf '')
@@ -930,25 +1038,15 @@ cmd_dispatch() {
     tmux set-window-option -t "$window" allow-rename off 2>/dev/null || true
   fi
 
-  # Step 5.5: idempotently gitignore the per-issue worktree dir (issue #55) so
-  # `claude -w` (Step 6, which actually creates .claude/worktrees/<n>) doesn't
-  # dirty the parent repo's `git status`. Best-effort — a write failure NEVER
-  # flips dispatch to ok:false (worst case is the pre-fix status quo). Runs AFTER
-  # the window opens (so `tmux new-window` stays the "first side effect") but
-  # before the worktree materializes.
-  local gitignore_result="already-ignored"
-  if [ "$ignore_status" = "not-ignored" ]; then
-    gitignore_result=$(append_worktree_ignore "$dir")
-  fi
-
-  # Step 6: launch claude (literal mode — the space/flag must not be key-interpreted).
-  # Route through paste_text so the same settle guards the launch's own Enter
-  # against the bracketed-paste race (issue #82).
+  # Step 9: launch claude (literal mode — the space/flag must not be
+  # key-interpreted). The worktree already exists (Step 7), so the default
+  # launch omits `-w` entirely (issue #107) — an override MUST NOT reintroduce it
+  # (see LAUNCH_TPL above). Route through paste_text so the same settle guards
+  # the launch's own Enter against the bracketed-paste race (issue #82).
   paste_text "$pane" "$launch_cmd" || true
   tmux send-keys -t "$pane" Enter 2>/dev/null || true
 
-  # Step 7: readiness gate before typing the prompt (claude -w also builds the
-  # worktree before its TUI renders, so this wait matters). Two-tier (marker or
+  # Step 10: readiness gate before typing the prompt. Two-tier (marker or
   # structural — see wait_ready); on total miss we settle a fixed amount and
   # proceed best-effort. Plan mode itself needs no gate: it's set by the
   # --permission-mode plan launch flag.
@@ -959,7 +1057,7 @@ cmd_dispatch() {
     sleep "$READY_FALLBACK_DELAY"
   fi
 
-  # Step 8: type + submit the prompt, confirmed (structural: the text left the
+  # Step 11: type + submit the prompt, confirmed (structural: the text left the
   # input line). Then a NON-GATING acceptance observation — did a ready TUI
   # actually consume it (working indicator / cleared input row)? This only informs
   # `prompt_accepted`; it never changes prompt_confirmed or re-sends (issue #67).
@@ -971,7 +1069,7 @@ cmd_dispatch() {
     fi
   fi
 
-  # Step 9: mark the issue in-progress on GitHub (issue #50). Done last so the
+  # Step 12: mark the issue in-progress on GitHub (issue #50). Done last so the
   # two gh round-trips don't delay the interactive handoff above. Best-effort —
   # a failure here only adds a warning, never flips dispatch to ok:false — and
   # skipped entirely when labeling is disabled ($LABEL empty).
@@ -985,10 +1083,11 @@ cmd_dispatch() {
     fi
   fi
 
-  # Result. ok:true from here on; warn on any unconfirmed step.
+  # Result. ok:true from here on; warn on any unconfirmed step (or a base that
+  # isn't fresh, issue #107).
   local warning="" display base
   if [ "$readiness_confirmed" = true ] && [ "$prompt_confirmed" = true ]; then
-    base="[issue] #$n ($title) → opened tmux window \`$wname\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
+    base="[issue] #$n ($title) → opened tmux window \`$wname\` on a worktree based on \`origin/$default\` @ \`${base_oid:0:8}\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
   else
     if [ "$readiness_confirmed" = false ] && [ "$prompt_confirmed" = false ]; then
       warning="Couldn't confirm claude finished starting, nor that the prompt submitted — check window \`$wname\`."
@@ -997,10 +1096,14 @@ cmd_dispatch() {
     else
       warning="claude started, but couldn't confirm the prompt submitted — check window \`$wname\`."
     fi
-    base="[issue] #$n ($title) → window \`$wname\` opened, but I couldn't fully confirm the handoff."
+    base="[issue] #$n ($title) → window \`$wname\` opened on a worktree based on \`origin/$default\` @ \`${base_oid:0:8}\`, but I couldn't fully confirm the handoff."
   fi
 
-  # Fold a label failure into the warning (best-effort — never ok:false).
+  # Fold a non-fresh base (issue #107) and a label failure into the warning
+  # (both best-effort — never ok:false).
+  if [ -n "$base_note" ]; then
+    warning="${warning:+$warning }${base_note}."
+  fi
   if [ -n "$label_note" ]; then
     warning="${warning:+$warning }$label_note."
   fi
@@ -1022,13 +1125,18 @@ cmd_dispatch() {
     --argjson ready "$readiness_confirmed" --argjson pconf "$prompt_confirmed" \
     --argjson paccept "$prompt_accepted" \
     --argjson lapplied "$label_applied" \
-    --arg warning "$warning" --arg tail "$tail_evidence" --arg display "$display" '
+    --arg warning "$warning" --arg tail "$tail_evidence" --arg display "$display" \
+    --arg default "$default" --arg base_oid "$base_oid" --argjson base_fresh "$base_fresh" \
+    --arg wtbranch "$worktree_branch" --arg wtpath "$worktree_path" '
     {
       ok: true,
       issue: ($issue | tonumber), title: $title,
       window: $window, window_name: $wname, pane: $pane,
       readiness_confirmed: $ready, prompt_confirmed: $pconf, prompt_accepted: $paccept,
-      label: $label, label_applied: $lapplied, gitignore: $gitignore
+      label: $label, label_applied: $lapplied, gitignore: $gitignore,
+      base_branch: $default, base_ref: ("origin/" + $default),
+      base_oid: $base_oid, base_fresh: $base_fresh,
+      worktree_branch: $wtbranch, worktree_path: $wtpath
     }
     + (if $warning == "" then {} else {warning: $warning} end)
     + (if $tail == "" then {} else {pane_tail: $tail} end)

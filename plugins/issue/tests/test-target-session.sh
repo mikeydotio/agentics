@@ -8,16 +8,18 @@ source "$(dirname "$0")/lib.sh"
 
 FAKE_DIR="$TESTS_DIR/fakes"
 
-# --- Case 1: dry-run reflects the -t <session>: flag in commands[0] ------------
+# --- Case 1: dry-run reflects the -t <session>: flag on its new-window command -
+# issue #107: dispatch now previews a fetch + worktree-add BEFORE new-window, so
+# the new-window command is no longer commands[0] — select it by content instead.
 repo=$(mk_repo)
 out=$(cd "$repo" && ISSUE_DRY_RUN=1 ISSUE_TARGET_SESSION=moshtail \
       bash "$SCRIPT" dispatch 7 2>&1)
 assert_eq "$(jqf "$out" .ok)" "true" "target dry-run: ok:true"
-assert_eq "$(jqf "$out" '.commands[0] | contains("-t moshtail:")')" "true" \
-  "target dry-run: commands[0] carries -t moshtail:"
+assert_eq "$(jqf "$out" '[.commands[]|select(startswith("tmux new-window"))][0] | contains("-t moshtail:")')" "true" \
+  "target dry-run: new-window command carries -t moshtail:"
 # Lock the flag's position: -t precedes -d, matching the real new-window
 # invocation (the dry-run command string and the real args must stay in sync).
-assert_contains "$(jqf "$out" '.commands[0]')" "new-window -t moshtail: -d -c" \
+assert_contains "$(jqf "$out" '[.commands[]|select(startswith("tmux new-window"))][0]')" "new-window -t moshtail: -d -c" \
   "target dry-run: -t moshtail: precedes -d, in sync with the real invocation"
 
 # --- Case 2: non-dry-run OUTSIDE tmux succeeds when the target session is set --
@@ -25,7 +27,9 @@ assert_contains "$(jqf "$out" '.commands[0]')" "new-window -t moshtail: -d -c" \
 # labeling disabled, poll delays zeroed) but with TMUX/TMUX_PANE explicitly
 # UNSET via env -u: the daemon caller runs outside tmux, so the $TMUX/$TMUX_PANE
 # hard preconditions must be skipped and the dispatch still completes ok:true.
-repo=$(mk_repo)
+# issue #107: this drives a REAL dispatch (real fetch + worktree add), so it
+# needs the hermetic local-origin fixture, not mk_repo's unfetchable fake origin.
+repo=$(mk_dispatch_repo)
 out=$( cd "$repo" \
     && PATH="$FAKE_DIR:$PATH" \
        ISSUE_TARGET_SESSION=moshtail \
@@ -52,7 +56,7 @@ assert_contains "$(jqf "$out" .display)" "requires tmux" \
 # --- Case 3: default (var unset) dry-run has NO -t flag (unchanged behavior) ---
 repo=$(mk_repo)
 out=$(cd "$repo" && ISSUE_DRY_RUN=1 bash "$SCRIPT" dispatch 7 2>&1)
-assert_eq "$(jqf "$out" '.commands[0] | contains("-t ")')" "false" \
-  "default dry-run: commands[0] has no -t flag"
+assert_eq "$(jqf "$out" '[.commands[]|select(startswith("tmux new-window"))][0] | contains("-t ")')" "false" \
+  "default dry-run: new-window command has no -t flag"
 
 finish

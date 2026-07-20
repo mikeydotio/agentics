@@ -9,7 +9,7 @@ per verb — so token cost stays low and the guard rails live in code, not prose
 
 | Command | What it does |
 |---------|--------------|
-| `/issue do <n>` | Spin up a fresh **plan-mode** Claude session for issue `<n>` in a **new tmux window** + per-issue git **worktree** (`claude -w <repo-prefix>-<n>`), mark the issue `in-progress`, and hand off a prompt asking it to plan a fix and report its plan/PRs back to the issue. |
+| `/issue do <n>` | Fetch `origin/<default>` and create a fresh per-issue git **worktree** based on that tip (issue #107 — never a possibly-stale local branch), then spin up a **plan-mode** Claude session for issue `<n>` in a **new tmux window** rooted in it, mark the issue `in-progress`, and hand off a prompt asking it to plan a fix and report its plan/PRs back to the issue. |
 | `/issue new <desc>` | Interrogate you for the nature, scope, and context of the need, draft a title + body, confirm, then **file** the issue via `gh` and return its number + link. |
 | `/issue view <n>` | Print issue `<n>`'s full content (native `gh` rendering incl. comments) and **stop**. |
 | `/issue complete <n>` | Close `<n>` as *completed* and **safely** clean up its artifacts — merged branches (local + remote) and clean worktrees — after showing exactly what it will remove and asking once. |
@@ -47,25 +47,41 @@ a pre-built pick option that the skill presents via one `AskUserQuestion`. With 
 - **Dispatch** — `bin/issue.sh dispatch <n>` runs a strict, ordered sequence:
    - Hard preconditions first (tmux present, inside a git repo, `gh` authenticated, the issue
      exists and is open) — any failure stops **before** anything is opened.
-   - `tmux new-window -d -c <repo-root> -n <repo-prefix>-<n>` — open the window **detached** (`-d`),
-     so **your focus stays on the current window**, with a stable name (`age-42`-style), and capture
-     its pane id. Every later keystroke targets that pane **by id**, so the handoff still lands in
-     the new window without stealing focus. tmux's `automatic-rename` and program-driven
-     `allow-rename` are turned **off** on the window so the name sticks even though Claude sets its
-     own terminal title. (Set `ISSUE_FOREGROUND=1` to switch focus to the new window instead.)
-   - **Worktree hygiene** — before launching Claude, idempotently ensure `.claude/worktrees/` is
-     gitignored (the container dir `claude -w <repo-prefix>-<n>` builds its per-issue worktree
-     under), so the ephemeral worktrees never dirty the parent repo's `git status`. It respects a
-     broader existing rule (e.g. `.claude/`) and is a no-op when already ignored. Best-effort: a
-     write failure only leaves the pre-fix status quo (an untracked worktree dir), never an
-     `ok:false`. Override the ignored path with `ISSUE_WORKTREE_IGNORE_PATH`.
-   - Launch `claude -w <repo-prefix>-<n> --permission-mode plan --model opusplan` (literal paste +
-     settle + Enter) — the `-w` argument matches the window name, so the worktree is
-     `.claude/worktrees/<repo-prefix>-<n>`; the `--permission-mode plan` flag opens the session
-     **in plan mode deterministically**, with no keystrokes; `--model opusplan` runs Opus while
-     planning and switches to Sonnet for execution (#97).
-   - **Readiness gate** — poll `capture-pane` until Claude's TUI is up (it also has to build the
-     worktree first), then type the prompt. Detection is **two-tier** so a Claude-Code footer-copy
+   - **Worktree hygiene** — idempotently ensure `.claude/worktrees/` is gitignored, **before** the
+     worktree materializes, so the ephemeral per-issue worktrees never dirty the parent repo's
+     `git status`. Respects a broader existing rule (e.g. `.claude/`) and is a no-op when already
+     ignored. Best-effort: a write failure only leaves the pre-#55 status quo (an untracked worktree
+     dir), never an `ok:false`. Override the ignored path with `ISSUE_WORKTREE_IGNORE_PATH`.
+   - **Fetch + base resolution (issue #107)** — `git fetch origin` the default branch's
+     remote-tracking ref (quiet, best-effort) and resolve the commit the new worktree will be based
+     on, in three tiers: **fresh** (the fetch succeeded and `origin/<default>` resolves — the common
+     case), **cached** (the fetch failed but a prior `origin/<default>` ref exists — still based on
+     origin, just possibly a poll behind), or **HEAD-fallback** (`origin/<default>` has never
+     resolved at all — offline *and* never fetched), which bases on the local checkout's `HEAD`
+     instead and carries a loud `warning` that the freshness guarantee wasn't met.
+     `ISSUE_REQUIRE_FRESH_BASE=1` turns that last tier into a hard `ok:false` instead. This is the
+     fix for #107: new work always starts from the freshest `origin/<default>` tip, never a local
+     branch a daemon-managed repo has permanently stopped pulling.
+   - **Create the worktree** — `git worktree add --no-track -b worktree-<repo-prefix>-<n>
+     .claude/worktrees/<repo-prefix>-<n> <resolved-base>`, left **unlocked** (unlike Claude Code's
+     own `-w`-managed worktrees) so `/issue complete` can reclaim it later through its existing
+     removable-worktree path. A path/branch that already exists (e.g. a prior dispatch never
+     completed) fails fast with a pointer to `/issue complete <n>`; a failure **after** this point
+     rolls the worktree/branch back so a failed dispatch leaves no litter.
+   - `tmux new-window -d -c <worktree-path> -n <repo-prefix>-<n>` — open the window **detached**
+     (`-d`), so **your focus stays on the current window**, rooted **in** the worktree just created,
+     with a stable name (`age-42`-style), and capture its pane id. Every later keystroke targets that
+     pane **by id**, so the handoff still lands in the new window without stealing focus. tmux's
+     `automatic-rename` and program-driven `allow-rename` are turned **off** on the window so the name
+     sticks even though Claude sets its own terminal title. (Set `ISSUE_FOREGROUND=1` to switch focus
+     to the new window instead.)
+   - Launch `claude --permission-mode plan --model opusplan` (literal paste + settle + Enter) — no
+     `-w`: the worktree already exists, and the window's `-c` above already puts the session inside
+     it; the `--permission-mode plan` flag opens the session **in plan mode deterministically**, with
+     no keystrokes; `--model opusplan` runs Opus while planning and switches to Sonnet for execution
+     (#97).
+   - **Readiness gate** — poll `capture-pane` until Claude's TUI is up, then type the prompt.
+     Detection is **two-tier** so a Claude-Code footer-copy
      change can't false-negative it (issue #67): a **fast path** matches a broadened alternation of
      known idle-footer markers, and a **structural** fallback (input-box frame `─` **and** idle
      prompt glyph `❯`, held stable across polls) confirms readiness even when the footer copy has
@@ -147,13 +163,14 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ISSUE_LAUNCH_CMD` | `claude -w <name> --permission-mode plan --model opusplan` | Command typed into the new window. `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`, so the worktree matches the window); `<n>` → issue number (still available). `--permission-mode plan` is what forces plan mode; `--model opusplan` plans on Opus, executes on Sonnet (#97). |
+| `ISSUE_LAUNCH_CMD` | `claude --permission-mode plan --model opusplan` | Command typed into the new window, which already sits inside the freshly-created worktree — **must NOT include `-w`/`--worktree`** (issue #107: that would try to create a second, colliding worktree). `<name>` → the resolved window/worktree name (`<repo-prefix>-<n>`); `<n>` → issue number (still available, e.g. for a custom system-prompt clause). `--permission-mode plan` is what forces plan mode; `--model opusplan` plans on Opus, executes on Sonnet (#97). |
 | `ISSUE_PROMPT` | _(GitHub-reporting prompt)_ | Prompt typed + submitted once Claude is ready. Default asks the child to read the issue and all its comments, weigh a reopen as a failed prior fix, plan the fix, comment the finalized plan on the issue, word PRs to close it (`Closes #<n>`), comment each PR link, and **never bump the version or deploy from the worktree** (that happens later from `main`). `<n>` → issue number. **May be multi-line** — it's delivered as a bracketed paste (issue #87), so embedded newlines stay text. Deliberately has no `/plan` prefix. |
 | `ISSUE_LABEL` | `in-progress` | Label applied to the issue at dispatch (created in the repo if missing). Set to **empty** (`ISSUE_LABEL=`) to disable labeling entirely. |
 | `ISSUE_LABEL_COLOR` | `fbca04` | Hex color (no `#`) used only when the label doesn't yet exist — existing labels keep their styling. |
 | `ISSUE_LABEL_DESC` | `Actively being worked on` | Description used only when the label is first created. |
-| `ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window **and worktree** name (the default launch renders `<name>` from this). Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
-| `ISSUE_WORKTREE_IGNORE_PATH` | `.claude/worktrees/` | Path idempotently added to the repo's root `.gitignore` at dispatch so `claude -w`'s per-issue worktrees don't dirty `git status`. No-op if already ignored (respects a broader rule like `.claude/`). |
+| `ISSUE_WINDOW_NAME` | _(computed)_ | Overrides the window **and worktree** name — dispatch derives both the worktree path (`.claude/worktrees/<name>`) and branch (`worktree-<name>`) from this. Default is `<first-3-alnum-of-repo-lowercased>-<n>` (e.g. `age-42`). `<n>` → issue number. |
+| `ISSUE_WORKTREE_IGNORE_PATH` | `.claude/worktrees/` | Container directory for per-issue worktrees (dispatch creates each worktree directly under this path, issue #107) — also idempotently added to the repo's root `.gitignore` before the worktree materializes, so it never dirties `git status`. No-op if already ignored (respects a broader rule like `.claude/`). |
+| `ISSUE_REQUIRE_FRESH_BASE` | _(unset)_ | Set to `1` to hard-fail dispatch (`ok:false`) instead of warning-and-proceeding when `origin/<default>` was never resolvable (offline **and** never fetched) — for callers that must enforce the "always built on the latest origin tip" guarantee (issue #107) rather than merely have it reported. |
 | `ISSUE_FOREGROUND` | _(unset)_ | By default the new window opens **detached** (`-d`), so your focus stays on the current window. Set to `1` to switch focus to the new window instead. |
 | `ISSUE_ALLOW_CLOSED` | _(unset)_ | Set to `1` to dispatch even if the issue is closed. |
 | `ISSUE_LIST_LIMIT` | `50` | Max open issues fetched for the picker. |
@@ -167,20 +184,21 @@ All optional; sensible defaults. Useful for customizing the launch/prompt or for
 | `ISSUE_READY_ACCEPT_PATTERN` | _(working-indicator alternation)_ | Non-gating post-submit acceptance marker: informs the `prompt_accepted` field but never changes `prompt_confirmed` or triggers a resend. |
 | `ISSUE_CONFIRM_ATTEMPTS` / `_CONFIRM_DELAY` / `_SEND_RETRIES` | `8` / `0.3` / `2` | Prompt confirm/resend bounds. `CONFIRM_ATTEMPTS`/`_DELAY` bound **both** the receipt poll (the paste landed in the input box) and the submit poll (the box cleared); `SEND_RETRIES` bounds **both** the receipt re-paste and the submit re-Enter. |
 | `ISSUE_PASTE_SETTLE_DELAY` | `0.2` | Settle (seconds) after each paste, **before** Enter, so the paste closes and the Enter submits instead of being absorbed as a newline (issue #82, the primary cure). Applies to the launch `send-keys -l` and the prompt's bracketed `paste-buffer` alike — for the latter it's now belt-and-suspenders, since the paste boundary is explicit (issue #87). Fractional. |
-| `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan --model opusplan` | Launch command for the `doctor` readiness self-test (omits `-w`, so no worktree; otherwise mirrors the dispatch launch flags). |
+| `ISSUE_DOCTOR_LAUNCH_CMD` | `claude --permission-mode plan --model opusplan` | Launch command for the `doctor` readiness self-test — creates no worktree/git side effect (dispatch's default launch omits `-w` too now, issue #107, but doctor additionally never runs `git worktree add` itself); otherwise mirrors the dispatch launch flags. |
 | `ISSUE_DRY_RUN` | _(unset)_ | Set to `1` to run the read-only checks and print the exact tmux commands it *would* run, without opening a window. |
 | `ISSUE_CAPTURE_LINES` | `200` | Rows of scrollback `/issue capture <n>` dumps from the worktree window (`tmux capture-pane -S -<N>`). |
 
-> **Plan mode is forced by the `--permission-mode plan` launch flag, not keystrokes.** `-w` is
-> Claude Code's official `--worktree` switch (creates a named per-issue worktree — here named with
-> the same `<repo-prefix>-<n>` formula as the window, e.g. worktree `.claude/worktrees/age-42` on
-> branch `worktree-age-42`; only valid from a git-tracked location), and `--permission-mode plan`
-> opens the session in plan mode with no
-> `Shift+Tab` guesswork. That flag sets the *initial* mode only — you can still `Shift+Tab` out of
-> plan mode once you've approved the plan. The prompt intentionally does **not** begin with `/plan`:
-> that is a slash command that routes to a registered `/plan` skill (e.g. forge's planner), not
-> Claude's built-in plan mode. `--model opusplan` (#97) pairs with this: the child session plans on
-> Opus and switches to Sonnet once it exits plan mode to execute.
+> **Plan mode is forced by the `--permission-mode plan` launch flag, not keystrokes.** The worktree
+> itself (named with the same `<repo-prefix>-<n>` formula as the window, e.g.
+> `.claude/worktrees/age-42` on branch `worktree-age-42`) is created **by dispatch itself** via
+> `git worktree add` (issue #107) — not by Claude Code's `-w`/`--worktree` switch, which dispatch's
+> default launch deliberately omits (a worktree already exists at launch time). `--permission-mode
+> plan` opens the session in plan mode with no `Shift+Tab` guesswork; that flag sets the *initial*
+> mode only — you can still `Shift+Tab` out of plan mode once you've approved the plan. The prompt
+> intentionally does **not** begin with `/plan`: that is a slash command that routes to a registered
+> `/plan` skill (e.g. forge's planner), not Claude's built-in plan mode. `--model opusplan` (#97)
+> pairs with this: the child session plans on Opus and switches to Sonnet once it exits plan mode to
+> execute.
 
 See `skills/issue/SKILL.md` for the verb routing, `bin/issue.sh` for every subcommand's
 deterministic sequence, and `references/new.md` / `references/complete.md` for the `new` and

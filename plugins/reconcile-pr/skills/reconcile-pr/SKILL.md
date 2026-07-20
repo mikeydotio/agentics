@@ -118,7 +118,10 @@ one-line summary (branch reconciled, N conflicts resolved, tests, PR URL).
 ## Recovering mid-flow
 If you lose context, run `status <pr>` to re-orient (it reports `idle`,
 `mid_rebase` with the unresolved files, or `clean`) and resume from the matching
-step.
+step. Every subcommand resolves its state from the repository, not your shell's
+current directory, so this works whether you run it from the main checkout or
+from inside the reconcile worktree itself — which is exactly where you'll
+naturally be after staging a resolution.
 
 ## Notes
 - **Requires** an authenticated `gh` CLI and a git repo with a GitHub `origin`.

@@ -27,7 +27,11 @@
 # Isolation: all rebase work happens in a dedicated git worktree under
 # <repo>/.claude/worktrees/reconcile-pr/<pr>/worktree — the user's own checkout
 # is never touched. That path is already gitignored (`.claude/worktrees/`).
-# State (meta.json, conflicts.log) lives beside it.
+# State (meta.json, conflicts.log) lives beside it. Every subcommand anchors
+# REPO_ROOT to that MAIN worktree via `git rev-parse --git-common-dir`
+# (need_repo), never CWD — the reconcile worktree is itself a linked
+# worktree, so a CWD-relative anchor (`--show-toplevel`) would mislocate
+# state whenever a subcommand is run from inside it (#108).
 #
 # Rebase runs with `-c merge.conflictStyle=zdiff3` so every conflict hunk carries
 # the common-ancestor block. During a rebase HEAD/ours = base and theirs = the PR

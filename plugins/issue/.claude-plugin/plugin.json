@@ -1,6 +1,6 @@
 {
   "name": "issue",
-  "version": "2.35.1",
+  "version": "2.35.2",
   "description": "GitHub-issue lifecycle toolkit: /issue do <n> dispatches an issue to a fresh plan-mode Claude session in a new tmux window + per-issue worktree; /issue new interrogates then files an issue; /issue view <n> prints it; /issue complete <n> closes it and safely cleans up merged branches + worktrees; /issue <n> views then offers to work on it",
   "author": {
     "name": "mikeydotio"

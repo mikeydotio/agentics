@@ -1,6 +1,6 @@
 {
   "name": "greenlight",
-  "version": "2.35.1",
+  "version": "2.35.2",
   "description": "Intelligent PreToolUse safety hook with deterministic command parsing, opt-in AI fallback via Claude Haiku, and permission mode awareness",
   "author": {
     "name": "mikeydotio"

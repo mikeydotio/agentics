@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.35.2] - 2026-07-21
+
+### Fixed
+- gate cmd_complete on STORY_DRY_RUN, cover valid_story_id (161d3a6)
+
+_[manual]_
+
 ## [v2.35.1] - 2026-07-21
 
 ### Fixed

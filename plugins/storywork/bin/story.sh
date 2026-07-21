@@ -509,7 +509,9 @@ cmd_complete() {
   wname=$(resolve_wname "$id" "$repo_name")
   default=$(default_branch)
   # Freshen origin/<default> once so merged-ness is judged against ground
-  # truth, not a local <default> a daemon-managed repo never pulls.
+  # truth, not a local <default> a daemon-managed repo never pulls. A read,
+  # not a destructive action — runs even under STORY_DRY_RUN, exactly as
+  # issue.sh's cmd_complete_execute freshens unconditionally.
   freshen_base_ref "$default"
 
   local wt_container worktree_path worktree_branch
@@ -517,13 +519,20 @@ cmd_complete() {
   worktree_path="$dir/$wt_container/$wname"
   worktree_branch="worktree-$wname"
 
-  local -a removed_wt=() removed_bl=() failed=() skipped=()
+  # Every destructive branch below is gated on $DRY_RUN — mirrors issue.sh's
+  # cmd_complete_execute exactly (git worktree remove / branch delete only run
+  # for real outside dry-run; under STORY_DRY_RUN=1 the command is recorded
+  # into `commands` and reported as a planned removal, with no side effect).
+  local -a removed_wt=() removed_bl=() failed=() skipped=() commands=()
 
   local wt_status
   wt_status=$(_story_worktree_status "$worktree_path")
   case "$wt_status" in
     removable)
-      if git worktree remove "$worktree_path" >/dev/null 2>&1; then
+      if [ -n "$DRY_RUN" ]; then
+        commands+=("git worktree remove $worktree_path" "git worktree prune")
+        removed_wt+=("$worktree_path")
+      elif git worktree remove "$worktree_path" >/dev/null 2>&1; then
         git worktree prune >/dev/null 2>&1 || true
         removed_wt+=("$worktree_path")
       else
@@ -537,7 +546,10 @@ cmd_complete() {
     if is_protected_branch "$worktree_branch"; then
       failed+=("branch:$worktree_branch(protected)")
     elif branch_is_merged "$worktree_branch" "$default"; then
-      if delete_merged_local_branch "$worktree_branch" "$default"; then
+      if [ -n "$DRY_RUN" ]; then
+        commands+=("git branch -d $worktree_branch")
+        removed_bl+=("$worktree_branch")
+      elif delete_merged_local_branch "$worktree_branch" "$default"; then
         removed_bl+=("$worktree_branch")
       else
         failed+=("branch:$worktree_branch(local)")
@@ -552,18 +564,24 @@ cmd_complete() {
   rbl=$(printf '%s\n' "${removed_bl[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
   fail_json=$(printf '%s\n' "${failed[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
   skip_json=$(printf '%s\n' "${skipped[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
+  local cmds_json='[]'
+  if [ -n "$DRY_RUN" ]; then
+    cmds_json=$(printf '%s\n' "${commands[@]:-}" | jq -R -s 'split("\n")|map(select(length>0))')
+  fi
 
   jq -n --arg id "$id" --argjson rwt "$rwt" --argjson rbl "$rbl" \
-        --argjson failed "$fail_json" --argjson skipped "$skip_json" '
+        --argjson failed "$fail_json" --argjson skipped "$skip_json" \
+        --argjson cmds "$cmds_json" --argjson dry "$([ -n "$DRY_RUN" ] && echo true || echo false)" '
     {
       ok: true, id: $id,
       removed: { worktrees: $rwt, branches: $rbl }
     }
+    + (if $dry then {dry_run:true, commands:$cmds} else {} end)
     + (if ($failed|length) > 0 then {failed:$failed} else {} end)
     + (if ($skipped|length) > 0 then {skipped:$skipped} else {} end)
     + { display: (
-        "[story] complete " + $id + ": removed "
-        + ($rwt|length|tostring) + " worktree(s), "
+        "[story] " + (if $dry then "DRY RUN for " else "" end) + "complete " + $id + ": "
+        + (if $dry then "would remove " else "removed " end) + ($rwt|length|tostring) + " worktree(s), "
         + ($rbl|length|tostring) + " branch(es)."
         + (if ($failed|length) > 0 then " Could not: " + ($failed|join(", ")) + "." else "" end)
         + (if ($skipped|length) > 0 then " Preserved: " + ($skipped|join(", ")) + "." else "" end)

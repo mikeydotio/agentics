@@ -113,4 +113,32 @@ assert_eq "$(jqf "$out4" .ok)" "true" "case4: ok:true (nothing to clean up is no
 assert_eq "$(jqf "$out4" '.removed.worktrees | length')" "0" "case4: no worktrees removed"
 assert_eq "$(jqf "$out4" '.removed.branches | length')" "0" "case4: no branches removed"
 
+# ==============================================================================
+# Case 5: STORY_DRY_RUN=1 — same removable-worktree + merged-branch setup as
+# case 1, but under dry-run: story.sh must preview the removal (dry_run:true +
+# a commands[] array) and perform NEITHER destructive side effect. Regression
+# for a review finding: cmd_complete's two destructive branches (`git worktree
+# remove`, the merged-branch delete) ran for real regardless of
+# $STORY_DRY_RUN, unlike issue.sh's cmd_complete_execute, which gates every
+# destructive branch on $DRY_RUN.
+# ==============================================================================
+repo5=$(mk_dispatch_repo)
+wname5=$(expected_wname "$repo5" "SH-5")
+(
+  cd "$repo5" || exit 1
+  git branch "worktree-$wname5"                       # merged (no commits of its own)
+  git worktree add -q --detach ".claude/worktrees/$wname5"
+) >/dev/null 2>&1
+
+out5=$(cd "$repo5" && STORY_DRY_RUN=1 bash "$SCRIPT" complete SH-5 2>&1)
+assert_eq "$(jqf "$out5" .ok)" "true" "case5: dry-run ok:true"
+assert_eq "$(jqf "$out5" .dry_run)" "true" "case5: dry_run flag set"
+cmds5=$(jqf "$out5" '.commands | join("\n")')
+assert_contains "$cmds5" "git worktree remove" "case5: dry-run previews the worktree removal"
+assert_contains "$cmds5" "worktree-$wname5" "case5: dry-run previews the branch delete"
+# nothing actually happened — both destructive side effects are no-ops under dry-run:
+[ -d "$repo5/.claude/worktrees/$wname5" ] || fail_test "case5: dry-run must NOT remove the worktree"
+( cd "$repo5" && git show-ref --verify --quiet "refs/heads/worktree-$wname5" ) \
+  || fail_test "case5: dry-run must NOT delete the merged branch"
+
 finish

@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.35.0] - 2026-07-21
+
+### Added
+- add story.sh dispatch/complete actuator (343565f)
+
+### Changed
+- Merge pull request #114 from mikeydotio/refactor/issue-session-lib-a1 (f13be27)
+
+_[manual]_
+
 ## [v2.34.1] - 2026-07-21
 
 ### Changed

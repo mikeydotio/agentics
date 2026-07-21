@@ -142,6 +142,9 @@ When recommending or performing a version bump:
 
 When you notice the user has completed a logical unit of work, suggest running `/semver bump` with the appropriate level.
 
+### Releasing via GitHub
+Any time a PR merges to main, perform a `/semver bump` (you choose the most appropriate component to bump), PR-and-merge the VERSION change, and then publish a github release for the new version.
+
 ### Hooks
 - Custom pre-bump and post-bump hooks can be added in `.semver/hooks/`.
 - Never trigger `/semver bump` from within a hook — this causes infinite recursion.

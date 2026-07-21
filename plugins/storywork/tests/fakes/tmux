@@ -1,17 +1,23 @@
 #!/usr/bin/env bash
-# Fake `tmux` for storywork's real-dispatch (non-dry-run) tests. Copied
-# verbatim from plugins/issue/tests/fakes/tmux (not sourced across plugin
+# Fake `tmux` for storywork's real-dispatch (non-dry-run) tests. Started as a
+# verbatim copy of plugins/issue/tests/fakes/tmux (not sourced across plugin
 # test dirs -- each plugin owns its own fixtures in this repo, per house
 # style): story.sh's cmd_dispatch drives the pane/window mechanics through
 # the SAME session.sh functions (wait_ready, send_prompt_confirmed, etc.)
 # issue.sh's own test suite already proved this fake against, byte-identical
 # extraction (Task A1) -- so the tmux CLI surface under test is unchanged,
-# only the caller (story.sh instead of issue.sh) differs.
+# only the caller (story.sh instead of issue.sh) differs. ONE deliberate,
+# ADDITIVE divergence from the issue copy: $FAKE_TMUX_NEW_WINDOW_FAIL=1 (see
+# `new-window` below) -- opt-in only, so every knob/behavior above is
+# byte-identical when it is unset.
 #
 # Implements only the subcommands cmd_dispatch / cmd_doctor drive, enough to
 # let the helper run to completion headlessly without a live tmux server:
 #
 #   new-window        -> reset the virtual input-box state, print a pane id (%1)
+#                        ($FAKE_TMUX_NEW_WINDOW_FAIL=1: print nothing, exit 1 --
+#                        drives story.sh's post-claim rollback test for a
+#                        `tmux new-window` failure)
 #   display-message   -> print a window id (@1), exit 0
 #   set-window-option -> no-op, exit 0
 #   send-keys         -> mutate the virtual input box (see STATEFUL MODEL below)
@@ -147,6 +153,13 @@ _paste_keys() {
 
 case "${1:-}" in
   new-window)
+    # $FAKE_TMUX_NEW_WINDOW_FAIL=1: simulate a `tmux new-window` failure (a
+    # dead server, an out-of-space TERM, etc.) -- print nothing and exit
+    # non-zero, BEFORE any state reset, so a caller retrying against a real
+    # tmux after this failure would see a clean slate.
+    if [ "${FAKE_TMUX_NEW_WINDOW_FAIL:-}" = "1" ]; then
+      exit 1
+    fi
     # First side effect of a dispatch: reset the virtual input box so every run
     # starts clean, and seed the prompt-Enter absorb counter from the knob. Also
     # clears the buffer store + submit bookkeeping (issue #87) so a reused $STATE

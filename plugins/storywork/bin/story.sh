@@ -51,6 +51,20 @@
 #                         move) REFUSES before any worktree/window is
 #                         created — never a redundant/silent no-op.
 #
+#                    CLAIM ROLLBACK: a real claim transition (step 3 above)
+#                    happens BEFORE every worktree/window side effect, so any
+#                    later hard failure (worktree/branch collision, `git
+#                    worktree add`, `tmux new-window`, or an unresolvable base
+#                    commit) would otherwise strand the story at `in-progress`
+#                    with no worktree, no window, and no session — silently,
+#                    forever. Every such failure now attempts a best-effort
+#                    CAS move BACK to the pre-claim state (guarded by
+#                    --if-state in-progress, so a genuine concurrent
+#                    transition is never clobbered) via claim_rollback_note,
+#                    and the failure message always names the outcome — a
+#                    successful rollback or an explicit "stranded, run this to
+#                    un-stick it" pointer. Never silent either way.
+#
 #   complete <id>    Worktree/branch cleanup ONLY — never touches story
 #                    state. Mirrors issue.sh's `complete execute <n>
 #                    --no-close` split: conductor's own --if-state-guarded
@@ -128,6 +142,9 @@ READY_ACCEPT_PATTERN="${STORY_READY_ACCEPT_PATTERN:-esc to interrupt|Thinking|Cr
 CAPTURE_LINES="${STORY_CAPTURE_LINES:-200}"
 DRY_RUN="${STORY_DRY_RUN:-}"
 ALLOW_CLOSED="${STORY_ALLOW_CLOSED:-}"
+# Escalate a non-fresh base (CACHED/HEAD-FALLBACK — see Step 6 below) from a
+# warning to a hard ok:false. Mirrors ISSUE_REQUIRE_FRESH_BASE exactly.
+REQUIRE_FRESH_BASE="${STORY_REQUIRE_FRESH_BASE:-}"
 
 require_story() {
   command -v "$STORY" >/dev/null 2>&1 \
@@ -140,6 +157,35 @@ require_story() {
 # own ids look like "SH-12"; this also rejects path-traversal/whitespace).
 valid_story_id() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]
+}
+
+# claim_rollback_note <id> <pre-claim-state> <claim-needed> — cmd_dispatch's
+# claim (Step 4) is a HARD PRECONDITION performed BEFORE any worktree/window
+# side effect (this file's header). If a REAL transition happened there
+# (<claim-needed> = true) and a LATER step still hard-fails (worktree/branch
+# collision, `git worktree add`, `tmux new-window`), the story would
+# otherwise be left permanently stuck at `in-progress` with no worktree, no
+# window, and no session — silent, exactly the failure class this project has
+# repeatedly hardened against for GitHub issues/PRs (#42/#43/#54). This
+# attempts a best-effort CAS move BACK to <pre-claim-state>, guarded by
+# --if-state in-progress so a genuine concurrent transition away from
+# in-progress is never clobbered, and echoes a clause for the failure message
+# naming the outcome either way (silence is never acceptable here). Echoes ""
+# when <claim-needed> is false — nothing to roll back. Takes <claim-needed>
+# as an explicit parameter (not read from a caller local) so this helper's
+# behavior never depends on bash's dynamic-scoping of `local`.
+claim_rollback_note() {
+  local id="$1" pre_state="$2" needed="$3"
+  [ "$needed" = true ] || { printf ''; return 0; }
+  local rb_json rb_result
+  rb_json=$("$STORY" move "$id" "$pre_state" --if-state in-progress --json 2>/dev/null) || true
+  rb_result=$(printf '%s' "$rb_json" | jq -r '.result // ""' 2>/dev/null || printf '')
+  if [ "$rb_result" = "ok" ]; then
+    printf ' Rolled the claim back to `%s`.' "$pre_state"
+  else
+    printf ' WARNING: story %s is now stranded at `in-progress` with no worktree/window — run `story move %s %s --if-state in-progress` to un-stick it.' \
+      "$id" "$id" "$pre_state"
+  fi
 }
 
 # ---- subcommand: dispatch ---------------------------------------------------
@@ -185,6 +231,10 @@ cmd_dispatch() {
   # move, and only outside dry-run (a write, not a read).
   local claim_needed=false
   [ "$state" = "in-progress" ] || claim_needed=true
+  # Preserved verbatim across the claim block below (which reassigns $state to
+  # "in-progress" on a successful move) — the state claim_rollback_note must
+  # move BACK to on any later hard failure.
+  local pre_claim_state="$state"
 
   if [ -z "$DRY_RUN" ] && [ "$claim_needed" = true ]; then
     local move_json move_result
@@ -275,34 +325,53 @@ cmd_dispatch() {
   fi
 
   # Step 6: fetch origin/<default> (best-effort, quiet) and resolve the
-  # commit the new worktree will be based on. Two tiers: FRESH (the ref
-  # resolves after freshening) or HEAD-FALLBACK (origin/<default> has never
-  # resolved at all — offline and never fetched); either way dispatch never
+  # commit the new worktree will be based on. THREE tiers (mirrors
+  # plugins/issue/bin/issue.sh's cmd_dispatch Step 6 exactly): FRESH (fetch
+  # ok + ref resolves), CACHED (fetch failed but a prior origin/<default> ref
+  # exists), HEAD-FALLBACK (origin/<default> has never resolved at all —
+  # offline and never fetched). Deliberately NOT routed through
+  # freshen_base_ref: that helper's documented contract is "any fetch
+  # failure is swallowed" (it exists for `complete`'s branch_is_merged, which
+  # only needs SOME usable ref, never freshness metadata) — inlining the
+  # fetch here and capturing its OWN exit code is what lets base_fresh
+  # distinguish "resolves" from "was just refreshed" (a resolvable-but-stale
+  # cached ref must never report base_fresh:true). Either way dispatch never
   # blocks on network.
-  local default base_oid="" base_fresh=false base_note=""
+  local default fetch_rc=0
   default=$(default_branch)
-  freshen_base_ref "$default"
+  git fetch --quiet origin "+refs/heads/$default:refs/remotes/origin/$default" \
+    >/dev/null 2>&1 || fetch_rc=$?
+
+  local base_oid="" base_fresh=false base_note=""
   if base_oid=$(git rev-parse --verify --quiet "refs/remotes/origin/$default^{commit}" 2>/dev/null) \
      && [ -n "$base_oid" ]; then
-    base_fresh=true
+    if [ "$fetch_rc" -eq 0 ]; then
+      base_fresh=true
+    else
+      base_note="couldn't refresh origin/$default (offline?); based on last-known origin/$default @ ${base_oid:0:8}"
+    fi
   elif base_oid=$(git rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null) && [ -n "$base_oid" ]; then
     base_note="could not determine origin/$default; new work is based on the local checkout, NOT the latest origin tip"
+    if [ -n "$REQUIRE_FRESH_BASE" ]; then
+      fail "could not determine a fresh origin/$default and STORY_REQUIRE_FRESH_BASE is set — refusing to dispatch on a possibly-stale base.$(claim_rollback_note "$id" "$pre_claim_state" "$claim_needed")"
+    fi
   else
-    fail "cannot resolve a base commit for the new worktree (no origin/$default and HEAD has no commits)."
+    fail "cannot resolve a base commit for the new worktree (no origin/$default and HEAD has no commits).$(claim_rollback_note "$id" "$pre_claim_state" "$claim_needed")"
   fi
 
   # Step 7: create the worktree off the resolved base commit.
   if git show-ref --verify --quiet "refs/heads/$worktree_branch" || [ -e "$worktree_path" ]; then
-    fail "a worktree or branch for \`$wname\` already exists — already dispatched? Clean it up first with \`story.sh complete $id\`."
+    fail "a worktree or branch for \`$wname\` already exists — already dispatched? Clean it up first with \`story.sh complete $id\`.$(claim_rollback_note "$id" "$pre_claim_state" "$claim_needed")"
   fi
   local wt_err
   if ! wt_err=$(git worktree add --no-track -b "$worktree_branch" "$worktree_path" "$base_oid" 2>&1); then
-    fail "failed to create worktree at $worktree_path: $(printf '%s' "$wt_err" | tail -n 2)"
+    fail "failed to create worktree at $worktree_path: $(printf '%s' "$wt_err" | tail -n 2)$(claim_rollback_note "$id" "$pre_claim_state" "$claim_needed")"
   fi
 
   # Step 8: open the window (rooted IN the new worktree). A failure here
-  # rolls back the just-created worktree/branch so a failed dispatch leaves
-  # no litter.
+  # rolls back the just-created worktree/branch (and, if a real claim
+  # transition happened, the story's state — see claim_rollback_note) so a
+  # failed dispatch leaves no litter.
   local new_window_args pane window
   new_window_args=(-c "$worktree_path" -n "$wname" -P -F '#{pane_id}')
   [ -z "$FOREGROUND" ] && new_window_args=(-d "${new_window_args[@]}")
@@ -311,7 +380,7 @@ cmd_dispatch() {
     git worktree remove --force "$worktree_path" >/dev/null 2>&1 || true
     git worktree prune >/dev/null 2>&1 || true
     git branch -D "$worktree_branch" >/dev/null 2>&1 || true
-    fail "failed to open a new tmux window."
+    fail "failed to open a new tmux window.$(claim_rollback_note "$id" "$pre_claim_state" "$claim_needed")"
   fi
   window=$(tmux display-message -p -t "$pane" '#{window_id}' 2>/dev/null || printf '')
 

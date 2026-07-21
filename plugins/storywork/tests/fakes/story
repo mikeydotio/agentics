@@ -24,6 +24,18 @@
 #                                    concurrent claim winning the race between
 #                                    story.sh's own show and move calls)
 #   FAKE_STORY_MOVE_FAIL=1           the move reports {result:"error"}
+#   FAKE_STORY_ROLLBACK_FAIL=1       a move whose TARGET state is anything
+#                                    other than "in-progress" reports
+#                                    {result:"error"} -- by construction,
+#                                    story.sh's cmd_dispatch only ever moves
+#                                    to a state other than in-progress via
+#                                    claim_rollback_note's post-claim
+#                                    rollback, so this isolates JUST that
+#                                    call (the original claim move, which
+#                                    always targets in-progress, is
+#                                    unaffected) -- models a rollback attempt
+#                                    itself failing (e.g. the story moved on
+#                                    again in the interim)
 #
 # story comment / story block: logged only (FAKE_STORY_LOG), always succeed.
 args="$*"
@@ -55,6 +67,11 @@ case "${1:-}" in
     done
     if [ -n "${FAKE_STORY_MOVE_FAIL:-}" ]; then
       jq -n --arg id "$id" '{result:"error", error:("story `" + $id + "` could not be moved"), exit_code:1}'
+      exit 1
+    fi
+    if [ -n "${FAKE_STORY_ROLLBACK_FAIL:-}" ] && [ "$state" != "in-progress" ]; then
+      jq -n --arg id "$id" --arg s "$state" \
+        '{result:"error", error:("story `" + $id + "` could not be rolled back to `" + $s + "`"), exit_code:1}'
       exit 1
     fi
     if [ -n "${FAKE_STORY_MOVE_CONFLICT:-}" ]; then

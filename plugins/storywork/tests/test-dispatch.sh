@@ -138,4 +138,112 @@ assert_eq "$(jqf "$dry_skip" .ok)" "true" "case5b: dry-run ok:true"
 assert_not_contains "$(jqf "$dry_skip" '.commands | join("\n")')" "move" \
   "case5b: planned commands exclude the move when already in-progress"
 
+# ==============================================================================
+# Case 6: `story show` itself fails (story not found). Must refuse before any
+# side effect with a message naming the story, not a generic crash.
+# ==============================================================================
+repo6=$(mk_dispatch_repo)
+wname6=$(expected_wname "$repo6" "SH-6")
+
+out6=$(FAKE_STORY_SHOW_FAIL=1 dispatch_real "$repo6" SH-6)
+assert_eq "$(jqf "$out6" .ok)" "false" "case6: ok:false when story show fails"
+assert_contains "$(jqf "$out6" .display)" "not found" "case6: display names the not-found failure"
+[ -e "$repo6/.claude/worktrees/$wname6" ] \
+  && fail_test "case6: no worktree should be created when story show fails" || :
+
+# ==============================================================================
+# Case 7: `story show` succeeds but `story move` fails with a GENERIC error
+# (distinct from a claim conflict — e.g. a storyhook-side outage). Must
+# refuse, not silently proceed as if claimed.
+# ==============================================================================
+repo7=$(mk_dispatch_repo)
+wname7=$(expected_wname "$repo7" "SH-7")
+
+out7=$(FAKE_STORY_STATE=todo FAKE_STORY_MOVE_FAIL=1 dispatch_real "$repo7" SH-7)
+assert_eq "$(jqf "$out7" .ok)" "false" "case7: ok:false when story move fails"
+assert_contains "$(jqf "$out7" .display)" "story move" "case7: display names the move failure"
+[ -e "$repo7/.claude/worktrees/$wname7" ] \
+  && fail_test "case7: no worktree should be created when story move fails" || :
+
+# ==============================================================================
+# Case 8: CLAIM ROLLBACK — the claim (a real todo -> in-progress transition)
+# succeeds, but a LATER hard failure (a worktree/branch collision: something
+# already dispatched for this id and was never completed) means the story
+# must NOT be left stranded at `in-progress` with no worktree/window. A
+# best-effort CAS move back to the pre-claim state is attempted and the
+# outcome is named in the failure message either way.
+# ==============================================================================
+repo8=$(mk_dispatch_repo)
+wname8=$(expected_wname "$repo8" "SH-8")
+log8=$(mktemp /tmp/storywork-log.XXXXXX)
+( cd "$repo8" \
+    && git branch "worktree-$wname8" \
+    && git worktree add -q --detach ".claude/worktrees/$wname8" ) >/dev/null 2>&1
+
+out8=$(FAKE_STORY_STATE=todo FAKE_STORY_LOG="$log8" dispatch_real "$repo8" SH-8)
+assert_eq "$(jqf "$out8" .ok)" "false" "case8: ok:false on a post-claim worktree/branch collision"
+assert_contains "$(jqf "$out8" .display)" "already exists" "case8: display names the collision"
+assert_contains "$(cat "$log8")" "move SH-8 in-progress --if-state todo" \
+  "case8: the CAS claim move was actually attempted"
+assert_contains "$(cat "$log8")" "move SH-8 todo --if-state in-progress" \
+  "case8: a rollback move to the pre-claim state was attempted"
+assert_contains "$(jqf "$out8" .display)" "Rolled the claim back" \
+  "case8: display confirms the rollback succeeded"
+
+# ---- Case 8b: the rollback attempt ITSELF fails — never silent about it. ----
+repo8b=$(mk_dispatch_repo)
+wname8b=$(expected_wname "$repo8b" "SH-8B")
+( cd "$repo8b" \
+    && git branch "worktree-$wname8b" \
+    && git worktree add -q --detach ".claude/worktrees/$wname8b" ) >/dev/null 2>&1
+
+out8b=$(FAKE_STORY_STATE=todo FAKE_STORY_ROLLBACK_FAIL=1 dispatch_real "$repo8b" SH-8B)
+assert_eq "$(jqf "$out8b" .ok)" "false" "case8b: ok:false on the same collision"
+assert_contains "$(jqf "$out8b" .display)" "stranded" \
+  "case8b: display explicitly names the stranded claim when rollback also fails"
+
+# ==============================================================================
+# Case 9: CLAIM ROLLBACK on a `git worktree add` failure — the worktree
+# CONTAINER path is a plain file (not a directory), so the pre-check at Step 7
+# passes (nothing exists at the exact worktree path yet) but the underlying
+# `git worktree add` call itself fails.
+# ==============================================================================
+repo9=$(mk_dispatch_repo)
+wname9=$(expected_wname "$repo9" "SH-9")
+log9=$(mktemp /tmp/storywork-log.XXXXXX)
+( cd "$repo9" && mkdir -p .claude && : > .claude/worktrees ) >/dev/null 2>&1
+
+out9=$(FAKE_STORY_STATE=todo FAKE_STORY_LOG="$log9" dispatch_real "$repo9" SH-9)
+assert_eq "$(jqf "$out9" .ok)" "false" "case9: ok:false when git worktree add fails"
+assert_contains "$(jqf "$out9" .display)" "failed to create worktree" "case9: display names the worktree-add failure"
+assert_contains "$(cat "$log9")" "move SH-9 in-progress --if-state todo" \
+  "case9: the CAS claim move was actually attempted"
+assert_contains "$(cat "$log9")" "move SH-9 todo --if-state in-progress" \
+  "case9: a rollback move was attempted after the worktree-add failure"
+
+# ==============================================================================
+# Case 10: CLAIM ROLLBACK on a `tmux new-window` failure — the fake tmux's
+# FAKE_TMUX_NEW_WINDOW_FAIL knob simulates a dead/unreachable tmux server.
+# ==============================================================================
+repo10=$(mk_dispatch_repo)
+wname10=$(expected_wname "$repo10" "SH-10")
+log10=$(mktemp /tmp/storywork-log.XXXXXX)
+
+out10=$( cd "$repo10" \
+    && PATH="$FAKE_TMUX_DIR:$PATH" \
+       TMUX="fake,0,0" TMUX_PANE="%0" \
+       STORY_READY_DELAY=0 STORY_READY_FALLBACK_DELAY=0 \
+       STORY_CONFIRM_DELAY=0 STORY_PASTE_SETTLE_DELAY=0 \
+       FAKE_TMUX_CAPTURE=marker FAKE_TMUX_NEW_WINDOW_FAIL=1 \
+       FAKE_STORY_STATE=todo FAKE_STORY_LOG="$log10" \
+       bash "$SCRIPT" dispatch SH-10 2>&1 )
+assert_eq "$(jqf "$out10" .ok)" "false" "case10: ok:false when tmux new-window fails"
+assert_contains "$(jqf "$out10" .display)" "failed to open a new tmux window" "case10: display names the tmux failure"
+assert_contains "$(cat "$log10")" "move SH-10 in-progress --if-state todo" \
+  "case10: the CAS claim move was actually attempted"
+assert_contains "$(cat "$log10")" "move SH-10 todo --if-state in-progress" \
+  "case10: a rollback move was attempted after the tmux new-window failure"
+( cd "$repo10" && git show-ref --verify --quiet "refs/heads/worktree-$wname10" ) \
+  && fail_test "case10: the worktree branch should have been rolled back by the existing tmux-failure cleanup" || :
+
 finish

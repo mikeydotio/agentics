@@ -159,6 +159,35 @@ valid_story_id() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]
 }
 
+# repo_root — echo the MAIN worktree's absolute root directory, regardless of
+# which worktree (or subdirectory of one) CWD is currently inside. Mirrors
+# plugins/reconcile-pr/bin/reconcile-pr.sh's need_repo exactly (agentics #108
+# — the identical CWD-vs-worktree hazard, fixed there first): `git rev-parse
+# --git-common-dir` resolves to <main>/.git from ANY worktree of the repo
+# (relative, ".git", only when CWD already IS the main worktree's own root),
+# so its dirname — resolved to an absolute path via a real `cd` in a
+# subshell, never the caller's shell — is stable no matter where CWD is.
+#
+# `dir` (repo_name/wname/worktree_path's anchor, both subcommands) MUST use
+# this instead of `git rev-parse --show-toplevel`: --show-toplevel is
+# CWD-relative, so from inside one of story.sh's OWN worktrees it returns
+# that worktree's root, not the main repo's — every path built from it is
+# then a nonsensical path nested inside the worktree itself, matching
+# nothing in `git worktree list` (a real reproduced defect: `complete`, run
+# from inside the worktree it should clean up, silently classified it
+# "missing" and did nothing while still reporting ok:true; `dispatch`, run
+# from inside an existing worktree of the same repo, would nest the NEW
+# worktree inside it). issue.sh avoids this class of bug for a different
+# reason: its own repo identity comes from origin_owner_repo() (the remote
+# URL), which is also worktree-invariant, just via a different mechanism —
+# storyhook has no GitHub-owner concept, so story.sh needs this directory-
+# based equivalent.
+repo_root() {
+  local common
+  common=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
+  ( CDPATH= cd -- "$(dirname -- "$common")" && pwd -P )
+}
+
 # claim_rollback_note <id> <pre-claim-state> <claim-needed> — cmd_dispatch's
 # claim (Step 4) is a HARD PRECONDITION performed BEFORE any worktree/window
 # side effect (this file's header). If a REAL transition happened there
@@ -202,9 +231,13 @@ cmd_dispatch() {
     [ -n "${TMUX_PANE:-}" ] || fail "story requires \$TMUX_PANE — run Claude inside a tmux pane."
   fi
 
-  # Step 2: repo dir (worktree creation below needs a git-tracked location).
+  # Step 2: repo dir (worktree creation below needs a git-tracked location) —
+  # anchored to the MAIN worktree via repo_root(), NEVER CWD-relative (see
+  # that function's header: dispatch invoked from inside an existing worktree
+  # of this same repo must still create its new worktree beside it, not
+  # nested inside it).
   local dir
-  dir=$(git rev-parse --show-toplevel 2>/dev/null) || fail "not inside a git repository."
+  dir=$(repo_root) || fail "not inside a git repository."
 
   # Step 3: story CLI present.
   require_story
@@ -501,10 +534,17 @@ cmd_complete() {
   local id="${1:-}"
   [ -n "$id" ] || fail "usage: story.sh complete <story-id>"
   valid_story_id "$id" || fail "story id must be alphanumeric (hyphens/underscores allowed) (got: $id)."
-  git rev-parse --show-toplevel >/dev/null 2>&1 || fail "not inside a git repository."
 
+  # repo_root(), not `git rev-parse --show-toplevel` — see that function's
+  # header: run from inside the very worktree this command should clean up
+  # (a real scenario: the LLM session it hosts calling `story.sh complete`
+  # on itself), --show-toplevel returns the WORKTREE's own root, so
+  # worktree_path below would be reconstructed as a path nested inside the
+  # worktree itself, matching nothing in `git worktree list` — the worktree
+  # silently classified "missing" and complete reported ok:true having
+  # cleaned up nothing.
   local dir repo_name wname default
-  dir=$(git rev-parse --show-toplevel)
+  dir=$(repo_root) || fail "not inside a git repository."
   repo_name="$(basename "$dir")"
   wname=$(resolve_wname "$id" "$repo_name")
   default=$(default_branch)

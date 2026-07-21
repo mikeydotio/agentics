@@ -3,6 +3,37 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.35.3] - 2026-07-21
+
+### Fixed
+- anchor story.sh repo-root to the main worktree, not CWD (67898a6)
+
+_[manual]_
+
+## [v2.35.2] - 2026-07-21
+
+### Fixed
+- gate cmd_complete on STORY_DRY_RUN, cover valid_story_id (161d3a6)
+
+_[manual]_
+
+## [v2.35.1] - 2026-07-21
+
+### Fixed
+- close review-blocking gaps in story.sh dispatch/claim (b2d59ee)
+
+_[manual]_
+
+## [v2.35.0] - 2026-07-21
+
+### Added
+- add story.sh dispatch/complete actuator (343565f)
+
+### Changed
+- Merge pull request #114 from mikeydotio/refactor/issue-session-lib-a1 (f13be27)
+
+_[manual]_
+
 ## [v2.34.1] - 2026-07-21
 
 ### Changed

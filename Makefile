@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
+.PHONY: test test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
+test: test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Root bats suite (storyhook state machine). bats-core is not installed
 # everywhere; skip with a notice rather than failing the whole gate.
@@ -45,6 +45,16 @@ test-issue:
 # and a local bare-origin repo; no live network. Always runs (no bats).
 test-reconcile-pr:
 	bash plugins/reconcile-pr/tests/run-tests.sh
+
+# storywork's plain-bash suite (plugins/storywork/tests/test-*.sh) — the
+# storyhook claim-then-dispatch contract (skip-the-redundant-move when a
+# caller already CAS'd the story to in-progress; refuse-before-any-side-
+# effect on a lost claim race; the closed-superstate guard) and the
+# complete verb's worktree/branch-only cleanup scan. Driven by a fake story
+# CLI + fake tmux on PATH + throwaway git repos; no live tmux/claude/story.
+# Always runs (no bats).
+test-storywork:
+	bash plugins/storywork/tests/run-tests.sh
 
 # rca's plain-bash suite (plugins/rca/tests/test-*.sh) — the investigation state
 # ladder, scaffold/gitignore idempotency, stack detection, the repro harness

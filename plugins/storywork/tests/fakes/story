@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Fake `story` (storyhook CLI) for storywork tests. Emits canned output driven
+# by env knobs so the whole story-dependent flow runs offline and
+# deterministically. The JSON SHAPE below is copied from the REAL `story`
+# binary's output (verified empirically against a built `story` v0.16.0, not
+# guessed from docs) -- double-nested `story.story`, `result` discriminator
+# (ok|conflict|error), and the conflict envelope's `expected`/`actual` fields.
+# This is NOT the same shape as plugins/rca/tests/fakes/story (a flat
+# {id,title,status,body} stand-in for a different, older contract) --
+# storywork's story.sh parses the real nested shape, so its fake must match it.
+#
+# Shared:
+#   FAKE_STORY_LOG=path              append each invocation's args here
+#
+# story show <id> [--json]:
+#   FAKE_STORY_SHOW_FAIL=1           `story show` reports {result:"error"} (not found)
+#   FAKE_STORY_STATE=todo            .story.story.state (default: todo)
+#   FAKE_STORY_SUPERSTATE=OPEN       .story.story.superstate (default: OPEN)
+#   FAKE_STORY_TITLE=...             .story.story.title (default: "Fake story <id>")
+#
+# story move <id> <state> [--if-state <expected>] [--json]:
+#   FAKE_STORY_MOVE_CONFLICT=1       the move reports {result:"conflict"} regardless
+#                                    of the --if-state value passed (models a
+#                                    concurrent claim winning the race between
+#                                    story.sh's own show and move calls)
+#   FAKE_STORY_MOVE_FAIL=1           the move reports {result:"error"}
+#
+# story comment / story block: logged only (FAKE_STORY_LOG), always succeed.
+args="$*"
+[ -n "${FAKE_STORY_LOG:-}" ] && printf '%s\n' "$args" >> "$FAKE_STORY_LOG"
+
+case "${1:-}" in
+  show)
+    id="${2:-}"
+    if [ -n "${FAKE_STORY_SHOW_FAIL:-}" ]; then
+      jq -n --arg id "$id" '{result:"error", error:("story `" + $id + "` not found"), exit_code:3}'
+      exit 3
+    fi
+    jq -n \
+      --arg id "$id" \
+      --arg title "${FAKE_STORY_TITLE:-Fake story $id}" \
+      --arg state "${FAKE_STORY_STATE:-todo}" \
+      --arg super "${FAKE_STORY_SUPERSTATE:-OPEN}" '
+      {result:"ok", story:{story:{id:$id, title:$title, state:$state, superstate:$super}}}'
+    exit 0 ;;
+  move)
+    id="${2:-}" state="${3:-}"
+    shift 3 2>/dev/null || true
+    if_state=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --if-state) if_state="${2:-}"; shift 2 ;;
+        *)          shift ;;
+      esac
+    done
+    if [ -n "${FAKE_STORY_MOVE_FAIL:-}" ]; then
+      jq -n --arg id "$id" '{result:"error", error:("story `" + $id + "` could not be moved"), exit_code:1}'
+      exit 1
+    fi
+    if [ -n "${FAKE_STORY_MOVE_CONFLICT:-}" ]; then
+      jq -n --arg exp "$if_state" --arg act "${FAKE_STORY_STATE:-todo}" '
+        {result:"conflict",
+         error:("state conflict: expected `" + $exp + "`, was `" + $act + "`"),
+         exit_code:9, expected:$exp, actual:$act}'
+      exit 9
+    fi
+    jq -n \
+      --arg id "$id" \
+      --arg title "${FAKE_STORY_TITLE:-Fake story $id}" \
+      --arg state "$state" \
+      --arg super "${FAKE_STORY_MOVE_SUPERSTATE:-OPEN}" '
+      {result:"ok", story:{story:{id:$id, title:$title, state:$state, superstate:$super}}}'
+    exit 0 ;;
+  comment|block)
+    if [ -n "${FAKE_STORY_COMMENT_FAIL:-}" ] && [ "$1" = "comment" ]; then
+      echo "could not comment" >&2; exit 1
+    fi
+    if [ -n "${FAKE_STORY_BLOCK_FAIL:-}" ] && [ "$1" = "block" ]; then
+      echo "could not block" >&2; exit 1
+    fi
+    exit 0 ;;
+  *)
+    echo "fake-story: unhandled: $args" >&2; exit 0 ;;
+esac

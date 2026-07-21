@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.35.3] - 2026-07-21
+
+### Fixed
+- anchor story.sh repo-root to the main worktree, not CWD (67898a6)
+
+_[manual]_
+
 ## [v2.35.2] - 2026-07-21
 
 ### Fixed

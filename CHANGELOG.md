@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.34.1] - 2026-07-21
+
+### Changed
+- extract provider-agnostic session lib (9f1b30d)
+- Merge pull request #113 from mikeydotio/release/v2.34.0 (36945cc)
+
+_[manual]_
+
 ## [v2.34.0] - 2026-07-20
 
 ### Added

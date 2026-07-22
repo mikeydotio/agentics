@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.36.0] - 2026-07-21
+
+### Added
+- per-project toolchain pin via .deployit/config.toml (3119442)
+
+### Changed
+- Merge pull request #115 from mikeydotio/feat/storywork-actuator-a2 (493b9bd)
+
+### Testing
+- add real-story-CLI and real-concurrency coverage (7bbec91)
+
+_[manual]_
+
 ## [v2.35.3] - 2026-07-21
 
 ### Fixed

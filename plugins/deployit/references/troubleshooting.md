@@ -29,6 +29,8 @@
 | Deploy shows `post_test: no .deployit/post-deploy-test.sh — skipped` but you expected a suite to run | The opt-in script is missing or mis-named (deployit looks for exactly `<project>/.deployit/post-deploy-test.sh`) | Create it at that path (see `references/post-deploy-tests.md`). It runs out-of-band after every deploy; a `not_configured` badge on the build page means the same thing. |
 | Build page shows `Tests running…` long after the suite should have finished | The detached run was killed (e.g. machine slept/rebooted mid-suite) or the script hangs | The status JSON at `<state>/posttest/<build_id>.json` carries `pid` + `started_at` — `kill -0 <pid>` to check liveness. Check `<state>/logs/posttest-<build_id>.log` for where it stalled; re-deploy to re-run. |
 | Post-deploy test reports `error` (not `failed`) | deployit couldn't launch the script (unreadable, or `bash` unavailable) | Confirm `.deployit/post-deploy-test.sh` is a readable shell script; run `bash .deployit/post-deploy-test.sh` by hand to reproduce. |
+| `[toolchain] developer_dir='...' (from .deployit/config.toml) does not exist` | The project's `.deployit/config.toml` pins an explicit `developer_dir` that isn't installed (or was moved/renamed) on this Mac | Install the required Xcode at that path, fix the path in `.deployit/config.toml`, or switch to `min_sdk` for a portable pin. See `references/toolchain.md`. |
+| `[toolchain] min_sdk='N' ... but no /Applications/Xcode*.app install has a version >= N` | The project's `.deployit/config.toml` pins `min_sdk = "N"` but no installed Xcode meets it on this Mac | Install an Xcode >= N, or set an explicit `[toolchain] developer_dir`. See `references/toolchain.md`. |
 
 ## Log locations
 

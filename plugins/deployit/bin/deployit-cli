@@ -71,6 +71,13 @@ def _tailscale_bin() -> str:
     return os.environ.get("DEPLOYIT_TAILSCALE_BIN", "tailscale")
 
 
+def _applications_dir() -> Path:
+    """Where to scan for Xcode installs when resolving [toolchain] min_sdk.
+    Overridable for tests via DEPLOYIT_APPLICATIONS_DIR."""
+    override = os.environ.get("DEPLOYIT_APPLICATIONS_DIR")
+    return Path(override) if override else Path("/Applications")
+
+
 def _gh_bin() -> str:
     """Absolute path to the `gh` CLI.
 
@@ -569,6 +576,100 @@ def _read_config(state: Path) -> dict:
         }
 
 
+def _read_project_config(cwd: Path) -> dict:
+    """Optional per-project overrides from <cwd>/.deployit/config.toml — the
+    project's own repo-committed config, separate from the per-machine
+    ~/Library/Application Support/deployit/config.toml that `_read_config`
+    reads. Lets different repos on the same machine pin different settings
+    (e.g. a project whose build needs a specific Xcode toolchain — see
+    [toolchain] / `_resolve_toolchain_developer_dir` below). Returns {} when
+    the file is absent, so a repo with no .deployit/config.toml behaves
+    exactly as it did before this feature existed. Currently only reads
+    [toolchain]; the file can grow more tables later without a loader
+    redesign, mirroring `_read_config`'s per-table shape."""
+    path = cwd / ".deployit" / "config.toml"
+    if not path.is_file():
+        return {}
+    try:
+        import tomllib
+        return tomllib.loads(path.read_text())
+    except ModuleNotFoundError:
+        text = path.read_text()
+        toolchain = {}
+        dd_m = _re.search(r'\[toolchain\][^\[]*?developer_dir\s*=\s*"([^"]*)"', text)
+        if dd_m:
+            toolchain["developer_dir"] = dd_m.group(1)
+        sdk_m = _re.search(r'\[toolchain\][^\[]*?min_sdk\s*=\s*"([^"]*)"', text)
+        if sdk_m:
+            toolchain["min_sdk"] = sdk_m.group(1)
+        return {"toolchain": toolchain} if toolchain else {}
+
+
+def _resolve_toolchain_developer_dir(project_cfg: dict):
+    """Resolve the DEVELOPER_DIR to archive/export with, from the project's
+    [toolchain] table in .deployit/config.toml. Returns None when the
+    project sets no [toolchain] table (or an empty one) — callers then build
+    with whatever toolchain xcode-select/the ambient environment already
+    provides, unchanged from before this feature existed.
+
+    Precedence: an explicit `developer_dir` always wins — a per-machine
+    escape hatch for a nonstandard install location. Otherwise `min_sdk`
+    selects the newest /Applications/Xcode*.app whose own version is >=
+    min_sdk. That's a portable selector deliberately preferred over a
+    committed absolute path: Xcode install locations and names churn (e.g.
+    a beta moving from ~/Downloads to /Applications, or being renamed once
+    it ships stable), so pinning a path in a repo-committed file would go
+    stale. It approximates the platform SDK version by Xcode's own version
+    — Apple's Xcode and platform-SDK major versions track together on the
+    yearly release cadence — rather than shelling out to `xcodebuild
+    -showsdks` per candidate.
+
+    fails loudly when min_sdk is set but nothing on disk satisfies it,
+    rather than silently falling back to the ambient toolchain: a build
+    that silently used the wrong SDK could succeed while silently omitting
+    whatever the pinned SDK enables (the motivating case: Lillist's
+    Private-Cloud-Compute search tier needs the iOS/macOS 27 SDK — see
+    mikeydotio/lillist#70 — and a 26.x build compiles fine without it)."""
+    toolchain = project_cfg.get("toolchain") or {}
+    if not toolchain:
+        return None
+
+    explicit = toolchain.get("developer_dir")
+    if explicit:
+        if not Path(explicit).is_dir():
+            fail(f"[toolchain] developer_dir={explicit!r} (from .deployit/config.toml) does not exist")
+        return explicit
+
+    min_sdk = toolchain.get("min_sdk")
+    if not min_sdk:
+        return None
+    try:
+        min_major = int(str(min_sdk).split(".")[0])
+    except ValueError:
+        fail(f"[toolchain] min_sdk={min_sdk!r} (from .deployit/config.toml) is not a valid version")
+
+    apps_dir = _applications_dir()
+    best_path, best_major = None, -1
+    for candidate in sorted(apps_dir.glob("Xcode*.app")):
+        version = _read_plist_string(candidate / "Contents" / "version.plist", "CFBundleShortVersionString")
+        if not version:
+            continue
+        try:
+            major = int(version.split(".")[0])
+        except ValueError:
+            continue
+        if major >= min_major and major > best_major:
+            best_path, best_major = candidate, major
+
+    if best_path is None:
+        fail(
+            f"[toolchain] min_sdk={min_sdk!r} (from .deployit/config.toml) but no "
+            f"{apps_dir}/Xcode*.app install has a version >= {min_major}. Install "
+            f"the required Xcode, or set an explicit [toolchain] developer_dir."
+        )
+    return str(best_path / "Contents" / "Developer")
+
+
 def _build_id(project: str, platform: str, commit: str) -> str:
     stamp = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     return f"{project.lower()}-{platform}-{stamp}-{commit}"
@@ -582,7 +683,7 @@ def _destination_for(platform: str) -> str:
     }[platform]
 
 
-def _xcodebuild_archive(meta: dict, archive_path: Path, scheme):
+def _xcodebuild_archive(meta: dict, archive_path: Path, scheme, env=None):
     cmd = [
         "xcodebuild",
         meta["xcode_container_flag"], meta["xcode_container_path"],
@@ -593,7 +694,11 @@ def _xcodebuild_archive(meta: dict, archive_path: Path, scheme):
         "-allowProvisioningUpdates",
         "archive",
     ]
-    res = subprocess.run(cmd)
+    # env=None (the default) means "inherit this process's environment",
+    # identical to the pre-[toolchain] behavior. cmd_deploy passes an
+    # explicit DEVELOPER_DIR-augmented env only when the project's
+    # .deployit/config.toml [toolchain] table resolves one.
+    res = subprocess.run(cmd, env=env)
     if res.returncode != 0:
         fail("xcodebuild archive failed — see Xcode output above; "
              "common causes in references/troubleshooting.md")
@@ -667,7 +772,7 @@ def _sparkle_mismatch_warnings(sparkle_detect: dict, enabled: bool) -> list:
     return warnings
 
 
-def _xcodebuild_export(archive_path: Path, export_dir: Path, plugin_root: Path, platform: str):
+def _xcodebuild_export(archive_path: Path, export_dir: Path, plugin_root: Path, platform: str, env=None):
     # Prefer an explicit override or a project-local
     # .deployit/ExportOptions.<platform>.plist before the bundled default,
     # so projects that need custom export options (e.g. manual signing for
@@ -689,7 +794,11 @@ def _xcodebuild_export(archive_path: Path, export_dir: Path, plugin_root: Path, 
         "-exportPath", str(export_dir),
         "-allowProvisioningUpdates",
     ]
-    res = subprocess.run(cmd)
+    # See _xcodebuild_archive: env=None inherits this process's environment
+    # unchanged; cmd_deploy passes a DEVELOPER_DIR-augmented env when
+    # [toolchain] resolved one, so archive and export always agree on which
+    # toolchain built the artifact being exported.
+    res = subprocess.run(cmd, env=env)
     if res.returncode != 0:
         fail("xcodebuild -exportArchive failed — see Xcode output above")
 
@@ -1512,8 +1621,16 @@ def cmd_deploy(args):
     cwd = Path.cwd()
     _refuse_if_worktree(cwd)
     meta = _derive_metadata(cwd, args.platform)
+
+    # Per-project toolchain pin (.deployit/config.toml [toolchain] — see
+    # _resolve_toolchain_developer_dir). None when the project sets none, in
+    # which case archive/export inherit the ambient environment unchanged.
+    project_cfg = _read_project_config(cwd)
+    developer_dir = _resolve_toolchain_developer_dir(project_cfg)
+    build_env = {**os.environ, "DEVELOPER_DIR": developer_dir} if developer_dir else None
+
     if getattr(args, "dump_metadata", False):
-        ok({"display": "metadata", **meta})
+        ok({"display": "metadata", **meta, "developer_dir": developer_dir})
         return
 
     # Semver awareness: when the project tracks its version with the semver
@@ -1543,9 +1660,9 @@ def cmd_deploy(args):
     if export_dir.exists():   _shutil.rmtree(export_dir)
     export_dir.mkdir(parents=True)
 
-    _xcodebuild_archive(meta, archive_path, args.scheme)
+    _xcodebuild_archive(meta, archive_path, args.scheme, env=build_env)
     build_number = _read_archive_build_number(archive_path, meta["project"])
-    _xcodebuild_export(archive_path, export_dir, args.plugin_root, args.platform)
+    _xcodebuild_export(archive_path, export_dir, args.plugin_root, args.platform, env=build_env)
 
     meta_full = {
         **meta,

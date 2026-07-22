@@ -59,6 +59,15 @@ repo, with release notes you author from the commit/issue history.
   unquoted in `project.yml`. If the CLI fails with "no recognised Xcode
   project layout in cwd," the user is likely in the wrong directory —
   confirm with them before suggesting a scheme override.
+
+  If the project's own `.deployit/config.toml` has a `[toolchain]` table,
+  archive/export use that pinned Xcode instead of the machine's
+  `xcode-select` default — see **Per-project toolchain pin**. If the CLI
+  fails with a `[toolchain] ... does not exist` or `... but no
+  /Applications/Xcode*.app install has a version >= ...` error, that pin is
+  stale or the required Xcode isn't installed on this Mac; do not silently
+  remove the pin without checking with the user first (it usually exists
+  because the project genuinely needs that toolchain).
 - **list / status / url** are read-only; no confirmations needed.
 - **gc** requires `--keep N` or `--older-than D` — never run unqualified.
 - **rm** deletes a local build or product — its index entry plus the on-disk
@@ -134,6 +143,18 @@ Every macOS `deploy` also publishes a GitHub release on the **app's own repo**
   download that opens without the Gatekeeper prompt, configure notarization
   (`[macos] notarize`). Full details in `references/github-release.md`.
 
+## Per-project toolchain pin
+
+A project can pin the Xcode toolchain `deploy` archives/exports with, via its
+own `<project>/.deployit/config.toml` `[toolchain]` table — either
+`min_sdk = "27"` (picks the newest matching `/Applications/Xcode*.app`) or an
+explicit `developer_dir` path. This is separate from the per-machine
+`~/Library/Application Support/deployit/config.toml` bootstrap writes; the
+project one is committed to the app's repo so the pin travels with the
+project. No `[toolchain]` table (or no `.deployit/config.toml` at all) means
+unchanged behavior — archive/export inherit the ambient toolchain. Full
+details, including the failure modes, in `references/toolchain.md`.
+
 ## Post-deploy tests
 
 If the project has a `.deployit/post-deploy-test.sh`, every `deploy` runs it
@@ -169,6 +190,7 @@ appended to the original command.
 - `references/macos.md` — macOS Developer-ID signing + notarytool
 - `references/github-release.md` — macOS GitHub release: version/tag rules, notes, notarization, recovery
 - `references/post-deploy-tests.md` — out-of-band post-deploy test suites via `.deployit/post-deploy-test.sh`
+- `references/toolchain.md` — per-project Xcode toolchain pin via `.deployit/config.toml [toolchain]`
 - `references/sparkle.md` — macOS Sparkle auto-update: appcast + EdDSA signing + app wiring
 - `references/visionos.md` — visionOS specifics (mostly ≡ iOS)
 - `references/tailscale-serve.md` — proxy config + Mac App Store variant quirks

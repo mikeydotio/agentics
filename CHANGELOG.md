@@ -3,6 +3,24 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.38.0] - 2026-07-30
+
+### Added
+- realign forge for Claude 5 models (41b6793)
+
+### Changed
+- Merge pull request #121 from mikeydotio/fix/isolate-storyhook-store-in-tests (900d4dd)
+- Merge pull request #120 from mikeydotio/chore/storyhook-store-migration (7b1b1f7)
+- Merge pull request #119 from mikeydotio/feat/claude5-realign-agents (e65376b)
+
+### Testing
+- run every suite against a storyhook store of its own (5f5e8a5)
+
+### Maintenance
+- migrate the tracker to the store and retire .storyhook (908dc68)
+
+_[manual]_
+
 ## [v2.37.0] - 2026-07-30
 
 ### Added

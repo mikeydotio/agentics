@@ -79,7 +79,7 @@ Our plugins primarily use **Handoff** (forge step transitions) with **Agent-as-T
 **Prevention**:
 - Maximum 3 retries per agent per story (configurable)
 - Circuit breakers: max sessions, max total retries, storyhook consecutive failure cap
-- Token budget awareness: agents must summarize if approaching output limits
+- Right-sized output: agents cover the substance without padding it out to fill a quota
 - Dead-letter handling: stories blocked after max retries get `blocked` status, not infinite retry
 
 ### Denial of Wallet

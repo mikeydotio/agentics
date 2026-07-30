@@ -191,9 +191,8 @@ Agent(
     - git diff of uncommitted changes
     - Deterministic check output (test results, linter, stub grep)
     - Relevant DESIGN.md section
-    - A <files_to_read> block listing the story's files_expected + files the diff touches (F065 —
-      without this explicit block, evaluator.md's "Mandatory Initial Read" protocol never fires
-      and the evaluator judges from the diff hunk alone, without full-file context)
+    - A <files_to_read> block listing the story's files_expected + files the diff touches —
+      without it the evaluator judges from the diff hunk alone, with no full-file context
     - [Fallback path only] Evaluator agent instructions (from evaluator.md) + forge override
       (from agent-overrides/evaluator-context.md)
   >

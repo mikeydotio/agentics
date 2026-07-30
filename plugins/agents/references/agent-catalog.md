@@ -52,6 +52,25 @@ Complete roster of agents available in the shared library at `plugins/agents/age
 | [evidence-collector](../agents/evidence-collector.md) | Read, Grep, Glob, Bash | yes | 7-category evidence taxonomy, facts-only discipline. Draws from Investigator + Observability + Data + Security. |
 | [hypothesis-challenger](../agents/hypothesis-challenger.md) | Read, Grep, Glob, Bash | yes | 6 challenge strategies (incl. experiment-design review), absorbs archaeologist + analyst + remediation roles. Draws from Skeptic + Architect + Security + Experimenter. |
 
+## Model and Effort Tiers
+
+Each agent's frontmatter is authoritative; this is the summary. Pins only ever move work *down*
+a tier — `opus` and `fable` are never pinned, because those aliases track the latest model of
+their line, so pinning them is a no-op at best and a downgrade when the session runs something
+more capable. Omitting `model:` inherits the session's model, which is what judgment-tier work
+wants.
+
+| Tier | `model:` | `effort:` | Agents |
+|------|----------|-----------|--------|
+| Bounded text work | `haiku` | `low` | copy-editor |
+| Multi-step, well-specified | `sonnet` | `medium` | data-engineer, devops-engineer, domain-researcher, evidence-collector, generator, observability-engineer, project-manager, qa-engineer, technical-writer, ux-designer-cli, ux-designer-mobile, ux-designer-web, validator |
+| Genuine analysis | *inherit* | `high` | accessibility-engineer, api-designer, lawyer, performance-engineer, software-engineer |
+| Adversarial / long-horizon | *inherit* | `xhigh` | evaluator, experimenter, hypothesis-challenger, investigator, reviewer, security-researcher, skeptic, software-architect, triager |
+
+Both fields bind only on the preferred `subagent_type: "agents:<name>"` path. Under the
+`general-purpose` fallback the subagent runs on the session's model at the session's effort —
+the same caveat that applies to `tools:` and `read_only:`. See `cross-plugin-usage.md`.
+
 ## Team Composition by Project Type
 
 | Project Type | Recommended Agents |

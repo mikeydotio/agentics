@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.37.0] - 2026-07-30
+
+### Added
+- realign the shared agent library for Claude 5 models (28d7253)
+
+### Changed
+- Merge pull request #116 from mikeydotio/feat/deployit-per-project-config (483b607)
+
+### Documentation
+- move the completed tool audit and design principles out of the plugin (96cdd1b)
+
+_[manual]_
+
 ## [v2.36.0] - 2026-07-21
 
 ### Added

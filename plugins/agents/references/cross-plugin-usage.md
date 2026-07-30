@@ -36,13 +36,18 @@ This is the same resolution order used by `/council-vote`
 
 1. **Preferred:** if `agents:<name>` appears in the available subagent types (in Claude Code,
    the agent-types system reminder), spawn with `subagent_type: "agents:<name>"` directly. The
-   platform then enforces that agent's own `tools:` allowlist and `read_only` frontmatter — no
-   inlining needed for the role definition itself (the pipeline-specific override and dynamic
-   context are still concatenated into the prompt, see below).
+   platform then applies that agent's own `tools:` allowlist, `read_only`, `model:`, and
+   `effort:` frontmatter — no inlining needed for the role definition itself (the
+   pipeline-specific override and dynamic context are still concatenated into the prompt, see
+   below).
 2. **Fallback:** if no `agents:*` types are exposed, spawn `subagent_type: "general-purpose"` and
    inline the full role definition into the prompt (steps below) — this is the only case where
    the shared `.md` needs to be read and pasted in, and the *only* enforcement is whatever the
    prompt asks for (i.e., not real enforcement — note this in any place that claims otherwise).
+   The agent's `model:` and `effort:` tiering is lost on this path too: the subagent runs on the
+   session's model at the session's effort, so a fallback spawn of a `haiku`/`low` agent costs
+   what the session costs, and a fallback spawn of an `xhigh` agent reasons only as hard as the
+   session does.
 3. **Don't guess.** If you can't tell what's available, try `agents:<name>` once; if it errors,
    retry with `general-purpose` + injected role. Record which path was taken (e.g. in the step's
    handoff) so it's auditable which enforcement level actually applied.
@@ -129,6 +134,12 @@ Overrides should contain ONLY pipeline-specific information:
 - Output format specifications
 - Guardrails and constraints
 - Tool restrictions
+
+An override that repeats something the agent definition already says is worse than one that
+omits it. The override is concatenated *after* the definition, so a restatement lands as a
+second, slightly-differently-worded copy of a rule the agent has already read — and the model
+spends reasoning reconciling the two before it starts on the actual work. If you find yourself
+copying a line out of `plugins/agents/agents/<name>.md`, delete it from the override instead.
 
 ## Namespace Convention
 

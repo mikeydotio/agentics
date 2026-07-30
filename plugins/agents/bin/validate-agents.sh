@@ -21,6 +21,22 @@ pass() {
   green "  PASS: $1"
 }
 
+# The canonical guardrail bullets live in _guardrails.md and are copied verbatim into every
+# agent. Extracting them here rather than hardcoding keeps _guardrails.md the single source of
+# truth: editing it without re-syncing the agents fails this suite instead of drifting silently,
+# which is what happened for as long as the block was documentation-only.
+CANON_FILE="$AGENTS_DIR/_guardrails.md"
+if [[ ! -f "$CANON_FILE" ]]; then
+  red "FATAL: missing $CANON_FILE"
+  exit 1
+fi
+CANON=$(sed -n '/^```markdown$/,/^```$/p' "$CANON_FILE" | grep '^- \*\*' || true)
+CANON_COUNT=$(printf '%s\n' "$CANON" | grep -c '^- \*\*' || true)
+if [[ "$CANON_COUNT" -lt 1 ]]; then
+  red "FATAL: no canonical guardrail bullets found in $CANON_FILE"
+  exit 1
+fi
+
 echo "Validating agents in $AGENTS_DIR/"
 echo "========================================"
 
@@ -120,11 +136,47 @@ for file in "$AGENTS_DIR"/*.md; do
     yellow "  WARN: Missing ## Output Format section"
   fi
 
-  # 11. Check for Mandatory Initial Read protocol
-  if grep -q 'Mandatory Initial Read' "$file"; then
-    pass "Has Mandatory Initial Read protocol"
+  # 11. Canonical guardrails present verbatim (drift guard)
+  missing_canon=0
+  while IFS= read -r bullet; do
+    [[ -z "$bullet" ]] && continue
+    # -e is required: every bullet starts with "- ", which BSD grep otherwise reads as a flag.
+    if ! grep -Fqx -e "$bullet" "$file"; then
+      fail "Guardrail bullet drifted from _guardrails.md: ${bullet:0:60}..."
+      missing_canon=$((missing_canon + 1))
+    fi
+  done <<< "$CANON"
+  if [[ $missing_canon -eq 0 ]]; then
+    pass "Canonical guardrails match _guardrails.md"
+  fi
+
+  # 12. Model pin policy: agents may only pin *down* a tier.
+  # `opus`/`fable` resolve to the latest of their line, so pinning them is a no-op at best and
+  # a downgrade when the session runs something more capable — omit the field to inherit.
+  if echo "$frontmatter" | grep -q '^model:'; then
+    agent_model=$(echo "$frontmatter" | grep '^model:' | sed 's/^model: *//')
+    case "$agent_model" in
+      haiku|sonnet) pass "Model pin '$agent_model' is a downward pin" ;;
+      *) fail "Model pin '$agent_model' is not allowed — use haiku, sonnet, or omit to inherit" ;;
+    esac
+  fi
+
+  # 13. Effort is required — the session default would otherwise apply uniformly to agents
+  # whose work is anything but uniform.
+  if echo "$frontmatter" | grep -q '^effort:'; then
+    agent_effort=$(echo "$frontmatter" | grep '^effort:' | sed 's/^effort: *//')
+    case "$agent_effort" in
+      low|medium|high|xhigh|max) pass "Effort '$agent_effort' is valid" ;;
+      *) fail "Invalid effort '$agent_effort' — use low, medium, high, xhigh, or max" ;;
+    esac
   else
-    fail "Missing Mandatory Initial Read protocol"
+    fail "Missing required field: effort"
+  fi
+
+  # 14. Claude 5 models verify their own work; instructing them to again causes
+  # over-verification. Catch the 4.x-era phrasings if they creep back in.
+  if grep -qiE 'double.?check|verify your (own )?work|re-?verify before|final verification step' "$file"; then
+    fail "Contains a redundant self-verification instruction"
   fi
 
 done

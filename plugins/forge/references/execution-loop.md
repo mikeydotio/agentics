@@ -10,19 +10,6 @@ the working tree. What stays genuine model judgment: constructing agent prompts,
 *content*, and deciding what a summarized predecessor diff should say when one is too large to
 paste verbatim.
 
-## Scope Note: F074 Is Not Closeable From This Repo
-
-**F074** ("Hook robustness: fragile `sed` cwd parse in session-start, python3 spawned on every Bash
-call in post-git") is sometimes bundled with agentics-side hook-hardening work because it reads
-like the same category of fix. It is not: F074's evidence is entirely
-`storyhook/plugin/claude-code/hooks/session-start.sh` (the `sed`-based `cwd` parse) and
-`hooks/post-git.sh` (the per-Bash-call `python3` spawn) — both live in the separate `storyhook`
-repository, not `agentics`. No change to any file under `plugins/` (this loop included) can close
-it; it requires a commit in `storyhook` itself. Before marking F074 resolved, verify against
-`storyhook`'s own git history (mirroring `references/story-decomposition.md`'s note on the
-`has_children` filter in `storyhook/src/app.rs` — another storyhook-side item this document
-references but cannot fix).
-
 ## Prerequisites
 
 Before entering the loop, the caller must have:
@@ -45,7 +32,7 @@ loop:
 ### Step 0: Runaway & Health Safeguard Check
 
 One call covers all three halt conditions (max sessions, max total retries, and the persisted
-storyhook-failure streak — F093, F097):
+storyhook-failure streak):
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh runaway-check --forge-dir .forge
@@ -129,7 +116,7 @@ Agent(
 
 ### Step 3a: Post-Generator Integrity Check
 
-Defense-in-depth: verify the generator did not modify forge state files, and (F064) did not commit.
+Defense-in-depth: verify the generator did not modify forge state files, and did not commit.
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-gen --forge-dir .forge --scope forge-only --session-id "$SESSION_ID"
@@ -139,10 +126,10 @@ Parse the JSON result:
 - `tampered: false` → proceed to Step 4.
 - `tampered: true`, `action: "restored"` → the generator modified `.forge/config.json` or
   `.forge/state.json`; the script already restored their exact pre-spawn content (content-hash
-  based, correct even for the gitignored `state.json` — F096). Mark story blocked: `story move
+  based, correct even for the gitignored `state.json`). Mark story blocked: `story move
   HP-N blocked`; add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator
   modified forge state files"}'`; continue to next iteration.
-- `tampered: true`, `head_moved: true`, `action: "manual_review_required"` (F064): the generator
+- `tampered: true`, `head_moved: true`, `action: "manual_review_required"`: the generator
   committed, violating Hard Rule 3. This is more serious than the file-content case above and is
   **NOT** auto-reverted — a `git reset` here risks destroying the commit's forensic trail or
   interacting badly with any concurrent work. Instead: mark story blocked (`story move HP-N
@@ -215,15 +202,15 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-integrity.sh check --phase pre-eval --forge
 belt-and-suspenders, not the primary enforcement:** when the evaluator resolves to the real
 registered `agents:evaluator` type, the platform enforces `evaluator.md`'s `tools: Read, Bash,
 Grep, Glob` and the evaluator structurally cannot call Write or Edit — a leaky evaluator "gets
-blocked," not just "gets caught after the fact" (closes F057/F058 at the mechanism level for that
-path). This check remains necessary for the `general-purpose` fallback path (no platform-level
-tool restriction applies there) and as defense-in-depth either way.
+blocked," not just "gets caught after the fact." This check is therefore **only** necessary on the
+`general-purpose` fallback path, where no platform-level tool restriction applies. Skip it when the
+spawn resolved to `agents:evaluator`.
 
 Parse the JSON result:
 - `tampered: false` → discard nothing; proceed to **Parse evaluator response** below.
 - `tampered: true`, `action: "restored"` → the evaluator modified the working tree (content-hash
   based — this catches BOTH an edit to a file the generator already touched AND a brand-new
-  untracked file, the two cases a filename-set diff misses; F092/F058). The script already
+  untracked file, the two cases a filename-set diff misses). The script already
   restored the exact pre-evaluator content and removed anything newly added. Discard the
   evaluator's verdict entirely (do not act on it, pass or fail). Re-run the evaluator once (spawn
   again, fresh integrity snapshot). If it tampers again → mark story blocked: `story move HP-N
@@ -303,7 +290,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh architect-check --wave-bounda
 Pass `--wave-boundary true` when the completed story was the last one in its wave, else `false`.
 The script persists `stories_since_last_architect_review` in `.forge/state.json` — this is what
 makes the trigger reachable under the default `max_stories_per_session: 1` (context clears between
-every single story, so an in-memory counter could never accumulate to its own threshold; F098).
+every single story, so an in-memory counter could never accumulate to its own threshold).
 
 Parse the result:
 - `trigger: false` → continue the loop (no review this iteration).
@@ -323,7 +310,7 @@ Parse the result:
       - Recent commits: <git log of stories completed since last review>
       - DESIGN.md: <relevant sections>
     >
-  )
+)
   ```
 
   If the architect reports significant drift → `write_handoff("Architectural drift detected:

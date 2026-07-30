@@ -32,7 +32,7 @@ story state add blocked --super OPEN --role active
 
 Also register the `escalate` custom `story_type` triage and the blocked-stories-pause flow use to
 flag a story needing a human decision (`forge-state.sh` detects this via the structured field, not
-a title match — F006). Same not-idempotent/exit-2 caveat as custom states — see
+a title match). Same not-idempotent/exit-2 caveat as custom states — see
 `storyhook-contract.md`'s **Custom Types**:
 
 ```bash

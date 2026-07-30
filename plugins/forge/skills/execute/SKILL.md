@@ -2,13 +2,14 @@
 name: execute
 description: Generator-evaluator execution loop with retry and session persistence. Implements stories autonomously through isolated subagent spawning.
 argument-hint: "[--dry-run [--dry-run-mode all-pass|all-fail|mixed]]"
+effort: high
 ---
 
 # Execute: Autonomous Generator-Evaluator Loop
 
 You are the execute skill. Your job is to implement stories autonomously through a generator-evaluator loop with session persistence, retry logic, and clean handoffs.
 
-**Read before starting — tiered, not "load all" (F019/F026/F027 — this skill re-runs once per
+**Read before starting — tiered, not "load all" (this skill re-runs once per
 story under the default `max_stories_per_session: 1`, so every reference eagerly loaded here is a
 recurring cost, not a one-time one):**
 
@@ -24,9 +25,9 @@ Load only when the condition applies:
 - `references/auto-resume.md` — **only if freshen behaves unexpectedly** (queue/cancel fails in a surprising way, or you need to explain resume latency/hook-ordering guarantees to the user). The actionable step is just calling `forge-step-exit.sh`; this doc is mechanism background, not an instruction to follow.
 - `references/deterministic-checks.md` — **only if a pre-check's `passed: false` needs more context than its own `details` field gives you.** The happy path (`all_passed: true`) never needs it.
 
-Never needed by this skill at all: `references/verification-protocol.md` documents the
-**evaluator agent's own** methodology (and defers to `evaluator.md` as the single source for its
-output schema) — that's the evaluator's context to carry when spawned, not the orchestrator's.
+The evaluator's own methodology and verdict schema live in its agent definition
+(`agents/evaluator.md`) — that is the evaluator's context to carry when spawned, not the
+orchestrator's, and not something this skill ever reads.
 
 **Read inputs:**
 - `.forge/plan-mapping.json` (required)
@@ -61,22 +62,10 @@ before dispatch — see `skills/forge/SKILL.md`'s State Detection section):
 
 1. Verify `.forge/plan-mapping.json` exists
 2. Verify storyhook has stories in `todo` state
-3. Read or create `.forge/config.json` with defaults (must match `skills/forge/SKILL.md`'s
-   Settings section byte-for-byte — see that section's note on why
-   `max_total_retries` is 100, not a smaller number, per F097):
-   ```json
-   {
-     "yolo": false,
-     "max_fix_cycles": 3,
-     "max_fix_cycles_yolo": 10,
-     "when_in_doubt": "escalate",
-     "max_retries": 4,
-     "max_stories_per_session": 1,
-     "max_sessions": 200,
-     "max_total_retries": 100,
-     "heartbeat_window_minutes": 30
-   }
-   ```
+3. Read or create `.forge/config.json` with the defaults in `skills/forge/SKILL.md`'s **Settings**
+   section — read them from there. Do not restate them here: the copy that used to live at this
+   step carried a "keep byte-for-byte in sync" instruction and had already drifted out of sync
+   anyway.
 4. Generate a session ID (e.g. `sess-$(date -u +%Y%m%dT%H%M%SZ)-$$`) and acquire the lock:
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh acquire --session-id "$SESSION_ID" --forge-dir .forge

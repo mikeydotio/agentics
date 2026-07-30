@@ -2,7 +2,7 @@
 
 Objective, scriptable checks that run BEFORE the LLM evaluator — cheaper and more reliable than
 LLM judgment for anything mechanically verifiable. Fully implemented by `bin/forge-prechecks.sh`
-(F024 — this doc used to restate the script's own logic in prose, which silently drifted from the
+(this doc used to restate the script's own logic in prose, which silently drifted from the
 real implementation; it now only says what the script checks and how to read its output).
 
 ## Running it
@@ -23,7 +23,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-prechecks.sh --story-id <id> --mapping .for
    whole-word `TODO`/`FIXME`/`HACK` and a small set of language-specific "intentionally
    unimplemented" idioms (`NotImplementedError`, `unimplemented!`, `throw new Error(...not
    implemented)`, `fatalError(...not implemented)`, `preconditionFailure(...not implemented)`).
-   Deliberately **not** bare `stub`/`placeholder`/`XXX` substrings (F105 — those false-positived on
+   Deliberately **not** bare `stub`/`placeholder`/`XXX` substrings (those false-positived on
    legitimate code, e.g. a form field's `placeholder` prop).
 4. **Scope** — compares the diff's touched files against `plan-mapping.json`'s `files_expected`
    for `--story-id`. **Always passes** — `unexpected_modified` is a warning surfaced for the

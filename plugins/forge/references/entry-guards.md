@@ -4,7 +4,7 @@ Checks that only matter when routing a **bare idea description or explicit `/for
 without `--orchestrated`** — i.e. the user is about to start something new. Every other subcommand
 (`continue`, `resume`, `status`, `stop`, a direct `--orchestrated` step invocation) skips this
 file entirely; `skills/forge/SKILL.md`'s Command Router only points here on the interrogate-routing path
-(F027 — this used to sit inline in the router body and reload on every single state transition
+(this used to sit inline in the router body and reload on every single state transition
 regardless of relevance).
 
 ## Legacy Migration Detection

@@ -2,6 +2,7 @@
 name: interrogate
 description: Deep interrogation of a raw idea — braindump, lightweight recon, relentless questioning. Produces IDEA.md. Use when the user has an idea to flesh out.
 argument-hint: [idea description]
+effort: high
 ---
 
 # Interrogate: From Spark to Understanding

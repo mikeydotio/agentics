@@ -2,7 +2,7 @@
 
 > **Note**: Agent definitions AND the roster (name, tools, description, "Used By") live in the
 > shared library — `plugins/agents/references/agent-catalog.md` is the single source. This doc
-> (F025) covers only what's genuinely forge-specific: which real filename to use for a role that's
+> covers only what's genuinely forge-specific: which real filename to use for a role that's
 > easy to misname, the project-type→team mapping, and how spawning actually works. For the
 > per-step "who's used where" index, see `skills/forge/SKILL.md`'s Agent Roster table — don't
 > restate it here.
@@ -49,8 +49,7 @@ To spawn agents in parallel: make multiple Agent() calls in a single message. Th
 
 This ensures every step completes all its agent work before writing artifacts and exiting.
 
-### Resolving `subagent_type` (F057, F060, F084)
-
+### Resolving `subagent_type`
 Every spawn — not just generator/evaluator — must resolve a real `subagent_type` instead of
 defaulting to `general-purpose`, and must wire in the pipeline-specific override when one exists.
 The full resolution mechanism and the reason it exists (tool restrictions are cosmetic under

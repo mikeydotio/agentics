@@ -2,6 +2,7 @@
 name: plan
 description: Task breakdown into waves with acceptance criteria. Produces PLAN.md. Spawns project-manager, qa-engineer, and skeptic agents.
 argument-hint: ""
+effort: high
 ---
 
 # Plan: Task Breakdown with Acceptance Criteria

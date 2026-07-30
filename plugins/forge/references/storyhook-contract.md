@@ -160,7 +160,7 @@ is one of these — `story new <title> --type <slug>` sets it at creation, `stor
 single-field update. `story_type` is **not** a free-form string — see **Custom Types** below, the
 same "register before use" pattern as custom states. Once registered, `story_type` is always
 present in `--json` output (`null` when unset, never omitted), so it is safe to filter on directly
-(e.g. `.story.story_type == "escalate"` — see forge-state.sh's escalate detection, F006).
+(e.g. `.story.story_type == "escalate"` — see forge-state.sh's escalate detection).
 
 ## Structured Feedback (evaluator verdicts, blocked reasons)
 
@@ -229,7 +229,7 @@ slug errors (`type \`<slug>\` already exists`, exit 2). There is no `story type 
 check before adding (there is a `story type list` command, but callers that need idempotency should
 tolerate/ignore the specific exit-2 "already exists" error rather than pre-checking). Forge
 registers an `escalate` type this way (`decompose/SKILL.md` Step 2) so `story_type: "escalate"` can
-flag stories needing a human decision (F006) — see `forge-state.sh`'s escalate detection and
+flag stories needing a human decision — see `forge-state.sh`'s escalate detection and
 `skills/triage/SKILL.md`'s ESCALATE story creation.
 
 `story state add` is **not** idempotent — re-running it on an existing slug errors

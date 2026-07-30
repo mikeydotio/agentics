@@ -133,15 +133,12 @@ Key files and their roles, so the next session knows where things are without ex
 
 ## Recovery Without Handoff
 
-If `.forge/handoffs/handoff-execute.md` is missing (crash without clean shutdown), the orchestrator MUST pause and ask the user what to do via `AskUserQuestion`:
+If `.forge/handoffs/handoff-execute.md` is missing (crash without clean shutdown), pause and ask the
+user rather than continuing silently. The `AskUserQuestion` for this case lives in
+`references/step-handoff.md` under **Missing Handoff on Resumption → Variant: the execute handoff
+is missing after a crash** — that file owns the protocol for every missing-handoff case.
 
-- **header:** "Missing Handoff"
-- **question:** "The handoff document from the previous session is missing (`.forge/handoffs/handoff-execute.md`). Without it, the generator will work without knowledge of patterns and conventions established in prior sessions, which may cause inconsistencies."
-- **options:**
-  - "Continue anyway (Recommended)" / "Proceed using storyhook + state.json + git log — I can fill in context if needed. Pros: resumes execution immediately. Cons: generator works without established patterns, risking inconsistencies."
-  - "Stop" / "Let me investigate what happened before resuming. Pros: avoids compounding problems from the crash. Cons: pipeline stalls until manual investigation completes."
-
-If "Continue anyway", recovery falls back to:
+If the user chooses "Continue anyway", recovery falls back to:
 
 | Source | What It Provides | What It Lacks |
 |--------|-----------------|---------------|

@@ -2,6 +2,7 @@
 name: triage
 description: Deliberate on review and validation findings. Label each as FIX or ESCALATE. Create ESCALATE stories via out-of-band decompose. Produces TRIAGE.md.
 argument-hint: "[--yolo]"
+effort: xhigh
 ---
 
 # Triage: FIX or ESCALATE Deliberation
@@ -62,7 +63,7 @@ When the team is split → use `when_in_doubt` from config.json (default: "escal
 
 ### 4. Out-of-Band Decompose for ESCALATE Items
 
-For each ESCALATE finding, create a storyhook story with rich context. `--type escalate` sets the real, queryable `story_type` field (F006 — `forge-state.sh` detects pending escalations by this field, not by a title-substring match); the `ESCALATE:` title prefix is kept only as a human-readable convention, not the detection mechanism:
+For each ESCALATE finding, create a storyhook story with rich context. `--type escalate` sets the real, queryable `story_type` field (`forge-state.sh` detects pending escalations by this field, not by a title-substring match); the `ESCALATE:` title prefix is kept only as a human-readable convention, not the detection mechanism:
 
 ```bash
 story new "ESCALATE: [finding title]" --type escalate

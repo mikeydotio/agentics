@@ -23,7 +23,7 @@ follows. Every orchestrated step follows the same pattern:
 1. **Write output artifacts** to `.forge/`
 2. **Write handoff**: `.forge/handoffs/handoff-<step>.md` with full context for the next step (see
    **Handoff Format** below). Before writing it, run `bin/forge-handoff-scaffold.sh --step <step>`
-   (F039) and use its `timestamp`/`artifacts_produced`/`pipeline_state` fields for the mechanical
+   and use its `timestamp`/`artifacts_produced`/`pipeline_state` fields for the mechanical
    sections — compose only the judgment sections (Key Decisions, Context for Next Step, Working
    Context, Open Questions) by hand.
 3. **Run the step-exit script** — this single call replaces hand-rolled `git commit` +
@@ -189,6 +189,27 @@ If the orchestrator resumes and the expected handoff file is missing:
      - "Let me create it" / "I'll write the handoff document manually, then re-invoke. Pros: restores full context. Cons: requires user effort and knowledge of the handoff format."
      - "Start this step over" / "Re-run the previous step to regenerate the handoff. Pros: guaranteed correct context. Cons: re-does work that already completed."
 3. If "Continue anyway" -> proceed but note in plain text which context may be incomplete
+
+### Variant: the *execute* handoff is missing after a crash
+
+Same protocol, different stakes and therefore a different option set. When
+`.forge/handoffs/handoff-execute.md` is the missing file, the loss is cross-story working context —
+patterns, micro-decisions, code landmarks — not just one step's rationale, so "Let me create it"
+and "Start this step over" are not meaningful offers:
+
+- **header:** "Missing Handoff"
+- **question:** "The handoff document from the previous session is missing
+  (`.forge/handoffs/handoff-execute.md`). Without it, the generator will work without knowledge of
+  patterns and conventions established in prior sessions, which may cause inconsistencies."
+- **options:**
+  - "Continue anyway (Recommended)" / "Proceed using storyhook + state.json + git log — I can fill
+    in context if needed. Pros: resumes execution immediately. Cons: generator works without
+    established patterns, risking inconsistencies."
+  - "Stop" / "Let me investigate what happened before resuming. Pros: avoids compounding problems
+    from the crash. Cons: pipeline stalls until manual investigation completes."
+
+On "Continue anyway", see `references/handoff-format.md`'s **Recovery Without Handoff** for what
+each remaining source does and does not provide.
 
 ## Step Rollback
 

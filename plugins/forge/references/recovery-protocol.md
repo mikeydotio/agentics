@@ -41,7 +41,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh acquire --session-id "$SESSION_ID" 
 ### 4. Crash Recovery
 
 Reset any story stuck in `in-progress`/`verifying` back to `todo` and clean the working tree, in
-one call (F038):
+one call:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-crash-recover.sh .

@@ -2,6 +2,8 @@
 name: deploy
 description: Deployment step. Never proceeds without explicit user permission via DEPLOY-APPROVAL.md. Produces COMPLETION.md.
 argument-hint: ""
+model: sonnet
+effort: medium
 ---
 
 # Deploy: Ship It

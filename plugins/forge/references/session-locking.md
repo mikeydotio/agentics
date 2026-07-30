@@ -1,7 +1,7 @@
 # Session Locking
 
 Heartbeat-based lock protocol to prevent duplicate work when remote triggers fire while a session
-is active. Scripted by `bin/forge-lock.sh` (WS4/F030) — this doc describes what the script checks
+is active. Scripted by `bin/forge-lock.sh`  — this doc describes what the script checks
 and how to read its JSON, not raw timestamp arithmetic for the model to hand-execute.
 
 ## Lock File
@@ -91,7 +91,7 @@ evaluator):
 immediately when the session ends, so there is no trigger interval component. The heartbeat window
 only matters for crash recovery (stale lock detection).
 
-**Known gap (F095), not solved by this script alone:** nothing refreshes the heartbeat *during* a
+**Known gap, not solved by this script alone:** nothing refreshes the heartbeat *during* a
 single long-running generator/evaluator subagent call — only at the three points listed above,
 which bracket the spawn, not the inside of it. A story whose generator or evaluator legitimately
 runs longer than the window can still go stale-locked mid-spawn. Exploiting the guaranteed-tmux

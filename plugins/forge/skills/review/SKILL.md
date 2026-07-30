@@ -2,6 +2,7 @@
 name: review
 description: Static gap and defect analysis — codebase quality, design drift, story hygiene. Produces REVIEW-REPORT.md with findings by severity. Runs in parallel with validate.
 argument-hint: ""
+effort: xhigh
 ---
 
 # Review: Static Analysis of Implemented Code

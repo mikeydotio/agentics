@@ -115,10 +115,9 @@ Detect and flag these evaluator-specific failure modes in yourself:
 ## Output Format
 
 **This is the single authoritative evaluator verdict schema.** Every other forge doc that
-mentions the evaluator's output (`references/verification-protocol.md`,
-`references/execution-loop.md`, `references/storyhook-contract.md`) must reference this section
-rather than redefine the shape — if you find one that redefines it, that doc has drifted; this
-schema wins.
+mentions the evaluator's output (`references/execution-loop.md`,
+`references/storyhook-contract.md`) must reference this section rather than redefine the shape —
+if you find one that redefines it, that doc has drifted; this schema wins.
 
 Return a JSON object (no markdown wrapping):
 

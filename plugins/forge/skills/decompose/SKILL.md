@@ -2,6 +2,8 @@
 name: decompose
 description: Decompose PLAN.md into storyhook stories with dependencies, priorities, and design context. Produces plan-mapping.json. Maps waves to stories with embedded DESIGN.md sections.
 argument-hint: ""
+model: sonnet
+effort: medium
 ---
 
 # Decompose: Plan to Stories
@@ -52,7 +54,7 @@ story state add blocked --super OPEN --role active
 
 Also register the `escalate` custom **type** triage and the blocked-stories-pause flow use to flag
 a story as needing a human decision (`forge-state.sh` detects pending escalations via the
-structured `story_type` field, not a title match — F006). `story_type` values are a fixed,
+structured `story_type` field, not a title match). `story_type` values are a fixed,
 project-scoped enum (`story new --type <slug>` rejects anything not registered with `story type
 add` first — verified against storyhook's built-in default set, `bug`/`chore`/`epic`/`story`/`task`,
 which does **not** include `escalate`). Same idempotency caveat as custom states — `story type add`

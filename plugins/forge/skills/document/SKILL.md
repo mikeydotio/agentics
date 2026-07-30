@@ -2,6 +2,8 @@
 name: document
 description: Comprehensive project documentation. Works even with ESCALATE stories pending. Spawns technical-writer agent. Produces DOCUMENTATION.md.
 argument-hint: ""
+model: sonnet
+effort: medium
 ---
 
 # Document: Project Documentation

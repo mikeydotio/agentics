@@ -2,6 +2,7 @@
 name: research
 description: Full domain research plus agent team roster recommendation. Produces research/SUMMARY.md and TEAM.md. Spawns domain-researcher agents for parallel investigation.
 argument-hint: ""
+effort: high
 ---
 
 # Research: Domain Investigation + Team Roster

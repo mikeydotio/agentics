@@ -2,6 +2,7 @@
 name: validate
 description: Test hardening — run tests, find coverage gaps, write missing tests. Produces VALIDATE-REPORT.md with findings by severity. Runs in parallel with review.
 argument-hint: ""
+effort: high
 ---
 
 # Validate: Test Hardening

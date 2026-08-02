@@ -400,7 +400,7 @@ EOF
 # invoke the script from inside TEST_DIR.
 
 init_storyhook() {
-  ( cd "$TEST_DIR" && git init -q . && story init --prefix ST >/dev/null 2>&1 )
+  ( cd "$TEST_DIR" && git init -q . && story project init --prefix ST >/dev/null 2>&1 )
 }
 
 # `story_type` is a fixed, project-scoped enum (story init seeds
@@ -507,7 +507,7 @@ run_state_in_project() {
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
-    story state add blocked --super OPEN --role active >/dev/null && \
+    story state add blocked --super OPEN >/dev/null && \
     story move ST-1 done >/dev/null && \
     story move ST-2 blocked "exhausted retries" >/dev/null )
   run_state_in_project
@@ -524,7 +524,7 @@ run_state_in_project() {
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
-    story state add blocked --super OPEN --role active >/dev/null && \
+    story state add blocked --super OPEN >/dev/null && \
     story move ST-1 blocked "exhausted retries" >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
@@ -851,7 +851,7 @@ EOF
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && \
-    story state add blocked --super OPEN --role active >/dev/null && \
+    story state add blocked --super OPEN >/dev/null && \
     story move ST-1 blocked "exhausted retries" >/dev/null )
   run_state_in_project
   [ "$(jq_field '.state')" = "blocked" ]

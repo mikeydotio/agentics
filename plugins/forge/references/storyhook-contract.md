@@ -28,7 +28,7 @@ exit 2). Verify any command you're unsure of with `story help <command>` or `sto
 | Dependency between stories | `story relate <a> <relationship> <b>` | Only 8 relations exist — see **Relationship Vocabulary** |
 | Remove a dependency | `story unrelate <a> <relationship> <b>` | |
 | Decompose a plan into stories | `story decompose --stdin --json` (create) or `story decompose --stdin --dry-run` (preview) | One call does the whole job — see **Decompose** |
-| Add a custom state | `story state add <slug> --super OPEN\|CLOSED [--role active]` | Idempotent-unsafe: errors (exit 2) if the slug already exists — see **Custom States** |
+| Add a custom state | `story state add <slug> --super OPEN\|CLOSED [--role active]` | Idempotent-unsafe: errors (exit 2) if the slug already exists. `--role active` marks the one state work starts in — at most one state may carry it, `story project init` already puts it on `in-progress`, so forge omits it for every state it adds — see **Custom States** |
 | Status overview | `story summary --json` | `.summary.{total_open,total_closed,by_state,by_priority,blocked_count,ready_count,ready_stories}` |
 | Dependency graph | `story graph [--critical-path] [--parallel-groups] [--json]` | `--json` → `.graph.{critical_path,parallel_groups,overview}` — no cycle field, in JSON or text (see **DAG Validation**) |
 | Search | `story search "<query>" --json` | |
@@ -205,18 +205,26 @@ story comment <id> '{"blocked_reason":"decision","description":"..."}'
 
 ## Custom States
 
-`story init` seeds `todo` / `in-progress` (role: active) / `done` by default. Any additional
-states forge needs (e.g. `verifying`, `blocked`) must be created explicitly:
+`story project init` seeds `todo` / `in-progress` (role: active) / `done` by default. Any
+additional states forge needs (e.g. `verifying`, `blocked`) must be created explicitly:
 
 ```bash
-story state add verifying --super OPEN --role active
-story state add blocked --super OPEN --role active
+story state add verifying --super OPEN
+story state add blocked --super OPEN
 ```
+
+**The `active` role.** At most one state may carry `--role active`. It has one meaning and one
+consumer: it is the state `story commit-sync` moves a story into when a commit referencing it
+first lands. Nothing in forge reads it. `story project init` assigns it to `in-progress`;
+`verifying` and `blocked` must not request it — a second `--role active` is rejected at write time
+(`error: only one state may have role \`active\`, but 2 do: …`). If a project has already moved the
+role elsewhere, leave it there: moving it back takes two calls (`story state set <old> --role none`
+then `story state set <new> --role active`) and is not forge's decision to make.
 
 ## Custom Types
 
 `story_type` (set via `story new <title> --type <slug>` / `story set <id> --type <slug>` /
-`--json '{"story_type":...}'`) is a **fixed, project-scoped enum** — `story init` seeds
+`--json '{"story_type":...}'`) is a **fixed, project-scoped enum** — `story project init` seeds
 `bug`/`chore`/`epic`/`story`/`task`, and setting any other slug errors (`unknown type
 \`<slug>\`. Available types: ...`, exit 2) until it's registered:
 
@@ -233,9 +241,13 @@ flag stories needing a human decision — see `forge-state.sh`'s escalate detect
 `skills/triage/SKILL.md`'s ESCALATE story creation.
 
 `story state add` is **not** idempotent — re-running it on an existing slug errors
-(`error: state \`verifying\` already exists`, exit 2). There is no `story state list` to check
-first; callers that need idempotency should tolerate/ignore that specific exit-2 error rather
-than treating it as a failure. Do not hand-edit `.storyhook/states.toml` directly.
+(`error: state \`verifying\` already exists`, exit 2). `story state list` does exist — it renders
+one line per state as `<slug> (<SUPER>[, active])[ — N open]`, and `story state list --json`
+returns `{"result":"ok","message":"<that same rendered text>"}`: states are **not** structured, so
+presence detection is a grep on rendered text, not a JSON query. Callers that need idempotency
+should still tolerate/ignore the specific exit-2 "already exists" error rather than pre-checking.
+There is no `.storyhook/states.toml` to hand-edit — state definitions live in storyhook's global
+store, and the `story state` verbs are the only way to change them.
 
 ## Decompose
 

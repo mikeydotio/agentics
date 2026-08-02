@@ -257,10 +257,16 @@ test_bump_run_reentrancy_guard() {
     trap "cleanup_test_repo '$repo'" RETURN
     _commit "$repo" a.txt "feat: a new feature"
 
-    local out
-    out=$(cd "$repo" && SEMVER_BUMP_IN_PROGRESS=1 "$CLI" bump run minor 2>&1)
+    # bump run's hard-error branch now exits 1 (matching bump execute's
+    # output_error for the same condition), so the invocation must be guarded
+    # from set -e like every other nonzero-exit CLI call in this suite.
+    local out ec
+    set +e
+    out=$(cd "$repo" && SEMVER_BUMP_IN_PROGRESS=1 "$CLI" bump run minor 2>&1); ec=$?
+    set -e
     assert_json_field "$out" ".ok" "false" "reentrancy blocked" &&
-    assert_json_field "$out" ".error" "reentrancy" "reentrancy error code"
+    assert_json_field "$out" ".error" "reentrancy" "reentrancy error code" &&
+    assert_exit_code "1" "$ec" "reentrancy is a hard error — exit 1"
 }
 
 

@@ -59,6 +59,13 @@ plugins are restamped too, so a bump can never miss one.
 - To seed a brand-new plugin or repair drift between bumps, run the hook standalone:
   `bash .semver/hooks/post-bump/01-sync-plugin-versions.sh` (files only, no git ops).
 - `tests/plugin-versions.sh` (in `make test`) fails if any manifest drifts from `VERSION`.
+- This hook runs automatically after every `/semver bump` (or a direct
+  `semver-cli bump execute` — e.g. the non-interactive path for bumping on a
+  feature branch) regardless of whether `--plugin-root` is passed; the CLI
+  locates its own hook runner (fixed since AGE-3, v2.38.0-era regression). A
+  bump's JSON exits `3` (not `0`) if hooks were pending but genuinely could
+  not run — check `post_hooks.warnings` before reaching for the manual
+  repair step above.
 
 ### Cache is version-keyed — shipped content changes MUST bump
 

@@ -10,8 +10,8 @@ SCRIPT="$BATS_TEST_DIRNAME/forge-crash-recover.sh"
 setup() {
   TEST_DIR="$(mktemp -d)"
   ( cd "$TEST_DIR" && git init -q . && git config user.email t@t.com && git config user.name t \
-      && story init --prefix ST >/dev/null 2>&1 \
-      && story state add verifying --super OPEN --role active >/dev/null 2>&1 )
+      && story project init --prefix ST >/dev/null 2>&1 \
+      && story state add verifying --super OPEN >/dev/null 2>&1 )
 }
 
 teardown() {
@@ -114,23 +114,36 @@ story_state() {
 }
 
 @test "cleans the tree even when there is nothing to reset" {
-  ( cd "$TEST_DIR" && story new "Task" >/dev/null && git add -A && git commit -q -m init )
-  echo "leftover" > "$TEST_DIR/.storyhook/next-id.bak" 2>/dev/null || true
+  ( cd "$TEST_DIR" && story new "Task" >/dev/null )
+  echo "clean baseline" > "$TEST_DIR/tracked.txt"
+  ( cd "$TEST_DIR" && git add -A && git commit -q -m init )
+  echo "crashed mid-edit" > "$TEST_DIR/tracked.txt"
   run_recover
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.reset_stories | length')" = "0" ]
   [ "$(jq_field '.tree_clean')" = "true" ]
+  [ "$(cat "$TEST_DIR/tracked.txt")" = "clean baseline" ]
 }
 
 # --- story list failure ---
 
 @test "story list --json failure is reported, not crashed on" {
-  # Force a failure: a directory with the same name storyhook expects a file
-  # at is a reliable, portable way to make story list error without mocking.
-  rm -rf "$TEST_DIR/.storyhook"
-  mkdir -p "$TEST_DIR/.storyhook"
-  run_recover
+  # storyhook 1.0.0 keeps project data in a single global store; a repo
+  # carries only `.storyhook.toml`, so a per-repo `.storyhook/` directory no
+  # longer means anything to storyhook. A directory that was never `story
+  # init`ed is the portable way to make `story list --json` exit non-zero —
+  # the same mechanism forge-dag-validate.bats uses for its
+  # uninitialized-project case.
+  UNINIT_DIR="$(mktemp -d)"
+  echo "dirty" > "$UNINIT_DIR/dirty.txt"
+  run bash "$SCRIPT" "$UNINIT_DIR"
   [ "$status" -eq 0 ]
   [ "$(jq_field '.ok')" = "false" ]
   [ "$(jq_field '.error')" = "story_list_failed" ]
+  [ "$(jq_field '.reset_stories | length')" = "0" ]
+  [ "$(jq_field '.tree_clean')" = "false" ]
+  [ -f "$UNINIT_DIR/dirty.txt" ]
+  rm -rf "$UNINIT_DIR"
 }
 
 @test "output is always valid JSON" {

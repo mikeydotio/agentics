@@ -43,13 +43,13 @@ If `.forge/plan-mapping.json` exists:
 
 ### 2. State and Type Setup
 
-`story init` already seeds `todo` / `in-progress` / `done`. Create the two additional states the
-execution loop needs (see `storyhook-contract.md`'s **Custom States** for why this isn't
-idempotent and must tolerate exit 2 — do not hand-edit `.storyhook/states.toml`):
+`story project init` already seeds `todo` / `in-progress` / `done`. Create the two additional
+states the execution loop needs (see `storyhook-contract.md`'s **Custom States** for why this
+isn't idempotent and must tolerate exit 2, and what the `active` role means):
 
 ```bash
-story state add verifying --super OPEN --role active
-story state add blocked --super OPEN --role active
+story state add verifying --super OPEN
+story state add blocked --super OPEN
 ```
 
 Also register the `escalate` custom **type** triage and the blocked-stories-pause flow use to flag
@@ -150,8 +150,8 @@ from Step 5, `files_expected`) onto the returned skeleton, then write the result
 ```
 
 IDs come from the scaffold script's own `story list --json` read — never assume a prefix. (The
-default prefix is `SH`, not `HP`; if a project runs `story init --prefix <X>`, IDs use `<X>`
-instead.)
+default prefix is `SH`, not `HP`; if a project runs `story project init --prefix <X>`, IDs use
+`<X>` instead.)
 
 ### 7. Validate DAG
 

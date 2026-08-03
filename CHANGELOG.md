@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.39.1] - 2026-08-03
+
+### Fixed
+- bound the story handoff through a file, not a pipe (1dc2743)
+
+### Changed
+- Merge pull request #129 from mikeydotio/docs/queue-age16-first (79cc69c)
+- Merge pull request #128 from mikeydotio/docs/progress-age16-age21 (c4b7149)
+- Merge pull request #127 from mikeydotio/fix/AGE-14-storyhook-blocked-state (19c70e3)
+
+### Documentation
+- record what AGE-16 actually was and requeue the backlog (3d4fd98)
+- claim AGE-16 for the backlog loop (dea1dfa)
+- move AGE-16 to the front of the backlog queue (e2b52d9)
+- correct AGE-16's diagnosis and add AGE-21 to the loop's memory (ba39dcd)
+
+### Testing
+- de-contaminate session-stop's wall-clock assertion (2ebb89e)
+
+_[manual]_
+
 ## [v2.39.0] - 2026-08-03
 
 ### Fixed

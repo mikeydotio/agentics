@@ -381,7 +381,10 @@ test_route_tracking_start_with_options() {
 # ═══════════════════════════════════════════════════════════════════════════
 
 test_cli_error_passthrough() {
-    # Run bump in a directory with no tracking -- CLI returns ok:false JSON
+    # Run bump in a directory with no tracking -- CLI returns ok:false JSON.
+    # The router now also exits 1 for this (previously always 0), so the
+    # invocation must be guarded from set -e like every other nonzero-exit
+    # call in this suite.
     local dir
     dir=$(mktemp -d "/tmp/semver-test-XXXXXX")
     cd "$dir"
@@ -393,9 +396,84 @@ test_cli_error_passthrough() {
     git commit -q -m "init"
 
     local result
+    set +e
     result=$(bash "$ROUTER" bump major 2>/dev/null)
+    set -e
 
     assert_json_field "$result" ".ok" "false"
 
     rm -rf "$dir"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 10. Exit-code propagation (AGE-3 follow-on: run_cli() previously ended with
+# a bare `set -e`, which itself returns 0 — every CLI outcome, success or
+# failure, was silently reported as exit 0. Now the router exits with the
+# CLI's own exit status: 0 success, 1 failed, 2 usage error, 3 completed but
+# post-bump hooks were skipped.)
+# ═══════════════════════════════════════════════════════════════════════════
+
+test_route_exit_code_clean_bump_is_zero() {
+    local dir
+    dir=$(create_semver_repo)
+    cd "$dir"
+    echo "feature" >> feature.txt
+    git add -A
+    git commit -q -m "feat: new feature"
+
+    bash "$ROUTER" bump minor > /dev/null
+    local ec=$?
+
+    rm -rf "$dir"
+    assert_exit_code "0" "$ec" "clean bump should exit 0"
+}
+
+test_route_exit_code_tracking_inactive_is_one() {
+    local dir
+    dir=$(mktemp -d "/tmp/semver-test-XXXXXX")
+    cd "$dir"
+    git init -q
+    git config user.name "Test"
+    git config user.email "test@test.com"
+    echo "init" > README.md
+    git add README.md
+    git commit -q -m "init"
+
+    local ec
+    set +e
+    bash "$ROUTER" bump major > /dev/null 2>&1
+    ec=$?
+    set -e
+
+    rm -rf "$dir"
+    assert_exit_code "1" "$ec" "an operation-failed CLI error should exit 1"
+}
+
+test_route_exit_code_hooks_skipped_is_three() {
+    local dir
+    dir=$(create_semver_repo)
+    cd "$dir"
+    mkdir -p .semver/hooks/post-bump
+    cat > .semver/hooks/post-bump/01-marker.sh << 'HOOK'
+#!/usr/bin/env bash
+echo "$NEW_VERSION" > .hook-ran
+HOOK
+    chmod +x .semver/hooks/post-bump/01-marker.sh
+    git add -A && git commit -q -m "add post-bump hook"
+    echo "feature" >> feature.txt
+    git add -A
+    git commit -q -m "feat: new feature"
+
+    # The router unconditionally threads --plugin-root "$PLUGIN_ROOT" ahead of
+    # passthrough args; argparse keeps the last occurrence of a repeated flag,
+    # so appending a bogus one here overrides it — forcing an unreachable
+    # runner without touching the real plugin's files on disk.
+    local result ec
+    set +e
+    result=$(bash "$ROUTER" bump minor --plugin-root /nonexistent-plugin-root 2>&1); ec=$?
+    set -e
+
+    rm -rf "$dir"
+    assert_json_field "$result" ".post_hooks.skipped" "true" "post_hooks.skipped should be true" &&
+    assert_exit_code "3" "$ec" "hooks-skipped-but-bump-landed should exit 3"
 }

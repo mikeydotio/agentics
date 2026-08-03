@@ -9,8 +9,12 @@ Both are **interactive** commands modeled on `bump run`/`bump execute`: the rout
 calls a `run` subcommand that gathers state and, on the happy path, executes in the
 same call; when interaction is needed it returns a `questions` array for the SKILL
 Question Loop, which then calls the `execute` subcommand with the collected flags.
-Both thread `--plugin-root` so post-bump user hooks (e.g. this repo's
-`01-sync-plugin-versions.sh`) fire and keep manifests in sync.
+Post-bump user hooks (e.g. this repo's `01-sync-plugin-versions.sh`) fire and keep
+manifests in sync regardless of `--plugin-root` — the CLI locates its own hook
+runner by default (see `user-hooks.md`'s Hook Runner Resolution). The router still
+threads `--plugin-root` through both commands as an explicit override, but it was
+never load-bearing for hooks to run (AGE-3): a caller invoking `semver-cli` directly
+without the flag gets the same hook execution as the router path.
 
 ## `set`
 

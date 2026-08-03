@@ -14,9 +14,18 @@ usage_json() {
 EOF
 }
 
+# Exit status of the most recent run_cli invocation, propagated as this
+# script's own exit code at the bottom of the file. Previously run_cli ended
+# with a bare `set -e` (itself exit 0), so every CLI outcome — success,
+# failure, or the new "bump landed but post-bump hooks were skipped" (3) —
+# was silently reported as 0. Stays 0 for the usage_json branches, which
+# never call the CLI at all.
+RC=0
+
 run_cli() {
     set +e
     $CLI "$@"
+    RC=$?
     set -e
 }
 
@@ -59,7 +68,9 @@ case "$cmd" in
         shift 2>/dev/null || true
         case "$subcmd" in
             start)
-                run_cli tracking start "$@"
+                # Plugin root threaded so post-bump hooks fire when --version
+                # seeds an initial VERSION (mirrors bump/set/init above).
+                run_cli tracking start --plugin-root "$PLUGIN_ROOT" "$@"
                 ;;
             stop)
                 run_cli tracking stop-gather
@@ -97,3 +108,5 @@ case "$cmd" in
         usage_json
         ;;
 esac
+
+exit "$RC"

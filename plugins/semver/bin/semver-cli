@@ -2,7 +2,8 @@
 """semver-cli: Deterministic semantic versioning operations.
 
 All output is JSON to stdout. Errors are JSON with ok=false.
-Exit codes: 0=success, 1=operation failed, 2=usage error.
+Exit codes: 0=success, 1=operation failed, 2=usage error,
+            3=completed but post-bump hooks could not run.
 """
 
 import argparse
@@ -79,10 +80,15 @@ Versioning settings are in `.semver/config.yaml`. Do not modify this file unless
 
 # ─── Output helpers ──────────────────────────────────────────────────────────
 
-def output(data):
-    """Print JSON to stdout and exit 0."""
+def output(data, exit_code=0):
+    """Print JSON to stdout and exit.
+
+    exit_code defaults to 0 (success). Callers that completed a mutation but
+    could not run post-bump hooks pass 3 — see the module docstring's
+    exit-code table.
+    """
     print(json.dumps(data, indent=2))
-    sys.exit(0)
+    sys.exit(exit_code)
 
 
 def output_error(error_code, message, detail=None):
@@ -836,15 +842,61 @@ def run_validation_checks(project_dir, config):
 
 # ─── User hooks runner ───────────────────────────────────────────────────────
 
+def _default_plugin_root():
+    """Absolute path to this plugin's root, derived from the CLI's own location.
+
+    hooks/run-user-hooks.sh ships with the plugin at a fixed path relative to
+    this script, so it can always be found without a caller passing
+    --plugin-root. The flag remains available as an explicit override (tests
+    use a deliberately bogus one to opt out of hook execution).
+    """
+    return os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+
+def _pending_post_bump_hooks(project_dir):
+    """Names of executable *.sh files in the project's post-bump hooks dir.
+
+    Mirrors run-user-hooks.sh's own discovery rules (*.sh, executable) so the
+    two never disagree about what counts as a hook. Used to tell "the project
+    defines no post-bump hooks" (safe to report success) apart from "hooks
+    are defined but the runner could not execute them" (must be reported).
+    Sorted for determinism; Python's default string ordering matches the
+    runner's `LC_COLLATE=C` byte-order sort for ASCII filenames.
+    """
+    hooks_dir = os.path.join(project_dir, ".semver", "hooks", "post-bump")
+    if not os.path.isdir(hooks_dir):
+        return []
+    names = []
+    for name in os.listdir(hooks_dir):
+        if not name.endswith(".sh"):
+            continue
+        path = os.path.join(hooks_dir, name)
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            names.append(name)
+    return sorted(names)
+
+
 def run_user_hooks(phase, bump_type, old_version, new_version, project_dir, plugin_root):
-    """Run user-defined hooks via run-user-hooks.sh. Returns parsed JSON or error dict."""
-    runner = os.path.join(plugin_root, "hooks", "run-user-hooks.sh")
+    """Run user-defined hooks via run-user-hooks.sh. Returns parsed JSON or error dict.
+
+    plugin_root is optional: a falsy value falls back to _default_plugin_root()
+    rather than skipping hook execution outright (this was the root cause of
+    hooks being silently skipped whenever a caller omitted --plugin-root).
+
+    old_version may be None for operations with no prior version — a fresh
+    init or tracking-start's first version, or `set` assigning a first
+    version. subprocess.run rejects a bare None in its argv list, and
+    run-user-hooks.sh's own blank-argument check would reject an empty
+    string as a usage error, so a None is represented to hook scripts as the
+    literal sentinel "(none)".
+    """
+    runner = os.path.join(plugin_root or _default_plugin_root(), "hooks", "run-user-hooks.sh")
     if not os.path.isfile(runner):
-        return {"status": "ok", "hooks_run": 0, "prompt_hook": None, "warnings": []}
+        return {"status": "error", "message": f"Hook runner not found at {runner}"}
 
     try:
         result = subprocess.run(
-            ["bash", runner, phase, bump_type, old_version, new_version, project_dir],
+            ["bash", runner, phase, bump_type, old_version or "(none)", new_version, project_dir],
             capture_output=True, text=True, timeout=120,
         )
         try:
@@ -1288,9 +1340,15 @@ def cmd_bump_run(args):
     state = _gather_bump_state(args)
 
     # A hard error (reentrancy / tracking inactive / parse error) is handed
-    # straight back; the orchestrator surfaces the message and stops.
+    # straight back; the orchestrator surfaces the message and stops. Exit 1
+    # so a caller checking the process exit code (not just ok:false in the
+    # JSON) sees the failure too — matching cmd_bump_execute's output_error
+    # for these same conditions. (bump gather's own exit code is unchanged:
+    # it is a separate, lower-level subcommand not routed through by
+    # semver-router.sh, and returning state for a question loop is not
+    # itself a failure.)
     if not state.get("ok"):
-        output(state)
+        output(state, exit_code=1)
 
     # Reasons a human/orchestrator must intervene before we may execute.
     blockers = []
@@ -1349,22 +1407,38 @@ def _run_post_bump_and_verify(bump_type, old_version, new_version, tagging, skip
                               project_dir, plugin_root, pre_hooks_result, result):
     """Run post-bump user hooks and populate result['pre_hooks'/'post_hooks'/'verification'].
 
-    Shared by bump and set. Runs outside the FileLock (matching bump's original
-    ordering). Returns the post-hooks result dict.
+    Shared by bump, set, and init. Runs outside the FileLock (matching bump's
+    original ordering, after the commit and tag already exist).
+
+    Returns True iff the project defines post-bump hooks that could not be
+    run at all (hook runner missing, crashed, or timed out) — the caller
+    should report this as exit code 3 (see module docstring). A hook that DID
+    run and exited non-zero is a different, already-documented case: it stays
+    exit 0 with a warning in post_hooks.warnings and no rollback, because the
+    version bump is already committed and tagged.
     """
-    post_hooks_result = {"hooks_run": 0, "prompt_hook": None, "warnings": []}
-    if plugin_root:
-        post_hooks_result = run_user_hooks(
-            "post-bump", bump_type, old_version, new_version, project_dir, plugin_root)
+    post_hooks_result = run_user_hooks(
+        "post-bump", bump_type, old_version, new_version, project_dir, plugin_root)
+
+    pending = _pending_post_bump_hooks(project_dir)
+    skipped = bool(pending) and post_hooks_result.get("status") == "error"
 
     result["pre_hooks"] = {
         "hooks_run": pre_hooks_result.get("hooks_run", 0),
         "prompt_hook": pre_hooks_result.get("prompt_hook"),
     }
+    warnings = list(post_hooks_result.get("warnings", []))
+    if skipped:
+        warnings.append({
+            "reason": "post_bump_hooks_unavailable",
+            "detail": post_hooks_result.get("message", "post-bump hook runner could not execute"),
+            "hooks_pending": pending,
+        })
     result["post_hooks"] = {
         "hooks_run": post_hooks_result.get("hooks_run", 0),
         "prompt_hook": post_hooks_result.get("prompt_hook"),
-        "warnings": post_hooks_result.get("warnings", []),
+        "warnings": warnings,
+        "skipped": skipped,
     }
 
     # Post-bump verification
@@ -1378,7 +1452,7 @@ def _run_post_bump_and_verify(bump_type, old_version, new_version, tagging, skip
         with open(changelog_path) as f:
             verification["changelog_has_entry"] = f"## [{new_version}]" in f.read()
     result["verification"] = verification
-    return post_hooks_result
+    return skipped
 
 
 def cmd_bump_execute(args):
@@ -1414,18 +1488,17 @@ def cmd_bump_execute(args):
     old_version = version
     today = datetime.date.today().isoformat()
 
-    # Run pre-bump hooks (before lock, per original design)
-    pre_hooks_result = {"hooks_run": 0, "prompt_hook": None, "warnings": []}
-    if plugin_root:
-        pre_hooks_result = run_user_hooks(
-            "pre-bump", bump_type, old_version, new_version, project_dir, plugin_root)
-        if pre_hooks_result.get("status") == "failed":
-            output_error("pre_hook_failed",
-                         f"Pre-bump hook '{pre_hooks_result.get('failed_hook', '?')}' failed "
-                         f"(exit {pre_hooks_result.get('exit_code', '?')})",
-                         detail=pre_hooks_result.get("output", ""))
-        if pre_hooks_result.get("status") == "blocked":
-            output_error("reentrancy", pre_hooks_result.get("reason", "Reentrancy blocked"))
+    # Run pre-bump hooks (before lock, per original design). plugin_root is
+    # optional here too — run_user_hooks self-locates when it is omitted.
+    pre_hooks_result = run_user_hooks(
+        "pre-bump", bump_type, old_version, new_version, project_dir, plugin_root)
+    if pre_hooks_result.get("status") == "failed":
+        output_error("pre_hook_failed",
+                     f"Pre-bump hook '{pre_hooks_result.get('failed_hook', '?')}' failed "
+                     f"(exit {pre_hooks_result.get('exit_code', '?')})",
+                     detail=pre_hooks_result.get("output", ""))
+    if pre_hooks_result.get("status") == "blocked":
+        output_error("reentrancy", pre_hooks_result.get("reason", "Reentrancy blocked"))
 
     lock = FileLock(project_dir)
     stashed = False
@@ -1491,8 +1564,9 @@ def cmd_bump_execute(args):
         result["stash_applied"] = True
 
     # Run post-bump hooks + verification (shared with set)
-    _run_post_bump_and_verify(bump_type, old_version, new_version, tagging, skip_tag,
-                              project_dir, plugin_root, pre_hooks_result, result)
+    hooks_skipped = _run_post_bump_and_verify(
+        bump_type, old_version, new_version, tagging, skip_tag,
+        project_dir, plugin_root, pre_hooks_result, result)
 
     # Build display
     lines = [f"[semver] Bumped {result['old_version']} → {result['new_version']} ({bump_type})"]
@@ -1511,9 +1585,11 @@ def cmd_bump_execute(args):
             lines.append("  Tag: skipped")
     if result.get("stash_applied"):
         lines.append("  Stash: restored")
+    if hooks_skipped:
+        lines.append("  ⚠ post-bump hooks did NOT run — see post_hooks.warnings")
     result["display"] = build_display(lines)
 
-    output(result)
+    output(result, exit_code=3 if hooks_skipped else 0)
 
 
 def cmd_bump_first_version(args):
@@ -1871,9 +1947,10 @@ def cmd_set_execute(args):
         result["stash_applied"] = True
 
     # Post-bump hooks + verification (source sentinel "set"; set runs no pre-hooks)
-    _run_post_bump_and_verify("set", old_version, new_version, tagging, skip_tag,
-                              project_dir, plugin_root,
-                              {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+    hooks_skipped = _run_post_bump_and_verify(
+        "set", old_version, new_version, tagging, skip_tag,
+        project_dir, plugin_root,
+        {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
 
     # Build display
     lines = [f"[semver] Set version → {new_version}"]
@@ -1895,9 +1972,11 @@ def cmd_set_execute(args):
             lines.append("  Tag: skipped")
     if result.get("stash_applied"):
         lines.append("  Stash: restored")
+    if hooks_skipped:
+        lines.append("  ⚠ post-bump hooks did NOT run — see post_hooks.warnings")
     result["display"] = build_display(lines)
 
-    output(result)
+    output(result, exit_code=3 if hooks_skipped else 0)
 
 
 def cmd_tracking_start(args):
@@ -2016,12 +2095,7 @@ def _tracking_start_fresh(project_dir, config_path, args):
     core = _init_fresh_core(project_dir, config_path, version=args.version, prefix=prefix,
                             tagging=tagging, fmt=fmt, branch=branch)
 
-    display_lines = ["[semver] Tracking initialized"]
-    display_lines.append(f"  Branch: {branch} | Tags: {'on' if tagging else 'off'} | Changelog: {fmt}")
-    if core["version_set"]:
-        display_lines.append(f"  Version: {core['version']}")
-
-    output({
+    result = {
         "ok": True,
         "action": "fresh_start",
         "target_branch": branch,
@@ -2033,8 +2107,27 @@ def _tracking_start_fresh(project_dir, config_path, args):
         "tag_created": core["tag_created"],
         "files_created": core["files_created"],
         "commit_hash": core["commit_hash"],
-        "display": build_display(display_lines),
-    })
+    }
+
+    display_lines = ["[semver] Tracking initialized"]
+    display_lines.append(f"  Branch: {branch} | Tags: {'on' if tagging else 'off'} | Changelog: {fmt}")
+    if core["version_set"]:
+        display_lines.append(f"  Version: {core['version']}")
+
+    # Post-bump hooks (e.g. the plugin-version-sync hook) only make sense when
+    # a version was actually written — without --version, tracking start
+    # creates no VERSION/tag for them to react to.
+    hooks_skipped = False
+    if core["version_set"]:
+        hooks_skipped = _run_post_bump_and_verify(
+            "init", None, core["version"], tagging, False,
+            project_dir, args.plugin_root,
+            {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+        if hooks_skipped:
+            display_lines.append("  ⚠ post-bump hooks did NOT run — see post_hooks.warnings")
+
+    result["display"] = build_display(display_lines)
+    output(result, exit_code=3 if hooks_skipped else 0)
 
 
 def _tracking_start_from_archive(project_dir, config_path, archive, archive_path, args):
@@ -2428,13 +2521,16 @@ def _init_do_fresh(project_dir, config_path, args):
         "files_created": core["files_created"],
         "commit_hash": core["commit_hash"],
     })
-    _run_post_bump_and_verify("init", None, core["version"], tagging, False,
-                              project_dir, args.plugin_root,
-                              {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+    hooks_skipped = _run_post_bump_and_verify(
+        "init", None, core["version"], tagging, False,
+        project_dir, args.plugin_root,
+        {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
     lines = [f"[semver] Initialized semver tracking at {core['version']}"]
     lines.append(f"  Auto-bump: on | Branch: {branch} | Tags: {'on' if tagging else 'off'} | Changelog: {fmt}")
+    if hooks_skipped:
+        lines.append("  ⚠ post-bump hooks did NOT run — see post_hooks.warnings")
     result["display"] = build_display(lines)
-    output(result)
+    output(result, exit_code=3 if hooks_skipped else 0)
 
 
 def _init_assess(project_dir, args, snap):
@@ -2671,14 +2767,17 @@ def _init_reinit(project_dir, config_path, args):
         # Overwrite an existing tag — reinit is a deliberate reset.
         _apply_tag(resolved, tagging, False, True, result)
 
-    _run_post_bump_and_verify("init", None, resolved, tagging, False,
-                              project_dir, args.plugin_root,
-                              {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+    hooks_skipped = _run_post_bump_and_verify(
+        "init", None, resolved, tagging, False,
+        project_dir, args.plugin_root,
+        {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
     lines = [f"[semver] Re-initialized semver at {resolved}"]
     if result.get("tag_created"):
         lines.append(f"  Tag: {resolved} " + ("moved" if result.get("tag_overwritten") else "created"))
+    if hooks_skipped:
+        lines.append("  ⚠ post-bump hooks did NOT run — see post_hooks.warnings")
     result["display"] = build_display(lines)
-    output(result)
+    output(result, exit_code=3 if hooks_skipped else 0)
 
 
 def cmd_init_execute(args):
@@ -3100,6 +3199,7 @@ def main():
     t_start.add_argument("--changelog", choices=["grouped", "flat"], default=None)
     t_start.add_argument("--branch", default=None)
     t_start.add_argument("--restore-tags", action="store_true")
+    t_start.add_argument("--plugin-root", default=None)
 
     # tracking stop-gather
     tracking_sub.add_parser("stop-gather", help="Gather state for stop")

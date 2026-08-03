@@ -26,8 +26,8 @@ Every hook script receives these environment variables:
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `BUMP_TYPE` | `minor` | The bump level: `major`, `minor`, or `patch` |
-| `OLD_VERSION` | `v1.2.3` | The current version before the bump (includes prefix) |
+| `BUMP_TYPE` | `minor` | The bump level: `major`, `minor`, `patch`, `set`, or `init` |
+| `OLD_VERSION` | `v1.2.3` | The version before the bump (includes prefix), or the literal sentinel `(none)` when there is no prior version — a fresh `init`, `tracking start`'s first version, or `set` assigning a first version |
 | `NEW_VERSION` | `v1.3.0` | The computed new version after the bump (includes prefix) |
 | `SEMVER_BUMP_IN_PROGRESS` | `1` | Re-entrancy guard — always `1` during hook execution |
 
@@ -61,6 +61,37 @@ Scripts are discovered as `*.sh` files in the phase directory and sorted alphabe
 - `PROMPT_HOOK.md` is never executed as a script — it is read by the AI agent separately
 - Non-`.sh` files (README.md, .txt, etc.) are ignored
 - Non-executable `.sh` files are skipped
+
+### Hook Runner Resolution
+
+Hooks are found and run whether or not a caller passes `--plugin-root`. The
+runner script (`hooks/run-user-hooks.sh`) ships with the plugin at a fixed
+path relative to `semver-cli` itself, so the CLI locates it from its own file
+path by default. `--plugin-root` remains available as an explicit override —
+`semver-router.sh` still threads it through for every command — but it was
+never required for hooks to fire, and omitting it (the documented
+non-interactive path for bumping on a feature branch) no longer skips hooks.
+
+### CLI Exit Codes
+
+These are `semver-cli`'s own process exit codes — distinct from the
+per-script exit codes above, which only ever affect the `pre_hooks`/
+`post_hooks` JSON block and never change the CLI's own exit status except as
+noted for code `3`:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Success. Hooks ran (or the project defines none). |
+| `1` | The operation failed — nothing was committed or tagged. |
+| `2` | Usage error (bad arguments) — nothing was committed or tagged. |
+| `3` | The version bump **did land** (committed and tagged), but post-bump hooks that the project defines could not be run at all — the hook runner was missing, crashed, or timed out. Check `post_hooks.warnings` for which hooks were pending. |
+
+Exit `3` is deliberately distinct from a hook that ran and exited non-zero
+(which stays exit `0` per the post-bump contract above — warn but do not roll
+back). It signals a different, more serious failure: the hooks were never
+even attempted, so whatever they were meant to do (e.g. this repo's
+`01-sync-plugin-versions.sh`, keeping manifests in sync with `VERSION`) did
+not happen.
 
 ## AI Prompt Hooks (PROMPT_HOOK.md)
 
@@ -277,6 +308,7 @@ git commit -m "chore: add pre-bump hook"
 - Check it has execute permission: `ls -la .semver/hooks/pre-bump/`
 - Ensure it ends with `.sh`
 - Verify `.semver/hooks/pre-bump/` (or `post-bump/`) directory exists
+- If the CLI exited `3`, the runner itself could not be found or crashed — check `post_hooks.warnings` for the reason. `--plugin-root` is not required for hooks to run (see Hook Runner Resolution above); this points at a broken plugin install, not a missing flag.
 
 **Hooks running in wrong order?**
 - Use zero-padded numeric prefixes: `01-`, `02-`, `10-`

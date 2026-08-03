@@ -507,7 +507,6 @@ run_state_in_project() {
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
-    story state add blocked --super OPEN >/dev/null && \
     story move ST-1 done >/dev/null && \
     story move ST-2 blocked "exhausted retries" >/dev/null )
   run_state_in_project
@@ -524,7 +523,6 @@ run_state_in_project() {
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
-    story state add blocked --super OPEN >/dev/null && \
     story move ST-1 blocked "exhausted retries" >/dev/null )
   run_state_in_project
   [ "$status" -eq 0 ]
@@ -851,7 +849,6 @@ EOF
   echo '{}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && \
-    story state add blocked --super OPEN >/dev/null && \
     story move ST-1 blocked "exhausted retries" >/dev/null )
   run_state_in_project
   [ "$(jq_field '.state')" = "blocked" ]

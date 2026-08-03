@@ -43,13 +43,12 @@ If `.forge/plan-mapping.json` exists:
 
 ### 2. State and Type Setup
 
-`story project new` already seeds `todo` / `in-progress` / `done`. Create the two additional
-states the execution loop needs (see `storyhook-contract.md`'s **Custom States** for why this
-isn't idempotent and must tolerate exit 2, and what the `active` role means):
+`story project new` already seeds `todo` / `in-progress` / `blocked` / `done`. Create the one
+additional state the execution loop needs (see `storyhook-contract.md`'s **Custom States** for why
+this isn't idempotent and must tolerate exit 2, and what the `active` role means):
 
 ```bash
 story state add verifying --super OPEN
-story state add blocked --super OPEN
 ```
 
 Also register the `escalate` custom **type** triage and the blocked-stories-pause flow use to flag

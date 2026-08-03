@@ -74,7 +74,7 @@ EOF
 @test "mapping-scaffold: identifies project_story and per-story skeletons from a real decompose" {
   cd "$TEST_DIR"
   write_plan
-  story project new --prefix MS >/dev/null 2>&1
+  story project new --prefix MS >/dev/null
   awk '/^## Task Breakdown/{flag=1} /^## / && !/^## Task Breakdown/{if(flag)exit} flag' .forge/PLAN.md > /tmp/ms-tasks-$$.md
   story decompose /tmp/ms-tasks-$$.md --json >/dev/null
   rm -f /tmp/ms-tasks-$$.md
@@ -97,7 +97,7 @@ EOF
 @test "mapping-scaffold: per-story skeleton has title filled and judgment fields null/empty" {
   cd "$TEST_DIR"
   write_plan
-  story project new --prefix MS >/dev/null 2>&1
+  story project new --prefix MS >/dev/null
   awk '/^## Task Breakdown/{flag=1} /^## / && !/^## Task Breakdown/{if(flag)exit} flag' .forge/PLAN.md > /tmp/ms-tasks2-$$.md
   story decompose /tmp/ms-tasks2-$$.md --json >/dev/null
   rm -f /tmp/ms-tasks2-$$.md

@@ -228,7 +228,7 @@ teardown() {
 # --- state comes from forge-state.sh, not a private re-derivation ---
 
 @test "status: VALIDATE-REPORT.md alone reports review_validate, not validate (both reports required for triage)" {
-  ( cd "$TEST_DIR" && git init -q . && story project new --prefix ST >/dev/null 2>&1 && \
+  ( cd "$TEST_DIR" && git init -q . && story project new --prefix ST >/dev/null && \
     story new "Task" >/dev/null && story move ST-1 done >/dev/null )
   printf '# Validate Report\n\ncontent\n' > "$FORGE_DIR/VALIDATE-REPORT.md"
   run bash -c "cd '$TEST_DIR' && bash '$SCRIPT' '$FORGE_DIR'"
@@ -255,7 +255,7 @@ teardown() {
 # --- get_story_counts real storyhook shape ---
 
 @test "get_story_counts reads the real double-nested story list --json shape" {
-  ( cd "$TEST_DIR" && git init -q . && story project new --prefix ST >/dev/null 2>&1 && \
+  ( cd "$TEST_DIR" && git init -q . && story project new --prefix ST >/dev/null && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
     story move ST-1 done >/dev/null )
   printf '# Idea\n\nidea\n' > "$FORGE_DIR/IDEA.md"

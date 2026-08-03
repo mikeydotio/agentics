@@ -88,12 +88,20 @@ import os
 import sys
 import time
 
+pid_path = sys.argv[1]
+
 if os.fork() == 0:
     os.setsid()                     # leave the process group timeout(1) signals
-    with open(sys.argv[1], "w") as fh:
+    with open(pid_path, "w") as fh:
         fh.write(str(os.getpid()))
     time.sleep(30)                  # hold the inherited stdout open
     os._exit(0)
+
+# Parent: do not exit until the grandchild has recorded its pid, so the test
+# never races the fork. Bounded, so a child that dies cannot spin us forever.
+deadline = time.monotonic() + 5
+while not os.path.exists(pid_path) and time.monotonic() < deadline:
+    time.sleep(0.01)
 EOF
 
   chmod +x "$SHIM_DIR/tmux" "$STORY_SHIM_DIR/story"
@@ -305,5 +313,42 @@ EOF
   # budget (internal timeout is 5s). Do not tighten: with the effect oracle
   # above carrying the signal, a narrower margin buys no detection and only
   # re-imports load sensitivity.
+  [ "$elapsed" -lt 12 ]
+}
+
+@test "a story handoff that leaves a surviving grandchild does not hold the hook open" {
+  # The timeout alone cannot bound this. `timeout` signals the process group it
+  # created; a descendant that calls setsid() has left that group, survives, and
+  # keeps the stdout it inherited open. A command substitution does not return
+  # until every writer closes that pipe, so the hook blocks for the survivor's
+  # full lifetime no matter what the timeout does.
+  #
+  # This is not a synthetic worry: storyhook's own SH-94 records a test binary
+  # blocked in read(2) for four minutes on a pipe whose write end an
+  # auto-spawned `story ... daemon --serve` held at fd 7 -- and `story handoff`
+  # is exactly a command that can auto-spawn that daemon.
+  command -v python3 >/dev/null || skip "python3 required to fork a session-leader grandchild"
+  use_story_shim grandchild
+
+  local start end elapsed gc_pid
+  start=$(date +%s)
+  run_forge_stop_isolated
+  end=$(date +%s)
+  elapsed=$((end - start))
+
+  # Ordering oracle: the grandchild must still be ALIVE at the moment the hook
+  # returned. This fails for the defect -- a hook that waited out the survivor
+  # returns only after it has exited -- and it cannot fail merely because the
+  # machine is slow, since load delays the hook's return without resurrecting
+  # or killing the grandchild.
+  [ -f "$TEST_DIR/gc.pid" ]
+  gc_pid="$(cat "$TEST_DIR/gc.pid")"
+  run kill -0 "$gc_pid"
+  [ "$status" -eq 0 ]
+
+  # ...and the checkpoint still completed.
+  [ "$(jq -r '.status' "$TEST_DIR/.forge/state.json")" = "paused" ]
+  [ ! -f "$TEST_DIR/.forge/lock.json" ]
+  # Loose backstop, same reasoning as above.
   [ "$elapsed" -lt 12 ]
 }

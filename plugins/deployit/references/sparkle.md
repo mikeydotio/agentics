@@ -104,16 +104,54 @@ public_ed_key = "<the SUPublicEDKey generate_keys printed>"
 
 ## 3. Where the Sparkle tools live
 
-`sign_update` and `generate_keys` come with Sparkle. deployit auto-discovers
-`sign_update` on `PATH`, then common locations; set `sign_update_path` (or the
-`DEPLOYIT_SPARKLE_SIGN_UPDATE` env var) if yours is elsewhere. Typical sources:
+`sign_update` and `generate_keys` come with Sparkle. Leave `sign_update_path`
+empty to auto-discover it; deployit tries, in order:
 
-- **Swift Package Manager** (you'll add Sparkle via SPM anyway): after a build,
-  the tools sit under
-  `~/Library/Developer/Xcode/DerivedData/<proj>/SourcePackages/artifacts/sparkle/Sparkle/bin/`.
-- **Homebrew:** `brew install --cask sparkle` →
-  `/opt/homebrew/Caskroom/sparkle/<version>/bin/`.
-- **Direct download:** the Sparkle release tarball's `bin/`.
+1. `DEPLOYIT_SPARKLE_SIGN_UPDATE` env var
+2. `macos.sparkle.sign_update_path` in `config.toml`
+3. `sign_update` on `PATH`
+4. the **SwiftPM artifact bundle** — you'll add Sparkle via SPM anyway (step
+   4), and after a build the tools sit under
+   `~/Library/Developer/Xcode/DerivedData/<Project>-*/SourcePackages/artifacts/*/Sparkle/bin/`
+5. the Homebrew cask, `/opt/homebrew/Caskroom/sparkle/<version>/bin/` (or
+   `/usr/local/...` on Intel) — **deprecated**, see below
+
+Rungs 1–2 are explicit operator intent: if you set either one, deployit uses
+*exactly* that binary — a path that doesn't exist there is a **hard error**
+naming the path you configured, never a silent fall-through to something
+else. This is deliberate (see the incident below): an operator who pinned a
+tool believes it's pinned, so guessing a substitute without saying so is
+worse than failing loudly. Leave the key **empty** to opt into auto-discovery
+(rungs 3–5) instead.
+
+When multiple versions match the same glob (e.g. two Caskroom installs),
+deployit picks the **newest by parsed version**, not the first one
+alphabetically.
+
+**Prefer the SwiftPM artifact over Homebrew.** Homebrew has deprecated the
+`sparkle` cask — `brew info --cask sparkle` reports *"Deprecated because it
+does not pass the macOS Gatekeeper check! It will be disabled on
+2026-09-01."* Its downloads are also quarantined by Homebrew and adhoc-signed
+by Sparkle with no Team ID, a combination Gatekeeper kills outright on first
+run. The SwiftPM artifact is byte-identical, carries **no quarantine xattr**
+(SwiftPM extraction doesn't set one), and is guaranteed to match the Sparkle
+version your app actually links — deployit tries it first and only falls
+back to the cask (with a warning) if no SwiftPM artifact is found.
+
+**The trap that caused a real incident.** Lillist v0.19.0 shipped an
+unsigned GitHub release on 2026-07-29 because `config.toml` pinned a
+version-stamped Caskroom path (`.../sparkle/2.9.3/bin/sign_update`), and
+`brew upgrade` later deleted 2.9.3 while installing 2.9.4. The pre-#117
+resolver treated the missing pin as *absent* and silently substituted the
+2.9.4 binary — which Gatekeeper killed with a non-zero exit and **empty
+stderr**, logged as a bare `sign_update failed: ` with nothing after the
+colon. Two lessons are now enforced: a version-stamped path is a trap
+`brew upgrade` springs on you (prefer the SwiftPM artifact, which has no
+version segment to go stale), and a configured-but-missing path is fatal, not
+silently substituted.
+
+- **Direct download:** the Sparkle release tarball's `bin/` also works — set
+  `sign_update_path` explicitly.
 
 ## 4. Add Sparkle to your app (SPM)
 
@@ -194,11 +232,24 @@ repo's build-number pre-action handles bumping it).
   without a stapled ticket, and a freshly auto-updated app may show the
   Gatekeeper "unidentified developer" prompt once. The EdDSA signature
   guarantees update integrity either way.
-- **Best-effort signing.** If `sign_update` or the key is missing, the deploy
-  still succeeds — it ships the `.dmg` and skips the appcast for that build (a
+- **Signing is required when a GitHub release is being published.** A
+  Developer-ID release is what real users auto-update from, so shipping one
+  unsigned is a failed release that reports success — issue #117. If
+  `sign_update` fails, isn't found, or its output can't be parsed, and this
+  deploy publishes a GitHub release (`[github] release = true`, the default),
+  the **whole deploy fails** (non-zero exit, nothing published — tailnet
+  index, backend, and release all untouched) rather than shipping an
+  unsigned build. deployit also preflights the toolchain before the
+  archive/export/notarize round-trip, so a bad pin fails in seconds, not
+  minutes in. Every failure names the resolved binary and, when the exit was
+  a silent kill (empty stdout/stderr — Gatekeeper's signature), calls that
+  out with the `xattr -d com.apple.quarantine <path>` fix.
+- **Best-effort only for tailnet-only deploys.** With `--no-release` or
+  `[github] release = false`, a signing failure still degrades gracefully as
+  before: the deploy ships the `.dmg` and skips the appcast for that build (a
   warning is logged to `~/Library/Logs/deployit/backend.err.log` / the deploy
-  stderr). The build won't appear in the feed until re-deployed with signing
-  working.
+  stderr, naming the resolved binary). The build won't appear in the feed
+  until re-deployed with signing working.
 - **Key rotation.** If you generate a new key pair, ship an app update that
   embeds the new `SUPublicEDKey` *before* retiring the old key, or existing
   installs can't verify the switch.

@@ -16,6 +16,95 @@ FRESHEN_HOOK="$BATS_TEST_DIRNAME/../../freshen/hooks/on-stop.sh"
 FORGE_PLUGIN_ROOT="$BATS_TEST_DIRNAME/.."
 FRESHEN_PLUGIN_ROOT="$BATS_TEST_DIRNAME/../../freshen"
 
+# macOS assesses a *freshly written* executable on its first exec (XProtect /
+# syspolicyd). Measured on an M1 Max: 12-43s for a new shim script's first exec
+# when XprotectService is saturated, ~0.05s for every exec after that. So any
+# assertion timing a region that contains a shim's *first* exec is measuring
+# that assessment, not the code under test -- which is what made the F051 bound
+# below look non-deterministic (AGE-16), with the hook itself measured at a flat
+# 5.0s throughout.
+#
+# Two things follow, and both are load-bearing:
+#
+# 1. Shims are built ONCE PER FILE, at a stable path, with every per-test value
+#    (log path, behaviour mode) read from the environment at RUN time. Writing
+#    them per test -- into a fresh `mktemp -d` -- meant a fresh assessment per
+#    test, which cost ~107s per suite run.
+# 2. Each shim is warmed here, outside every timed region, so the assessment is
+#    paid before any measurement starts. Every shim must honour SHIM_WARMUP=1 by
+#    exiting immediately, BEFORE any side effect -- otherwise the warm-up would
+#    append to $TMUX_LOG (six assertions require it to stay empty) or sit
+#    through the shim's own sleep.
+#
+# This removes only fixture-construction cost: production `story`/`tmux` are
+# installed, already-assessed binaries, so the confound has no production
+# analogue. It does not weaken any assertion -- a warmed run still goes red
+# against a genuinely unbounded call (~30s) while a correct one lands at ~5s.
+#
+# Relocating the shims out of $TMPDIR does NOT help: /private/tmp measured
+# 25-41s, worse than $TMPDIR. The cause is first-exec assessment, not Spotlight
+# indexing, so this repo's .metadata_never_index guidance does not apply here.
+setup_file() {
+  export SHIM_DIR="$BATS_FILE_TMPDIR/shim"
+  export STORY_SHIM_DIR="$BATS_FILE_TMPDIR/story-shim"
+  mkdir -p "$SHIM_DIR" "$STORY_SHIM_DIR"
+
+  # tmux shim: log every invocation instead of driving a real pane.
+  cat > "$SHIM_DIR/tmux" <<'EOF'
+#!/usr/bin/env bash
+[ -n "${SHIM_WARMUP:-}" ] && exit 0
+echo "$@" >> "$TMUX_LOG"
+exit 0
+EOF
+
+  # story shim: behaviour picked at run time so the file content never changes.
+  # Only tests that put $STORY_SHIM_DIR on PATH see it at all.
+  cat > "$STORY_SHIM_DIR/story" <<'EOF'
+#!/usr/bin/env bash
+[ -n "${SHIM_WARMUP:-}" ] && exit 0
+touch "$TEST_DIR/story-started"
+case "${STORY_SHIM_MODE:-hang}" in
+  hang)
+    sleep 30
+    touch "$TEST_DIR/story-completed"
+    echo "should never print -- killed by the timeout wrapper first"
+    ;;
+  grandchild)
+    python3 "$STORY_SHIM_DIR/spawn-grandchild.py" "$TEST_DIR/gc.pid"
+    ;;
+esac
+exit 0
+EOF
+
+  cat > "$STORY_SHIM_DIR/spawn-grandchild.py" <<'EOF'
+"""Fork a session-leader grandchild that holds its inherited stdout open.
+
+Mirrors the shape storyhook's own SH-94 hit in production: an auto-spawned
+`story ... daemon --serve` that escapes the process group `timeout` signals and
+keeps the caller's pipe open. `setsid(1)` does not exist on macOS, so the escape
+is done here via os.setsid() after a fork.
+"""
+import os
+import sys
+import time
+
+if os.fork() == 0:
+    os.setsid()                     # leave the process group timeout(1) signals
+    with open(sys.argv[1], "w") as fh:
+        fh.write(str(os.getpid()))
+    time.sleep(30)                  # hold the inherited stdout open
+    os._exit(0)
+EOF
+
+  chmod +x "$SHIM_DIR/tmux" "$STORY_SHIM_DIR/story"
+  warm_shim "$SHIM_DIR/tmux"
+  warm_shim "$STORY_SHIM_DIR/story"
+}
+
+warm_shim() {
+  SHIM_WARMUP=1 "$1" >/dev/null 2>&1 || true
+}
+
 setup() {
   TEST_DIR="$(mktemp -d)"
   export TEST_DIR
@@ -28,18 +117,18 @@ EOF
 {"holder": "test-session", "acquired_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
 EOF
 
-  # tmux shim: log every invocation to a file instead of driving a real pane.
-  SHIM_DIR="$TEST_DIR/shim"
-  mkdir -p "$SHIM_DIR"
   TMUX_LOG="$TEST_DIR/tmux.log"
+  export TMUX_LOG
   touch "$TMUX_LOG"
-  cat > "$SHIM_DIR/tmux" <<EOF
-#!/usr/bin/env bash
-echo "\$@" >> "$TMUX_LOG"
-exit 0
-EOF
-  chmod +x "$SHIM_DIR/tmux"
   export PATH="$SHIM_DIR:$PATH"
+}
+
+# Put the story shim on PATH for this test and select its behaviour. Kept out
+# of setup() so the tests that don't ask for it keep resolving `story` exactly
+# as they did before.
+use_story_shim() {
+  export STORY_SHIM_MODE="$1"
+  export PATH="$STORY_SHIM_DIR:$PATH"
 }
 
 teardown() {
@@ -47,6 +136,11 @@ teardown() {
     local guard_file
     guard_file="$(guard_file_for "$TEST_DIR")"
     rm -f "$guard_file" "${guard_file}.tmp"
+  fi
+  # Reap any session-leader grandchild a shim deliberately left running, so it
+  # cannot outlive the suite holding descriptors open.
+  if [[ -n "${TEST_DIR:-}" && -f "$TEST_DIR/gc.pid" ]]; then
+    kill "$(cat "$TEST_DIR/gc.pid")" 2>/dev/null || true
   fi
   if [[ -n "${TEST_DIR:-}" && -d "$TEST_DIR" ]]; then
     rm -rf "$TEST_DIR"
@@ -57,6 +151,18 @@ run_forge_stop() {
   CLAUDE_PROJECT_DIR="$TEST_DIR" CLAUDE_PLUGIN_ROOT="$FORGE_PLUGIN_ROOT" \
     TMUX=1 TMUX_PANE="%1" \
     bash "$FORGE_HOOK" < /dev/null
+}
+
+# Same as run_forge_stop, but with the hook's own stdout/stderr pointed at
+# FILES instead of bats' capture pipe. Mandatory for any test whose shim may
+# leave a process alive after the hook returns: such a process inherits the
+# hook's stdout, and if that is bats' pipe then bats itself blocks waiting for
+# EOF -- on exactly the pipe semantics under test. The test would then hang (or
+# time out) whether or not the hook is correct, making the oracle unevaluable.
+run_forge_stop_isolated() {
+  CLAUDE_PROJECT_DIR="$TEST_DIR" CLAUDE_PLUGIN_ROOT="$FORGE_PLUGIN_ROOT" \
+    TMUX=1 TMUX_PANE="%1" \
+    bash "$FORGE_HOOK" < /dev/null > "$TEST_DIR/hook.out" 2> "$TEST_DIR/hook.err"
 }
 
 run_freshen_stop() {
@@ -177,22 +283,27 @@ EOF
 # --- F051: bounded story handoff (timeout), reordered after the checkpoint ---
 
 @test "a hanging story handoff is bounded by a timeout and never blocks the checkpoint" {
-  cat > "$SHIM_DIR/story" <<'SHIM'
-#!/usr/bin/env bash
-sleep 30
-echo "should never print -- killed by the timeout wrapper first"
-SHIM
-  chmod +x "$SHIM_DIR/story"
+  use_story_shim hang
 
   local start end elapsed
   start=$(date +%s)
-  run_forge_stop
+  run_forge_stop_isolated
   end=$(date +%s)
   elapsed=$((end - start))
 
-  # Bounded well under the hook's 15s timeout budget (internal timeout is
-  # 5s) -- the checkpoint must have completed regardless of the hang.
-  [ "$elapsed" -lt 12 ]
+  # Primary oracle is an EFFECT, not a clock reading: the shim reaches its
+  # completion marker only after a full 30s sleep, so the marker's absence
+  # (paired with the start marker's presence, proving the call was actually
+  # made) is direct evidence the timeout fired. A wall-clock reading alone
+  # cannot distinguish "the bound held" from "the machine was fast".
+  [ -f "$TEST_DIR/story-started" ]
+  [ ! -f "$TEST_DIR/story-completed" ]
+  # The checkpoint must have completed regardless of the hang.
   [ "$(jq -r '.status' "$TEST_DIR/.forge/state.json")" = "paused" ]
   [ ! -f "$TEST_DIR/.forge/lock.json" ]
+  # Loose backstop only -- deliberately left generous against the hook's 15s
+  # budget (internal timeout is 5s). Do not tighten: with the effect oracle
+  # above carrying the signal, a narrower margin buys no detection and only
+  # re-imports load sensitivity.
+  [ "$elapsed" -lt 12 ]
 }

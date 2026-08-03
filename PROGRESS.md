@@ -16,7 +16,7 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-11** |
+| **Next story** | **AGE-16** |
 | **Completed this loop** | AGE-14, AGE-15 (one PR) |
 | **Last updated by** | AGE-14 session, 2026-08-03 |
 
@@ -30,8 +30,9 @@ via freshen, and stops.
 
 Read this before you conclude something you did broke the build.
 
-- **`make test` is now GREEN** (bar the two caveats below). The pre-push gate is live again —
-  **do not bypass it.**
+- **`make test` is green for everything this loop controls** — 570 pass. The two failures you may
+  still hit are pre-existing defects with their own stories (AGE-16, AGE-21), not something you
+  broke. The gate is live again: **do not bypass it except under the evidence rule below.**
 - **`session-stop.bats` "a hanging story handoff is bounded by a timeout" WILL block your push.**
   Filed as **AGE-16**, now `high` + `blocks-ci`. It first looked like load-flakiness (passes 4/4
   unloaded, fails 2-of-3 at load ~13), but measuring it disproved that: isolated runs took
@@ -78,7 +79,8 @@ without recording why in this file.
 | # | Story | Pri | Why here |
 |---|---|---|---|
 | ✅ | ~~**AGE-14** + **AGE-15**~~ | high | **DONE** — merged together as one PR. See "What AGE-14 turned out to be" above. |
-| 1 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
+| 1 | **AGE-16** | high | **Reordered ahead of its original position by the AGE-14 session — reason recorded here as the queue rules require.** It is `blocks-ci`: F051's timeout does not bound a hung `story handoff`, and it non-deterministically fails the full `make test` that the pre-push hook runs. It already blocked two consecutive pushes. Until it lands, *every* session after this one must bypass the gate to push, which defeats the gate — the identical argument that put AGE-14 first. |
+| 2 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
 | 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
 | 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
 | 5 | **AGE-6** | med | WS-C, rca realign. Independent. |

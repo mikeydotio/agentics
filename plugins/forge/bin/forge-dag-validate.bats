@@ -11,7 +11,7 @@ SCRIPT="$BATS_TEST_DIRNAME/forge-dag-validate.sh"
 setup() {
   TEST_DIR="$(mktemp -d)"
   export TEST_DIR
-  ( cd "$TEST_DIR" && git init -q . && story project init --prefix DV >/dev/null 2>&1 )
+  ( cd "$TEST_DIR" && git init -q . && story project new --prefix DV >/dev/null 2>&1 )
 }
 
 teardown() {

@@ -43,7 +43,7 @@ If `.forge/plan-mapping.json` exists:
 
 ### 2. State and Type Setup
 
-`story project init` already seeds `todo` / `in-progress` / `done`. Create the two additional
+`story project new` already seeds `todo` / `in-progress` / `done`. Create the two additional
 states the execution loop needs (see `storyhook-contract.md`'s **Custom States** for why this
 isn't idempotent and must tolerate exit 2, and what the `active` role means):
 
@@ -150,7 +150,7 @@ from Step 5, `files_expected`) onto the returned skeleton, then write the result
 ```
 
 IDs come from the scaffold script's own `story list --json` read — never assume a prefix. (The
-default prefix is `SH`, not `HP`; if a project runs `story project init --prefix <X>`, IDs use
+default prefix is `SH`, not `HP`; if a project runs `story project new --prefix <X>`, IDs use
 `<X>` instead.)
 
 ### 7. Validate DAG

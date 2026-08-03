@@ -400,7 +400,7 @@ EOF
 # invoke the script from inside TEST_DIR.
 
 init_storyhook() {
-  ( cd "$TEST_DIR" && git init -q . && story project init --prefix ST >/dev/null 2>&1 )
+  ( cd "$TEST_DIR" && git init -q . && story project new --prefix ST >/dev/null 2>&1 )
 }
 
 # `story_type` is a fixed, project-scoped enum (story init seeds

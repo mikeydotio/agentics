@@ -10,7 +10,7 @@ SCRIPT="$BATS_TEST_DIRNAME/forge-crash-recover.sh"
 setup() {
   TEST_DIR="$(mktemp -d)"
   ( cd "$TEST_DIR" && git init -q . && git config user.email t@t.com && git config user.name t \
-      && story project init --prefix ST >/dev/null 2>&1 \
+      && story project new --prefix ST >/dev/null 2>&1 \
       && story state add verifying --super OPEN >/dev/null 2>&1 )
 }
 

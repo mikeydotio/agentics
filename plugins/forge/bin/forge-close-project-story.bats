@@ -12,7 +12,7 @@ SCRIPT="$BATS_TEST_DIRNAME/forge-close-project-story.sh"
 setup() {
   TEST_DIR="$(mktemp -d)"
   export TEST_DIR
-  ( cd "$TEST_DIR" && git init -q . && story project init --prefix CP >/dev/null 2>&1 )
+  ( cd "$TEST_DIR" && git init -q . && story project new --prefix CP >/dev/null 2>&1 )
   mkdir -p "$TEST_DIR/.forge"
 }
 

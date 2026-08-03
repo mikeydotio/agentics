@@ -18,7 +18,7 @@ REFERENCE_MD="$BATS_TEST_DIRNAME/../references/story-decomposition.md"
 
 setup() {
   TEST_DIR="$(mktemp -d)"
-  ( cd "$TEST_DIR" && git init -q . && story project init --prefix SC >/dev/null 2>&1 )
+  ( cd "$TEST_DIR" && git init -q . && story project new --prefix SC >/dev/null 2>&1 )
 }
 
 teardown() {

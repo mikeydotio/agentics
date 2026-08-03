@@ -4,6 +4,21 @@
 # — and under 3.11+ tomllib nests it natively. Either way the contract holds:
 # cfg["macos"]["sparkle"] carries enabled + the three path/key fields, and a
 # config WITHOUT the section degrades to safe defaults (enabled false).
+#
+# Case C (issue #117 self-review catch): the tomllib branch does ZERO
+# normalization (`return tomllib.loads(text)` verbatim) — unlike the regex
+# fallback, which always synthesizes the full macos.sparkle sub-dict with
+# defaults even when the section is absent from the source text. So under
+# tomllib (the real production interpreter — this project's own CLAUDE.md
+# notes "macOS 26 ships 3.13"), a config.toml with [macos] but no
+# [macos.sparkle] parses to a `cfg["macos"]` dict with NO "sparkle" key at
+# all. Every sparkle_cfg read in cmd_deploy MUST use a .get() chain
+# (`cfg.get("macos", {}).get("sparkle", {})`), never direct indexing
+# (`cfg["macos"]["sparkle"]`) — the latter KeyErrors on exactly that
+# tomllib-parsed, no-sparkle-section config. This Python (3.9.x) can't
+# exercise the tomllib branch directly, so Case C simulates its
+# unnormalized shape by hand and drives the exact guard expression
+# cmd_deploy's Sparkle preflight uses.
 set -euo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
@@ -68,8 +83,25 @@ spb = b.get("macos", {}).get("sparkle", {})
 assert spb.get("enabled", False) is False, f"B: enabled should default False, got {spb!r}"
 assert b["server"]["port"] == 8729, f"B: port {b['server']!r}"
 
+# Case C — a raw tomllib-shaped cfg (macos present, sparkle key ABSENT — no
+# normalization applied) must not KeyError through the exact expression
+# cmd_deploy's Sparkle preflight uses.
+c = {"macos": {"notarize": False, "notary_profile": ""}}
+c_sparkle = c.get("macos", {}).get("sparkle", {})
+assert c_sparkle == {}, f"C: expected {{}}, got {c_sparkle!r}"
+assert c_sparkle.get("enabled") is None, "C: preflight guard must read False/None, never raise"
+
 print(f"ok (python {sys.version_info.major}.{sys.version_info.minor}, "
       f"{'tomllib' if sys.version_info >= (3, 11) else 'regex-fallback'})")
 PY
+
+# Static regression guard: cmd_deploy must never index cfg["macos"]["sparkle"]
+# directly — only the defended .get("macos", {}).get("sparkle", {}) chain
+# (see Case C above). Direct indexing KeyErrors on a real tomllib-parsed
+# config.toml that has [macos] but no [macos.sparkle].
+if grep -n 'cfg\["macos"\]\["sparkle"\]' "$PLUGIN_ROOT/bin/deployit-cli"; then
+    echo "FAIL: found unsafe direct indexing of cfg[\"macos\"][\"sparkle\"] above"
+    exit 1
+fi
 
 echo "PASS"

@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | NOT STARTED — scaffolding session complete, first story not yet begun |
+| **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-14** |
-| **Completed this loop** | none |
-| **Last updated by** | scaffolding session, 2026-08-03 |
+| **Next story** | **AGE-11** |
+| **Completed this loop** | AGE-14, AGE-15 (one PR) |
+| **Last updated by** | AGE-14 session, 2026-08-03 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
@@ -26,24 +26,41 @@ via freshen, and stops.
 
 ---
 
-## Known state at loop start (2026-08-03, main @ `03c0591`, `VERSION` = v2.38.0)
+## Known state (updated 2026-08-03 by the AGE-14 session)
 
 Read this before you conclude something you did broke the build.
 
-- **`make test` is already red**, in two independent ways:
-  - **6 forge failures** — `289/290/313` in `forge-state.test.bats` and `384/385/386` in
-    `forge-storyhook-setup-contract.bats`, all `error: state ` + "`blocked` already exists".
-    This is exactly AGE-14, story #1 in the queue. They go green when it lands.
-  - **`test_shipped_content_matches_tagged_release`** — PRs #124 and #125 merged shipped
-    `plugins/**` content without a bump, so the tree is ahead of tag `v2.38.0`. The **first
-    bump any session performs clears this**, because it covers all accumulated drift, not just
-    that session's own. AGE-14's bump will do it.
-- Consequence: **until AGE-14 merges, the pre-push hook cannot pass.** For any push before then
-  (this scaffolding commit included), `SKIP_PREPUSH_TESTS=1` is the sanctioned bypass for a
-  change that ships no runtime code. After AGE-14, the gate is live again — do not bypass it.
-- No worktrees are in use by this loop. One unrelated worktree
-  (`.claude/worktrees/dual-host-plugin-compatibility`) and one leftover
-  (`.claude/worktrees/age-AGE-2`, merged, reclaimable) exist — ignore both.
+- **`make test` is now GREEN** (bar the two caveats below). The pre-push gate is live again —
+  **do not bypass it.**
+- **`session-stop.bats` "a hanging story handoff is bounded by a timeout" is load-flaky.** It
+  asserts a 12s wall-clock bound against an ~8.4s real runtime — ~3.6s of headroom. Unloaded it
+  passes 4/4; at load average ~13 it fails 2-of-3. Filed as **AGE-16**. If you see it red, check
+  `uptime` before believing it: run it serially before concluding anything.
+- **`test_shipped_content_matches_tagged_release`** is expected-red on any branch that changes
+  shipped `plugins/**` until that branch's `/semver bump` lands. Cleared for the #124/#125
+  backlog by AGE-14's bump.
+- Two `/issue do` worktrees were dispatched by the user mid-loop and are **live, not leftovers**:
+  `.claude/worktrees/age-117` and `age-118`. Do not reclaim them. Also present and unrelated:
+  `dual-host-plugin-compatibility`, and `age-AGE-2` (merged, reclaimable).
+
+### ⚠ Scope collision the next sessions must resolve
+
+The user dispatched **GitHub issue #118 — "Realign skills, agents, and model selection for the
+Claude 5 generation"** into its own worktree. That overlaps **AGE-6** (WS-C, rca realign) and
+**AGE-7** (WS-D, remaining plugins + prompt-hygiene lint), queue rows 5 and 8. Two agents editing
+the same skill files from different branches will conflict. **Before starting AGE-6, check
+whether #118 has merged**; if it has, re-scope or close AGE-6/AGE-7 against it rather than
+redoing the work. The user was asked to rule on ownership and had not replied when this session
+ended.
+
+### What AGE-14 turned out to be
+
+AGE-14 as filed was **incomplete, not wrong**. Its stated cause (`story state add blocked`
+colliding with a template that now ships `blocked`) was real but *unreachable*: the dominant
+failure was that **storyhook 2.0.0 renamed `story project init` → `story project new`**, so every
+fixture aborted in setup before `story state add` ever ran. 59 tests were red, not 6. The rename
+was filed as **AGE-15** and landed in the same PR (council-ruled). Four boundary defects found
+along the way were filed rather than fixed — see the new-stories list below.
 
 ---
 
@@ -54,8 +71,8 @@ without recording why in this file.
 
 | # | Story | Pri | Why here |
 |---|---|---|---|
-| 1 | **AGE-14** | high | Only `high`. `make test` is red until it lands, so the pre-push gate is dead for every session after this one. Must go first. |
-| 2 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
+| ✅ | ~~**AGE-14** + **AGE-15**~~ | high | **DONE** — merged together as one PR. See "What AGE-14 turned out to be" above. |
+| 1 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
 | 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
 | 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
 | 5 | **AGE-6** | med | WS-C, rca realign. Independent. |
@@ -66,7 +83,22 @@ without recording why in this file.
 | 9 | **AGE-9** | low | Council-decision story, independent. |
 | 10 | **AGE-13** | low | Council-decision story, independent. |
 
-**AGE-2 and AGE-3 are already `done`** — do not touch them.
+**AGE-2, AGE-3, AGE-14 and AGE-15 are already `done`** — do not touch them.
+
+### New stories filed by the AGE-14 session — slot these in
+
+Found while working AGE-14; filed rather than fixed, per the "defects become stories" rule. None
+is scheduled yet. Recommended: take **AGE-18** and **AGE-17** early — they are the reason a
+60-test breakage went unseen, and every "the suite is green" claim this loop makes is only as
+trustworthy as they are.
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — **first token only**, so `story project init` validated as verb `project` and passed. The F103 drift guard is structurally blind to every subcommand rename. |
+| **AGE-18** | high | `make test` **exits 0 when `bats` is absent** (`Makefile` `else echo "skipping"`, ~6 targets), so the pre-push gate is vacuously green on any machine without it. Same class: contract-check `exit 0`s on `story_cli_missing`. |
+| **AGE-19** | med | No storyhook **major-version pin** anywhere. An upstream major surfaces as ~60 unattributable failures instead of one assertion. |
+| **AGE-16** | med | `session-stop.bats`' 12s wall-clock bound sits only ~3.6s above real runtime → flakes under load. Cost this session real time and produced one false diagnosis. |
+| **AGE-20** | low | Ten duplicated storyhook fixture-creation sites across two plugins — why one upstream rename cost ten edits. **Deliberately deferred**: the 10th site is in a *different plugin*, so a shared helper is a new cross-plugin module boundary, not a mechanical extraction. Land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
 
 ---
 
@@ -195,6 +227,19 @@ closing summary in this file, and stop so the user comes back to a finished back
 - **A story's comments outrank its description.** Several here carry audit corrections that
   supersede the original text — AGE-7, AGE-8 and AGE-11 each have a "Audit correction
   (2026-08-03)" comment that changes their scope.
+- **Reproduce the story's stated cause before you fix it — the story can be wrong.** AGE-14 named
+  a specific error and predicted 6 failures; the real breakage was a different upstream change
+  and 59 failures. Its diagnosis had been written from *inference*, because the fixtures were
+  swallowing the CLI's actual error text. Run the failing tests and read the real output first.
+  If the story is wrong, file the true cause as its own story and say so in the PR — do not
+  quietly widen the original.
+- **Suspect load before you believe a timing failure.** Several suites here assert wall-clock
+  bounds with thin margins (AGE-16). Concurrent Claude sessions push load average past 13 and
+  flip them red. Check `uptime`, re-run serially, and only then treat it as signal. A subagent
+  in this session reported a "deterministic" failure that was pure load.
+- **Council decisions are archived, not just acted on.** `/council-vote` writes the full audit
+  trail to `.council/<slug>/` (gitignored). AGE-14's scope ruling is at
+  `.council/age14-fix-scope/DECISION.md` — read it before reopening that question.
 - `.freshen/` is gitignored and ephemeral; never commit it.
 
 ## Recovery — if the loop stalls

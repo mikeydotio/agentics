@@ -28,7 +28,7 @@ exit 2). Verify any command you're unsure of with `story help <command>` or `sto
 | Dependency between stories | `story relate <a> <relationship> <b>` | Only 8 relations exist — see **Relationship Vocabulary** |
 | Remove a dependency | `story unrelate <a> <relationship> <b>` | |
 | Decompose a plan into stories | `story decompose --stdin --json` (create) or `story decompose --stdin --dry-run` (preview) | One call does the whole job — see **Decompose** |
-| Add a custom state | `story state add <slug> --super OPEN\|CLOSED [--role active]` | Idempotent-unsafe: errors (exit 2) if the slug already exists. `--role active` marks the one state work starts in — at most one state may carry it, `story project init` already puts it on `in-progress`, so forge omits it for every state it adds — see **Custom States** |
+| Add a custom state | `story state add <slug> --super OPEN\|CLOSED [--role active]` | Idempotent-unsafe: errors (exit 2) if the slug already exists. `--role active` marks the one state work starts in — at most one state may carry it, `story project new` already puts it on `in-progress`, so forge omits it for every state it adds — see **Custom States** |
 | Status overview | `story summary --json` | `.summary.{total_open,total_closed,by_state,by_priority,blocked_count,ready_count,ready_stories}` |
 | Dependency graph | `story graph [--critical-path] [--parallel-groups] [--json]` | `--json` → `.graph.{critical_path,parallel_groups,overview}` — no cycle field, in JSON or text (see **DAG Validation**) |
 | Search | `story search "<query>" --json` | |
@@ -205,18 +205,22 @@ story comment <id> '{"blocked_reason":"decision","description":"..."}'
 
 ## Custom States
 
-`story project init` seeds `todo` / `in-progress` (role: active) / `done` by default. Any
-additional states forge needs (e.g. `verifying`, `blocked`) must be created explicitly:
+`story project new` seeds `todo` / `in-progress` (role: active) / `blocked` / `done` by default.
+Only states beyond that set must be created explicitly — for forge, that is `verifying` alone:
 
 ```bash
 story state add verifying --super OPEN
-story state add blocked --super OPEN
 ```
+
+**Do not add `blocked` here.** The project template ships it, and `story state add` is not
+idempotent, so re-adding it exits 2 and takes the whole `&&` chain down with it. This is the same
+reason the block omits `in-progress`. Anything this list adds that the template already provides
+is a bug — see AGE-14.
 
 **The `active` role.** At most one state may carry `--role active`. It has one meaning and one
 consumer: it is the state `story commit-sync` moves a story into when a commit referencing it
-first lands. Nothing in forge reads it. `story project init` assigns it to `in-progress`;
-`verifying` and `blocked` must not request it — a second `--role active` is rejected at write time
+first lands. Nothing in forge reads it. `story project new` assigns it to `in-progress`;
+`verifying` must not request it — a second `--role active` is rejected at write time
 (`error: only one state may have role \`active\`, but 2 do: …`). If a project has already moved the
 role elsewhere, leave it there: moving it back takes two calls (`story state set <old> --role none`
 then `story state set <new> --role active`) and is not forge's decision to make.
@@ -224,7 +228,7 @@ then `story state set <new> --role active`) and is not forge's decision to make.
 ## Custom Types
 
 `story_type` (set via `story new <title> --type <slug>` / `story set <id> --type <slug>` /
-`--json '{"story_type":...}'`) is a **fixed, project-scoped enum** — `story project init` seeds
+`--json '{"story_type":...}'`) is a **fixed, project-scoped enum** — `story project new` seeds
 `bug`/`chore`/`epic`/`story`/`task`, and setting any other slug errors (`unknown type
 \`<slug>\`. Available types: ...`, exit 2) until it's registered:
 

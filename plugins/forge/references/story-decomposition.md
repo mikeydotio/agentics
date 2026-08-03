@@ -21,13 +21,12 @@ Before creating stories, check if `.forge/plan-mapping.json` exists:
 
 ### 2. State and Type Setup
 
-`story project init` already seeds `todo` / `in-progress` / `done`. Create the two additional
-states forge's execution loop needs (see `storyhook-contract.md`'s **Custom States** for the
-not-idempotent/exit-2 caveat and what the `active` role means):
+`story project new` already seeds `todo` / `in-progress` / `blocked` / `done`. Create the one
+additional state forge's execution loop needs (see `storyhook-contract.md`'s **Custom States** for
+the not-idempotent/exit-2 caveat and what the `active` role means):
 
 ```bash
 story state add verifying --super OPEN
-story state add blocked --super OPEN
 ```
 
 Also register the `escalate` custom `story_type` triage and the blocked-stories-pause flow use to
@@ -119,7 +118,7 @@ loop doesn't depend on reading DESIGN.md later.
 `bin/forge-mapping-scaffold.sh --plan .forge/PLAN.md` computes the mechanical fields — `plan_hash`
 (portable MD5, no `md5sum`/`md5` flag differences to reconcile) and a per-story skeleton with real
 IDs and titles read back from `story list --json` (never an assumed prefix — the default is `SH`,
-not `HP`; a project that ran `story project init --prefix <X>` uses `<X>` instead). Fill in each story's
+not `HP`; a project that ran `story project new --prefix <X>` uses `<X>` instead). Fill in each story's
 judgment fields on top of that skeleton — `task_ref`/`wave` from PLAN.md, `acceptance_criteria`,
 `design_section` from Step 5 above, `files_expected` — then write the result to
 `.forge/plan-mapping.json` (version-controlled):

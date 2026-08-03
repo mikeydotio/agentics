@@ -37,7 +37,7 @@ REAL_STORY="$(command -v story)"
 mk_real_story_repo() {
   local dir
   dir=$(mk_dispatch_repo)
-  ( cd "$dir" && story project init --prefix TST >/dev/null 2>&1 )
+  ( cd "$dir" && story project new --prefix TST >/dev/null )
   printf '%s' "$dir"
 }
 

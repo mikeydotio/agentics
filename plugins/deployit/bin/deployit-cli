@@ -844,63 +844,190 @@ def _stage_ios_or_visionos(state: Path, plugin_root: Path,
     return artifact_name, ipa_url, manifest_url
 
 
-def _find_sparkle_sign_update(plugin_root: Path, sparkle_cfg: dict):
-    """Locate Sparkle's `sign_update`. Resolution mirrors _xcodebuild_export's
-    ExportOptions ladder: env override -> config path -> PATH -> common SPM /
-    Homebrew locations. Returns a Path, or None when nothing is found."""
-    env = os.environ.get("DEPLOYIT_SPARKLE_SIGN_UPDATE")
-    if env and Path(env).is_file():
-        return Path(env)
-    cfg_path = sparkle_cfg.get("sign_update_path") or ""
-    if cfg_path and Path(cfg_path).is_file():
-        return Path(cfg_path)
-    on_path = _shutil.which("sign_update")
-    if on_path:
-        return Path(on_path)
+# Sparkle `sign_update` discovery roots (issue #117). Module-level so tests
+# can monkeypatch them instead of touching real Caskroom/DerivedData paths.
+# Homebrew has deprecated the `sparkle` cask ("does not pass the macOS
+# Gatekeeper check! It will be disabled on 2026-09-01") and quarantines its
+# downloads; the SwiftPM artifact bundle a Sparkle-using project already has
+# is byte-identical, carries no quarantine xattr, and is version-matched to
+# what the app actually links — so it is tried first.
+SPARKLE_SPM_DERIVED_DATA_GLOBS = [
+    "{home}/Library/Developer/Xcode/DerivedData/{project}-*/SourcePackages/"
+    "artifacts/*/Sparkle/bin/sign_update",
+    "{home}/Library/Developer/Xcode/DerivedData/*/SourcePackages/"
+    "artifacts/*/Sparkle/bin/sign_update",
+]
+SPARKLE_CASK_ROOTS = [
+    Path("/opt/homebrew/Caskroom/sparkle"),
+    Path("/usr/local/Caskroom/sparkle"),
+]
+
+
+def _sparkle_version_sort_key(path: Path):
+    """Sort key that picks the NEWEST of several `sign_update` glob hits by
+    parsed version, not lexicographically. The old code did
+    `sorted(glob(...))[0]` — with 2.9.3 and 2.9.4 both installed that returns
+    2.9.3 (string '3' < '4'), and across majors 1.9.0 beats 2.0.0 (issue
+    #117, AC 5). Every dotted-number run in the path is a candidate; the
+    largest wins. Paths with no parseable version sort behind ones that have
+    one, with the path string as a deterministic tiebreaker."""
+    versions = [tuple(int(part) for part in match.split("."))
+                for match in _re.findall(r"\d+(?:\.\d+)+", str(path))]
+    return (max(versions) if versions else (), str(path))
+
+
+def _sparkle_glob_newest(pattern: str):
+    """Newest file matching `pattern` by _sparkle_version_sort_key, or None."""
     import glob as _glob
-    home = str(Path.home())
-    patterns = [
-        "/opt/homebrew/Caskroom/sparkle/*/bin/sign_update",
-        "/usr/local/Caskroom/sparkle/*/bin/sign_update",
-        home + "/Library/Developer/Xcode/DerivedData/*/SourcePackages/"
-        "artifacts/*/Sparkle/bin/sign_update",
-    ]
-    for pattern in patterns:
-        for hit in sorted(_glob.glob(pattern)):
-            if Path(hit).is_file():
-                return Path(hit)
-    return None
+    hits = [Path(hit) for hit in _glob.glob(pattern) if Path(hit).is_file()]
+    return max(hits, key=_sparkle_version_sort_key) if hits else None
 
 
-def _sparkle_sign(plugin_root: Path, zip_path: Path, sparkle_cfg: dict):
+def _is_quarantined(path: Path) -> bool:
+    """True if `path` carries com.apple.quarantine — the exact condition that
+    got a Homebrew-cask `sign_update` killed by Gatekeeper with a non-zero
+    exit and EMPTY stderr in issue #117's postmortem. Diagnostic only:
+    CPython's os.getxattr doesn't reach macOS's xattr namespace, so this
+    shells to /usr/bin/xattr; missing on non-macOS, so that case (and any
+    other failure to invoke it) reads as "not quarantined" rather than
+    raising — quarantine is a warning, never the primary failure signal."""
+    try:
+        res = subprocess.run(["xattr", "-p", "com.apple.quarantine", str(path)],
+                             capture_output=True, text=True)
+    except (FileNotFoundError, OSError):
+        return False
+    return res.returncode == 0
+
+
+def _resolve_sparkle_sign_update(sparkle_cfg: dict, project: str = "") -> dict:
+    """Locate Sparkle's `sign_update`. Resolution is intent-first: an
+    operator who pinned a path (env override or config) meant it, so a pin
+    that doesn't exist on disk is a hard error naming the pin — never a
+    silent fall-through to discovery. That fall-through is exactly how issue
+    #117 shipped an unsigned release: a version-stamped Caskroom path
+    disappeared under `brew upgrade`, and the missing-file check silently
+    substituted a different, quarantined binary with no diagnostic naming
+    what actually ran. Only an EMPTY key falls through to discovery, which
+    prefers the SwiftPM artifact bundle over the deprecated Homebrew cask
+    (see the module-level SPARKLE_* comment).
+
+    Returns {"path": Path|None, "source": str, "warnings": [str]} — callers
+    need to name how the tool was resolved, not just whether it was, so a
+    failure message can always say what actually ran (issue #117, AC 3)."""
+    result = None  # (Path, source-description)
+
+    env = os.environ.get("DEPLOYIT_SPARKLE_SIGN_UPDATE")
+    if env:
+        p = Path(env)
+        if not p.is_file():
+            fail(f"DEPLOYIT_SPARKLE_SIGN_UPDATE={env!r} does not exist")
+        result = (p, "env DEPLOYIT_SPARKLE_SIGN_UPDATE")
+
+    if result is None:
+        cfg_path = sparkle_cfg.get("sign_update_path") or ""
+        if cfg_path:
+            p = Path(cfg_path)
+            if not p.is_file():
+                fail("macos.sparkle.sign_update_path="
+                     f"{cfg_path!r} (from config.toml) does not exist")
+            result = (p, "config macos.sparkle.sign_update_path")
+
+    if result is None:
+        on_path = _shutil.which("sign_update")
+        if on_path:
+            result = (Path(on_path), "PATH")
+
+    warnings = []
+
+    if result is None:
+        home = str(Path.home())
+        for pattern in SPARKLE_SPM_DERIVED_DATA_GLOBS:
+            hit = _sparkle_glob_newest(pattern.format(home=home, project=project or "*"))
+            if hit:
+                result = (hit, "SwiftPM artifact bundle")
+                break
+
+    if result is None:
+        for root in SPARKLE_CASK_ROOTS:
+            hit = _sparkle_glob_newest(str(root / "*" / "bin" / "sign_update"))
+            if hit:
+                warnings.append(
+                    f"{hit} was resolved from the deprecated Homebrew `sparkle` "
+                    "cask (`brew info --cask sparkle`: disabled 2026-09-01) — "
+                    "prefer the SwiftPM artifact bundle; see references/sparkle.md")
+                result = (hit, f"Homebrew cask ({root})")
+                break
+
+    if result is None:
+        return {"path": None, "source": "not found", "warnings": warnings}
+
+    path, source = result
+    if _is_quarantined(path):
+        warnings.append(
+            f"{path} carries the com.apple.quarantine attribute — Gatekeeper "
+            "kills it on first run with a non-zero exit and NO stderr (the "
+            f"exact failure issue #117 hardened against). Fix: xattr -d "
+            f"com.apple.quarantine {path}")
+    return {"path": path, "source": source, "warnings": warnings}
+
+
+def _gatekeeper_diagnosis(tool: Path) -> str:
+    """A non-zero sign_update exit with EMPTY stdout AND stderr is Gatekeeper
+    killing the process before it can write anything — the signature of
+    issue #117's incident (a quarantined, adhoc-signed Homebrew-cask
+    binary). Name it as fact when the quarantine xattr confirms it, as the
+    leading hypothesis otherwise, so the failure is never just a bare colon
+    with nothing after it (AC 3)."""
+    if _is_quarantined(tool):
+        return ("(empty stdout/stderr) — Gatekeeper killed it: this binary "
+                f"carries com.apple.quarantine. Fix: xattr -d "
+                f"com.apple.quarantine {tool}")
+    return ("(empty stdout/stderr) — likely Gatekeeper killing an "
+            f"unsigned/adhoc-signed binary before it could run. Check: "
+            f"xattr -p com.apple.quarantine {tool}")
+
+
+def _sparkle_sign(zip_path: Path, sparkle_cfg: dict, project: str):
     """Return the base64 EdDSA signature for zip_path, or None when signing
-    can't proceed. Best-effort: a missing tool / key / parse failure only warns,
-    so the deploy still ships the .dmg. DEPLOYIT_SKIP_SPARKLE_SIGN stubs a
+    can't proceed. Best-effort: a missing tool / non-zero exit / parse
+    failure only warns, so the deploy still ships the .dmg — but every
+    warning now reports the resolved binary and how it was resolved, never a
+    bare message (issue #117, AC 3). DEPLOYIT_SKIP_SPARKLE_SIGN stubs a
     deterministic signature for tests (no real Sparkle toolchain needed)."""
     if os.environ.get("DEPLOYIT_SKIP_SPARKLE_SIGN"):
         return "TEST-ED-SIGNATURE-DO-NOT-SHIP=="
-    tool = _find_sparkle_sign_update(plugin_root, sparkle_cfg)
+
+    resolved = _resolve_sparkle_sign_update(sparkle_cfg, project)
+    for w in resolved["warnings"]:
+        sys.stderr.write(f"deployit: WARNING — {w}\n")
+
+    tool = resolved["path"]
+    source = resolved["source"]
     if tool is None:
         sys.stderr.write(
-            "deployit: [macos.sparkle] enabled but `sign_update` not found; "
-            "skipping Sparkle for this build (see references/sparkle.md)\n")
+            "deployit: sign_update failed; skipping Sparkle for this build: "
+            "no `sign_update` found (checked env, config, PATH, SwiftPM "
+            "artifacts, and the Homebrew cask — see references/sparkle.md)\n")
         return None
+
     cmd = [str(tool), str(zip_path)]
     key_path = sparkle_cfg.get("private_key_path") or ""
     if key_path:
         cmd += ["--ed-key-file", key_path]
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
+        detail = res.stderr.strip() or res.stdout.strip() or _gatekeeper_diagnosis(tool)
         sys.stderr.write(
-            "deployit: sign_update failed; skipping Sparkle for this build: "
-            f"{res.stderr.strip() or res.stdout.strip()}\n")
+            f"deployit: sign_update failed; skipping Sparkle for this build: "
+            f"sign_update ({tool}, via {source}) failed: {detail}\n")
         return None
     # sign_update prints e.g.: sparkle:edSignature="BASE64==" length="12345"
     m = _re.search(r'edSignature="([^"]+)"', res.stdout)
     if not m:
         sys.stderr.write(
-            f"deployit: could not parse sign_update output ({res.stdout.strip()!r}); "
-            "skipping Sparkle\n")
+            f"deployit: sign_update failed; skipping Sparkle for this build: "
+            f"could not parse sign_update ({tool}, via {source}) output "
+            f"({res.stdout.strip()!r})\n")
         return None
     return m.group(1)
 
@@ -963,7 +1090,7 @@ def _stage_sparkle_zip(plugin_root: Path, dst: Path, build_id: str,
     zip_name = f"{meta_full['project']}.zip"
     zip_path = dst / zip_name
     _ditto_zip_app(app_path, zip_path)
-    signature = _sparkle_sign(plugin_root, zip_path, sparkle_cfg)
+    signature = _sparkle_sign(zip_path, sparkle_cfg, meta_full["project"])
     if signature is None:
         zip_path.unlink(missing_ok=True)
         return None
@@ -1028,10 +1155,23 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
     sparkle_detect = _detect_sparkle_in_app(staging_app)
 
     # Sparkle (opt-in): zip + EdDSA-sign the .app before it's removed below.
+    # When `release` is set, a failed sign is fatal (_sparkle_sign_failure ->
+    # fail() -> exit 1, issue #117) — this call does not return None on that
+    # path, so sparkle_meta is only ever falsy here when release is False.
     sparkle_meta = None
     if sparkle_cfg.get("enabled"):
-        sparkle_meta = _stage_sparkle_zip(plugin_root, dst, build_id, staging_app,
-                                          meta_full, sparkle_cfg)
+        try:
+            sparkle_meta = _stage_sparkle_zip(plugin_root, dst, build_id, staging_app,
+                                              meta_full, sparkle_cfg)
+        except SystemExit:
+            # An explicitly configured sign_update_path/env override that
+            # doesn't exist is a hard fail() (issue #117, AC 2) — the .dmg
+            # hdiutil already wrote above must not linger as an orphaned,
+            # meta-less artifact under serve/: no _meta.json is ever written
+            # on this path, so cmd_deploy's index publish never runs;
+            # removing dst makes that true on disk too.
+            _shutil.rmtree(dst, ignore_errors=True)
+            raise
 
     # GitHub release asset: the canonical signed-app zip. Reuse Sparkle's zip
     # when it produced one (byte-identical archive of the same bundle);

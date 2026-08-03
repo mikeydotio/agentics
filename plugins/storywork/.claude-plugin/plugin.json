@@ -1,6 +1,6 @@
 {
   "name": "storywork",
-  "version": "2.38.0",
+  "version": "2.39.0",
   "description": "storyhook-based dispatch actuator: story.sh dispatch <id> claims a story via storyhook's --if-state CAS primitive and hands it off to a fresh plan-mode Claude session in a new tmux window + per-story worktree; story.sh complete <id> cleans up its merged worktree/branch (never touches story state -- the caller performs the actual state transition). HARD DEPENDENCY: sources plugins/issue/lib/session.sh, so the `issue` plugin must also be installed alongside `storywork`.",
   "author": {
     "name": "mikeydotio"

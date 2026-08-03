@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.39.0] - 2026-08-03
+
+### Fixed
+- stop adding `blocked`, which the storyhook template now ships (6717023)
+- migrate fixtures and docs to `story project new` (daaa4c1)
+- stop silently skipping post-bump hooks when --plugin-root is omitted (af86c9e)
+- update the story CLI init invocation for storyhook 2.0 (ac50aed)
+- adapt storyhook fixtures to the CLI's current surface (00d2183)
+
+### Changed
+- Merge pull request #126 from mikeydotio/docs/backlog-loop-progress (a4cbc72)
+- Merge pull request #125 from mikeydotio/fix/AGE-3-semver-post-bump-hooks-skipped (03c0591)
+- Merge pull request #124 from mikeydotio/fix/age-2-storyhook-active-role-invariant (4e048e3)
+- Merge pull request #123 from mikeydotio/chore/storyhook-prefix-age (10e096e)
+- Merge pull request #122 from mikeydotio/feat/claude5-realign-forge (660cc15)
+
+### Documentation
+- record AGE-14/AGE-15 in the backlog loop's progress file (9f8828d)
+- add PROGRESS.md to drive the autonomous backlog loop (b5b8a1a)
+- correct the storyhook state, role, and init-verb contract (80ae367)
+
+### Testing
+- stop swallowing storyhook's stderr when fixtures create a project (6a14bda)
+- execute decompose's documented storyhook setup (ac8528b)
+
+### Maintenance
+- rename the project prefix from HP to AGE (ebe5326)
+
+_[manual]_
+
 ## [v2.38.0] - 2026-07-30
 
 ### Added

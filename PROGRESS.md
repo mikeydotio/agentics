@@ -32,10 +32,16 @@ Read this before you conclude something you did broke the build.
 
 - **`make test` is now GREEN** (bar the two caveats below). The pre-push gate is live again —
   **do not bypass it.**
-- **`session-stop.bats` "a hanging story handoff is bounded by a timeout" is load-flaky.** It
-  asserts a 12s wall-clock bound against an ~8.4s real runtime — ~3.6s of headroom. Unloaded it
-  passes 4/4; at load average ~13 it fails 2-of-3. Filed as **AGE-16**. If you see it red, check
-  `uptime` before believing it: run it serially before concluding anything.
+- **`session-stop.bats` "a hanging story handoff is bounded by a timeout" WILL block your push.**
+  Filed as **AGE-16**, now `high` + `blocks-ci`. It first looked like load-flakiness (passes 4/4
+  unloaded, fails 2-of-3 at load ~13), but measuring it disproved that: isolated runs took
+  5.68s / 11.28s / **27.46s**, and 27s against a **5s** internal timeout means F051's bound is not
+  holding at all. Treat a red here as the known defect, not as something you broke — but confirm
+  your branch does not touch `session-stop.sh`/`.bats` before you accept that.
+- **`SKIP_PREPUSH_TESTS=1` was needed twice in the AGE-14 session**, solely because of AGE-16 and
+  AGE-21 — never to mask anything from that branch. If you must bypass, run the full suite first,
+  record the failing test names and why they are unrelated, and put that evidence in the PR body.
+  Bypassing without that record is the thing the rule exists to stop.
 - **`test_shipped_content_matches_tagged_release`** is expected-red on any branch that changes
   shipped `plugins/**` until that branch's `/semver bump` lands. Cleared for the #124/#125
   backlog by AGE-14's bump.
@@ -96,8 +102,9 @@ trustworthy as they are.
 |---|---|---|
 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — **first token only**, so `story project init` validated as verb `project` and passed. The F103 drift guard is structurally blind to every subcommand rename. |
 | **AGE-18** | high | `make test` **exits 0 when `bats` is absent** (`Makefile` `else echo "skipping"`, ~6 targets), so the pre-push gate is vacuously green on any machine without it. Same class: contract-check `exit 0`s on `story_cli_missing`. |
+| **AGE-16** | **high** | **`blocks-ci`.** forge's Stop hook: F051's 5s timeout does **not** bound a hung `story handoff`. Isolated runs measured 5.68s / 11.28s / **27.46s** — 27s against a 5s limit means it is not bounded at all (an orphaned grandchild appears to hold the command-substitution pipe open). A production defect, not a flaky assertion. **It blocked two consecutive full `make test` runs during the AGE-14 session** while all other 427 forge tests passed. **Do not "fix" it by raising the 12s bound** — that hides the defect the number is exposing. |
 | **AGE-19** | med | No storyhook **major-version pin** anywhere. An upstream major surfaces as ~60 unattributable failures instead of one assertion. |
-| **AGE-16** | med | `session-stop.bats`' 12s wall-clock bound sits only ~3.6s above real runtime → flakes under load. Cost this session real time and produced one false diagnosis. |
+| **AGE-21** | med | `plugins/deployit/tests/test-cli-rm.sh` depends on a **live local deployit backend daemon** (`:8729`); when it is unavailable the test fails and blocks unrelated pushes. Passed 3/3 in earlier runs, failed once under contention from the `age-117` session, passed again immediately after. Same class as AGE-18 — a gate that does not mean what it says. |
 | **AGE-20** | low | Ten duplicated storyhook fixture-creation sites across two plugins — why one upstream rename cost ten edits. **Deliberately deferred**: the 10th site is in a *different plugin*, so a shared helper is a new cross-plugin module boundary, not a mechanical extraction. Land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
 
 ---

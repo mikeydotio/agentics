@@ -1,6 +1,8 @@
 ---
 name: greenlight
 description: Manage the greenlight pre-tool-use safety hook. Control permission mode behavior, analysis settings, allowlists/blocklists, and test commands.
+model: sonnet
+effort: medium
 ---
 
 # Greenlight — Safety Hook Manager

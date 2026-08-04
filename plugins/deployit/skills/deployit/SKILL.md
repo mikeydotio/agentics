@@ -1,7 +1,9 @@
 ---
 name: deployit
-description: Use when the user wants to deploy an iOS / macOS / visionOS app to their tailnet for OTA install on their own devices. Commands are `/deployit bootstrap` (one-time per Mac), `/deployit deploy [--platform ios|macos|visionos] [--scheme NAME]`, `/deployit list`, `/deployit url`, `/deployit status`, `/deployit gc`, and `/deployit redeploy [--source PATH]` (refresh daemon + verify after PWA changes). When the project uses the semver plugin, deploy reports the semver version in the web UI and bumps it when it has not changed since the last build. Every macOS deploy also publishes a GitHub release of the Developer-ID-signed app (as a .zip) with agent-authored notes; pass `--no-release` to skip. Replaces hand-rolled `Tools/Deploy/deploy-ios.sh`-style scripts.
+description: Use when the user wants to deploy an iOS / macOS / visionOS app to their tailnet for OTA install on their own devices. Commands: `/deployit bootstrap` (one-time setup), `deploy [--platform P] [--scheme S]`, `list`, `url`, `status`, `gc`, `redeploy [--source PATH]`. Reports/bumps the semver version in the web UI when present. Every macOS deploy also publishes a Developer-ID-signed GitHub release (pass `--no-release` to skip).
 argument-hint: <bootstrap | deploy [--platform P] [--scheme S] [--no-release] | list | url | status | gc | rm [--build ID | --product BUNDLE_ID --platform P] | redeploy [--source PATH]>
+model: sonnet
+effort: medium
 ---
 
 # deployit Orchestrator
@@ -196,3 +198,4 @@ appended to the original command.
 - `references/tailscale-serve.md` — proxy config + Mac App Store variant quirks
 - `references/troubleshooting.md` — common archive/export failures + recipes
 - `references/semver.md` — semver integration: version display + deploy-time bump guard
+- `references/index-publishing.md` — appcast/listing PR publish flow (`publish = "auto"`, `auto_merge`), referenced from troubleshooting.md's ruleset-block recipe

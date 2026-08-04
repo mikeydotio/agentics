@@ -3,6 +3,7 @@ name: semver
 description: Use when the user wants to manage semantic versioning for their project. Handles version tracking (start/stop), version bumping (major/minor/patch) with changelog generation, assigning an explicit version (set), one-shot initialization (init), reading current version, auto-bump configuration, and sync integrity validation/repair. Commands are /semver current, /semver bump, /semver set, /semver init, /semver tracking, /semver auto-bump, /semver validate, and /semver repair.
 argument-hint: <current | bump <major|minor|patch> [--force] | set <vX.Y.Z> | init [vX.Y.Z] | tracking <start [options]|stop> | auto-bump <start|stop> | validate | repair>
 model: sonnet
+effort: medium
 ---
 
 # Semantic Versioning Orchestrator

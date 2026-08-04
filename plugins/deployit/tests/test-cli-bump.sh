@@ -7,8 +7,12 @@ TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 SEMVER_CLI="$(cd "$PLUGIN_ROOT/.." && pwd)/semver/bin/semver-cli"
 
+# Fail, never skip: SEMVER_CLI is a fixed path inside this repository, so its
+# absence means a broken checkout — not "not applicable". run-tests.sh counts an
+# exit 0 as PASS, so skipping here reported a green suite for a test that never
+# ran (the AGE-18 class).
 if [[ ! -f "$SEMVER_CLI" ]]; then
-    echo "SKIP: semver-cli not found at $SEMVER_CLI"; exit 0
+    echo "FAIL: semver-cli not found at $SEMVER_CLI (broken checkout?)" >&2; exit 1
 fi
 
 REPO=$(mktemp -d)

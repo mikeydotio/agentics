@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-16** |
-| **Next story** | AGE-11 (see queue) |
-| **Completed this loop** | AGE-14, AGE-15 (one PR) |
-| **Last updated by** | AGE-16 session, 2026-08-03 |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-11** |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16 |
+| **Last updated by** | AGE-16 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
@@ -26,7 +26,7 @@ via freshen, and stops.
 
 ---
 
-## Known state (updated 2026-08-03 by the AGE-14 session)
+## Known state (updated 2026-08-04 by the AGE-16 session)
 
 Read this before you conclude something you did broke the build.
 
@@ -49,10 +49,14 @@ Read this before you conclude something you did broke the build.
     `.metadata_never_index` guidance does not apply. Warming is the only control that works.
   - Prefer an **effect oracle** over a clock reading wherever you can: assert a marker the command
     could only have written had it not been killed, not that `elapsed < N`.
-- **`SKIP_PREPUSH_TESTS=1` was needed twice in the AGE-14 session**, solely because of AGE-16 and
-  AGE-21 — never to mask anything from that branch. If you must bypass, run the full suite first,
-  record the failing test names and why they are unrelated, and put that evidence in the PR body.
-  Bypassing without that record is the thing the rule exists to stop.
+- **`SKIP_PREPUSH_TESTS=1` was NOT needed by the AGE-16 session** — the gate passed on its own for
+  the first time in three sessions (`MAKE_EXIT=0`, 572 bats assertions + 209 shell checks, zero
+  failures, zero skipped suites, at v2.39.1). Treat a bypass as a red flag again, not routine. If
+  you must bypass, run the full suite first, record the failing test names and why they are
+  unrelated, and put that evidence in the PR body.
+- **Capture full output when you run `make -k test`.** Piping it through `tail` hides which suite
+  failed and costs you a second ~15-minute run — redirect to a log file instead. Expect ~15 min
+  wall-clock, longer when another session is running its own suite concurrently.
 - **`test_shipped_content_matches_tagged_release`** is expected-red on any branch that changes
   shipped `plugins/**` until that branch's `/semver bump` lands. Cleared for the #124/#125
   backlog by AGE-14's bump.
@@ -69,6 +73,11 @@ the same skill files from different branches will conflict. **Before starting AG
 whether #118 has merged**; if it has, re-scope or close AGE-6/AGE-7 against it rather than
 redoing the work. The user was asked to rule on ownership and had not replied when this session
 ended.
+
+**Still unresolved as of the AGE-16 session (2026-08-04):** issue #118 is still `OPEN` and its
+worktree is still live, as is `age-117` (issue #117, also open). Nothing has merged, so the
+collision is intact — AGE-6 is now queue row 6, which buys several stories of runway before it
+matters. Re-check `gh issue view 118` when you reach it rather than trusting this line.
 
 ### What AGE-14 turned out to be
 

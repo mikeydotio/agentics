@@ -14,18 +14,127 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-26** (claimed 2026-08-04, branch `fix/AGE-26-greenlight-story-verb-surface`) |
-| **Next story** | **AGE-26** — greenlight auto-approves the whole `story` CLI on a premise storyhook 2.0 falsified; the remaining work is the trust-boundary judgement (queue row 16). Lowest-ID ready `medium`, so `story next` and this table **agree**. Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22 |
-| **Repo version** | **v3.6.0** — unchanged. AGE-22 touched **no `plugins/**` at all** (root `tests/`, `Makefile`, `CLAUDE.md` only), so **no bump was owed** — same as AGE-19 and AGE-21 before it. |
-| **Last updated by** | AGE-22 session, 2026-08-04 |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-34** — `forge-integrity.bats` snapshots the real working tree, so two concurrent `make test` runs in one checkout fail each other spuriously. Lowest-ID ready `medium`; `story next` agrees. ⚠ Its cheapest fix also kills the duplicated gate this loop pays on every story, and it pairs with **AGE-36** (same economics — fix them together). Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26 |
+| **Repo version** | **v3.7.0** — bumped by AGE-26 (minor). It changed shipped `plugins/greenlight/**` runtime content, so a bump was **owed** — unlike AGE-19/21/22, which touched no shipped content. |
+| **Last updated by** | AGE-26 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-26 session)
+
+- **AGE-26 is DONE and shipped as v3.7.0. AGE-34 leads the queue.** It changed shipped
+  `plugins/greenlight/**`, so the bump was owed — run the pathspec check yourself rather than
+  assuming which case you are in:
+  `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **non-empty means bump.**
+- **⚠ THE CHAIR'S OWN VERB ENUMERATION WAS WRONG, AND IT WAS THE MOST USEFUL ERROR OF THE SESSION.**
+  The brief listed "44 top-level verbs" harvested from `story help --all`. That is the help-**topic**
+  index, not the command surface. All three council seats caught it independently. Measured:
+
+  | Source | Count | Wrong how |
+  |---|---|---|
+  | `help --all` headings | **45** (not 44) | 4 are **not commands** (`states`, `storage`, `json-format`, `relink`) |
+  | `story help` Usage block | **48** | omits `context`, `sync-git` |
+  | Reality | **≥50** | `context` and `sync-git` execute and are in **neither** |
+
+  The two verbs missing from the chair's list were **`plugin`** (`story plugin install <target>`
+  installs third-party code) and **`store`** (`story store new <path>` writes a store file at an
+  arbitrary path) — the two most dangerous on the surface. **A table built from that list with a
+  fail-OPEN default would have auto-approved arbitrary code installation, inside the very PR whose
+  purpose was to stop auto-approving dangerous verbs.** That is why the default is fail-closed, and
+  why **no completeness guard exists**: a guard is impossible when the CLI cannot enumerate itself.
+- **⚠ THE STORY REFUTED TWO CLAUSES OF THE STALE PREMISE AND MISSED THE THIRD.** AGE-26 says the
+  store is global and un-revertible (true). The premise's third clause — *"never touches system
+  state"* — is falsified verbatim by `story update`: *"atomically replaces the running executable."*
+  Also unlisted by the story: `story project new` writes `.storyhook.toml` **and `AGENTS.md`** into
+  the cwd (measured in a fresh `git init`), `story web start` binds the machine's **Tailscale IP**,
+  `story github-sync` pushes to GitHub Issues, and `story tui` would hang an unattended session.
+  Counter-measured: **`story scaffold` writes NO file** — all three variants emit to stdout and the
+  directory listing is byte-identical before and after. Three seats verified that independently;
+  the natural assumption is false. Same for `report --html`, `context`, `export`, `load-context`.
+- **⚠ THE DECIDING FACT WAS IN THE PLAN EXPLORER, AND THE BRIEF NEVER LOOKED THERE.** Measured 7/7
+  under `GREENLIGHT_PLAN_EXPLORER=1` **before** the fix: `story purge --force`,
+  `story project delete --force`, `story update --force` and `story plugin install evil` all
+  returned **allow**, with the reason string *"plan exploration: readonly/safe command"* — while
+  `git push origin main`, `rm -rf /tmp/x` **and `bash -c 'story purge …'`** were all **denied** in
+  the same sandbox. Wrapping the command made it MORE restricted than typing it bare. The sandbox
+  had exactly one hole and it was this.
+- **The shipped rule, and it is mechanical — apply it to a verb you have never seen.** ALLOW iff the
+  worst case is a wrong story RECORD in the current project, repairable by another `story` command.
+  **Return 2 ONLY if `is_known_destructive` already ranks an equivalent operation at 2 by command
+  name**, with the peer named in a comment at the arm. Everything else, including every unrecognised
+  verb, returns 1. Bucket 2 is exactly five: `purge`, `project delete` (peer `rm|rmdir|unlink|shred`),
+  `update`, `plugin install|uninstall` (peer `apt|brew|yum|dnf|pacman`).
+  - The peer rule is **self-limiting** — bucket 2 cannot grow without someone first editing
+    `is_known_destructive`, a far louder act — and it is why **no rename of `any_destructive` was
+    needed**: if every `story` verb at 2 mirrors an existing 2, "destructive" is already the right
+    word and no calibration ambiguity forms. That property is what won the vote.
+- **⚠ `delete` IS ALLOWED AND `purge` IS NOT — that is storyhook's design, not a judgement.**
+  `delete` is a soft tombstone `reopen` undoes; `purge` **refuses a story that was not soft-deleted
+  first**. So gating `purge` alone gates the entire irreversible path at zero cost to the reversible
+  one. Do not "tidy" this into a single rule.
+- **⚠ THE EXTRACTOR MUST FOLLOW `is_safe_git`, NEVER `is_safe_gh` — and the story's own fix
+  direction pointed at the wrong one.** storyhook accepts global flags **before** the verb and two
+  of them **take a value** (`--store-path <file>`, `--project <slug>`). `is_safe_gh`'s `$(i+1)` form
+  reads `--json` as the verb; a flag-skipper that does not consume values reads the **path** as the
+  verb. Both misreads are silent. Verified `story --json purge ABC-1` returned **allow** pre-fix.
+- **⚠ A NARROWING GUARD WAS PROPOSED, VOTED FOR, AND WITHDRAWN BY ALL THREE SEATS — do not rebuild
+  it.** It would grep shipped docs for "verbs an agent is told to type". Measured: the **only**
+  occurrences of `story purge` and `story project delete` in shipped `plugins/**` were
+  `greenlight.sh:484-485`, **inside greenlight's own comment describing this defect** — so the guard
+  would have read the sentence documenting the bug as a **mandate to keep `story purge` allowed**,
+  while reporting green. The AGE-11 rule inverted.
+  - **The transferable rule, and it is the sharpest result of the session:**
+    `bounded-capture-guard.sh` is sound because a `timeout` call is **shell syntax in a shell file**
+    — a decidable predicate over a formal grammar. `story purge` in a markdown skill is **prose**.
+    They look like the same shape and are not; the difference is whether the corpus is a **language
+    or a document**. A guard over a document needs a corpus test, which needs its own corpus test.
+  - What replaces it: the allowlist pin asserts **SET EQUALITY**, which is bidirectional — deleting
+    `move` reds it exactly as adding `purge` does. **A second test was never needed, only a second
+    corpus, and the corpus was the unsound part.**
+- **⚠ `decompose` IS ALLOWED, AND THAT IS WHAT KEPT THE BUMP AT MINOR.** It is the only otherwise-
+  denied verb with real fenced agent-typed call sites in shipped content
+  (`forge/references/storyhook-contract.md:271-278`, `story-decomposition.md:76-82`). Deny it and a
+  shipped forge instruction changes verdict, which makes the honest level **major**. If you ever
+  narrow the allowlist, check the removed verb against those files first.
+- **Mutation battery: 10 run, 10 caught**, every mutation asserted APPLIED and every restore
+  asserted tracked-and-clean. M9 (removing `decompose`) reds the pin — **proving the set-equality
+  pin catches narrowing**, which is the mechanism that replaced the withdrawn guard. M6 (restoring
+  the blanket allow inside `is_always_safe`) reds **17** tests including the source-level guard.
+  ⚠ A first attempt at M6 used an unanchored `sed` that hit every `*) return 1 ;;` in the file and
+  corrupted sibling helpers — it still "caught" the mutation, for the wrong reason. **Scope a
+  mutation to the function you mean, or its red proves nothing.**
+- **The gate was green with NO bypass — thirteen sessions running.** `MAKE_EXIT=0`, **653 bats
+  assertions + 307 shell checks, zero `not ok`, zero shell FAIL, zero make errors, 5 bats plans**.
+  653 = AGE-22's 628 + 25 new. `test_shipped_content_matches_tagged_release` PASS on the bump. The
+  AGE-24 ordering (targeted suites → bump → **one** full `make -k test`) held for the sixth time.
+- **⚠ CLAUDE.md is in `forge-contract-check`'s root scan set, where each inline backtick span is
+  parsed as an invocation.** This session's CLAUDE.md entry therefore writes the verbs as **prose**
+  (`the purge and project-delete verbs`) rather than as `` `story purge` `` spans. Verified green
+  via `make test-storyhook-contract-root`. If you document a `story` verb in a root file, either
+  write it as prose or be ready to justify it to that guard.
+- **Filed: AGE-52** (med) — greenlight's config auto-init only copies when the file is **absent**,
+  so no existing install ever receives a corrected default; the live config still carries
+  `ai_enabled: true` + `ai_model: claude-sonnet-4-6`, the exact values F077/F078/F082 fixed, inert
+  only because `ANTHROPIC_API_KEY` happens to be unset. **AGE-53** (low) — `open`/`xdg-open`/
+  `xdg-mime` sit in `is_always_safe` under the same false header (`open -a <App>` launches
+  applications, `open <url>` hits the network); same shape as AGE-26, smaller blast radius.
+  **AGE-54** (med) — `plan_explorer_uncertain: allow` also auto-approves `npx` (*"execute arbitrary
+  code, always uncertain"*), so the explorer sandbox permits arbitrary code execution; the council
+  accepted "fix at the origin, not the encounter point" **on condition the origin got a ticket**,
+  and this is that ticket.
+- **Council: C won 2-1 in a ranked-choice runoff; every seat voted against its own round-1 proposal
+  (A→C, B→C, C→B), and in the runoff A ranked its own proposal LAST.** C defected from its own
+  design, then returned to it after **checking** a calibration claim it had asserted rather than
+  measured. Nobody defended the blanket allow at any point. Full trail:
+  `.council/age26-greenlight-story-verb-surface/DECISION.md`.
 
 ## Known state (updated 2026-08-04 by the AGE-22 session)
 
@@ -920,7 +1029,7 @@ without recording why in this file.
 | 13 | **AGE-13** | low | Council-decision story, independent. |
 | 14 | **AGE-23** | low | Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. **Confirmed live again this session:** the council skill's own `references/council-protocol.md` failed to resolve skill-relative and cost a wasted tool call. |
 | 15 | **AGE-25** | low | AGE-17's own safety mechanisms are unproven — see below. |
-| 16 | **AGE-26** | med | **New, filed by the AGE-11 session.** greenlight auto-approves the whole `story` CLI on a premise storyhook 2.0 falsified. Its *comment* is already corrected (AGE-11, v2.40.1); what remains is the trust-boundary judgement — see below. |
+| ✅ | ~~**AGE-26**~~ | med | **DONE — shipped as v3.7.0.** `story` left `is_always_safe` for a verb-aware `is_safe_story()`. Return 2 is licensed **only by an existing peer** in `is_known_destructive`, which makes the bucket self-limiting and made a rename unnecessary. The story missed the premise's third clause (`story update` replaces its own binary) and the chair's own verb list missed `plugin` and `store`. A narrowing guard was proposed, voted for and **withdrawn by all three seats** — it would have read the comment describing the defect as a mandate to keep it. See the AGE-26 block above. Filed **AGE-52**, **AGE-53**, **AGE-54**. |
 | 17 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
 
 **AGE-2, AGE-3, AGE-11, AGE-14, AGE-15, AGE-16, AGE-17 and AGE-18 are already `done`** — do not
@@ -1534,6 +1643,14 @@ on why it was held out of AGE-31's PR.
 | Story | Pri | What |
 |---|---|---|
 | **AGE-51** | low | **A safety property that holds today for a reason nothing pins.** Five shipped sites capture the `story` CLI through `$( … )` with no bound, and storyhook auto-spawns a daemon that outlives the client (`tests/store-isolation.sh:41`) — the exact precondition for AGE-16's hazard. **Measured NOT exposed on storyhook 2.0.0**: the capture returns in 0.03s and every `story … daemon --serve` holds fd 0 on `/dev/null` with **no fd 1 or fd 2**. But that is an upstream implementation detail, not a contract, and SH-94 records the daemon holding a pipe at **fd 7** — so the class is one storyhook release away from live, with no local signal. Fix direction is an assertion that a spawned daemon holds no fd 1/2 (turning a future silent hang into a named red) **or** an upstream request to make "the daemon closes stdio" contractual — **not** redirecting the five working sites to temp files. Deliberately kept out of AGE-22's guard on all three council seats' advice. |
+
+### Stories filed by the AGE-26 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-52** | med | **A shipped fix that reached zero installs — the #71 class, one layer down.** `greenlight.sh:34-38` seeds the user config from the bundled default **only when the file does not exist**, so any later correction to `default-config.yaml` never arrives. Live proof: `~/.config/greenlight/config.yaml` dated **Apr 8** still carries `ai_enabled: true`, `ai_model: claude-sonnet-4-6`, `ai_show_rationale: true` — precisely the values the F077/F078/F082 comment in the hook says were changed because sonnet-4-6 is not on the structured-outputs list and *"every call likely 400'd and fell through to defer anyway: pure overhead, zero benefit."* Inert today **only because `ANTHROPIC_API_KEY` is unset** — an accident, not a guard. Note `read_config` already layers correctly for a MISSING key; the defect is that a STALE key beats a corrected default. Fix needs a decision (drop the seed and let `read_config` layer / version-stamp and reconcile / warn on drift). |
+| **AGE-53** | low | **AGE-26's shape, different command.** `open`, `xdg-open` and `xdg-mime` sit in `is_always_safe` under `# misc harmless utilities`, beneath a header promising *"no flags or arguments can make them destructive"*. `open -a <App>` launches an arbitrary application; `open <url>` hands a URL to the browser (outbound, and a plausible exfiltration channel); `xdg-mime` edits the handler database that decides what a later `xdg-open` launches. Smaller blast radius than AGE-26 — `open` destroys nothing — but in the plan explorer it is `allow`-ed as *"readonly/safe"*. `mktemp` (creates a file) and `pbcopy`/`xclip`/`xsel` (write the system clipboard) share that line and that header. Flagged by the council's security seat under the sibling-sweep rule. |
+| **AGE-54** | med | **The origin AGE-26 deliberately did not fix, filed as the council's explicit condition.** `plan_explorer_uncertain: allow` flips **every** uncertain command to auto-approved in a headless explorer — including `npx\|bunx\|pipx\|uvx`, which the hook's own comment one line above calls *"execute arbitrary code, always uncertain"*. So that config grants arbitrary code execution, which can reach the storyhook store by another route. Compounding it, `default-config.yaml:60-63` sells the option as *"trust the isolation of the worktree"* — a worktree isolates the filesystem, not a process `npx` starts nor a store outside every repository. The architect seat used this to argue AGE-26 must not harden verbs against the knob (symptom-masking at the encounter point); the security seat agreed **on condition the origin got a ticket** — *"B's own fix-at-the-origin argument is only honest if the origin actually gets a ticket."* Latent: the default is `deny`. |
 
 ### Stories filed by the AGE-24 session
 

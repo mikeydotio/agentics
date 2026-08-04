@@ -74,6 +74,40 @@ SHIPPED_PATHSPEC=(
     ':(exclude,glob)plugins/*/README.md'  # GitHub-facing docs, not read at runtime
 )
 
+# Layer 3 pathspec — repo-root agent-instruction files. Layer 2's scope is
+# `plugins/` only, which is exactly how the myth escaped it: AGE-27 found the
+# retired directory asserted in repo-root AGENTS.md and .gitignore, neither of
+# which any earlier layer reads.
+#
+# An ALLOWLIST, not a blanket root scan, and the distinction is load-bearing in
+# the same way Layer 2's exclusions are. CHANGELOG.md (release history),
+# PROGRESS.md (this backlog's own analysis of the bug) and .planning/ all name
+# the retired path legitimately — a blanket scan would red on documents that are
+# CORRECT, which is the guard shape AGE-11's council rejected unanimously:
+# a guard you can satisfy by deleting true sentences is the wrong guard.
+#
+# Hand-maintained on purpose. A future root GEMINI.md or .cursorrules is not
+# scanned until someone adds it here, and test_layer3_allowlist_is_pinned makes
+# that addition a deliberate, reviewed act rather than a silent one.
+ROOT_INSTRUCTION_PATHSPEC=(
+    'AGENTS.md'
+    'CLAUDE.md'
+    'README.md'
+    '.gitignore'
+)
+
+# The retired SURFACES a root instruction file must never assert. Each is a
+# fixed string (git grep -F), assembled rather than written out for the same
+# reason as RETIRED_BARE above. Layer 3's job is eradicating known-dead names,
+# not parsing grammar.
+#
+# Deliberately NOT here: the id-first form (`story <id> is done`, AGE-27 claim
+# #2). It is pattern-shaped rather than a fixed string, so it belongs to the
+# grammar guard — forge-contract-check.sh — whose scan set does not yet reach
+# repo-root files. That is AGE-30, blocked on AGE-24 and AGE-29.
+RETIRED_MCP="mcp-""config"
+RETIRED_SURFACES=("$RETIRED_DIR" "$RETIRED_MCP")
+
 # --- Detectors (work on any repo root; used by the real checks + fixtures) ---
 
 # git grep exits 1 on "no match", which is the success case here — swallow it
@@ -84,6 +118,14 @@ layer1_hits() {
 
 layer2_hits() {
     git -C "$1" grep -nIF -e "$RETIRED_DIR" -- "${SHIPPED_PATHSPEC[@]}" 2>/dev/null || true
+}
+
+# One -e per retired surface: git grep ORs them, so a single pass reports every
+# dead assertion in the allowlisted root files.
+layer3_hits() {
+    local args=() s
+    for s in "${RETIRED_SURFACES[@]}"; do args+=(-e "$s"); done
+    git -C "$1" grep -nIF "${args[@]}" -- "${ROOT_INSTRUCTION_PATHSPEC[@]}" 2>/dev/null || true
 }
 
 # --- Fixture ---------------------------------------------------------------
@@ -106,6 +148,26 @@ make_fixture() {
     printf 'clean harness\n'   > "$fix/plugins/alpha/tests/test-tool.sh"
     printf 'clean bats\n'      > "$fix/plugins/alpha/bin/tool.bats"
     printf 'clean readme\n'    > "$fix/plugins/alpha/README.md"
+    git -C "$fix" init -q
+    git -C "$fix" add -A
+    echo "$fix"
+}
+
+# A throwaway repo shaped like this one's ROOT: the four allowlisted
+# instruction files, plus the three shapes Layer 3 must not scan because they
+# name retired surfaces legitimately (release history, this backlog's own
+# analysis of the bug, and planning docs).
+make_root_fixture() {
+    local fix
+    fix="$(mktemp -d)"
+    mkdir -p "$fix/.planning"
+    printf 'clean agents doc\n'   > "$fix/AGENTS.md"
+    printf 'clean claude doc\n'   > "$fix/CLAUDE.md"
+    printf 'clean readme\n'       > "$fix/README.md"
+    printf 'node_modules/\n'      > "$fix/.gitignore"
+    printf 'clean changelog\n'    > "$fix/CHANGELOG.md"
+    printf 'clean progress\n'     > "$fix/PROGRESS.md"
+    printf 'clean plan\n'         > "$fix/.planning/HARNESS-PLAN.md"
     git -C "$fix" init -q
     git -C "$fix" add -A
     echo "$fix"
@@ -139,6 +201,104 @@ test_shipped_content_does_not_name_the_retired_storyhook_path() {
         Offending lines:
 $hits"
     fi
+}
+
+# --- Layer 3: real repo ----------------------------------------------------
+
+test_root_instruction_files_do_not_assert_retired_storyhook_surfaces() {
+    local hits; hits="$(layer3_hits "$REPO_ROOT")"
+    if [ -n "$hits" ]; then
+        fail "a repo-root agent-instruction file asserts a storyhook surface that no longer
+        exists. These files are read by agents BY CONVENTION, unprompted, so a wrong instruction
+        here reaches agents that never load a plugin skill (AGE-27). There is no per-repo
+        storyhook directory (\`story help storage\`) and no MCP server — storyhook has one
+        interface, the CLI. Not scanned, on purpose: CHANGELOG.md, PROGRESS.md and .planning/,
+        which name these surfaces legitimately in order to record or deny them.
+        Offending lines:
+$hits"
+    fi
+}
+
+# --- Layer 3 detector: effect oracles + scope proofs ------------------------
+#
+# Same AGE-18 discipline as Layer 1: prove the detector can actually hit, in
+# every allowlisted file and for every retired surface, before trusting a
+# "no hits" result on the real repo.
+
+test_layer3_detects_every_retired_surface_in_every_allowlisted_file() {
+    local fix f s
+    for f in "${ROOT_INSTRUCTION_PATHSPEC[@]}"; do
+        for s in "${RETIRED_SURFACES[@]}"; do
+            fix="$(make_root_fixture)"
+            printf 'commit %s to keep project state with the repo\n' "$s" >> "$fix/$f"
+            git -C "$fix" add -A
+            [ -n "$(layer3_hits "$fix")" ] || {
+                rm -rf "$fix"
+                fail "Layer 3 missed retired surface '$s' in allowlisted root file $f"
+            }
+            rm -rf "$fix"
+        done
+    done
+}
+
+test_layer3_does_not_scan_files_that_name_retired_surfaces_legitimately() {
+    local fix f s
+    for f in CHANGELOG.md PROGRESS.md .planning/HARNESS-PLAN.md; do
+        for s in "${RETIRED_SURFACES[@]}"; do
+            fix="$(make_root_fixture)"
+            printf 'the retired %s was removed in storyhook 1.0.0 — recorded so it stays dead\n' \
+                "$s" >> "$fix/$f"
+            git -C "$fix" add -A
+            local hits; hits="$(layer3_hits "$fix")"
+            [ -z "$hits" ] || {
+                rm -rf "$fix"
+                fail "Layer 3 wrongly flagged $f. That exclusion is load-bearing: release
+        history and this backlog's own bug analysis must be able to NAME a retired surface in
+        order to record or deny it. A guard you can satisfy by deleting true sentences is the
+        wrong guard (AGE-11 council, unanimous). Hits: $hits"
+            }
+            rm -rf "$fix"
+        done
+    done
+}
+
+test_layer3_ignores_the_pointer_file() {
+    local fix; fix="$(make_root_fixture)"
+    printf 'a repo carries only %s.toml, the committed pointer file — commit it\n' \
+        "$RETIRED_BARE" >> "$fix/AGENTS.md"
+    git -C "$fix" add -A
+    local hits; hits="$(layer3_hits "$fix")"
+    [ -z "$hits" ] || fail "Layer 3 must not match the live pointer file: it carries no trailing
+        slash and IS version-controlled. Flagging it would tell agents to delete the one
+        storyhook artifact a repo genuinely owns. Hits: $hits"
+    rm -rf "$fix"
+}
+
+# The allowlist is hand-maintained, so pin it. Adding or removing a scanned file
+# is a coverage change and must be a deliberate, reviewed edit — not something
+# that happens silently in an unrelated diff.
+test_layer3_allowlist_is_pinned() {
+    local actual expected
+    actual="$(printf '%s\n' "${ROOT_INSTRUCTION_PATHSPEC[@]}" | sort | tr '\n' ' ')"
+    expected="$(printf '%s\n' AGENTS.md CLAUDE.md README.md .gitignore | sort | tr '\n' ' ')"
+    [ "$actual" = "$expected" ] || fail "Layer 3's allowlist changed. Expected: $expected
+        Got: $actual
+        If you are ADDING a root agent-instruction file, update this pin in the same commit and
+        say why in the message. If you are REMOVING one, you are removing coverage."
+}
+
+# A rename must drop coverage LOUDLY. Without this, renaming AGENTS.md leaves
+# the pathspec silently matching nothing and Layer 3 reports a clean pass over
+# a file that no longer exists — the vacuous green this repo has fought three
+# times (AGE-16, AGE-18, AGE-21).
+test_layer3_allowlist_entries_all_exist() {
+    local f missing=""
+    for f in "${ROOT_INSTRUCTION_PATHSPEC[@]}"; do
+        [ -e "$REPO_ROOT/$f" ] || missing="$missing $f"
+    done
+    [ -z "$missing" ] || fail "Layer 3 allowlist names files that do not exist:$missing
+        A pathspec matching nothing passes vacuously. Either restore the file or remove it from
+        ROOT_INSTRUCTION_PATHSPEC and its pin, deliberately."
 }
 
 # --- Layer 1 detector: effect oracles --------------------------------------

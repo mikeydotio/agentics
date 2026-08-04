@@ -683,8 +683,13 @@ def _destination_for(platform: str) -> str:
     }[platform]
 
 
-def _xcodebuild_archive(meta: dict, archive_path: Path, scheme, env=None):
-    cmd = [
+def _archive_argv(meta: dict, archive_path: Path, scheme) -> list:
+    """The full `xcodebuild … archive` command line, as a pure function.
+
+    Split out from `_xcodebuild_archive` so the argv can be asserted without
+    running Xcode — deployit's test suite is hermetic and there is no
+    `DEPLOYIT_XCODEBUILD_BIN` fake-binary seam."""
+    return [
         "xcodebuild",
         meta["xcode_container_flag"], meta["xcode_container_path"],
         "-scheme", scheme or meta["default_scheme"],
@@ -694,6 +699,10 @@ def _xcodebuild_archive(meta: dict, archive_path: Path, scheme, env=None):
         "-allowProvisioningUpdates",
         "archive",
     ]
+
+
+def _xcodebuild_archive(meta: dict, archive_path: Path, scheme, env=None):
+    cmd = _archive_argv(meta, archive_path, scheme)
     # env=None (the default) means "inherit this process's environment",
     # identical to the pre-[toolchain] behavior. cmd_deploy passes an
     # explicit DEVELOPER_DIR-augmented env only when the project's

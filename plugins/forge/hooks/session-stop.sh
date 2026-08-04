@@ -11,7 +11,21 @@
 # output" feedback from creating an infinite conversation loop.
 
 set -uo pipefail
-trap '[ $? -eq 0 ] && echo "forge: ok" >&2 || echo "forge: error" >&2' EXIT
+
+# Scratch file for the bounded storyhook call (see F051/AGE-16 below).
+# Initialised before the EXIT trap is installed so the trap can never
+# dereference it unset under `set -u`.
+STORY_OUT=""
+
+# $? is captured FIRST, before any cleanup, so the stderr write below still
+# reports the script's real exit status -- that write is what prevents Claude
+# Code's "No stderr output" feedback loop, and it must survive every path.
+_on_exit() {
+  local status=$?
+  [ -n "$STORY_OUT" ] && rm -f "$STORY_OUT"
+  [ $status -eq 0 ] && echo "forge: ok" >&2 || echo "forge: error" >&2
+}
+trap _on_exit EXIT
 
 # F050: the circuit-breaker check used to run here, before ANY of the
 # checkpoint work below (handoff write, status=paused, lock release). A
@@ -75,11 +89,21 @@ duration_since() {
   jq -n -r --arg t "$iso" 'try ((now - ($t | fromdate)) | floor) catch empty' 2>/dev/null
 }
 
-# F051: bound a command by a hard wall-clock timeout so it can never eat
-# the whole 15s hook budget and truncate the checkpoint. Stock macOS ships
-# neither GNU `timeout` nor a BSD equivalent -- prefer `timeout`, fall back
-# to Homebrew coreutils' `gtimeout`, and if neither exists, signal that to
-# the caller (exit 127) rather than risk an unbounded hang.
+# F051: bound a command by a wall-clock timeout so it can never eat the whole
+# 15s hook budget and truncate the checkpoint. Stock macOS ships neither GNU
+# `timeout` nor a BSD equivalent -- prefer `timeout`, fall back to Homebrew
+# coreutils' `gtimeout`, and if neither exists, signal that to the caller
+# (exit 127) rather than risk an unbounded hang.
+#
+# Scope of the bound, precisely (AGE-16 corrected an over-broad claim here):
+# `timeout` signals the process GROUP it created, so the command and any
+# ordinary descendant are covered. A descendant that leaves that group -- by
+# calling setsid(), as storyhook's auto-spawned daemon does -- is NOT covered,
+# and no `--kill-after` would change that, since SIGKILL targets the same group.
+# Callers must therefore never hand this function a pipe (a command
+# substitution) to write into: an escaped descendant inherits the write end and
+# holds the caller open for its whole lifetime, entirely outside this bound.
+# Redirect to a file instead -- see the storyhook call below.
 run_with_timeout() {
   local secs="$1"; shift
   if command -v timeout >/dev/null 2>&1; then
@@ -158,12 +182,29 @@ rm -f "$LOCK_FILE"
 # checkpoint (a hang here can no longer block it) and bounded by a hard
 # timeout well under the hook's 15s budget.
 if command -v story &>/dev/null; then
-  STORY_HANDOFF="$(cd "$PROJECT_DIR" && run_with_timeout 5 story handoff --since "${DURATION}" 2>/dev/null)"
-  STORY_STATUS=$?
-  if [[ $STORY_STATUS -eq 0 && -n "$STORY_HANDOFF" ]]; then
-    printf '\n## Storyhook Handoff\n%s\n' "$STORY_HANDOFF" >> "$HANDOFF_FILE"
-  elif [[ $STORY_STATUS -eq 127 ]]; then
-    echo "forge: session-stop: no timeout/gtimeout available -- skipped bounded story handoff call" >&2
+  # AGE-16: the output goes through a temp FILE, never `$(...)`. A command
+  # substitution's pipe is not closed until every process holding its write end
+  # exits -- including a descendant that escaped the process group `timeout`
+  # signals. storyhook auto-spawns `story ... daemon --serve` in its own process
+  # group, and its own SH-94 writeup records a test binary blocked in read(2)
+  # for four minutes on a pipe that daemon was holding at fd 7. Captured that
+  # way, the call is unbounded no matter what timeout does -- precisely the
+  # failure F051's bound exists to prevent. A plain file has no reader waiting
+  # on EOF, so the bound holds even when a descendant survives.
+  STORY_OUT="$(mktemp "${TMPDIR:-/tmp}/forge-story-handoff.XXXXXX" 2>/dev/null || true)"
+  if [[ -n "$STORY_OUT" ]]; then
+    ( cd "$PROJECT_DIR" && run_with_timeout 5 story handoff --since "${DURATION}" \
+        > "$STORY_OUT" 2>/dev/null )
+    STORY_STATUS=$?
+    # `$(<file)` is a bash builtin read -- no subprocess, so it cannot block.
+    STORY_HANDOFF="$(<"$STORY_OUT")"
+    if [[ $STORY_STATUS -eq 0 && -n "$STORY_HANDOFF" ]]; then
+      printf '\n## Storyhook Handoff\n%s\n' "$STORY_HANDOFF" >> "$HANDOFF_FILE"
+    elif [[ $STORY_STATUS -eq 127 ]]; then
+      echo "forge: session-stop: no timeout/gtimeout available -- skipped bounded story handoff call" >&2
+    fi
+  else
+    echo "forge: session-stop: could not create a temp file -- skipped bounded story handoff call" >&2
   fi
 fi
 

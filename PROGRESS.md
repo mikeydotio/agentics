@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-16** |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-16** |
+| **Next story** | AGE-11 (see queue) |
 | **Completed this loop** | AGE-14, AGE-15 (one PR) |
-| **Last updated by** | AGE-14 session, 2026-08-03 |
+| **Last updated by** | AGE-16 session, 2026-08-03 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
@@ -30,15 +30,25 @@ via freshen, and stops.
 
 Read this before you conclude something you did broke the build.
 
-- **`make test` is green for everything this loop controls** — 570 pass. The two failures you may
-  still hit are pre-existing defects with their own stories (AGE-16, AGE-21), not something you
-  broke. The gate is live again: **do not bypass it except under the evidence rule below.**
-- **`session-stop.bats` "a hanging story handoff is bounded by a timeout" WILL block your push.**
-  Filed as **AGE-16**, now `high` + `blocks-ci`. It first looked like load-flakiness (passes 4/4
-  unloaded, fails 2-of-3 at load ~13), but measuring it disproved that: isolated runs took
-  5.68s / 11.28s / **27.46s**, and 27s against a **5s** internal timeout means F051's bound is not
-  holding at all. Treat a red here as the known defect, not as something you broke — but confirm
-  your branch does not touch `session-stop.sh`/`.bats` before you accept that.
+- **`make test` is green for everything this loop controls.** The one failure you may still hit is
+  a pre-existing defect with its own story (**AGE-21**), not something you broke. The gate is
+  live: **do not bypass it except under the evidence rule below.**
+- **AGE-16 is FIXED — `session-stop.bats` no longer flakes, and that suite is now ~8s instead of
+  ~107s.** If you see it red, it is something you broke.
+- **⚠ The macOS first-exec trap that AGE-16 turned out to be — read this before you write any
+  timed test.** macOS assesses a *freshly written* executable on its first exec (XProtect /
+  syspolicyd): measured **12–43s** for a new shim script when `XprotectService` is saturated,
+  ~0.05s for every exec after, and **0.004s for a copied binary**. Any bats assertion that times a
+  region containing a shim's *first* exec is measuring that, not your code. This is what produced
+  AGE-16's 5.68 / 11.28 / 27.46s "evidence" — the hook itself was a flat 5.01s the whole time.
+  - Fix pattern (now in `session-stop.bats`): build shims **once per file** at a stable path via
+    `setup_file`, read per-test values from the environment at run time, and warm each one with
+    `SHIM_WARMUP=1` outside every timed region. Per-test shims cost ~107s a run; this costs ~8s.
+  - **Relocating to `/private/tmp` does NOT help** — measured 25–41s, *worse* than `$TMPDIR`. The
+    cause is first-exec assessment, not Spotlight, so the CLAUDE.md `$TMPDIR` /
+    `.metadata_never_index` guidance does not apply. Warming is the only control that works.
+  - Prefer an **effect oracle** over a clock reading wherever you can: assert a marker the command
+    could only have written had it not been killed, not that `elapsed < N`.
 - **`SKIP_PREPUSH_TESTS=1` was needed twice in the AGE-14 session**, solely because of AGE-16 and
   AGE-21 — never to mask anything from that branch. If you must bypass, run the full suite first,
   record the failing test names and why they are unrelated, and put that evidence in the PR body.
@@ -69,6 +79,33 @@ fixture aborted in setup before `story state add` ever ran. 59 tests were red, n
 was filed as **AGE-15** and landed in the same PR (council-ruled). Four boundary defects found
 along the way were filed rather than fixed — see the new-stories list below.
 
+### What AGE-16 turned out to be — the sharpest "the story can be wrong" case yet
+
+AGE-16's filed root cause was **falsified**, and the evidence it cited was **misattributed** —
+yet a real production defect was hiding underneath it. All three parts matter to the next session:
+
+1. **The bound was never broken.** `run_with_timeout 5 story handoff` measured a flat **5.01s** in
+   every call form, including the hook's exact one. GNU `timeout` group-kills, so the story's own
+   `sleep 30` shim gets reaped and *cannot* reproduce the failure. The prescribed regression test
+   would have been **vacuous** — passing identically before and after any fix.
+2. **The 5.68 / 11.28 / 27.46s spread was the test harness, not the hook** — macOS first-exec
+   assessment of freshly written shims (see the ⚠ block above). Line-level instrumentation put
+   9.99s on a `tmux send-keys` shim whose body is one `echo`.
+3. **A real, reachable defect was underneath anyway.** Capturing a bounded command through
+   `$(...)` is unbounded whenever the command leaves a descendant that escaped the process group:
+   the descendant inherits the pipe's write end and the substitution waits for it. Measured
+   **30.05s against a 5s bound** — and 30.12s even when the shim itself exits 0 in 0.05s.
+   Two council seats independently found the confirming evidence: storyhook auto-spawns
+   `story … daemon --serve` with `process_group(0)`, and storyhook's own **SH-94** records a test
+   binary blocked in `read(2)` for **four minutes** on a pipe that daemon held at fd 7.
+   Fix: redirect to a temp file, read back with `$(<file)`. `--kill-after` does **not** help —
+   SIGKILL targets the same group the descendant left. Council ruled it out unanimously after
+   both seats that proposed it withdrew it.
+
+**The transferable lesson:** the story's numbers were real but pointed at the wrong thing, and its
+prescribed test would have proved nothing. Reproduce, instrument, and *attribute* before fixing —
+`.council/age16-fix-scope/DECISION.md` has the full audit trail.
+
 ---
 
 ## The queue
@@ -79,32 +116,38 @@ without recording why in this file.
 | # | Story | Pri | Why here |
 |---|---|---|---|
 | ✅ | ~~**AGE-14** + **AGE-15**~~ | high | **DONE** — merged together as one PR. See "What AGE-14 turned out to be" above. |
-| 1 | **AGE-16** | high | **Reordered ahead of its original position by the AGE-14 session — reason recorded here as the queue rules require.** It is `blocks-ci`: F051's timeout does not bound a hung `story handoff`, and it non-deterministically fails the full `make test` that the pre-push hook runs. It already blocked two consecutive pushes. Until it lands, *every* session after this one must bypass the gate to push, which defeats the gate — the identical argument that put AGE-14 first. |
-| 2 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
-| 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
-| 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
-| 5 | **AGE-6** | med | WS-C, rca realign. Independent. |
-| 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
-| 7 | **AGE-10** | low | **Pulled ahead of its priority** — AGE-7 is `blocked-by` it, and storyhook will refuse to dispatch AGE-7 until it closes. |
-| 8 | **AGE-7** | med | WS-D + the prompt-hygiene lint. Needs AGE-10 done. **On merge, also close AGE-8** (below). |
+| ✅ | ~~**AGE-16**~~ | high | **DONE** — the `blocks-ci` flake is gone. See "What AGE-16 turned out to be" below; its filed diagnosis was wrong in an instructive way. |
+| 1 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
+| 2 | **AGE-18** | high | `make test` exits 0 when `bats` is absent — the gate is vacuously green on any machine without it. Highest-value remaining: every "the suite is green" claim this loop makes rests on it. |
+| 3 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — first token only, so the F103 drift guard is blind to every subcommand rename. Pairs naturally with AGE-18. |
+| 4 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
+| 5 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
+| 6 | **AGE-6** | med | WS-C, rca realign. Independent. |
+| 7 | **AGE-12** | med | storywork claim diagnostic. Independent. |
+| 8 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
+| 9 | **AGE-19** | med | No storyhook major-version pin. |
+| 10 | **AGE-22** | med | **New, filed by this session.** Preventative guard for AGE-16's defect class — see below. |
+| 11 | **AGE-10** | low | **Pulled ahead of its priority** — AGE-7 is `blocked-by` it, and storyhook will refuse to dispatch AGE-7 until it closes. |
+| 12 | **AGE-7** | med | WS-D + the prompt-hygiene lint. Needs AGE-10 done. **On merge, also close AGE-8** (below). |
 | — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7 and storyhook already excludes it from `ready`. When AGE-7 merges, close it: `story move AGE-8 done` with a comment pointing at AGE-7's PR. |
-| 9 | **AGE-9** | low | Council-decision story, independent. |
-| 10 | **AGE-13** | low | Council-decision story, independent. |
+| 13 | **AGE-9** | low | Council-decision story, independent. |
+| 14 | **AGE-13** | low | Council-decision story, independent. |
+| 15 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
 
-**AGE-2, AGE-3, AGE-14 and AGE-15 are already `done`** — do not touch them.
+**AGE-2, AGE-3, AGE-14, AGE-15 and AGE-16 are already `done`** — do not touch them.
 
-### New stories filed by the AGE-14 session — slot these in
+### Unscheduled stories — slot these in
 
-Found while working AGE-14; filed rather than fixed, per the "defects become stories" rule. None
-is scheduled yet. Recommended: take **AGE-18** and **AGE-17** early — they are the reason a
-60-test breakage went unseen, and every "the suite is green" claim this loop makes is only as
-trustworthy as they are.
+Filed rather than fixed, per the "defects become stories" rule. They are now placed in the queue
+above; this table keeps the detail. **AGE-18** and **AGE-17** are the recommended next pair after
+AGE-11 — they are the reason a 60-test breakage went unseen, and every "the suite is green" claim
+this loop makes is only as trustworthy as they are.
 
 | Story | Pri | What |
 |---|---|---|
 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — **first token only**, so `story project init` validated as verb `project` and passed. The F103 drift guard is structurally blind to every subcommand rename. |
 | **AGE-18** | high | `make test` **exits 0 when `bats` is absent** (`Makefile` `else echo "skipping"`, ~6 targets), so the pre-push gate is vacuously green on any machine without it. Same class: contract-check `exit 0`s on `story_cli_missing`. |
-| **AGE-16** | **high** | **`blocks-ci`.** forge's Stop hook: F051's 5s timeout does **not** bound a hung `story handoff`. Isolated runs measured 5.68s / 11.28s / **27.46s** — 27s against a 5s limit means it is not bounded at all (an orphaned grandchild appears to hold the command-substitution pipe open). A production defect, not a flaky assertion. **It blocked two consecutive full `make test` runs during the AGE-14 session** while all other 427 forge tests passed. **Do not "fix" it by raising the 12s bound** — that hides the defect the number is exposing. |
+| **AGE-22** | med | **Filed by the AGE-16 session.** Preventative guard for AGE-16's defect class: nothing stops the next `$(timeout … cmd)` from being written. The repo is currently clean — `rca-repro.sh:25` and `greenlight-explore.sh:146` both already redirect to a file. Note a council seat reported greenlight as a sibling site; **the sweep disproved that**. Watch for AGE-17's trap when writing the guard: match the whole command, not the first token. |
 | **AGE-19** | med | No storyhook **major-version pin** anywhere. An upstream major surfaces as ~60 unattributable failures instead of one assertion. |
 | **AGE-21** | med | `plugins/deployit/tests/test-cli-rm.sh` depends on a **live local deployit backend daemon** (`:8729`); when it is unavailable the test fails and blocks unrelated pushes. Passed 3/3 in earlier runs, failed once under contention from the `age-117` session, passed again immediately after. Same class as AGE-18 — a gate that does not mean what it says. |
 | **AGE-20** | low | Ten duplicated storyhook fixture-creation sites across two plugins — why one upstream rename cost ten edits. **Deliberately deferred**: the 10th site is in a *different plugin*, so a shared helper is a new cross-plugin module boundary, not a mechanical extraction. Land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
@@ -242,10 +285,13 @@ closing summary in this file, and stop so the user comes back to a finished back
   swallowing the CLI's actual error text. Run the failing tests and read the real output first.
   If the story is wrong, file the true cause as its own story and say so in the PR — do not
   quietly widen the original.
-- **Suspect load before you believe a timing failure.** Several suites here assert wall-clock
-  bounds with thin margins (AGE-16). Concurrent Claude sessions push load average past 13 and
-  flip them red. Check `uptime`, re-run serially, and only then treat it as signal. A subagent
-  in this session reported a "deterministic" failure that was pure load.
+- **Do not stop at "it was load" — attribute the time.** AGE-16 looked like load, then looked like
+  a broken timeout, and was neither: it was macOS first-exec assessment inside the timed region
+  (see the ⚠ block up top). Load average was a *correlate*, not the cause — a discriminating run
+  showed the warmed hook flat at 5.11–5.13s under load 7–11 while a fresh shim's first exec in the
+  same loop ranged 1.1–31.4s. If a timing assertion is red, instrument the script line by line and
+  find out which command actually consumed the wall clock before believing anyone's theory,
+  including the story's.
 - **Council decisions are archived, not just acted on.** `/council-vote` writes the full audit
   trail to `.council/<slug>/` (gitignored). AGE-14's scope ruling is at
   `.council/age14-fix-scope/DECISION.md` — read it before reopening that question.

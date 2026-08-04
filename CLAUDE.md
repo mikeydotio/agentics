@@ -51,6 +51,42 @@ a nuisance to silence. If it can, add the wrapper's name to `REGISTRY` in that f
 *not* covered: hand-rolled bounds (background pid + `kill -TERM`, used twice in rca), `perl -e
 alarm`, and bounds reached through a variable.
 
+**greenlight classifies the storyhook CLI by verb, and the rule for adding one is mechanical.**
+The bare command name is **not** in `is_always_safe` and must never be re-added — that table
+promises *"no flags or arguments can make them destructive"*, which is false for a CLI whose purge
+and project-delete verbs are documented "There is no undo", whose update verb "atomically replaces
+the running executable", and whose plugin verb installs third-party code. `is_safe_story()` returns
+three ways: **allow** iff the worst case is a wrong story record in the current project, repairable
+by another verb of the same CLI; **destructive (2)** only if `is_known_destructive` *already* ranks
+an equivalent operation at 2 by command name, with that peer named in a comment at the arm (purge
+and project-delete mirror `rm|rmdir|unlink|shred`; update and plugin-install mirror
+`apt|brew|yum|dnf|pacman`); **uncertain (1)** for everything else, including every unrecognised
+verb. The peer requirement is load-bearing — it makes bucket 2 self-limiting, since it cannot grow
+without someone first editing `is_known_destructive`, a far louder act than editing an allowlist,
+and it is why no rename of `any_destructive` was needed. Enforced by
+`plugins/greenlight/tests/greenlight-story.bats`, whose allowlist pin asserts **set equality**, so
+it reds on a narrowing exactly as it reds on a widening — **a removed verb may be a MAJOR bump**,
+because shipped docs instruct agents to type some of them.
+
+⚠ Three traps there. **The verb surface cannot be enumerated from the CLI** — its own `help --all`
+yields 45 headings of which 4 are not commands, its usage block yields 48, and two more verbs
+execute while appearing in *neither*; that is why unknown verbs fail closed and why no completeness
+guard exists (a sentinel test pins the fail-closed default instead). **The extractor must follow
+`is_safe_git`, never `is_safe_gh`** — storyhook accepts global flags *before* the verb and two of
+them take a value (`--store-path`, `--project`), so `is_safe_gh`'s `$(i+1)` form reads `--json` as
+the verb and a flag-skipper that ignores values reads the path as the verb. **Do not add flag
+predicates** — the doctor verb is denied whole rather than split on `--fix`, because every flag
+predicate is a permanent bypass surface.
+
+⚠ **Do not write a guard that greps shipped docs for "verbs an agent is told to type."** It was
+proposed, voted for, and withdrawn by all three council seats on measurement: the only occurrences
+of the purge and project-delete forms in shipped `plugins/**` were inside greenlight's *own comment
+describing the defect*, so the guard would have read the sentence documenting the bug as a mandate
+to keep the verb auto-approved — while reporting green. The transferable rule:
+`bounded-capture-guard.sh` is sound because a `timeout` call is **shell syntax in a shell file**, a
+decidable predicate over a formal grammar; the same verb inside a markdown skill is **prose**. Same
+shape, different kind. Full trail: `.council/age26-greenlight-story-verb-surface/DECISION.md`.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

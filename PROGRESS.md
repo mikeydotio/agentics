@@ -14,12 +14,12 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-28** (`story next` agrees — it is the only `high` open) |
+| **Loop status** | **IN FLIGHT** |
+| **Story in flight** | **AGE-28** (claimed `in-progress`, branch `fix/AGE-28-archive-configuration`) |
+| **Next story** | **AGE-32** (the unblocker for AGE-24/30/31) |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33 |
-| **Repo version** | **v2.41.0** — released and published |
-| **Last updated by** | AGE-27 session, 2026-08-04 |
+| **Repo version** | **v2.41.0** — AGE-28 ships a **MAJOR** bump (council chair ruling, see below) |
+| **Last updated by** | AGE-28 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session

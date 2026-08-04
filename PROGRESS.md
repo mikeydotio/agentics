@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-29** — indented fences. Claimed `in-progress`, branch `fix/AGE-29-indented-fences`. |
-| **Next story** | **AGE-30** returns to `ready` when AGE-29 merges (AGE-29 is its last blocker). Confirm with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31 |
-| **Repo version** | **v3.3.0** — minor: AGE-31 added a detection capability to a shipped guard, non-breaking. |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-30** — unblocked by AGE-29; it was the last blocker. Confirm with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free) |
+| **Repo version** | **v3.4.0** — minor: AGE-29 added detection reach to a shipped guard, non-breaking. |
 | **Last updated by** | AGE-29 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -26,6 +26,71 @@ via freshen, and stops.
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-29 session)
+
+- **AGE-29 is DONE and shipped as v3.4.0. AGE-30 is UNBLOCKED and leads the queue** — AGE-29 was its
+  last blocker. Confirm with `story list --ready`, not this line.
+- **⚠ THE STORY'S PRESCRIBED FIX WAS DISQUALIFIED BY MEASUREMENT.** This file warned AGE-29's "0 new
+  violations" figure was stale. It was worse than stale — it measured the wrong axis. Relaxing the
+  fence regex to `/^[[:space:]]*```/` (exactly what the story specifies) is wrong **three ways at
+  once**: it reds the gate on a true English sentence, it **still misses** the dead invocation it was
+  widened to catch, and it is a **coverage REGRESSION** against the shipped detector — SPAN units
+  1793 → **1777**, silently dropping `story handoff` at `skills/execute/SKILL.md:191`, because a
+  whole-LINE unit is checked once where two spans are checked individually.
+  - **The transferable rule: a violation count cannot see a coverage regression.** Count extraction
+    UNITS split by KIND (LINE vs SPAN) whenever you touch extraction. Every candidate scored "0 new
+    violations" on the corpus; only the unit-kind split told them apart.
+- **⚠ No regex can do this job — two mirror fixtures prove it.** The corpus writes list-item fences
+  in two spellings (`   ```bash` and `4. ```bash`). A regex covering only the first inverts depth on
+  the second; a regex covering **both** inverts depth on a document that *quotes* a list fence
+  (`- ```js` inside a ```` ```markdown ```` block). Same false positive, same sentence, opposite
+  trigger. Nothing lexical separates a legal opener from quoted content — **only fence depth does**,
+  and a naive depth model is the broken one. Hence: *"if I have to write the correct detector in
+  order to test the regex, ship the correct detector."*
+- **The detector now models fence structure** (CommonMark's asymmetry, and it is load-bearing): an
+  **opener** may carry indentation and an optional list marker; a **closer** may carry indentation
+  ONLY, must be unmarked, carry no info string, and run at least as long as its opener. A list marker
+  is container syntax — legal before an opener, never before a closer.
+  - **Extraction is BYTE-IDENTICAL to the regex approach on all 29 corpus files** (LINE=742,
+    SPAN=1793, 2535 units, 0 files differing). Nothing that exists today changed. One seat used that
+    number to argue the correct detector "buys nothing"; the chair used the same number to conclude
+    it **costs nothing**. Byte-identity measures *migration risk*, not *value*.
+- **⚠ Three things will bite you if you touch the detector**, each pinned by a test naming its
+  mutation: a fence-shaped line that is *not* a valid closer must still be **emitted** as a line unit
+  (adding a `next` there drops content silently); whitespace classes must be `[[:space:]]`, not
+  `[ \t]`, because a CRLF closer is `` ```\r `` and a stray `\r` latches depth open to EOF; and the
+  closer test is `run >= flen` — the off-by-one `>` latches **26 of 29** corpus files.
+- **⚠ MUTATION TESTING CAUGHT A GAP IN THIS SESSION'S OWN TESTS.** Ten mutations were run; nine reded
+  the right tests and **one reded nothing** — dropping the info-string half of the closer rule,
+  because the obvious fixture's `- ```js` is rejected by the *list-marker* half first and masks it. A
+  fixture with equal-length unmarked fences was added and it now reds. **Run the mutations: the
+  natural fixture for a rule is often not the one that pins it.**
+- **AGE-41 was closed for free by this fix and never needed its own PR.** A nested 4-backtick block
+  containing an odd number of 3-backtick lines desynchronised the **shipped** detector and reported a
+  false positive on ordinary English. Filed, commented, closed; its repro ships as a regression test.
+- **⚠ A METHODOLOGY CORRECTION — do not repeat the chair's error.** The AGE-31 note below says a run
+  without a root argument "scanned nothing". That is true **only for a copy placed outside the plugin**
+  (`DOCS_ROOT` defaults to `$SCRIPT_DIR/..`, which for a scratchpad copy is the scratchpad). For the
+  **real** script a bare run scans all 29 files. This session generalised it into "always pass an
+  explicit root" and dispatched three council seats with that false premise. The rule that actually
+  holds either way: **assert a FLOOR on `files_scanned`**. The real vacuous path is passing the
+  **repo root** (`files_scanned: []`, `contract_ok: true`). The suite now pins a floor.
+- **⚠ `grep` in your Bash tool is NOT the `grep` your tests run.** It is a shell function wrapping
+  **ugrep 7.5.0**, whose `[[:punct:]]` does not match `` ` ``, `>` or `+`; bats and hooks get
+  `/usr/bin/grep`. Measured: `^[[:punct:]]` matched **4** lines under one and **1** under the other.
+  **When a count is evidence for a decision, use `awk` or `/usr/bin/grep` explicitly.** Filed as
+  **AGE-42**. This session's own 214-marker figure was re-verified in awk and survived — by luck.
+- **⚠ Beware grepping the gate log for `FAIL` as well as `skip`.** This file already warns that every
+  `skip` string in a green log is a *test name*. The same is true of `FAIL`: this run's log contains
+  two lines matching `FAIL`, and **both are `ok` lines** whose test names are "…reports FAILED with
+  the cycle count…" and "display shows FAIL for failing check". Count `^not ok ` instead.
+- **The gate was green with NO bypass — seven sessions running.** `MAKE_EXIT=0`, **619 bats
+  assertions + 334 shell checks, zero failures, zero skipped suites**. `plugin-content-drift` cleared
+  on the bump. **AGE-21's flaky `test-cli-rm.sh` PASSED.** Wall clock ~25 min — faster than the ~45min
+  this file last quoted and far under the old ~2h figure, but budget for 2h; it varies with load.
+- **The AGE-24 ordering held for the third time**: targeted suites first (`make test-forge` + the
+  three fast guards, ~8 min), then bump, then **one** full `make -k test` post-bump.
 
 ## Known state (updated 2026-08-04 by the AGE-31 session)
 
@@ -453,7 +518,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-32**~~ | med | **DONE — shipped as v3.1.0.** Token-bound `expect-dead` marker, ruled unanimously by `/council-vote`. Unblocks AGE-24 and AGE-31. See "What AGE-32 turned out to be" below. |
 | ✅ | ~~**AGE-24**~~ | med | **DONE — shipped as v3.2.0.** Inline backtick *spans* are now scanned outside fences; the `storyhook-contract.md:8` marker landed in the same commit. See "What AGE-24 turned out to be" below. Filed **AGE-37**. |
 | ✅ | ~~**AGE-31**~~ | med | **DONE — shipped as v3.3.0** (PR #146). Angle placeholders in the verb slot are violations; only a placeholder naming the slot itself is exempt, by equality-per-segment. See "What AGE-31 turned out to be" below. Filed **AGE-38** and **AGE-39**. |
-| 1 | **AGE-29** | med | **Now the LAST blocker on AGE-30, so it leads.** Indented fences: `:409`'s detector is `/^```/`, anchored at column 0, so a fence indented inside a numbered list is never scanned. ⚠ Its "measured free / 0 new violations" figure is **stale** — see the warning at the top. |
+| ✅ | ~~**AGE-29**~~ | med | **DONE — shipped as v3.4.0.** The fence detector now models structure instead of toggling. Its own prescribed fix was **disqualified by measurement** — see the AGE-29 block above. **Closed AGE-41 for free.** Filed **AGE-40**, **AGE-42**, **AGE-43**. |
+| 1 | **AGE-30** | med | **Unblocked by AGE-29 — it leads.** `forge-contract-check.sh` cannot reach repo-root agent-instruction files. An **interface** decision (file args vs multiple roots vs a repo-local caller), not a scan-list append — `:284-288` says the scan set is deliberately shape-based, "not a hand-maintained filename list". ⚠ Read AGE-27's four transferable lessons before starting: its *stated* durable fix was rejected 3-0 and the guard's reach has a measured ceiling. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
 | 8 | **AGE-19** | med | No storyhook major-version pin. |
@@ -1042,6 +1108,15 @@ the chain simply stops. To restart:
 append after the invocation match, so a line counts as scanned only once an invocation was found —
 turns a false `form_is_valid` into a true `not_scanned`, existing tests stay green) plus the ruling
 on why it was held out of AGE-31's PR.
+
+### Stories filed by the AGE-29 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-40** | low | Blockquoted fences are unreachable — **both** the fence and its body. Measured during the council: a `>`-aware detector delivers **ZERO** reach, because `START_RE` (`^[[:space:]]*\$?[[:space:]]*story`) and `MID_RE`'s separator class ``[(;&|`]`` reject the `>` prefix independently of fence tracking. So recognising the fence would add a desync surface for no gain. The real fix is prefix-stripping in the extractor — a different change with a different risk profile, which is why it was deliberately **not** folded into AGE-29. Zero occurrences in the corpus; matters for AGE-30. |
+| ~~**AGE-41**~~ | low | **DONE — closed by AGE-29, no separate PR.** A nested 4-backtick block containing an ODD number of 3-backtick lines desynchronised the toggle and false-positived on true prose, identically under the shipped detector and both regex candidates. The run-length rule makes it unrepresentable. Its repro ships as the "a shorter marker cannot close a longer fence" regression test. |
+| **AGE-42** | low | **Agent-run `grep` is ugrep 7.5.0, not the `grep` your tests run.** Its `[[:punct:]]` does not match `` ` ``, `>` or `+`; bats/hooks get `/usr/bin/grep`. A hand-run marker count therefore under-counts **in the green direction**, turning a completeness oracle into the vacuous green it exists to prevent. Found when a council seat tested its own proposed test. Shipped code is unaffected (all six POSIX-class users run under bash). Fix is documentation plus optionally a guard. |
+| **AGE-43** | **med** | **A false positive REACHABLE ON THE SHIPPED SCRIPT TODAY.** `MID_RE` harvests the remainder with `(.*)$`, which runs past an inline span's closing backtick, so inside a fence `` Then run `story project new` to start. `` reports subcommand `` new` `` — reddening the gate on the *correct* modern spelling. Verified on the unmodified script with a plain column-0 fence; zero corpus occurrences today. One-token fix (`([^`]*)`), but ⚠ **do not sell it as a safety precondition for a detector change** — it was measured NOT to fix the prose-verb false-positive class, because it bounds the *argument* capture, not the *verb* capture. Ships with an invariant test: no reported token may end in a backtick. |
 
 ### Stories filed by the AGE-24 session
 

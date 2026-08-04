@@ -2,6 +2,8 @@
 name: postmortem
 description: RCA step 7 — commit the blameless postmortem to docs/rca/, post the closing issue comment, offer the CLAUDE.md lesson, and clean up worktrees and artifacts.
 argument-hint: "[slug]"
+model: sonnet
+effort: medium
 ---
 
 # RCA Postmortem — Durable Lesson & Cleanup

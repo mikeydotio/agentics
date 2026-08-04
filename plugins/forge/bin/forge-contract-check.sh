@@ -458,12 +458,27 @@ collect_markers() {
 }
 
 # Does a well-formed marker on $1 name exactly the token $2?
+#
+# A placeholder token is NOT refused here (AGE-31). AGE-32 refused one on
+# the grounds that a marker naming `<token>` is the convention's own
+# signature rather than a suppression — true, but it was written when no
+# placeholder could ever BE reported: the subcommand and relation checks
+# skip placeholders outright, so `$2` was always a concrete token. The
+# verb-slot widening below makes `<id>` reportable, and refusing to
+# suppress it would leave the one form this guard newly catches with no
+# way for a document to deny it — a guard satisfiable only by deleting a
+# true sentence, which AGE-11 ruled out.
+#
+# The exact-match on line 2 below is what keeps the signature case safe:
+# a marker naming `<token>` suppresses only a violation whose reported
+# token is literally `<token>`, so documenting the convention still
+# cannot mute a real finding. Staleness keeps its broader placeholder
+# exemption — see classify_stale_markers.
 marker_suppresses() {
   local ln tok reason
   [[ -n "$FILE_MARKERS" ]] || return 1
   while IFS=$'\t' read -r ln tok reason; do
     [[ "$ln" == "$1" ]] || continue
-    is_placeholder "$tok" && return 1
     [[ -n "$reason" ]] || return 1
     [[ "$tok" == "$2" ]] || return 1
     return 0

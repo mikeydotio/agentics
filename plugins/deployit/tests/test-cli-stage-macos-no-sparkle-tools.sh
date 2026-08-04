@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Graceful degradation: when Sparkle is enabled but signing can't proceed (tool
-# missing or sign_update fails), the deploy must NOT fail — it still produces the
-# .dmg, drops the unsigned .zip, writes no `sparkle` key, and warns on stderr.
+# Graceful degradation is now TAILNET-ONLY (issue #117 narrowed this): when
+# Sparkle is enabled, signing can't proceed, and this build does NOT publish
+# a GitHub release (release=False, the default _stage_macos param this test
+# exercises), the deploy must NOT fail — it still produces the .dmg, drops
+# the unsigned .zip, writes no `sparkle` key, and warns on stderr naming the
+# resolved binary. The release=True contract (hard fail, never ships
+# unsigned) is covered separately by test-cli-sparkle-sign-required.sh.
 # We force the failure deterministically (host-independent) by pointing
 # DEPLOYIT_SPARKLE_SIGN_UPDATE at a stub that exits non-zero.
 set -euo pipefail
@@ -51,7 +55,8 @@ meta = {
     "origin_base_url": "https://demo.tail.ts.net/deployit",
 }
 
-# Must not raise even though signing fails.
+# Must not raise even though signing fails — release is left at its default
+# (False), the tailnet-only contract this test covers.
 mod._stage_macos(state, plugin_root, "lillist-macos-nosign", app, meta,
                  False, "", {"enabled": True})
 
@@ -65,5 +70,10 @@ PY
 
 grep -qi "skipping Sparkle" "$STDERR_LOG" \
     || { echo "FAIL: expected a 'skipping Sparkle' warning on stderr"; cat "$STDERR_LOG"; exit 1; }
+
+# issue #117 AC 3: the warning must always name the resolved binary, not just
+# say "failed" — assert the stub's own path appears in the diagnostic.
+grep -qF "$STUB" "$STDERR_LOG" \
+    || { echo "FAIL: expected the resolved sign_update path ($STUB) in the warning"; cat "$STDERR_LOG"; exit 1; }
 
 echo "PASS"

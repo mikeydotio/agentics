@@ -10,8 +10,10 @@
 # hardcodes a verb or relationship list — it asks the live `story` binary.
 #
 # What it reads, in <docs-root>/references/*.md and
-# <docs-root>/skills/*/SKILL.md: every line inside a fenced ```...``` block,
-# plus every inline single-backtick `span` outside one. The second half
+# <docs-root>/skills/*/SKILL.md: every line inside a fenced ```...``` block
+# — including a fence indented inside a list, or opened on the list-marker
+# line itself — plus every inline single-backtick `span` outside one. The
+# second half
 # matters more than it sounds — forge documents most of its storyhook surface
 # as inline prose in tables and paragraphs, so a fenced-only scan left the
 # majority of the contract unguarded (see "Extraction scope" below).
@@ -394,6 +396,34 @@ fi
 #   2. Outside a fence, the unit is each inline single-backtick SPAN, and
 #      the span alone is handed over — never the line it sits on.
 #
+# FENCE RECOGNITION (AGE-29). Because the unit depends on fence depth, getting
+# depth wrong is not a reach bug — it silently moves prose into rule 1, which
+# is the false-positive class rule 2 exists to prevent. So the detector models
+# fences properly rather than toggling on anything that looks like a marker:
+#
+#   * An OPENER may carry a container prefix — indentation, and optionally a
+#     list marker (`- `, `* `, `+ `, `1. `, `1) `). `4. ```bash` at
+#     skills/execute/SKILL.md:172 is a real fence, and a column-0-anchored
+#     detector read its whole body as prose.
+#   * A CLOSER may carry indentation ONLY. It must be unmarked, carry no info
+#     string, and run at least as long as the opener it closes.
+#
+# That asymmetry is CommonMark's and it is load-bearing, not pedantry. A list
+# marker is container syntax, legal before an opener and never before a closer;
+# accepting one in both positions desynchronises depth the moment a document
+# quotes a list fence — which is exactly what a doc explaining markdown does,
+# and it inverts every line that follows. Recording the opener's backtick run
+# is what keeps a ```-line inside a ````-block from closing it.
+#
+# Three consequences worth knowing before you touch this:
+#   - A fence-shaped line that is not a valid closer must still be EMITTED as a
+#     line unit. Adding a `next` to that branch drops content silently.
+#   - Whitespace classes must be [[:space:]], not [ \t]: a CRLF closer is
+#     "```\r", and a \r left in the info string rejects the closer and latches
+#     depth open to EOF.
+#   - A fence left open at EOF whole-line-scans the remainder. The suite pins
+#     this by appending a canary sentence to every real corpus file.
+#
 # Rule 2 is not an optimisation, it is what makes the widening safe. forge
 # writes most of its storyhook contract as inline prose in tables and
 # paragraphs: at v2.39.1 all eight `story project ` occurrences in this
@@ -713,8 +743,22 @@ while IFS= read -r f; do
         ;;
     esac
   done < <(awk '
-    BEGIN { d = 0 }
-    /^```/ { d = 1 - d; next }
+    BEGIN { d = 0; flen = 0 }
+    {
+      if (match($0, /^[[:space:]]*(([-*+]|[0-9]+[.)])[[:space:]]+)?`{3,}/)) {
+        tok = substr($0, RSTART, RLENGTH)
+        info = substr($0, RSTART + RLENGTH)
+        marked = (tok ~ /[^[:space:]`]/)
+        run = 0
+        for (i = length(tok); i >= 1; i--) {
+          if (substr(tok, i, 1) == "`") run++; else break
+        }
+        if (d == 0) { d = 1; flen = run; next }
+        bare = info
+        gsub(/[[:space:]]/, "", bare)
+        if (!marked && bare == "" && run >= flen) { d = 0; next }
+      }
+    }
     d == 1 { printf "%d\t%s\n", NR, $0; next }
     {
       rest = $0

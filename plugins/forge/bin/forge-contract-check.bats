@@ -50,7 +50,13 @@ jq_field() {
 
 @test "contract-check: scans a nonzero number of real forge files" {
   run bash "$SCRIPT" "$FORGE_ROOT"
-  [ "$(jq_field '.files_scanned | length')" -gt 0 ]
+  # A FLOOR, not just non-emptiness. The vacuous path is not omitting the
+  # argument — DOCS_ROOT defaults to the plugin root, so a bare run scans the
+  # whole corpus. It is passing the REPO root: references/ and skills/ do not
+  # exist there, so the script returns files_scanned:[] with contract_ok true.
+  # A floor reds on that; `> 0` also would, but only a floor reds on a
+  # file-selection glob that quietly stops matching most of the corpus.
+  [ "$(jq_field '.files_scanned | length')" -ge 25 ]
 }
 
 @test "contract-check: real verb list includes the documented verbs, excludes nothing forged" {
@@ -794,6 +800,275 @@ EOF
   # OUTSIDE the script, so it costs nothing and cannot red the gate on the
   # AGE-37 class the way narrowing classify_stale_markers would.
   [ "$markers" -eq "$accounted" ]
+}
+
+# --- Fence structure (AGE-29) ---
+#
+# The detector is a run-length fence RECOGNISER, not a 1-bit toggle. It exists
+# because the toggle could not represent fenced-block structure, and every way
+# of failing to represent it lands on the same consequence: a line's extraction
+# unit flips between LINE and SPAN, and a whole-line-scanned English sentence
+# reads as an invocation (AGE-24 measured 28 such false positives corpus-wide).
+#
+# The asymmetry that drives the closer rule is CommonMark's, not ours: a list
+# marker is CONTAINER syntax. It is legal before an OPENER — which is why
+# `4. ```bash` at skills/execute/SKILL.md:172 is a real fence — and never legal
+# before a CLOSER. A detector that accepts a marker in both positions
+# desynchronises the moment a document quotes a list fence, which is exactly
+# what a doc teaching markdown does.
+#
+# Each test below names the mutation it exists to catch. Every one was run.
+
+@test "contract-check: a fence opened on a list-marker line is scanned, and the prose after it is not" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+4. ```bash
+   story bogusverb HP-1
+   ```
+5. Each story (story metadata lives in the store) is tracked by `story list`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.files_scanned | length')" -eq 1 ]
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  # Bidirectional in one document: the fenced body must be REACHED, and the
+  # prose after the block must stay span-scanned. A detector anchored at column
+  # 0 reports nothing; one that matches the closer but not the opener reports
+  # `metadata` at line 6 — a true English sentence — and still misses this.
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.verb_violations[0].verb')" = "bogusverb" ]
+  [ "$(jq_field '.verb_violations[0].line')" -eq 4 ]
+}
+
+@test "contract-check: a whitespace-indented fence body is scanned as a line" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+1. Claim the story:
+   ```bash
+   story bogusverb HP-1
+   ```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # AGE-29's filed spelling, and the corpus majority: 30 indented markers across
+  # 8 of 29 files. Pinned separately from the marker-line case so a regression is
+  # attributable to the right half.
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.verb_violations[0].verb')" = "bogusverb" ]
+}
+
+@test "contract-check: a list fence quoted inside a fenced block is content, not a closer" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+```markdown
+- ```js
+```
+
+Each story (story metadata lives in the store) is tracked by `story list`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # The document that decided AGE-29. A regex that accepts a list marker before
+  # a CLOSER treats `- ```js` as the end of the block, inverts depth, and reds
+  # the gate on the sentence at line 7. Nothing lexical distinguishes `- ```js`
+  # here from the legal opener `4. ```bash` above — only fence depth does, which
+  # is why no regex-only detector can pass both of these tests.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: a shorter marker cannot close a longer fence" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+````markdown
+Open a fenced block by writing:
+
+```bash
+````
+
+Recovery; story data lives in a SQLite store.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Reds under the pre-AGE-29 detector too: this is a defect the shipped guard
+  # already had (filed as AGE-41), not one AGE-29 introduced. `;` is a shell
+  # separator, so the trailing sentence violates the moment it is scanned whole.
+  # Mutation: drop `run >= flen`, or hardcode flen=3.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: a bare marker carrying a list marker is not a closer" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+```markdown
+- ```
+```
+
+Each story (story metadata lives in the store) is tracked by `story list`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # The `!marked` half of the closer rule. Without it a BARE marker with a list
+  # prefix closes the block and produces the identical false positive this
+  # detector exists to prevent — the defect was present in the first draft of
+  # the run-length detector and is caught by nothing else in this file.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: a marker carrying an info string is not a closer" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+````markdown
+````js
+const x = 1;
+````
+
+Each story (story metadata lives in the store) is tracked by `story list`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # The `bare == ""` half of the closer rule, isolated. CommonMark: a closing
+  # fence may not carry an info string. The fences here are equal length and
+  # unmarked, so neither `run >= flen` nor `!marked` rejects `````js` — this is
+  # the only shape in which that condition is load-bearing, which is why the
+  # obvious antiB fixture does NOT pin it (mutation testing caught that: dropping
+  # `bare == ""` reded nothing until this test existed).
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: a CRLF document does not latch the fence open" {
+  printf '# Fixture\r\n\r\n1. ```bash\r\n   story bogusverb HP-1\r\n   ```\r\n\r\nEach story (story metadata lives in the store) is tracked.\r\n' \
+    > "$FIXTURE_DIR/references/step-handoff.md"
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # A CRLF closer is "```\r". Matching the info string against [ \t] rather than
+  # [[:space:]] leaves \r behind, the closer is rejected, depth latches to EOF,
+  # and the trailing prose is whole-line scanned — an EXTRA `metadata` violation
+  # on top of the real one. Mutation: narrow [[:space:]] back to [ \t].
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.verb_violations[0].verb')" = "bogusverb" ]
+}
+
+@test "contract-check: fence-shaped content inside a fence is still scanned" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+````markdown
+``` story bogusverb HP-1
+````
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # A fence-shaped line that is NOT a valid closer must fall through and still
+  # be emitted as a LINE unit. Mutation: add a `next` to the non-closer branch —
+  # the line is silently dropped, nothing else in the suite notices, and the
+  # result is a vacuous green. No corpus file exercises this shape.
+  [ "$(jq_field '[.verb_violations[].verb] | join(",")')" = "bogusverb" ]
+}
+
+@test "contract-check: every list-marker spelling opens a fence, and a bare number does not" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+- ```bash
+  story bogusalpha HP-1
+  ```
+
+1) ```bash
+   story bogusbeta HP-1
+   ```
+
+4. ```bash
+   story bogusgamma HP-1
+   ```
+
+4.```bash
+Each story (story metadata lives in the store) is tracked by `story list`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Branch coverage for the marker alternation. Neither the bullet nor the `)`
+  # spelling occurs anywhere in the corpus, so narrowing the class to `[0-9]+\.`
+  # would pass every other test in this file. The final block is the negative
+  # case: `4.```bash` has no separator after the marker, so it is NOT a fence and
+  # the sentence under it must stay span-scanned. Mutation: weaken
+  # `[[:space:]]+` to `*`, and that sentence reports `metadata`.
+  [ "$(jq_field '[.verb_violations[].verb] | sort | join(",")')" = "bogusalpha,bogusbeta,bogusgamma" ]
+}
+
+@test "contract-check: both invocations on a two-span line are checked" {
+  cat > "$FIXTURE_DIR/references/step-handoff.md" <<'EOF'
+# Fixture
+
+1. ```bash
+   story move HP-1 in-progress
+   ```
+2. Generate the report: `story summary` + `story bogusverb`
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Pins the extraction UNIT, which no other fixture does. The dead form is the
+  # SECOND span, so it is reachable only while the line is span-scanned: collapse
+  # the line into one LINE unit and the documented "only the first qualifying
+  # invocation per unit is checked" limitation swallows it silently. That is a
+  # coverage REGRESSION rather than a false positive, and it is invisible to
+  # violation counts — a column-0-anchored detector widened only for leading
+  # whitespace reports contract_ok true with zero violations here.
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '[.verb_violations[].verb] | join(",")')" = "bogusverb" ]
+}
+
+@test "contract-check: a dead form planted in a real list-marker fence is caught" {
+  local tree="$FIXTURE_DIR/real"
+  mkdir -p "$tree"
+  cp -R "$FORGE_ROOT/references" "$tree/references"
+  cp -R "$FORGE_ROOT/skills" "$tree/skills"
+  local target="$tree/skills/execute/SKILL.md"
+  # Fail loud if the document was restructured rather than silently testing nothing.
+  grep -qF '4. ```bash' "$target"
+  # Plant the exact grammar this guard was built to kill, in a real forge doc,
+  # inside the fence shape the shipped detector cannot see.
+  awk 'NR == 173 { print "   story HP-N is done"; next } { print }' "$target" > "$target.tmp"
+  mv "$target.tmp" "$target"
+  run bash "$SCRIPT" "$tree"
+  echo "$output" >&2
+  [ "$(jq_field '.files_scanned | length')" -ge 25 ]
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  # Reach proven on real content, asserted through the public JSON only, so this
+  # survives any future change to how the detector is implemented.
+  [ "$(jq_field '[.verb_violations[] | select(.verb == "HP-N") | .file] | join(",")')" = "skills/execute/SKILL.md" ]
+}
+
+@test "contract-check: no real corpus file leaves the detector latched at EOF" {
+  local tree="$FIXTURE_DIR/canary"
+  mkdir -p "$tree"
+  cp -R "$FORGE_ROOT/references" "$tree/references"
+  cp -R "$FORGE_ROOT/skills" "$tree/skills"
+  # Append a sentence that is ordinary English when span-scanned (no backticks,
+  # so it yields no units at all) and a violation when scanned as a whole LINE.
+  # Any file whose fence is still open at EOF therefore reports `data`.
+  local f
+  while IFS= read -r f; do
+    printf '\nRecovery; story data lives in a SQLite store.\n' >> "$f"
+  done < <(find "$tree" \( -path '*/references/*.md' -o -name 'SKILL.md' \) -type f)
+  run bash "$SCRIPT" "$tree"
+  echo "$output" >&2
+  [ "$(jq_field '.files_scanned | length')" -ge 25 ]
+  # Bounds the failure mode a stateful detector adds over a toggle: a closer that
+  # is never matched latches depth ON for the rest of the file. Mutation: change
+  # the closer test to `run > flen` (an ordinary off-by-one in exactly this
+  # logic) and 26 of 29 files latch, reporting 32 violations.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
 }
 
 # --- Schema stability across every exit path (AGE-18 lock) ---

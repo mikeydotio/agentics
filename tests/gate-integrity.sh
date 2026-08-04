@@ -27,6 +27,10 @@
 #      effect oracle, not a status reading. Without it, `test-root-bats: false`
 #      would satisfy (1) perfectly while verifying nothing at all.
 #   3. No Makefile recipe reintroduces the swallow (the class killer).
+#   4. No plugin test skips because an in-repo path is missing — absence of a
+#      path this repository ships means a broken checkout, never "not
+#      applicable". That is the class of plugins/deployit/tests/test-cli-bump.sh,
+#      whose exit-0 skip was counted as PASS by its own runner.
 #
 # It never recurses into a real suite: in (1) bats is absent by construction so
 # every target dies at its runner's check, and in (2) the `bats` on PATH is a
@@ -185,6 +189,40 @@ $(echo "$hits" | sed 's/^/          /')
         Tool-availability policy belongs in the suite runners (they already exit 1
         with an actionable message, and they cover direct \`bash <runner>\` invocation
         too). A Makefile recipe that echoes and succeeds is exactly AGE-18."
+    fi
+}
+
+# --- 4. Class killer: no test may skip because an in-repo path is missing ---
+
+test_plugin_tests_never_skip_on_a_filesystem_path_predicate() {
+    local hits=""
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        # A filesystem-existence predicate whose body exits 0 within two lines.
+        # `command -v <tool>` skips are deliberately NOT matched: a platform that
+        # genuinely lacks hdiutil/ditto/PlistBuddy is "not applicable", which is a
+        # different claim from "this repo is missing its own file". Assertions
+        # that exit 1 on a missing path are the correct shape and stay green.
+        #
+        # Known limit: the `exit 0` must appear within 2 lines of the predicate.
+        # A skip spread wider than that evades this check. Widening the window
+        # trades that false negative for false positives on an assertion that
+        # merely happens to precede an unrelated `exit 0`; 2 covers every shape
+        # in the repo today (verified against all four variants).
+        hits+="$(awk -v F="$f" '
+            /\[\[?[[:space:]]+! -[fdx][[:space:]]/ { ln=NR; line=$0; n=0; found=0
+                if (line ~ /exit 0/) found=1
+                while (n < 2 && (getline nx) > 0) { n++; if (nx ~ /exit 0/) found=1 }
+                if (found) printf "%s:%d: %s\n", F, ln, line
+            }' "$f")"
+    done <<< "$(find "$REPO_ROOT/plugins" -path '*/tests/test-*.sh' -type f | sort)"
+    hits="$(printf '%s' "$hits" | grep -vE '^$' || true)"
+    if [ -n "$hits" ]; then
+        fail "these tests SKIP (exit 0) because a filesystem path is missing:
+$(echo "$hits" | sed 's/^/          /')
+        These paths live in this repository — absence means a broken checkout, never
+        'not applicable'. Fail loudly instead, so the suite cannot report PASS for a
+        test it never ran (plugins/*/tests/run-tests.sh counts exit 0 as PASS)."
     fi
 }
 

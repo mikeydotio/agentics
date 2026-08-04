@@ -217,6 +217,60 @@ claim_rollback_note() {
   fi
 }
 
+# missing_claim_state_vocabulary — CONFIRM, never infer, that this project's
+# state vocabulary genuinely lacks `in-progress`, the state cmd_dispatch
+# hardcodes as its claim target. Echoes the comma-separated vocabulary it
+# OBSERVED and returns 0 only on a positively-parsed absence; returns 1
+# (echoing nothing) on every other outcome, so the caller degrades to its
+# ordinary failure path.
+#
+# WHY THIS IS NOT A TEXT MATCH ON THE MOVE'S OWN ERROR (the obvious
+# implementation, deliberately rejected — see
+# .council/age12-claim-state-missing/DECISION.md): storyhook reports the
+# condition as ``state `in-progress` is not defined``, but that same sentence
+# is emitted when the state that is undefined is the `--if-state` value — the
+# story's CURRENT state, a completely different fault with a completely
+# different remedy. A regex over the wording would answer confidently and
+# wrongly. Presence of a state is an observable FACT; the wording is
+# version-coupled guesswork. So this observes.
+#
+# WHY IT IS CHEAP ANYWAY: it runs only after a claim has already failed — a
+# cold, terminal path where one extra read costs nothing and the process is
+# about to exit. The happy path pays nothing, which is pinned by a test.
+#
+# ⚠ EVERY AMBIGUITY MUST DEGRADE, NOT GUESS. `story state list --json` returns
+# the vocabulary as an UNSTRUCTURED prose blob under `.message` (one state per
+# line, slug first, with a trailing " — N open" annotation), so the parse is
+# inherently upstream-coupled. It is therefore double-gated: the absence is
+# believed only when the blob parsed into at least one state AND the literal
+# `in-progress` appears nowhere in it at all. A failed call, an empty message,
+# an unparseable message, or a reformat that hides the state from the
+# line-parse but not from the substring check all return 1 — the caller then
+# emits exactly what it emits today, which already names the cause. That
+# asymmetry is the whole design: this can cost accuracy, never correctness.
+#
+# Recorded honestly, because the next reader will otherwise "simplify" it:
+# mutating away the `-n "$message"` guard ALONE reds nothing, because the
+# `-n "$states"` guard catches every input it would have caught (awk yields no
+# states from an empty message). It is kept as defence-in-depth on the most
+# common degradation — a failed `state list` call — rather than leaving that
+# path to depend on awk's behaviour over empty input. Deleting BOTH reds three
+# tests. The `-n "$states"` guard is uniquely load-bearing for a non-empty
+# message that parses to nothing, which is what case 11e exists to pin.
+missing_claim_state_vocabulary() {
+  local list_json message states
+  list_json=$("$STORY" state list --json 2>/dev/null) || true
+  message=$(printf '%s' "$list_json" | jq -r '.message // ""' 2>/dev/null) || true
+  [ -n "$message" ] || return 1
+  # Loose containment first: if the state is named anywhere in the blob, in any
+  # future formatting, it exists and there is nothing to report.
+  case "$message" in *in-progress*) return 1 ;; esac
+  # A state's slug is the first whitespace-delimited token of its line.
+  states=$(printf '%s\n' "$message" | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $1 }')
+  [ -n "$states" ] || return 1
+  printf '%s' "$states"
+}
+
 # ---- subcommand: dispatch ---------------------------------------------------
 cmd_dispatch() {
   local id="${1:-}"
@@ -279,7 +333,24 @@ cmd_dispatch() {
       conflict)
         refuse "claim-conflict" "story $id changed state before it could be claimed (expected \`$state\`, now \`$(printf '%s' "$move_json" | jq -r '.actual // "?"' 2>/dev/null)\`) — another dispatch likely won the race." ;;
       *)
-        fail "story move $id in-progress failed: $(printf '%s' "$move_json" | jq -r '.error // "story move emitted no result"' 2>/dev/null)." ;;
+        local move_error states
+        move_error=$(printf '%s' "$move_json" | jq -r '.error // ""' 2>/dev/null) || true
+        [ -n "$move_error" ] || move_error="story move emitted no result"
+        # A vocabulary with no `in-progress` is a PERMANENT, operator-fixable
+        # misconfiguration, not the transient storyhook error the generic arm
+        # below describes — so it refuses distinguishably and names the repair.
+        # The remedy is storyhook's OWN prescribed one (its state-invariant
+        # error says "Run `story doctor --fix` to add it"): a wrapper that
+        # contradicts the tool it wraps creates two rival instructions for one
+        # fault, and `story doctor --fix` also lands the state in the correct
+        # board position, which `story state add` — appending it after `done` —
+        # cannot. `doctor --fix` omitting the `active` role is an upstream gap,
+        # filed there rather than papered over with a second command here.
+        if states=$(missing_claim_state_vocabulary); then
+          refuse "claim-state-missing" \
+            "story $id cannot be claimed: this storyhook project's state vocabulary has no \`in-progress\` state (it defines: $states) — run \`story doctor --fix\` in this repo to add it, then re-run this dispatch. (\`story move\` reported: $move_error)"
+        fi
+        fail "story move $id in-progress failed: $move_error." ;;
     esac
   fi
 

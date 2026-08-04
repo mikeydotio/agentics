@@ -16,7 +16,7 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-21** — deployit's `test-cli-rm.sh` needs a live local daemon; the last known source of pre-push gate noise. Nothing is blocked (`blocked: 0`), so `story next` and this table agree. Confirm with `story list --ready`. |
+| **Next story** | **AGE-21** — deployit's `test-cli-rm.sh` needs a live local daemon. **⚠ `story next` says AGE-19; take AGE-21 anyway** — see the tie-break note directly below. Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12 |
 | **Repo version** | **v3.6.0** — minor. See the level note below; AGE-12's own text implied a patch. |
 | **Last updated by** | AGE-12 session, 2026-08-04 |
@@ -31,6 +31,17 @@ via freshen, and stops.
 
 - **AGE-12 is DONE and shipped as v3.6.0. AGE-21 leads the queue.** Nothing is blocked
   (`blocked: 0`); confirm with `story list --ready`, not this line.
+- **⚠ CORRECTION to this session's own first draft of the line above: `story next` says AGE-19,
+  NOT AGE-21, and the table is still right.** An earlier version of this block claimed the two
+  "agree" now that nothing is blocked. They do not, and the reason has nothing to do with
+  blocking: AGE-19 and AGE-21 are both `todo`/`ready`/`medium`, so `story next` is breaking the
+  tie by **ID order alone**. This table breaks it by what unblocks the loop itself — AGE-21 is
+  the last known source of pre-push gate noise, and every session here depends on a trustworthy
+  gate. That is the AGE-28 rule restated: **trust `story list` for STATE, this table for
+  ORDERING RATIONALE, because `story next` cannot see the rationale.** Caveat worth carrying:
+  AGE-21's flake has now **not fired in five consecutive full gate runs**, so reproduce it
+  before believing the story — if it no longer reproduces, that finding is the deliverable, and
+  AGE-19 (which this session's own upstream-coupling work makes newly relevant) is next.
 - **⚠ THE STORY'S CENTRAL CLAIM WAS FALSE, AND ONLY REPRODUCTION REVEALED IT.** AGE-12 states the
   failure surfaces *"only a generic `story move ... failed` message"* and that *"nothing in the
   error names the actual cause"*. Reproduced live, the shipped script already emitted ``story move

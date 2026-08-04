@@ -182,6 +182,163 @@ EOF
   [ "$(jq_field '.contract_ok')" = "true" ]
 }
 
+# --- Subcommand drift detection (AGE-17) ---
+#
+# The verb guard used to validate only the FIRST token after `story`, so
+# `story project init` checked out as the real verb `project` and passed —
+# which is precisely how storyhook 2.0's `project init` -> `project new`
+# rename reached main unseen. These tests pin the two-token check.
+
+@test "contract-check: catches the historical 'story project init' rename" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story project init --prefix AGE
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 1 ]
+  [ "$(jq_field '.subcommand_violations[0].verb')" = "project" ]
+  [ "$(jq_field '.subcommand_violations[0].subcommand')" = "init" ]
+  [ "$(jq_field '.subcommand_violations[0].file')" = "references/storyhook-contract.md" ]
+  [ "$(jq_field '.subcommand_violations[0].line')" -eq 4 ]
+  # `project` IS a real verb — this must NOT be reported as a verb violation.
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: catches an invented subcommand (failure oracle)" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story project bogus --prefix AGE
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.subcommand_violations[0].subcommand')" = "bogus" ]
+}
+
+@test "contract-check: catches an invented subcommand under a compact-alternation verb" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story hooks nonexistent
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.subcommand_violations[0].verb')" = "hooks" ]
+  [ "$(jq_field '.subcommand_violations[0].subcommand')" = "nonexistent" ]
+}
+
+# Effect oracle (the AGE-16 lock): assert the derivation ACTUALLY RAN and
+# consulted BOTH ground-truth sources, rather than defaulting to something
+# that trivially satisfies the failure assertions above.
+#
+#   - `web status` appears ONLY in `story help web`, never in `story --help`.
+#   - `type add`   appears ONLY in `story --help`; `story help type` does not exist.
+# No single-source implementation can satisfy both at once.
+@test "contract-check: real_subcommands proves both help sources were consulted" {
+  run bash "$SCRIPT" "$FORGE_ROOT"
+  echo "$output" >&2
+  # per-verb help only
+  echo "$output" | jq -e '.real_subcommands.web | index("status") != null' >/dev/null
+  # global --help only
+  echo "$output" | jq -e '.real_subcommands.type | index("add") != null' >/dev/null
+  # a verb that takes no subcommands must NOT be enforced at all
+  echo "$output" | jq -e '.real_subcommands | has("tui") | not' >/dev/null
+  # the dead verb form must be absent from the live vocabulary
+  echo "$output" | jq -e '.real_subcommands.project | index("init") == null' >/dev/null
+  echo "$output" | jq -e '.real_subcommands.project | index("new") != null' >/dev/null
+}
+
+@test "contract-check: real_subcommands covers the known subcommand-bearing verbs" {
+  run bash "$SCRIPT" "$FORGE_ROOT"
+  # 11 today (project web member state store phase hooks scaffold plugin type epic),
+  # and `story --help`'s global block alone lists all eleven — it is the enforcement
+  # FLOOR that per-verb help only adds to. So dropping below 11 cannot be per-verb
+  # parse degradation; it means the global usage block itself changed, which is
+  # exactly the drift this guard exists to report. Pin it rather than leave slack.
+  [ "$(jq_field '.real_subcommands | length')" -ge 11 ]
+  for v in project state type hooks phase web; do
+    echo "$output" | jq -e --arg v "$v" '.real_subcommands | has($v)' >/dev/null
+  done
+}
+
+# --- Subcommand check: no false positives ---
+
+@test "contract-check: accepts the two-token forms the real docs use" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story type add bug --description "A defect"
+story state add review --super OPEN
+story project new --prefix AGE
+story hooks install
+story phase list
+story web status
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: never flags position 2 of a verb that takes free-form arguments" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story move HP-1 done
+story new "Some title"
+story comment HP-1 "note"
+story summary
+story tui
+story delete HP-1 "reason"
+story show HP-1
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: treats a placeholder in the subcommand slot as a wildcard" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story project <subcommand>
+story state [add|remove]
+story hooks --help
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
+}
+
+# --- Schema stability across every exit path (AGE-18 lock) ---
+
+@test "contract-check: the CLI-missing early exit still emits the new keys" {
+  PATH="/usr/bin:/bin" run bash "$SCRIPT" "$FIXTURE_DIR"
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
+  echo "$output" | jq -e 'has("real_subcommands")' >/dev/null
+  echo "$output" | jq -e 'has("subcommand_violations")' >/dev/null
+}
+
 # --- Output shape ---
 
 @test "contract-check: output is always valid JSON" {

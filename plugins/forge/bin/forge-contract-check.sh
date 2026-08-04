@@ -20,6 +20,12 @@
 #      invocation's <relationship> must be one of the relationship types
 #      `story help relate` documents (the CLI's own enforced vocabulary —
 #      see storyhook's src/domain.rs `relation_edges`).
+#   3. Every `story <verb> <subcommand>` invocation whose <verb> is a
+#      two-token dispatch target (`project`, `state`, `hooks`, `type`, …)
+#      must name a <subcommand> that verb actually has. storyhook's
+#      surface is NOT a flat verb namespace, and checking only the first
+#      token is how the `project init` -> `project new` rename passed this
+#      guard unseen: `project` is real, so `story project init` validated.
 #
 # Ground truth resolution (never hardcoded — see Ground rule 4 in the
 # hardening plan: derive from the live binary so this stays correct as
@@ -46,8 +52,19 @@
 #     contract_ok        - true if zero violations were found. Only
 #                          meaningful when ok is true. THIS is the
 #                          regression-guard pass/fail signal.
-#     verb_violations    - array of {file, line, verb, command}.
+#     verb_violations    - array of {file, line, verb, command}. `verb` is
+#                          always a SINGLE token; a bad subcommand under a
+#                          real verb is reported separately (below), because
+#                          "unknown verb 'project'" would be a false claim.
 #     relation_violations- array of {file, line, relation, command}.
+#     subcommand_violations
+#                        - array of {file, line, verb, subcommand, command}.
+#     real_subcommands   - object mapping each ENFORCED verb to its real
+#                          subcommand list. Its key set IS the enforcement
+#                          domain: a verb absent from it is never checked in
+#                          position 2. Emitted so an operator debugging a
+#                          misfire can read the derivation instead of
+#                          reverse-engineering it.
 #     story_source       - which resolution path found the CLI (env/path).
 #     display            - human-readable summary.
 set -euo pipefail
@@ -69,7 +86,9 @@ fi
 
 if [[ -z "$STORY_BIN" ]]; then
   jq -n '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
-          real_verbs: [], real_relations: [], files_scanned: [], story_source: "",
+          subcommand_violations: [],
+          real_verbs: [], real_relations: [], real_subcommands: {},
+          files_scanned: [], story_source: "",
           error: "story_cli_missing",
           display: "[forge] contract check skipped: `story` CLI not found (set STORYHOOK_BIN or install via the storyhook-install skill)"}'
   exit 0
@@ -91,7 +110,9 @@ REAL_VERBS_JSON="$(printf '%s\n' "$real_verbs_out" \
 if [[ "$(echo "$REAL_VERBS_JSON" | jq 'length')" -eq 0 ]]; then
   jq -n --arg src "$STORY_SOURCE" \
     '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
-      real_verbs: [], real_relations: [], files_scanned: [], story_source: $src,
+      subcommand_violations: [],
+      real_verbs: [], real_relations: [], real_subcommands: {},
+      files_scanned: [], story_source: $src,
       error: "story_help_unparseable",
       display: "[forge] contract check skipped: could not parse a verb list from `story --help`"}'
   exit 0
@@ -118,7 +139,9 @@ REAL_RELATIONS_JSON="$(printf '%s\n' "$real_relate_help" \
 if [[ "$(echo "$REAL_RELATIONS_JSON" | jq 'length')" -eq 0 ]]; then
   jq -n --arg src "$STORY_SOURCE" --argjson verbs "$REAL_VERBS_JSON" \
     '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
-      real_verbs: $verbs, real_relations: [], files_scanned: [], story_source: $src,
+      subcommand_violations: [],
+      real_verbs: $verbs, real_relations: [], real_subcommands: {},
+      files_scanned: [], story_source: $src,
       error: "story_relate_help_unparseable",
       display: "[forge] contract check skipped: could not parse a relationship vocabulary from `story help relate`"}'
   exit 0
@@ -129,6 +152,133 @@ is_valid_verb() {
 }
 is_valid_relation() {
   echo "$REAL_RELATIONS_JSON" | jq -e --arg r "$1" 'index($r) != null' >/dev/null
+}
+
+# ── Derive the real SUBCOMMAND vocabulary for every verb that has one ──
+#
+# storyhook's surface is not a flat verb namespace: `story project new`,
+# `story state add`, `story hooks install` and friends are two-token
+# dispatch targets. Validating only the first token is exactly how the
+# `story project init` -> `story project new` rename passed this guard
+# unseen — `project` is a real verb, so the dead form validated clean.
+#
+# Ground truth is the UNION of both help surfaces, because neither is
+# complete alone (measured against storyhook 2.x):
+#   - `story --help`'s usage block is the only source for `type add`,
+#     `state add`, `member add`, `store new`, `epic *` and `plugin *`:
+#     `story help <verb>` does not exist for those verbs at all.
+#   - `story help <verb>`'s synopsis is the only source for `web status`,
+#     which the global usage block omits.
+#
+# The union has a structural property worth stating, because it bounds
+# how this code can fail: the global block lists every one of the eleven
+# subcommand-bearing verbs, so it is an enforcement FLOOR that per-verb
+# help can only add to. Any per-verb degradation — a cosmetic restyle, an
+# early synopsis truncation, a removed help topic — shrinks only the
+# additive contribution. That is a false negative (a missed rename). It
+# can never narrow the enforced set below the global block and so cannot
+# manufacture a false positive, which would red the pre-push gate
+# repo-wide. Global help failing IS fatal, and already fails loud via the
+# `story_help_unparseable` exit above.
+#
+# Two harvesting rules keep prose out of the vocabulary:
+#   1. SYNOPSIS REGIONS ONLY. For per-verb help that is the leading run of
+#      lines up to the first blank one. `story help hooks` line 4 is the
+#      prose "story events occur (create, state change, close, etc.)" — an
+#      ordinary sentence that happened to wrap onto a line starting with
+#      "story ". Harvested naively it invents a verb `events`.
+#   2. THE FIRST TOKEN MUST ALREADY BE A REAL VERB. Belt to rule 1's
+#      braces: whatever prose still slips through can only widen a
+#      vocabulary or mark a verb open — never narrow one. Every parse
+#      failure therefore degrades to a false negative by construction.
+#
+# A verb is ENFORCED only when every documented form puts a literal word
+# in position 2. One placeholder, flag, parenthetical or bare form
+# (`story tui`, `story move <id> <state>`, `story summary`) marks the verb
+# OPEN: it takes free-form arguments there, so position 2 is unknowable
+# and is never checked.
+
+REAL_VERBS_SPACED=" $(echo "$REAL_VERBS_JSON" | jq -r 'join(" ")') "
+
+# Emit "<verb>\t<position-2 token>" for each usage line of $1 matching $2.
+# $3 restricts the harvest to one verb ("" = any real verb).
+#
+# Everything right of the first " | " is discarded. That form lists
+# alternative continuations whose implicit prefix is unrecoverable —
+# `story project link origin [URL] | link checkout [PATH]` repeats its
+# depth-2 token while `story project settings list | get <key>` omits it,
+# with nothing in the text to tell the two apart — so only the first
+# segment can be attributed with certainty.
+harvest_usage_rows() {
+  local text="$1" line_re="$2" want="$3"
+  local line left
+  printf '%s\n' "$text" | grep -E "$line_re" | while IFS= read -r line; do
+    left="${line%% | *}"
+    local tok=()
+    read -ra tok <<< "$left"
+    [[ "${tok[0]:-}" == "story" ]] || continue
+    [[ -n "${tok[1]:-}" ]] || continue
+    [[ -z "$want" || "${tok[1]}" == "$want" ]] || continue
+    [[ "$REAL_VERBS_SPACED" == *" ${tok[1]} "* ]] || continue
+    printf '%s\t%s\n' "${tok[1]}" "${tok[2]:-}"
+  done
+}
+
+SUBCOMMAND_ROWS="$(harvest_usage_rows "$real_verbs_out" '^[[:space:]]{2}story ' '' || true)"
+
+while IFS= read -r hv; do
+  [[ -z "$hv" ]] && continue
+  verb_help="$("$STORY_BIN" help "$hv" 2>/dev/null || true)"
+  [[ -n "$verb_help" ]] || continue
+  synopsis="$(printf '%s\n' "$verb_help" \
+    | awk 'BEGIN{keep=1} /^[[:space:]]*$/{keep=0} keep{print}' || true)"
+  [[ -n "$synopsis" ]] || continue
+  verb_rows="$(harvest_usage_rows "$synopsis" '^story ' "$hv" || true)"
+  if [[ -n "$verb_rows" ]]; then
+    SUBCOMMAND_ROWS="${SUBCOMMAND_ROWS}${SUBCOMMAND_ROWS:+$'\n'}${verb_rows}"
+  fi
+done < <(echo "$REAL_VERBS_JSON" | jq -r '.[]')
+
+# Classify: a verb survives only with >=1 literal and 0 open signals.
+ENFORCED_ROWS="$(printf '%s\n' "$SUBCOMMAND_ROWS" | awk -F'\t' '
+  function literal(s) { return s ~ /^[A-Za-z][A-Za-z0-9._-]*(\|[A-Za-z][A-Za-z0-9._-]*)*$/ }
+  $1 == "" { next }
+  {
+    if ($2 == "" || !literal($2)) { open[$1] = 1; next }
+    n = split($2, parts, "|")
+    for (i = 1; i <= n; i++) pair[$1 SUBSEP parts[i]] = 1
+  }
+  END {
+    for (k in pair) {
+      split(k, a, SUBSEP)
+      if (!(a[1] in open)) printf "%s\t%s\n", a[1], a[2]
+    }
+  }' || true)"
+
+REAL_SUBCOMMANDS_JSON="$(printf '%s\n' "$ENFORCED_ROWS" \
+  | jq -R -s 'split("\n") | map(select(length > 0)) | map(split("\t"))
+              | group_by(.[0])
+              | map({key: .[0][0], value: (map(.[1]) | unique)})
+              | from_entries')"
+
+if [[ "$(echo "$REAL_SUBCOMMANDS_JSON" | jq 'length')" -eq 0 ]]; then
+  jq -n --arg src "$STORY_SOURCE" --argjson verbs "$REAL_VERBS_JSON" \
+        --argjson relations "$REAL_RELATIONS_JSON" \
+    '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
+      subcommand_violations: [],
+      real_verbs: $verbs, real_relations: $relations, real_subcommands: {},
+      files_scanned: [], story_source: $src,
+      error: "story_subcommands_unparseable",
+      display: "[forge] contract check skipped: could not derive a subcommand vocabulary from `story --help` / `story help <verb>`"}'
+  exit 0
+fi
+
+verb_is_enforced() {
+  echo "$REAL_SUBCOMMANDS_JSON" | jq -e --arg v "$1" 'has($v)' >/dev/null
+}
+is_valid_subcommand() {
+  echo "$REAL_SUBCOMMANDS_JSON" | jq -e --arg v "$1" --arg s "$2" \
+    '.[$v] | index($s) != null' >/dev/null
 }
 
 # ── Locate every doc that documents storyhook commands ──
@@ -166,6 +316,7 @@ MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
 
 VERB_VIOLATIONS=""
 RELATION_VIOLATIONS=""
+SUBCOMMAND_VIOLATIONS=""
 SCANNED_FILES_JSON="[]"
 
 add_verb_violation() {
@@ -180,6 +331,15 @@ add_relation_violation() {
   rec="$(jq -n --arg file "$1" --arg line "$2" --arg relation "$3" --arg command "$4" \
     '{file: $file, line: ($line | tonumber), relation: $relation, command: $command}')"
   RELATION_VIOLATIONS="${RELATION_VIOLATIONS}${RELATION_VIOLATIONS:+$'\n'}${rec}"
+}
+
+add_subcommand_violation() {
+  local rec
+  rec="$(jq -n --arg file "$1" --arg line "$2" --arg verb "$3" --arg subcommand "$4" \
+                --arg command "$5" \
+    '{file: $file, line: ($line | tonumber), verb: $verb, subcommand: $subcommand,
+      command: $command}')"
+  SUBCOMMAND_VIOLATIONS="${SUBCOMMAND_VIOLATIONS}${SUBCOMMAND_VIOLATIONS:+$'\n'}${rec}"
 }
 
 if [[ -n "$FILES" ]]; then
@@ -213,6 +373,29 @@ while IFS= read -r f; do
       continue
     fi
 
+    # Two-token dispatch targets: `story project new`, `story state add`.
+    # Only verbs the CLI documents as taking a literal subcommand are
+    # checked here; everything else accepts free-form arguments in that
+    # position (see the ENFORCED/OPEN note above the derivation).
+    if verb_is_enforced "$verb"; then
+      read -ra subtoks <<< "$rest"
+      sub="${subtoks[0]:-}"
+      sub="${sub%,}"
+      # A placeholder, flag or quoted span in the subcommand slot is a
+      # documentation wildcard rather than a dispatch target — the docs
+      # legitimately write `story project <subcommand>`.
+      case "$sub" in
+        ''|-*|'<'*|'['*|'('*|'{'*|'$'*|'"'*|"'"*|'`'*|'|'*|'#'*)
+          : ;;
+        *)
+          if ! is_valid_subcommand "$verb" "$sub"; then
+            add_subcommand_violation "$rel_f" "$lineno" "$verb" "$sub" "$trimmed"
+            continue
+          fi
+          ;;
+      esac
+    fi
+
     case "$verb" in
       relate|unrelate|link|unlink)
         read -ra resttoks <<< "$rest"
@@ -234,16 +417,31 @@ relation_violations_json="[]"
 if [[ -n "$RELATION_VIOLATIONS" ]]; then
   relation_violations_json="$(printf '%s\n' "$RELATION_VIOLATIONS" | jq -s '.')"
 fi
+subcommand_violations_json="[]"
+if [[ -n "$SUBCOMMAND_VIOLATIONS" ]]; then
+  subcommand_violations_json="$(printf '%s\n' "$SUBCOMMAND_VIOLATIONS" | jq -s '.')"
+fi
 
 verb_count="$(echo "$verb_violations_json" | jq 'length')"
 relation_count="$(echo "$relation_violations_json" | jq 'length')"
+subcommand_count="$(echo "$subcommand_violations_json" | jq 'length')"
 contract_ok="true"
-[[ "$verb_count" -gt 0 || "$relation_count" -gt 0 ]] && contract_ok="false"
+if [[ "$verb_count" -gt 0 || "$relation_count" -gt 0 || "$subcommand_count" -gt 0 ]]; then
+  contract_ok="false"
+fi
 
 if [[ "$contract_ok" == "true" ]]; then
   display="[forge] contract check: OK — every documented \`story\` verb and relationship matches the real CLI (source: $STORY_SOURCE)"
 else
-  display="[forge] contract check: FAILED — ${verb_count} bad verb(s), ${relation_count} bad relationship(s) found (source: $STORY_SOURCE)"
+  display="[forge] contract check: FAILED — ${verb_count} bad verb(s), ${subcommand_count} bad subcommand(s), ${relation_count} bad relationship(s) found (source: $STORY_SOURCE)"
+  if [[ "$subcommand_count" -gt 0 ]]; then
+    while IFS= read -r s; do
+      s_verb="$(echo "$s" | jq -r '.verb')"
+      display="$display
+  - '$s_verb' has no subcommand '$(echo "$s" | jq -r '.subcommand')' at $(echo "$s" | jq -r '.file'):$(echo "$s" | jq -r '.line'): $(echo "$s" | jq -r '.command')
+      (real: $(echo "$REAL_SUBCOMMANDS_JSON" | jq -r --arg v "$s_verb" '.[$v] | join(", ")'))"
+    done <<< "$(echo "$subcommand_violations_json" | jq -c '.[]')"
+  fi
   if [[ "$verb_count" -gt 0 ]]; then
     while IFS= read -r v; do
       display="$display
@@ -262,12 +460,16 @@ jq -n \
   --argjson contract_ok "$contract_ok" \
   --argjson verb_violations "$verb_violations_json" \
   --argjson relation_violations "$relation_violations_json" \
+  --argjson subcommand_violations "$subcommand_violations_json" \
   --argjson real_verbs "$REAL_VERBS_JSON" \
   --argjson real_relations "$REAL_RELATIONS_JSON" \
+  --argjson real_subcommands "$REAL_SUBCOMMANDS_JSON" \
   --argjson files_scanned "$SCANNED_FILES_JSON" \
   --arg story_source "$STORY_SOURCE" \
   --arg display "$display" \
   '{ok: true, contract_ok: $contract_ok, verb_violations: $verb_violations,
-    relation_violations: $relation_violations, real_verbs: $real_verbs,
-    real_relations: $real_relations, files_scanned: $files_scanned,
+    relation_violations: $relation_violations,
+    subcommand_violations: $subcommand_violations, real_verbs: $real_verbs,
+    real_relations: $real_relations, real_subcommands: $real_subcommands,
+    files_scanned: $files_scanned,
     story_source: $story_source, display: $display}'

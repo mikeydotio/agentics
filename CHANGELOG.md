@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.2.0] - 2026-08-04
+
+### Fixed
+- check inline-backtick `story` spans, not just fenced blocks (2575e5e)
+
+### Changed
+- Merge pull request #144 from mikeydotio/docs/AGE-32-file-age36 (e022855)
+- Merge pull request #143 from mikeydotio/fix/AGE-32-contract-check-negative-examples (d990ea4)
+
+### Documentation
+- claim AGE-24 and mark the loop in flight (114b144)
+- record AGE-36, the pre-push gate that cannot finish in budget (53795c2)
+- close out AGE-32 and hand off to AGE-24 (cb64f9b)
+
+_[manual]_
+
 ## [v3.1.0] - 2026-08-04
 
 ### Added

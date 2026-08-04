@@ -5,7 +5,7 @@ CLI. There is no MCP server — storyhook does not expose one, and there is no d
 story data lives in a SQLite store outside the repository (`story help storage`).
 
 The CLI is strictly **verb-first**: the first token after `story` must be a known subcommand.
-There is no id-first form (`story HP-N is done` does not exist and errors with `unknown command`,
+There is no id-first form (`story HP-N is done` does not exist and errors with `unknown command`, <!-- contract-check: expect-dead HP-N -- the id-first grammar this sentence exists to deny; naming it is the point -->
 exit 2). Verify any command you're unsure of with `story help <command>` or `story help --all`.
 
 ## Command Reference

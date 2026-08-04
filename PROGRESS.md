@@ -14,8 +14,8 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-26** (claimed 2026-08-04, branch `fix/AGE-26-greenlight-story-verb-surface`) |
 | **Next story** | **AGE-26** — greenlight auto-approves the whole `story` CLI on a premise storyhook 2.0 falsified; the remaining work is the trust-boundary judgement (queue row 16). Lowest-ID ready `medium`, so `story next` and this table **agree**. Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22 |
 | **Repo version** | **v3.6.0** — unchanged. AGE-22 touched **no `plugins/**` at all** (root `tests/`, `Makefile`, `CLAUDE.md` only), so **no bump was owed** — same as AGE-19 and AGE-21 before it. |

@@ -121,20 +121,28 @@ Read this before you conclude something you did broke the build.
   `.claude/worktrees/age-117` and `age-118`. Do not reclaim them. Also present and unrelated:
   `dual-host-plugin-compatibility`, and `age-AGE-2` (merged, reclaimable).
 
-### ⚠ Scope collision the next sessions must resolve
+### ⚠ Scope collision — resolved by PR, not yet merged
 
-The user dispatched **GitHub issue #118 — "Realign skills, agents, and model selection for the
-Claude 5 generation"** into its own worktree. That overlaps **AGE-6** (WS-C, rca realign) and
-**AGE-7** (WS-D, remaining plugins + prompt-hygiene lint), queue rows 5 and 8. Two agents editing
-the same skill files from different branches will conflict. **Before starting AGE-6, check
-whether #118 has merged**; if it has, re-scope or close AGE-6/AGE-7 against it rather than
-redoing the work. The user was asked to rule on ownership and had not replied when this session
-ended.
+**Update (2026-08-04, from the #118 worktree session):** the collision below is resolved by
+[PR #137](https://github.com/mikeydotio/agentics/pull/137), open against `main` but **not yet
+merged** (worktree policy: stop after opening the PR, never merge from a worktree). It carries
+**AGE-4, AGE-5, AGE-6, AGE-7, AGE-10** in full, plus AGE-8's remaining scope (`obviated-by AGE-7`).
+All five were claimed `in-progress` in storyhook before that PR's work started, so `story next`
+already skips them — **do not restart any of the five**, and do not touch
+`plugins/{rca,agents/references/cross-plugin-usage.md}` or the 9 WS-D plugins' `SKILL.md`
+frontmatter/descriptions until PR #137 either merges or is closed. If you reach this point in the
+queue before it merges, skip past all five rows and continue with the next open story; re-check
+`gh pr view 137` rather than trusting this note indefinitely. Once it merges: `story move AGE-4
+AGE-5 AGE-6 AGE-7 done`, and `story move AGE-8 done` per its own obviated-by note, then delete
+these five rows from the queue table below.
 
-**Still unresolved as of the AGE-18 session (2026-08-04):** issue #118 is still `OPEN` and its
-worktree is still live, as is `age-117` (issue #117, also open). Nothing has merged, so the
-collision is intact — AGE-6 is now queue row 5, which still buys several stories of runway before
-it matters. Re-check `gh issue view 118` when you reach it rather than trusting this line.
+Original collision note, kept for context: the user dispatched **GitHub issue #118 — "Realign
+skills, agents, and model selection for the Claude 5 generation"** into its own worktree,
+overlapping AGE-6 (WS-C) and AGE-7 (WS-D) — two agents editing the same skill files from
+different branches would have conflicted. PR #137 also absorbed AGE-4 and AGE-5 (both `#118`
+findings deferred from WS-B) and AGE-10 (the description-budget target AGE-7 was blocked on),
+which were not part of the originally-flagged collision but are the same prompt-realignment
+surface.
 
 ### What AGE-14 turned out to be
 
@@ -198,16 +206,16 @@ without recording why in this file.
 | ✅ | ~~**AGE-11**~~ | med | **DONE** — the dead `--extra-path` calls are gone and a two-layer guard stops them returning. Shipped as **v2.40.1** (patch). See "What AGE-11 turned out to be" below. Filed **AGE-26** and **AGE-27** on the way. |
 | 1 | **AGE-27** | **high** | **New, filed by the AGE-11 session. Leads the queue on the table's own priority-first rule** — it is the only `high` open. Repo-root `AGENTS.md` is auto-discovered by *every* agent, unprompted, and teaches three false things; two of them are commands that error exit 2. ⚠ **Collides with AGE-24 on `forge-contract-check.sh`** — see the note below the table before choosing an order. |
 | 2 | **AGE-24** | med | It is the *other half* of AGE-17: the guard still cannot catch the drift it exists to catch. **Read "What AGE-17 turned out to be" first** — and note its fix collides with a deliberate existing test. |
-| 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
-| 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
-| 5 | **AGE-6** | med | WS-C, rca realign. Independent. **Check `gh issue view 118` before starting** — see the scope collision above. |
+| ⏳ | **AGE-4** | med | **PR #137 open, not merged.** Do not restart — see the scope-collision update above. |
+| ⏳ | **AGE-5** | med | **PR #137 open, not merged.** Do not restart — see the scope-collision update above. |
+| ⏳ | **AGE-6** | med | **PR #137 open, not merged.** Do not restart — see the scope-collision update above. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
 | 8 | **AGE-19** | med | No storyhook major-version pin. |
 | 9 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. |
-| 10 | **AGE-10** | low | **Pulled ahead of its priority** — AGE-7 is `blocked-by` it, and storyhook will refuse to dispatch AGE-7 until it closes. |
-| 11 | **AGE-7** | med | WS-D + the prompt-hygiene lint. Needs AGE-10 done. **On merge, also close AGE-8** (below). |
-| — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7 and storyhook already excludes it from `ready`. When AGE-7 merges, close it: `story move AGE-8 done` with a comment pointing at AGE-7's PR. |
+| ⏳ | **AGE-10** | low | **PR #137 open, not merged.** Do not restart — see the scope-collision update above. |
+| ⏳ | **AGE-7** | med | **PR #137 open, not merged.** Do not restart — see the scope-collision update above. |
+| — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7; PR #137 carries its remaining scope too. Close both AGE-7 and AGE-8 once #137 merges. |
 | 12 | **AGE-9** | low | Council-decision story, independent. |
 | 13 | **AGE-13** | low | Council-decision story, independent. |
 | 14 | **AGE-23** | low | Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. **Confirmed live again this session:** the council skill's own `references/council-protocol.md` failed to resolve skill-relative and cost a wasted tool call. |

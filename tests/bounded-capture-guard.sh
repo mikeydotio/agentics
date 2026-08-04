@@ -98,7 +98,11 @@
 # already uses twice in rca -- MORE exposed than timeout(1), since `kill` on a
 # pid does not signal the group at all), `perl -e alarm`, a `read -t` loop, a
 # bound reached through a variable (`"$TO" 5 cmd`), or a name assembled at
-# runtime. L4's fixpoint is also manual: a new registry occurrence reds loudly,
+# runtime. The scan set is also INDEX-BASED (`git ls-files`), so a brand-new
+# script is invisible until it is `git add`ed -- which is the right boundary for
+# a pre-push gate (nothing unstaged can be pushed) but will surprise you if you
+# expect a red while iterating on an untracked file. L4's fixpoint is also
+# manual: a new registry occurrence reds loudly,
 # but a reviewer who classifies a genuine depth-2 wrapper as an ordinary call
 # reopens the hole one level down. Finally, shipped markdown instructing an agent
 # to write the capture is out of scope by construction.

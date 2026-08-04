@@ -14,9 +14,9 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-12** — storywork's in-progress claim diagnostic. Nothing is blocked any more (`blocked: 0`), so the dependency-graph rule no longer overrides `story next`; it and this table now agree. Confirm with `story list --ready`. |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-12** — storywork's in-progress claim diagnostic. |
+| **Next story** | **AGE-21** — deployit's `test-cli-rm.sh` needs a live local daemon. Confirm with `story list --ready`; nothing is blocked (`blocked: 0`), so `story next` and this table agree. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30 |
 | **Repo version** | **v3.5.0** — minor, NOT the `patch` AGE-30 predicted. See the level note below. |
 | **Last updated by** | AGE-30 session, 2026-08-04 |

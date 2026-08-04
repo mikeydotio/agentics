@@ -579,9 +579,221 @@ EOF
   # deny it — the single undecidable site the inline widening (AGE-24) exposed.
   # Pinning the count keeps the escape hatch from spreading unnoticed: a second
   # suppression is a deliberate decision, not a ride-along.
+  #
+  # The second one IS such a decision (AGE-31). The same sentence now denies the
+  # TEMPLATE spelling `story <id> is done` as well as the concrete `HP-N` one,
+  # which makes this a LIVE tripwire on the real corpus rather than only in
+  # fixtures: revert either half of AGE-31 and this test reds. Reverting the
+  # widening leaves the `<id>` marker suppressing nothing; reverting the marker
+  # repair leaves the `<id>` violation unsuppressed.
+  [ "$(jq_field '.suppressions | length')" -eq 2 ]
+  [ "$(jq_field '[.suppressions[].file] | unique | join(",")')" = "references/storyhook-contract.md" ]
+  [ "$(jq_field '[.suppressions[].token] | sort | join(",")')" = "<id>,HP-N" ]
+}
+
+# --- Placeholder verbs (AGE-31) ---
+#
+# The verb slot admits angle placeholders, and an angle placeholder there is a
+# VIOLATION rather than a wildcard — the inverse of the subcommand and relation
+# slots. The asymmetry is deliberate and load-bearing: position 2's legal set is
+# sometimes genuinely unknowable (an OPEN verb takes free-form arguments there),
+# so `story project <subcommand>` is a true statement; position 1's legal set is
+# always the derived verb list, never free-form, so `story <id> is done` asserts
+# a grammar that does not exist. That is precisely the id-first drift F103 was
+# built to kill, in the spelling documentation actually uses.
+
+@test "contract-check: a placeholder verb is caught alongside its concrete spelling" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story <id> is done
+story HP-12 is done
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  # Both spellings, one test: an implementation that satisfies this by
+  # disabling the verb check wholesale loses HP-12 and fails here.
+  [ "$(jq_field '.verb_violations | length')" -eq 2 ]
+  [ "$(jq_field '[.verb_violations[].verb] | sort | join(",")')" = "<id>,HP-12" ]
+  [ "$(jq_field '.verb_violations[0].line')" -eq 4 ]
+  [ "$(jq_field '.verb_violations[1].line')" -eq 5 ]
+}
+
+@test "contract-check: a placeholder verb is caught in an inline span too" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+Mark a story finished with `story <id> is done` when the work lands.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.verb_violations[0].verb')" = "<id>" ]
+  # Effect oracle for AGE-24's unit rule: outside a fence the SPAN is handed to
+  # the checker, so the reported command is the span alone — never the sentence.
+  [ "$(jq_field '.verb_violations[0].command')" = "story <id> is done" ]
+}
+
+@test "contract-check: flags and shell variables in the verb slot stay clean" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story --help
+story -h
+story $verb list
+story ${VERB} list
+story help <command>
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # `story --help` is the invocation this very script executes to derive its
+  # vocabulary. Flagging it would red the gate on a doc documenting the guard's
+  # own ground truth. Pinning it here makes a future any-token widening red THIS
+  # test loudly instead of reding the pre-push gate on someone else's document.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: a placeholder naming the verb slot is a wildcard, not a violation" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+The guard reports any `story <verb> ...` invocation the live CLI would reject.
+Every `story <VERB> --json` form is machine-readable, and `story <the-verb> x`,
+`story <sub-command> y`, `story <cmd-name> z` and `story <Sub_Command> w` all
+name the slot itself.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: entity placeholders are flagged even when they look like words" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story <transaction> is done
+story <redaction> is done
+story <compaction> is done
+story <verbatim> is done
+story <verbose> is done
+story <story-id> is done
+story <target> is done
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # The rejected half of the segment table. These are the tokens a SUBSTRING
+  # rule silently exempts — `action` inside `<transaction>`, `verb` inside
+  # `<verbatim>` — every one a false negative in the direction this guard
+  # cannot afford. Equality-per-segment is what keeps them visible.
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 7 ]
+}
+
+@test "contract-check: one line, one wildcard and one violation, only the violation reported" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+Use `story <verb> --json`, never `story <id> is done`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Failure oracle for the wildcard rule. Skipping every angle placeholder
+  # satisfies the wildcard test above perfectly; only this one can tell
+  # "exempted the wildcard" from "stopped checking placeholders".
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.verb_violations[0].verb')" = "<id>" ]
+}
+
+@test "contract-check: a marker suppresses a placeholder-token violation it names" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+There is no id-first form (`story <id> is done` does not exist). <!-- contract-check: expect-dead <id> -- the id-first grammar this sentence exists to deny -->
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+  # Assert the SUPPRESSION, not merely the absence of a violation — that is what
+  # distinguishes "deliberately denied" from "never scanned" (the vacuous-green
+  # shape AGE-24 and AGE-27 both exist to catch).
   [ "$(jq_field '.suppressions | length')" -eq 1 ]
-  [ "$(jq_field '.suppressions[0].file')" = "references/storyhook-contract.md" ]
-  [ "$(jq_field '.suppressions[0].token')" = "HP-N" ]
+  [ "$(jq_field '.suppressions[0].token')" = "<id>" ]
+  [ -n "$(jq_field '.suppressions[0].reason')" ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
+}
+
+@test "contract-check: a marker naming a different placeholder does not suppress" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+There is no id-first form (`story <id> is done` does not exist). <!-- contract-check: expect-dead <ident> -- names the wrong token -->
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Failure oracle for the suppression above: without this, "always suppress a
+  # placeholder" passes that test perfectly. The hatch stayed TOKEN-bound.
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.suppressions | length')" -eq 0 ]
+}
+
+@test "contract-check: the AGE-11 site in the committed ADR stays clean" {
+  # docs/decisions/forge-hardening.md describes this guard using the very
+  # spelling the guard now inspects, inside the ADR whose next paragraph reads
+  # "A guard you can satisfy by deleting true sentences is the wrong guard."
+  # It is not in the scan set today; AGE-30 is the change that would pull it in.
+  # Committing its text as a fixture makes the confirmed site a test, not a memory.
+  local adr="$FORGE_ROOT/../../docs/decisions/forge-hardening.md"
+  [ -f "$adr" ] || skip "ADR not present in this checkout"
+  sed -n '62,80p' "$adr" > "$FIXTURE_DIR/references/storyhook-contract.md"
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+}
+
+@test "contract-check: a quoted convention example does not become a stale suppression" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+Annotate the denied line, e.g. `<!-- contract-check: expect-dead <id> -- why it is dead -->`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # AGE-37 LOCK. collect_markers cannot yet tell an APPLIED marker from a QUOTED
+  # one, so narrowing the placeholder exemption in classify_stale_markers would
+  # extend AGE-37's existing defect class to placeholder tokens and red the
+  # pre-push gate on a correct document. This asserts the ordering: anyone who
+  # narrows it before AGE-37 lands fails here immediately.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
+}
+
+@test "contract-check: every marker in the real corpus is accounted for" {
+  run bash "$SCRIPT" "$FORGE_ROOT"
+  echo "$output" >&2
+  local scanned markers accounted
+  scanned="$(jq_field '.files_scanned[]')"
+  [ -n "$scanned" ]
+  # Count applied markers, excluding the literal `<token>` convention signature.
+  markers="$(printf '%s\n' "$scanned" | xargs grep -ho 'contract-check: expect-dead [^ ]*' \
+              | grep -cv 'expect-dead <token>' || true)"
+  accounted=$(( $(jq_field '.suppressions | length') + $(jq_field '.stale_suppressions | length') ))
+  # The invariant keeping the escape hatch honest: a marker either suppresses
+  # something or is reported stale. Never silently nothing. This holds it from
+  # OUTSIDE the script, so it costs nothing and cannot red the gate on the
+  # AGE-37 class the way narrowing classify_stale_markers would.
+  [ "$markers" -eq "$accounted" ]
 }
 
 # --- Schema stability across every exit path (AGE-18 lock) ---

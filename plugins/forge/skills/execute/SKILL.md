@@ -19,6 +19,12 @@ Always load, every entry:
 - `references/team-roles.md`'s "Resolving subagent_type" section — governs the generator/evaluator/software-architect spawns below
 
 Load only when the condition applies:
+- `references/execution-loop-retry.md` — **only when an attempt has actually failed** (a
+  pre-check returned `passed: false`, or the evaluator returned `verdict: "fail"`). A
+  first-attempt pass never needs it. AUTHORITATIVE for that path — follow it completely.
+- `references/execution-loop-complete.md` — **only when `story next` reports every story
+  done**. Fires once per pipeline run, not once per session. AUTHORITATIVE for that path —
+  follow it completely.
 - `references/recovery-protocol.md` — **only on Resume** (`state_json_exists: true`, see Entry Modes below). A Fresh Start never needs it.
 - `references/handoff-format.md` — **only once a pause or Complete is actually about to happen** (session limit hit, blocked, error, all stories done). Not needed while still looping through generate/evaluate.
 - `references/session-locking.md` — **only if a `forge-lock.sh` call returns something other than the expected success** (contention, staleness) and you need the full protocol to interpret it. The inline calls in this skill and in `execution-loop.md` already carry the correct flags for the happy path.
@@ -89,7 +95,8 @@ Follow `references/recovery-protocol.md`:
 
 ## Execution Loop
 
-Follow `references/execution-loop.md` **completely**. High-level flow:
+Follow `references/execution-loop.md` **completely** — plus `references/execution-loop-retry.md`
+once an attempt fails and `references/execution-loop-complete.md` once every story is done. High-level flow:
 
 ```
 loop:
@@ -170,12 +177,12 @@ path to commit (see `references/handoff-format.md`).
 
 ### Complete (all stories done)
 
-When all stories reach `done` (see `references/execution-loop.md`'s "The project story" note —
+When all stories reach `done` (see `references/execution-loop-complete.md`'s "The project story" note —
 this excludes `plan-mapping.json`'s `project_story`, which `story next` can never hand back and so
 never reaches `done` through the loop itself):
 1. Run full project test suite
    - If fails → set `status: "paused"`, `pause_reason: "final-test-suite-failed"`, do NOT cancel
-     freshen, and do not proceed past this step (see `execution-loop.md`'s Complete section for the
+     freshen, and do not proceed past this step (see `execution-loop-complete.md` for the
      exact state.json patch)
 2. Close the project story (hygiene only, best-effort — never a precondition for anything below):
    `bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .` — ignore `.ok`/`.reason` beyond

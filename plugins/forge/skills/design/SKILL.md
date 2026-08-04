@@ -109,13 +109,11 @@ After all sections are approved, write `.forge/DESIGN.md`:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/DESIGN.md`
-2. Write `.forge/handoffs/handoff-design.md` (content: see step-handoff.md's Design Handoff table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step design \
-     --summary "architecture design approved" --next "/forge plan --orchestrated"
-   ```
-4. STOP
+**If `--orchestrated`:** Write `.forge/DESIGN.md`, then follow the Step Exit Protocol
+(`references/step-handoff.md`) — write `handoff-design.md` (Design Handoff table) and run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step design \
+  --summary "architecture design approved" --next "/forge plan --orchestrated"
+```
 
 **If standalone:** Write `.forge/DESIGN.md`, report completion to user, exit.

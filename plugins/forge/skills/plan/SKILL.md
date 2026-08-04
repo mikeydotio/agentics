@@ -116,13 +116,11 @@ If "Needs adjustment" — ask what to change, revise, re-present.
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/PLAN.md`
-2. Write `.forge/handoffs/handoff-plan.md` (content: see step-handoff.md's Plan Handoff table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step plan \
-     --summary "implementation plan approved" --next "/forge decompose --orchestrated"
-   ```
-4. STOP
+**If `--orchestrated`:** Write `.forge/PLAN.md`, then follow the Step Exit Protocol
+(`references/step-handoff.md`) — write `handoff-plan.md` (Plan Handoff table) and run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step plan \
+  --summary "implementation plan approved" --next "/forge decompose --orchestrated"
+```
 
 **If standalone:** Write `.forge/PLAN.md`, report completion to user, exit.

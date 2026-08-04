@@ -28,12 +28,18 @@ via freshen, and stops.
 
 ## Known state (updated 2026-08-04 by the AGE-27 session)
 
-- **⚠ ANOTHER SESSION IS LIVE AND IS WORKING THIS BACKLOG.** `AGE-4` and `AGE-5` flipped from
-  `todo` to `in-progress` *during* the AGE-27 session and now carry real commits
-  (`79943a9` at 04:28, `47ced2a` at 04:30) from the `age-118` worktree, whose branch has moved to
-  `feat/claude5-realign-rca-remaining`. **Do not claim AGE-4, AGE-5 or AGE-7.** This is not the
-  crashed-session case in Recovery — those stories are actively being worked. Re-check
-  `story list` at session start rather than trusting this file's queue table.
+- **⚠ ANOTHER SESSION WORKS THIS BACKLOG CONCURRENTLY — `story list` outranks this file.**
+  `AGE-4` and `AGE-5` went `todo` → `in-progress` → `done` *during* the AGE-27 session, and
+  **PR #137 merged mid-flight** (`20c31d2`), closing **AGE-4, AGE-5, AGE-6, AGE-7, AGE-8 and
+  AGE-10** in one go. AGE-27's own PR hit a merge conflict on this file as a result.
+  Two standing consequences:
+  - **Re-derive the queue from `story list` at session start.** This table is a snapshot and was
+    wrong within the hour, twice. Trust it for *rationale*, not for *state*.
+  - **Expect to merge `origin/main` into your branch before your PR will land.** Do not rebase —
+    the branch is already pushed and force-pushing is banned. `git merge origin/main`, resolve,
+    push again.
+  The long-running **`#118` scope collision** this file warned about for eight sessions is now
+  **resolved and closed** by #137. Ignore the stale collision note further down.
 - **`AGE-28` (high) appeared mid-session from another session** — deployit archives with a
   hardcoded `-configuration Debug`, so every OTA build ever produced shipped unoptimized. It is
   `todo` and unclaimed, and it is the highest-priority open story, so it **leads the queue** on the
@@ -152,20 +158,28 @@ Read this before you conclude something you did broke the build.
   `.claude/worktrees/age-117` and `age-118`. Do not reclaim them. Also present and unrelated:
   `dual-host-plugin-compatibility`, and `age-AGE-2` (merged, reclaimable).
 
-### ⚠ Scope collision the next sessions must resolve
+### ⚠ Scope collision — resolved by PR, not yet merged
 
-The user dispatched **GitHub issue #118 — "Realign skills, agents, and model selection for the
-Claude 5 generation"** into its own worktree. That overlaps **AGE-6** (WS-C, rca realign) and
-**AGE-7** (WS-D, remaining plugins + prompt-hygiene lint), queue rows 5 and 8. Two agents editing
-the same skill files from different branches will conflict. **Before starting AGE-6, check
-whether #118 has merged**; if it has, re-scope or close AGE-6/AGE-7 against it rather than
-redoing the work. The user was asked to rule on ownership and had not replied when this session
-ended.
+**Update (2026-08-04, from the #118 worktree session):** the collision below is resolved by
+[PR #137](https://github.com/mikeydotio/agentics/pull/137), open against `main` but **not yet
+merged** (worktree policy: stop after opening the PR, never merge from a worktree). It carries
+**AGE-4, AGE-5, AGE-6, AGE-7, AGE-10** in full, plus AGE-8's remaining scope (`obviated-by AGE-7`).
+All five were claimed `in-progress` in storyhook before that PR's work started, so `story next`
+already skips them — **do not restart any of the five**, and do not touch
+`plugins/{rca,agents/references/cross-plugin-usage.md}` or the 9 WS-D plugins' `SKILL.md`
+frontmatter/descriptions until PR #137 either merges or is closed. If you reach this point in the
+queue before it merges, skip past all five rows and continue with the next open story; re-check
+`gh pr view 137` rather than trusting this note indefinitely. Once it merges: `story move AGE-4
+AGE-5 AGE-6 AGE-7 done`, and `story move AGE-8 done` per its own obviated-by note, then delete
+these five rows from the queue table below.
 
-**Still unresolved as of the AGE-18 session (2026-08-04):** issue #118 is still `OPEN` and its
-worktree is still live, as is `age-117` (issue #117, also open). Nothing has merged, so the
-collision is intact — AGE-6 is now queue row 5, which still buys several stories of runway before
-it matters. Re-check `gh issue view 118` when you reach it rather than trusting this line.
+Original collision note, kept for context: the user dispatched **GitHub issue #118 — "Realign
+skills, agents, and model selection for the Claude 5 generation"** into its own worktree,
+overlapping AGE-6 (WS-C) and AGE-7 (WS-D) — two agents editing the same skill files from
+different branches would have conflicted. PR #137 also absorbed AGE-4 and AGE-5 (both `#118`
+findings deferred from WS-B) and AGE-10 (the description-budget target AGE-7 was blocked on),
+which were not part of the originally-flagged collision but are the same prompt-realignment
+surface.
 
 ### What AGE-14 turned out to be
 
@@ -228,18 +242,15 @@ without recording why in this file.
 | ✅ | ~~**AGE-17**~~ | high | **DONE** — the guard now validates two-token forms. See "What AGE-17 turned out to be" below. Shipped as **v2.40.0** (minor: additive JSON keys). Filed **AGE-24** and **AGE-25** on the way. |
 | ✅ | ~~**AGE-11**~~ | med | **DONE** — the dead `--extra-path` calls are gone and a two-layer guard stops them returning. Shipped as **v2.40.1** (patch). See "What AGE-11 turned out to be" below. Filed **AGE-26** and **AGE-27** on the way. |
 | ✅ | ~~**AGE-27**~~ | high | **DONE** — `AGENTS.md` regenerated, `.gitignore:10` corrected, and a new Layer 3 guards the retired surfaces. **No bump.** See "What AGE-27 turned out to be" below; the council rejected the story's own stated fix. Filed **AGE-30**, **AGE-31**, **AGE-32** and split **AGE-29**. |
+| ✅ | ~~**AGE-4**, **AGE-5**, **AGE-6**, **AGE-7**, **AGE-10**, **AGE-8**~~ | med/low | **DONE — PR #137 merged** (`20c31d2`) while AGE-27 was in flight. All six are `done` in storyhook. The `#118` scope collision this file warned about for eight sessions is **resolved and closed**. |
 | 1 | **AGE-28** | **high** | **New, filed mid-session by another session. Leads on priority-first** — the only `high` open. deployit hardcodes `-configuration Debug` in `_xcodebuild_archive()`, so every OTA build ever produced shipped unoptimized with `#if DEBUG` code compiled in. Touches `plugins/deployit/**` → **bump required**. |
 | 2 | **AGE-32** | med | **Unblocks the whole `forge-contract-check` chain.** AGE-24, AGE-30 and AGE-31 are all `blocked-by` it (directly or transitively), so storyhook will not dispatch any of them until it closes. It is a *design decision* story: pick how a doc can name a dead form in order to deny it without the guard flagging it. |
 | — | **AGE-24** | med | **BLOCKED by AGE-32** — storyhook excludes it from `ready`. Do not try to work it first; its fix reds the gate on `storyhook-contract.md:8`, which is a correct document. |
-| — | **AGE-4**, **AGE-5** | med | **⚠ ACTIVELY IN PROGRESS in another session** (commits `79943a9`, `47ced2a` from the `age-118` worktree). **Do not claim.** |
-| 5 | **AGE-6** | med | WS-C, rca realign. Independent. **Check `gh issue view 118` before starting** — see the scope collision above. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
 | 8 | **AGE-19** | med | No storyhook major-version pin. |
 | 9 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. |
-| 10 | **AGE-10** | low | **Pulled ahead of its priority** — AGE-7 is `blocked-by` it, and storyhook will refuse to dispatch AGE-7 until it closes. |
-| 11 | **AGE-7** | med | WS-D + the prompt-hygiene lint. Needs AGE-10 done. **On merge, also close AGE-8** (below). |
-| — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7 and storyhook already excludes it from `ready`. When AGE-7 merges, close it: `story move AGE-8 done` with a comment pointing at AGE-7's PR. |
+| — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7; PR #137 carries its remaining scope too. Close both AGE-7 and AGE-8 once #137 merges. |
 | 12 | **AGE-9** | low | Council-decision story, independent. |
 | 13 | **AGE-13** | low | Council-decision story, independent. |
 | 14 | **AGE-23** | low | Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. **Confirmed live again this session:** the council skill's own `references/council-protocol.md` failed to resolve skill-relative and cost a wasted tool call. |

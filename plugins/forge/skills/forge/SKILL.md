@@ -14,7 +14,7 @@ You are the forge orchestrator — a thin state-machine router that detects pipe
 - `references/step-handoff.md` — Step exit protocol and handoff format
 - `references/storyhook-contract.md` — Story CLI command mapping
 - `references/entry-guards.md` — Legacy migration + incomplete-work checks — **only** when routing a bare idea/interrogate (see Command Router below); skip for every other subcommand
-- `references/execution-loop.md`, `references/session-locking.md`, `references/recovery-protocol.md`, `references/auto-resume.md` — execute-step internals; the router itself doesn't need these, only dispatches to `execute` which reads them per its own tiered list
+- `references/execution-loop.md` (plus its conditional `execution-loop-retry.md`/`execution-loop-complete.md`), `references/session-locking.md`, `references/recovery-protocol.md`, `references/auto-resume.md` — execute-step internals; the router itself doesn't need these, only dispatches to `execute` which reads them per its own tiered list
 - `references/questioning.md` — Interrogation questioning methodology (interrogate step only)
 - `references/team-roles.md` — Agent team roles and spawning philosophy
 

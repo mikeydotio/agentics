@@ -2,6 +2,7 @@
 name: intake
 description: RCA step 1 — latch an existing GitHub/storyhook issue, scaffold the investigation, and build the Kepner-Tregoe IS/IS-NOT differential grid from the bug description, issue, and light recon; ask only about genuine gaps.
 argument-hint: "[bug description] [--issue <gh#|url|storyhook-id>]"
+effort: high
 ---
 
 # RCA Intake

@@ -1,6 +1,8 @@
 ---
 name: greenlight
 description: Manage the greenlight pre-tool-use safety hook. Control permission mode behavior, analysis settings, allowlists/blocklists, and test commands.
+model: sonnet
+effort: medium
 ---
 
 # Greenlight — Safety Hook Manager
@@ -51,7 +53,7 @@ current=$(grep '^disabled_modes:' ~/.config/greenlight/config.yaml | sed 's/^dis
 updated=$(echo "$current" | tr ' ' '\n' | grep -v "^<mode>$" | tr '\n' ' ' | sed 's/ *$//')
 # Write back — portable in-place edit (BSD sed's `-i` requires a backup-suffix
 # argument and silently misparses `-i "s/.../"` as one; GNU sed doesn't. A
-# temp-file rewrite works identically on both — see F079.)
+# temp-file rewrite works identically on both.)
 tmp=$(mktemp)
 sed "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml > "$tmp" \
   && mv "$tmp" ~/.config/greenlight/config.yaml
@@ -68,7 +70,7 @@ current=$(grep '^disabled_modes:' ~/.config/greenlight/config.yaml | sed 's/^dis
 if ! echo " $current " | grep -q " <mode> "; then
   updated="${current} <mode>"
   updated=$(echo "$updated" | sed 's/^ *//')
-  # Portable in-place edit — see the F079 note above (mktemp + sed + mv,
+  # Portable in-place edit — see the note above (mktemp + sed + mv,
   # not `sed -i` which is GNU-only without a backup-suffix argument).
   tmp=$(mktemp)
   sed "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml > "$tmp" \

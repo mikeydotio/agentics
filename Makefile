@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -46,6 +46,22 @@ test-plugin-content-drift:
 # --extra-path that isn't on disk (AGE-11). Plain bash so it always runs.
 test-storyhook-path-guard:
 	bash tests/with-isolated-store.sh bash tests/storyhook-path-guard.sh
+
+# Claude 5 prompt-realignment regression guard (#118): model/effort tiering
+# stays alias-only and never pinned up, no self-verification instructions or
+# unresolvable finding-ID citations creep back into shipped skill/agent/
+# reference prose, and every SKILL.md stays inside the body-line and
+# description-char budgets. Plain bash so it always runs in the pre-push gate.
+test-prompt-hygiene:
+	bash tests/with-isolated-store.sh bash tests/prompt-hygiene.sh
+
+# Structural validation for the shared agent library (frontmatter, tool/
+# read-only consistency, naming, canonical-guardrail drift, model/effort
+# policy) — previously invoked only ad hoc via the /agents skill and never
+# part of the pre-push gate, so WS-A's model-pin and self-verification
+# checks went unenforced. Plain bash so it always runs.
+test-agents:
+	bash tests/with-isolated-store.sh bash plugins/agents/bin/validate-agents.sh
 
 test-semver:
 	bash tests/with-isolated-store.sh bash plugins/semver/tests/run-tests.sh

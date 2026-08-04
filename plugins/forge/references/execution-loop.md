@@ -10,6 +10,24 @@ the working tree. What stays genuine model judgment: constructing agent prompts,
 *content*, and deciding what a summarized predecessor diff should say when one is too large to
 paste verbatim.
 
+**This file is the always-loaded core — tiered, not "load all". The execute skill re-runs once
+per story under the default `max_stories_per_session: 1`, so everything resident here is a
+recurring cost, not a one-time one:**
+
+Here, and reached on essentially every entry:
+- **Prerequisites** and **Steps 0–7** — every iteration walks all of them.
+- **Pause** — under the default `max_stories_per_session: 1`, Step 6 trips the session limit on
+  every successful story, so the loop exits through Pause nearly every session. It stays
+  resident for that reason, not for symmetry with the two below.
+
+Load only when the condition applies. Each is AUTHORITATIVE for its own path exactly as this
+file is for Steps 0–7 — follow it completely once loaded:
+- `references/execution-loop-retry.md` — **only when an attempt has actually failed**: a
+  deterministic pre-check returned `passed: false` (Step 4), or the evaluator returned
+  `verdict: "fail"` (Step 5a). A story that passes first attempt never reaches it.
+- `references/execution-loop-complete.md` — **only when Step 1's `story next` reports every
+  story done**. This fires once per pipeline run, not once per session.
+
 ## Prerequisites
 
 Before entering the loop, the caller must have:
@@ -321,27 +339,9 @@ have no real story completions to track drift against).
 
 ### Retry
 
-```bash
-retry:
-  git checkout .  # discard failed attempt's changes
-  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-loop-state.sh retry --story-id HP-N --forge-dir .forge
-```
-
-Parse the result:
-- `action: "retry"` →
-  ```bash
-  story move HP-N todo  # with evaluator/check feedback already in comments
-  ```
-  continue (back to top of loop)
-- `action: "block"` →
-  ```bash
-  story move HP-N blocked
-  story comment HP-N '{"blocked_reason":"max_retries","description":"Failed <max_retries> attempts","last_feedback":{...}}'
-  ```
-  continue (back to top of loop — will pick next story)
-
-The script owns `retry_counts[story_id]`, `total_retries`, and the retry-vs-block comparison
-against `config.max_retries` — no model-run counter arithmetic or JSON edits.
+`goto retry` — reached from Step 4's failed pre-check and Step 5a's `verdict: "fail"`, and from
+nowhere else. Specified in `references/execution-loop-retry.md`: read it at the moment an
+attempt actually fails, and follow it completely. A first-attempt pass never reaches it.
 
 ### Pause
 
@@ -379,80 +379,12 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
 
 ### Complete
 
-**IMPORTANT:** "Complete" here means *all stories are done*, not *the pipeline is done*.
-Execution must hand off to review_validate — it must NOT write `.forge/COMPLETION.md` and must NOT
-cancel the freshen signal. `COMPLETION.md` is the pipeline's terminal artifact; it is owned
-exclusively by the deploy step (`skills/deploy/SKILL.md`) and the "no deployment needed" branch of
-the Deploy Permission Gate (`skills/forge/SKILL.md`). Writing it here would make `forge-state.sh`'s
-very first check (`artifact_exists "COMPLETION.md"` → `state: complete`) treat the pipeline as
-fully finished, silently skipping review, validate, triage, document, and deploy.
-
-**The project story.** decompose auto-created a synthetic "project story" from PLAN.md's
-`## Task Breakdown` heading (`plan-mapping.json`'s `project_story` — see
-`references/story-decomposition.md`). storyhook's `story next` permanently refuses to ever hand
-back a story with children, so the project story can *never* reach `done` through Step 1/3/5 of
-this loop the way a real leaf task story does — "all real task stories done" is reached with the
-project story still sitting at `todo` forever. That's expected, not a bug in this loop: reaching
-`complete` only ever requires every *real* task story (i.e. everything except `project_story`) to
-be `done` — `forge-state.sh`'s `check_storyhook()` already computes "all done" that way by reading
-`project_story` straight out of `plan-mapping.json` and excluding it, so the `review_validate`
-transition below works with zero special-casing here. Step 2 below closes the project story for
-real anyway — purely so `story list` / `story summary` don't show a permanently-open story to
-anyone inspecting the project afterward. If it fails or is skipped, nothing downstream breaks: the
-`review_validate` transition never depended on it succeeding.
-
-```
-complete:
-  # 1. Full test suite
-  Run full project test suite
-  If tests fail:
-    Do NOT re-enter the loop
-    Write failure details to .forge/handoffs/handoff-execute.md
-```
-
-```bash
-jq '.status = "paused" | .pause_reason = "final-test-suite-failed" | .updated_at = (now | todate)' \
-  .forge/state.json > .forge/state.json.tmp && mv .forge/state.json.tmp .forge/state.json
-bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
-```
-
-```
-    # Do NOT remove auto-resume trigger
-    Log: "Final test suite failed — manual review required. See handoffs/handoff-execute.md."
-    return
-
-  # 2. Close the project story (hygiene only -- see "The project story" above;
-  #    best-effort, never a precondition for anything below).
-  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .
-  # Ignore `.ok`/`.reason` beyond logging: `no_plan_mapping`, `story_cli_missing`,
-  # etc. are all fine to silently continue past. `.closed` is informational
-  # only -- the close writes to storyhook's own store, which is outside the
-  # repository, so item 5's commit has nothing to pick up either way.
-
-  # 3. Storyhook report
-  story summary
-  story handoff --since <total_duration>
-
-  # 4. Write handoff to .forge/handoffs/handoff-execute.md (NOT COMPLETION.md):
-    - Project summary
-    - Stories completed with acceptance criteria
-    - Test results
-    - Notable decisions and patterns
-    - Duration and session count
-
-  # 5. Release the lock, then step-exit: commit and queue freshen for the NEXT
-  #    step (review_validate) — do NOT cancel. No --extra-path is needed:
-  #    storyhook keeps story state outside the repository.
-  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
-  bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
-    --summary "all stories complete" --next "/forge continue"
-  # status stays in the same two-value space as every other exit path
-  # ("running" while looping, "paused" once the loop has exited for any
-  # reason) — forge-step-exit.sh's own patch sets it. There is no third
-  # "complete" status — storyhook + forge-state.sh (not state.json) decide
-  # the review_validate transition, per Hard Rule 1 ("storyhook is
-  # authoritative for story-level state — never duplicate it in forge files").
-```
+`goto complete` — reached from Step 1 when `story next` reports every story done, and from
+nowhere else. Specified in `references/execution-loop-complete.md`: the final test suite, the
+project-story close, the storyhook report, the handoff, and the review_validate hand-off, plus
+the two notes on what "Complete" does and does not mean (it is *not* the pipeline's terminal
+state, and the project story never reaches `done` through this loop). Read it only when Step 1
+actually reports all stories done, and follow it completely.
 
 ## State Transition Summary
 

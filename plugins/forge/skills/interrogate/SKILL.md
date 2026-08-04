@@ -128,14 +128,12 @@ Write `.forge/IDEA.md`:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/IDEA.md`
-2. Write `.forge/handoffs/handoff-interrogate.md` (content: see step-handoff.md's Interrogate
-   Handoff table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step interrogate \
-     --summary "capture idea — [project name]" --next "/forge research --orchestrated"
-   ```
-4. STOP
+**If `--orchestrated`:** Write `.forge/IDEA.md`, then follow the Step Exit Protocol
+(`references/step-handoff.md`) — write `handoff-interrogate.md` (Interrogate Handoff table) and
+run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step interrogate \
+  --summary "capture idea — [project name]" --next "/forge research --orchestrated"
+```
 
 **If standalone:** Write `.forge/IDEA.md`, report completion to user, exit.

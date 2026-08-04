@@ -9,12 +9,12 @@ supplied script output, walk the implicated code, and return a FACTS-ONLY report
 - `GRID.md` — the IS/IS-NOT specification (distinctions + aligned changes).
 - `REPRO.md` — the failing repro and its diagnostic signal.
 - `forensics/*.json` — script-generated bisect culprit, blame/intro candidates, pickaxe hits,
-  timeline, hotspot/coupling rankings. This is the deterministic record: anchor to it first,
-  cite its SHAs, and treat discrepancies between it and your own reading as findings.
+  timeline, hotspot/coupling rankings (this is what your Ground-in-Deterministic-Forensics-First
+  methodology anchors to).
 
 ## Constraints
 
-- Read-only throughout; you return a report — the dispatching skill writes `ORIGIN.md`.
+- You return a report — the dispatching skill writes `ORIGIN.md`.
 - **No causation claims.** Timelines, attributions, structural observations, data-flow facts,
   coupling observations — yes. "Therefore the bug is…" — no; hypotheses belong to a later
   step, and an editorialized origin report contaminates it.

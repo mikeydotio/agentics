@@ -2,6 +2,7 @@
 name: diagnose
 description: RCA step 4 — form ≥2 competing defect→infection→failure hypotheses, falsify them with controlled worktree experiments, survive the challenger, classify per ODC, and rule surgical-vs-redesign. Produces the verified DIAGNOSIS.md.
 argument-hint: "[slug]"
+effort: xhigh
 ---
 
 # RCA Diagnose — Hypotheses, Falsification, Verdict

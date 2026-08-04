@@ -2,6 +2,7 @@
 name: fix
 description: RCA step 6 — gated fix implementation. RED (repro still fails) → software-engineer implements the behavior fix → GREEN → full suite → fix: commit → sibling-pattern sweep → optional separate refactor: commit. Two hats, feature branch, push/PR left to the user.
 argument-hint: "[slug]"
+effort: high
 ---
 
 # RCA Fix — Gated Implementation

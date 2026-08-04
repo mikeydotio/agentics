@@ -19,7 +19,7 @@ scale:
   the number of stories attempted across a full run.
 
 The subtlety is that `total_retries` increments once per failed evaluation or pre-check (see
-`references/execution-loop.md`'s Retry step), **not** only when a story exhausts its own retries. A
+`references/execution-loop-retry.md`), **not** only when a story exhausts its own retries. A
 plan of dozens to ~100 stories, at a realistic 30–50% first-attempt retry rate, therefore accrues
 retries in the tens purely from normal, healthy operation.
 

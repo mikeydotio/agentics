@@ -95,7 +95,7 @@ downstream accounts for it. Two things do:
 1. `forge-state.sh`'s `check_storyhook()` reads `project_story` straight out of this file and
    excludes it from its "are all stories done" computation, so the pipeline's `review_validate`
    transition never depends on the project story reaching `done` at all.
-2. The execution loop's Complete step (`references/execution-loop.md`) additionally closes it for
+2. The execution loop's Complete step (`references/execution-loop-complete.md`) additionally closes it for
    real via `bin/forge-close-project-story.sh`, once every real task story is done — purely so
    `story list` / `story summary` don't show a permanently-open story to a human later. This is a
    hygiene step, not a correctness dependency; (1) alone is what keeps the pipeline unstuck.

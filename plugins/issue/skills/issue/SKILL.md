@@ -1,7 +1,9 @@
 ---
 name: issue
-description: GitHub-issue lifecycle toolkit. `/issue do <n>` spins up a fresh plan-mode Claude session for an issue in a new tmux window + per-issue git worktree; `/issue new <desc>` interrogates you then files an issue; `/issue view <n>` prints an issue and stops; `/issue complete <n>` closes it and safely cleans up merged branches + worktrees; `/issue <n>` views it then offers to work on it; bare `/issue` lists open issues to pick from. Use when the user wants to file, view, start work on, or wrap up a GitHub issue. Deterministic work lives in bin/issue.sh; requires an authenticated gh CLI (and tmux for `do`).
+description: GitHub-issue lifecycle toolkit. `/issue do <n>` spins up a fresh plan-mode session for an issue in a new tmux window + git worktree; `/issue new <desc>` interrogates then files an issue; `/issue view <n>` prints and stops; `/issue complete <n>` closes it and cleans up merged branches + worktrees; bare `/issue` lists open issues. Use when the user wants to file, view, start, or wrap up a GitHub issue. Requires an authenticated gh CLI (and tmux for `do`).
 argument-hint: "<do <n> | view <n> | new <desc> | complete <n> | <n>>"
+model: sonnet
+effort: medium
 ---
 
 # Issue — GitHub-issue lifecycle toolkit

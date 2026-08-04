@@ -2,6 +2,7 @@
 name: reproduce
 description: RCA step 2 — the firm reproduction gate. Detect the test stack, have qa-engineer build an automated failing repro test, quantify flakiness, minimize (FULL tier), and set the investigation tier. No hypothesis work happens until this gate is passed or explicitly overridden.
 argument-hint: "[slug]"
+effort: high
 ---
 
 # RCA Reproduce — The Firm Gate

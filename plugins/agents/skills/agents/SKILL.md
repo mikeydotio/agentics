@@ -2,6 +2,8 @@
 name: agents
 description: Browse and validate the shared agent library
 argument-hint: "list | describe <name> | validate"
+model: sonnet
+effort: low
 ---
 
 # Shared Agent Library

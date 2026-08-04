@@ -104,19 +104,16 @@ The validator writes tests for critical gaps found during analysis:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/VALIDATE-REPORT.md`
-2. Write `.forge/handoffs/handoff-validate.md` (content: see step-handoff.md's Validate Handoff
-   table)
-3. Commit `.forge/` plus every test file written in Step 4 — pass each one explicitly as its own
-   `--extra-path`, NOT a blanket `git add -A` (which would sweep in unrelated untracked files —
-   coverage output, caches, stray build artifacts — from the user's target project):
-   ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step validate \
-     --summary "test hardening + report" --next "/forge continue" \
-     --extra-path <test-file-1> --extra-path <test-file-2> ...
-   ```
-4. STOP
+**If `--orchestrated`:** Write `.forge/VALIDATE-REPORT.md`, then follow the Step Exit Protocol
+(`references/step-handoff.md`) — write `handoff-validate.md` (Validate Handoff table) and commit
+`.forge/` plus every test file written in Step 4, passing each one explicitly as its own
+`--extra-path` — NOT a blanket `git add -A` (which would sweep in unrelated untracked files —
+coverage output, caches, stray build artifacts — from the user's target project):
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step validate \
+  --summary "test hardening + report" --next "/forge continue" \
+  --extra-path <test-file-1> --extra-path <test-file-2> ...
+```
 
 **Note:** Validate never checks for `.forge/REVIEW-REPORT.md` before deciding whether to queue
 freshen — that file-presence "whoever finishes second queues" coordination previously deadlocked

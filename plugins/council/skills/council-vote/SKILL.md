@@ -1,7 +1,8 @@
 ---
 name: council-vote
-description: Use this instead of answering directly when a request both (a) frames a decision between 2+ defensible alternatives and (b) carries explicit "decide for me" signals from the user. Surface phrases to watch for - "the user said decide", "user is on PTO / unavailable / unreachable / stepped away", "just need to commit to one", "stuck between X and Y", "PR is blocking", "use the council", "don't want to ping them again", "user delegated this". When those signals are present, do NOT just pick an answer - convene the council, a 3-member sub-agent panel that proposes independently, votes single-choice, deliberates once if not unanimous, then runs ranked-choice IRV with a chair tiebreaker. Returns the winning proposal with full audit trail at `.council/<slug>/`. Especially for API contract design (pagination, error shape, auth-default), migrations (expand/contract vs single-shot), client resilience (retry wrappers, idempotency), dependency acceptance (licenses, transitive deps), interaction design (mobile CTAs, CLI defaults), and naming/tone calls that are hard to reverse.
+description: Use this instead of answering directly when a decision has 2+ defensible alternatives AND the user delegated it — "decide for me", "user is unavailable", "stuck between X and Y", "use the council". Convenes a 3-member panel: independent proposals, a vote, one deliberation round if not unanimous, then ranked-choice IRV with a chair tiebreaker. Full audit trail at `.council/<slug>/`. Best for hard-to-reverse calls: API contracts, migrations, dependencies, interaction design.
 argument-hint: <question> [-- <context summary>]
+effort: high
 ---
 
 # Council Vote
@@ -24,10 +25,10 @@ tie — break ties using a documented heuristic.
 
 1. **Panel size is exactly 3.** Not 2, not 4, not 5. Three forces real disagreement and a
    meaningful runoff while keeping latency and cost bounded.
-2. **Three members, dispatched in parallel, never backgrounded.** A single message with
-   3 `Agent` tool calls per phase. Sequential dispatch defeats independent reasoning and
-   inflates latency. Never use `run_in_background` — the chair must have all 3 responses
-   in hand before it can tally a vote or write the round's artifact.
+2. **Three members, dispatched in parallel in one message (3 `Agent` calls), never
+   backgrounded.** Sequential dispatch defeats independent reasoning and inflates latency;
+   never use `run_in_background` — the chair must have all 3 responses in hand before it
+   can tally a vote or write the round's artifact.
 3. **Round-1 research is blind.** Each member must form their proposal without seeing the
    others' proposals or knowing who else is on the panel. Anchoring is the enemy of a good
    council.
@@ -43,13 +44,11 @@ tie — break ties using a documented heuristic.
    if a member needs write tools (rare), the proposal still describes the change rather
    than performing it.
 8. **Member responses are JSON; malformed responses get exactly one retry, then abstain.**
-   All four member-response formats (proposal, vote, revision, ranking) are JSON objects
-   with worked samples in the prompt. On parse failure or missing/empty required fields,
-   re-dispatch that single seat once with a "your previous response was malformed"
-   preamble. If the retry also fails, mark the seat as abstaining and proceed. Two
-   abstentions in one phase aborts the council — write `ABORT.md` and return an error,
-   never fabricate a decision. Full protocol: `references/council-protocol.md` § "Member
-   response failures".
+   On parse failure or missing/empty required fields, re-dispatch that single seat once
+   with a "your previous response was malformed" preamble. If the retry also fails, mark
+   the seat as abstaining and proceed. Two abstentions in one phase aborts the council —
+   write `ABORT.md` and return an error, never fabricate a decision. Full protocol:
+   `references/council-protocol.md` § "Member response failures".
 9. **Decline cleanly if you can't dispatch in parallel.** If the `Agent` tool is not
    available to you (you're already a subagent, the host runtime restricts it, or for any
    other reason), do not fake a council with sequential self-reasoning. Write

@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.40.0] - 2026-08-03
+
+### Fixed
+- validate storyhook subcommands, not just the first token (e08dd75)
+- fail deployit's bump test when semver-cli is missing (f2e4996)
+- fail the pre-push gate when bats is absent instead of skipping (426e5e2)
+
+### Changed
+- Merge pull request #134 from mikeydotio/fix/AGE-18-fail-when-bats-absent (8f00f4d)
+- Merge pull request #133 from mikeydotio/docs/queue-high-priority-first (c734f0b)
+- Merge pull request #132 from mikeydotio/docs/progress-age16-done (0d27af4)
+- Merge pull request #131 from mikeydotio/fix/AGE-16-bounded-story-handoff (07428d6)
+
+### Documentation
+- close out AGE-18 in the backlog loop's memory (0f2392c)
+- correct the bats install hint for macOS (d180ab7)
+- claim AGE-18 for the backlog loop (98874e1)
+- put the high-priority stories at the front of the queue (c41f940)
+- close out AGE-16 in the backlog loop's memory (99c04de)
+
+_[manual]_
+
 ## [v2.39.1] - 2026-08-03
 
 ### Fixed

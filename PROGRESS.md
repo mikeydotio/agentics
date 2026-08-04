@@ -14,9 +14,9 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-22** — preventative guard for AGE-16's `$(timeout … cmd)` class. `story next` and this table **agree** (lowest-ID ready `medium`). Confirm STATE with `story list --ready`. |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-22** — preventative guard for AGE-16's `$(timeout … cmd)` class. |
+| **Next story** | TBD on merge — re-derive from `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19 |
 | **Repo version** | **v3.6.0** — unchanged. AGE-19 touched **no `plugins/**` at all** (root `tests/`, `Makefile`, `CLAUDE.md` only), so **no bump was owed**. |
 | **Last updated by** | AGE-19 session, 2026-08-04 |

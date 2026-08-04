@@ -1,6 +1,6 @@
 {
   "name": "freshen",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Automatic context clearing via tmux — lets plugins trigger /clear and re-invocation between workflow phases",
   "author": {
     "name": "mikeydotio"

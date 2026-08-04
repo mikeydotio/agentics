@@ -14,12 +14,12 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-29** — now the **last** blocker on AGE-30. See below. |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-29** — indented fences. Claimed `in-progress`, branch `fix/AGE-29-indented-fences`. |
+| **Next story** | **AGE-30** returns to `ready` when AGE-29 merges (AGE-29 is its last blocker). Confirm with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31 |
 | **Repo version** | **v3.3.0** — minor: AGE-31 added a detection capability to a shipped guard, non-breaking. |
-| **Last updated by** | AGE-31 session, 2026-08-04 |
+| **Last updated by** | AGE-29 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session

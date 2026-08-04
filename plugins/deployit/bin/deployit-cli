@@ -584,9 +584,9 @@ def _read_project_config(cwd: Path) -> dict:
     (e.g. a project whose build needs a specific Xcode toolchain — see
     [toolchain] / `_resolve_toolchain_developer_dir` below). Returns {} when
     the file is absent, so a repo with no .deployit/config.toml behaves
-    exactly as it did before this feature existed. Currently only reads
-    [toolchain]; the file can grow more tables later without a loader
-    redesign, mirroring `_read_config`'s per-table shape."""
+    exactly as it did before this feature existed. Reads [toolchain] and
+    [build]; the file can grow more tables without a loader redesign,
+    mirroring `_read_config`'s per-table shape."""
     path = cwd / ".deployit" / "config.toml"
     if not path.is_file():
         return {}
@@ -594,15 +594,41 @@ def _read_project_config(cwd: Path) -> dict:
         import tomllib
         return tomllib.loads(path.read_text())
     except ModuleNotFoundError:
-        text = path.read_text()
-        toolchain = {}
-        dd_m = _re.search(r'\[toolchain\][^\[]*?developer_dir\s*=\s*"([^"]*)"', text)
-        if dd_m:
-            toolchain["developer_dir"] = dd_m.group(1)
-        sdk_m = _re.search(r'\[toolchain\][^\[]*?min_sdk\s*=\s*"([^"]*)"', text)
-        if sdk_m:
-            toolchain["min_sdk"] = sdk_m.group(1)
-        return {"toolchain": toolchain} if toolchain else {}
+        return _parse_project_config_text(path.read_text())
+
+
+def _parse_project_config_text(text: str) -> dict:
+    """The pre-3.11 fallback parse of a project config.toml, as a pure function.
+
+    Split out so it can be tested *directly and unconditionally* — on a 3.11+
+    interpreter `_read_project_config` never reaches this branch, so a test that
+    only exercised the public entry point would pass vacuously there while this
+    is the sole live path everywhere else (macOS ships python 3.9).
+
+    Accumulates each table independently. The previous shape returned
+    `{"toolchain": toolchain} if toolchain else {}`, which silently discarded
+    every other table — so a config.toml setting only `[build]` parsed to `{}`
+    and the acknowledgement vanished without a word.
+
+    Note `allow_debug` is matched as a bare TOML boolean, not a quoted string:
+    the quoted-capture idiom used for the `[toolchain]` keys would never match
+    `allow_debug = true`."""
+    out = {}
+
+    toolchain = {}
+    dd_m = _re.search(r'\[toolchain\][^\[]*?developer_dir\s*=\s*"([^"]*)"', text)
+    if dd_m:
+        toolchain["developer_dir"] = dd_m.group(1)
+    sdk_m = _re.search(r'\[toolchain\][^\[]*?min_sdk\s*=\s*"([^"]*)"', text)
+    if sdk_m:
+        toolchain["min_sdk"] = sdk_m.group(1)
+    if toolchain:
+        out["toolchain"] = toolchain
+
+    if _re.search(r'\[build\][^\[]*?\ballow_debug\s*=\s*true', text):
+        out["build"] = {"allow_debug": True}
+
+    return out
 
 
 def _resolve_toolchain_developer_dir(project_cfg: dict):
@@ -688,17 +714,177 @@ def _archive_argv(meta: dict, archive_path: Path, scheme) -> list:
 
     Split out from `_xcodebuild_archive` so the argv can be asserted without
     running Xcode — deployit's test suite is hermetic and there is no
-    `DEPLOYIT_XCODEBUILD_BIN` fake-binary seam."""
+    `DEPLOYIT_XCODEBUILD_BIN` fake-binary seam.
+
+    Deliberately passes **no** `-configuration` (AGE-28). An explicit
+    `-configuration` on the command line overrides the scheme's ArchiveAction,
+    and this function hardcoded `Debug` from the first iOS commit — so every OTA
+    build deployit ever produced shipped unoptimized with `#if DEBUG` code
+    compiled in. The scheme is the sole authority over what gets built; deployit
+    only *measures* the result (`_archive_gate`) and refuses to ship an
+    unacknowledged unoptimized one."""
     return [
         "xcodebuild",
         meta["xcode_container_flag"], meta["xcode_container_path"],
         "-scheme", scheme or meta["default_scheme"],
-        "-configuration", "Debug",
         "-destination", _destination_for(meta["platform"]),
         "-archivePath", str(archive_path),
         "-allowProvisioningUpdates",
         "archive",
     ]
+
+
+def _settings_argv(meta: dict, scheme) -> list:
+    """`xcodebuild -showBuildSettings` for the archive action, as a pure function.
+
+    Deliberately mirrors `_archive_argv`'s container flag/path, `-scheme` and
+    `-destination` exactly: if the query and the archive disagreed on any of
+    those, the gate would measure a *different* build than the one it ships —
+    a check that verifies the wrong thing while reporting green. A test pins
+    that agreement."""
+    return [
+        "xcodebuild",
+        meta["xcode_container_flag"], meta["xcode_container_path"],
+        "-scheme", scheme or meta["default_scheme"],
+        "-destination", _destination_for(meta["platform"]),
+        "-showBuildSettings", "-json",
+        "archive",
+    ]
+
+
+def _archive_build_settings(meta: dict, scheme, env=None):
+    """Resolved archive build settings, straight from xcodebuild, or None.
+
+    Asking xcodebuild is asking the only component whose answer is
+    definitionally correct — it is the same binary, container, scheme,
+    destination and (via `env`) DEVELOPER_DIR that the archive itself will use.
+    Parsing the `.xcscheme` instead would be a second implementation of Xcode's
+    own scheme resolution, free to disagree with reality.
+
+    `env` must be the same toolchain-augmented environment the archive gets, or
+    the settings could be resolved by a *different* Xcode than the one that
+    builds. Returns None when xcodebuild cannot answer; the caller refuses."""
+    res = subprocess.run(_settings_argv(meta, scheme), env=env,
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        return None
+    try:
+        entries = json.loads(res.stdout)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not entries:
+        return None
+    return entries[0].get("buildSettings") or None
+
+
+# Reasons `_archive_gate` can refuse. Distinct strings so a later refactor
+# cannot collapse the branches unnoticed — a test asserts they stay distinct.
+_GATE_UNACKNOWLEDGED = "unoptimized_unacknowledged"
+_GATE_PUBLISH        = "unoptimized_publish"
+_GATE_UNRESOLVED     = "unresolved"
+
+
+def _archive_refusal_message(gate: dict, meta: dict, scheme) -> str:
+    """The operator-facing text for a refused archive. Every refusal names what
+    was measured and every way out, so nobody has to read the source to act."""
+    name = gate["configuration"] or "?"
+    if gate["reason"] == _GATE_UNRESOLVED:
+        return (
+            "could not determine what this archive would build — xcodebuild "
+            "could not resolve the archive build settings.\n"
+            f"  command: {' '.join(_settings_argv(meta, scheme))}\n"
+            "This usually means the archive itself was about to fail. Fix the "
+            "scheme/toolchain, then retry.\n"
+            "[build] allow_debug does NOT silence this: it acknowledges a known "
+            "unoptimized build, not an unknown one."
+        )
+    shared = (
+        f"the {meta['platform']} archive would build configuration {name!r}, "
+        f"which is UNOPTIMIZED (optimization level {gate['optimization_level']}).\n"
+        "That ships a slow binary with any #if DEBUG code compiled in.\n"
+    )
+    if gate["reason"] == _GATE_PUBLISH:
+        return shared + (
+            "[build] allow_debug = true acknowledges an unoptimized build for "
+            "installing on your own devices — it does NOT authorise publishing "
+            "one. This deploy would publish a Developer-ID-signed GitHub "
+            "release, which cannot be recalled.\n"
+            "Ways out: deploy with --no-release, set [github] release = false, "
+            "or fix the scheme's archive configuration."
+        )
+    return shared + (
+        "Ways out:\n"
+        "  • fix the scheme's ArchiveAction to build an optimized "
+        "configuration (deployit no longer overrides it), or\n"
+        "  • if this project deploys unoptimized builds deliberately, "
+        "acknowledge it in .deployit/config.toml:\n"
+        "        [build]\n"
+        "        allow_debug = true\n"
+        "See references/build-configuration.md."
+    )
+
+
+def _archive_gate(settings, project_cfg: dict, platform: str,
+                  do_release: bool) -> dict:
+    """Rule on whether an archive may proceed. Pure — no I/O, fully testable.
+
+    Substance-based, never name-based: a configuration *named* Release that
+    builds `-Onone` is still unoptimized, and a project may name its
+    configurations anything. Ordered ladder, because a target with no Swift
+    reports only the GCC key:
+
+        SWIFT_OPTIMIZATION_LEVEL → GCC_OPTIMIZATION_LEVEL → unresolved
+
+    Absence of `SWIFT_ACTIVE_COMPILATION_CONDITIONS` / `GCC_OPTIMIZATION_LEVEL`
+    is the **healthy** signal (measured: a real Release archive omits both), so
+    it must never itself trigger a refusal.
+
+    `platform` and `do_release` are parameters rather than globals so the
+    refusal boundary is directly testable. Note `do_release` is a *ceiling on
+    the escape hatch*, not the trigger: it is macOS-only by construction, so
+    triggering on it would leave every iOS deploy — the case that motivated
+    this — unprotected."""
+    settings = settings or {}
+    allow_debug = bool((project_cfg.get("build") or {}).get("allow_debug"))
+
+    swift = settings.get("SWIFT_OPTIMIZATION_LEVEL")
+    gcc = settings.get("GCC_OPTIMIZATION_LEVEL")
+    if swift is not None:
+        optimization_level, unoptimized = swift, (swift == "-Onone")
+    elif gcc is not None:
+        optimization_level, unoptimized = gcc, (gcc == "0")
+    else:
+        optimization_level, unoptimized = None, None
+
+    verdict = {
+        "configuration": settings.get("CONFIGURATION"),
+        "configuration_source": "xcodebuild -showBuildSettings",
+        "optimization_level": optimization_level,
+        "unoptimized": unoptimized,
+        "allow_debug": allow_debug,
+        "verdict": "proceed",
+        "reason": None,
+        "warnings": [],
+    }
+
+    if optimization_level is None:
+        return {**verdict, "verdict": "refuse", "reason": _GATE_UNRESOLVED}
+    if not unoptimized:
+        return verdict
+
+    name = verdict["configuration"] or "?"
+    if not allow_debug:
+        return {**verdict, "verdict": "refuse", "reason": _GATE_UNACKNOWLEDGED}
+    # Acknowledged — but the acknowledgement covers sideloading to your own
+    # devices, never an unrecallable Developer-ID-signed GitHub release.
+    if do_release:
+        return {**verdict, "verdict": "refuse", "reason": _GATE_PUBLISH}
+    return {**verdict, "warnings": [
+        f"configuration {name!r} builds unoptimized "
+        f"({optimization_level}) — allowed by [build] allow_debug = true in "
+        f".deployit/config.toml. This {platform} build ships without "
+        f"optimization and with any #if DEBUG code compiled in."
+    ]}
 
 
 def _xcodebuild_archive(meta: dict, archive_path: Path, scheme, env=None):
@@ -841,6 +1027,19 @@ def _stage_ios_or_visionos(state: Path, plugin_root: Path,
             "id", "platform", "project", "bundle_id",
             "marketing_version", "semver_version", "build_number", "commit",
             "timestamp", "origin_host", "origin_base_url",
+        )},
+        # AGE-28: what this build was actually built with. There is no post-hoc
+        # oracle — a real .xcarchive/Info.plist records no configuration — so
+        # this is the only durable record, and a warning alone would die with
+        # the terminal scrollback. Both staging paths use an explicit allowlist,
+        # so a field threaded only through meta_full is silently dropped rather
+        # than carried. Read with .get(): these are advisory build-provenance
+        # fields that cmd_deploy always supplies, but staging is also called
+        # directly (by tests, and by any future caller that does not gate), and
+        # missing provenance must not crash a stage. The required keys above
+        # stay strict, so a genuinely missing one still fails loudly.
+        **{k: meta_full.get(k) for k in (
+            "configuration", "configuration_source", "optimization_level",
         )},
         "install": {
             "kind": "itms-services",
@@ -1235,6 +1434,19 @@ def _stage_macos(state: Path, plugin_root: Path, build_id: str,
             "id", "platform", "project", "bundle_id",
             "marketing_version", "semver_version", "build_number", "commit",
             "timestamp", "origin_host", "origin_base_url",
+        )},
+        # AGE-28: what this build was actually built with. There is no post-hoc
+        # oracle — a real .xcarchive/Info.plist records no configuration — so
+        # this is the only durable record, and a warning alone would die with
+        # the terminal scrollback. Both staging paths use an explicit allowlist,
+        # so a field threaded only through meta_full is silently dropped rather
+        # than carried. Read with .get(): these are advisory build-provenance
+        # fields that cmd_deploy always supplies, but staging is also called
+        # directly (by tests, and by any future caller that does not gate), and
+        # missing provenance must not crash a stage. The required keys above
+        # stay strict, so a genuinely missing one still fails loudly.
+        **{k: meta_full.get(k) for k in (
+            "configuration", "configuration_source", "optimization_level",
         )},
         "install": {"kind": "direct-download", "dmg_url": dmg_url},
         "primary_artifact": dmg_name,
@@ -1877,6 +2089,19 @@ def cmd_deploy(args):
     if export_dir.exists():   _shutil.rmtree(export_dir)
     export_dir.mkdir(parents=True)
 
+    # AGE-28: measure what is about to be built, and refuse an unacknowledged
+    # unoptimized archive — before the archive/export/notarize round-trip
+    # rather than after it, matching the Sparkle preflight above. `build_env`
+    # is passed so the settings resolve under the SAME toolchain the archive
+    # uses; without it a [toolchain]-pinned project (Lillist pins min_sdk=27)
+    # would be gated on settings from a different Xcode.
+    gate = _archive_gate(_archive_build_settings(meta, args.scheme, env=build_env),
+                         project_cfg, args.platform, do_release)
+    if gate["verdict"] == "refuse":
+        fail(_archive_refusal_message(gate, meta, args.scheme))
+    for warning in gate["warnings"]:
+        print(f"deployit: WARNING — {warning}", file=sys.stderr)
+
     _xcodebuild_archive(meta, archive_path, args.scheme, env=build_env)
     build_number = _read_archive_build_number(archive_path, meta["project"])
     _xcodebuild_export(archive_path, export_dir, args.plugin_root, args.platform, env=build_env)
@@ -1889,6 +2114,13 @@ def cmd_deploy(args):
         "timestamp": timestamp,
         "origin_host": origin_host,
         "origin_base_url": base_url,
+        # AGE-28: the durable record of what was built. `optimization_level` is
+        # carried alongside the name deliberately — the NAME is the field that
+        # can lie, and a Release-named configuration built -Onone is exactly the
+        # case a name-only record would whitewash.
+        "configuration": gate["configuration"],
+        "configuration_source": gate["configuration_source"],
+        "optimization_level": gate["optimization_level"],
     }
 
     if args.platform in ("ios", "visionos"):

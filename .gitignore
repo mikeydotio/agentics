@@ -7,7 +7,10 @@ Thumbs.db
 *.swp
 *.swo
 *~
-# .storyhook/ and .planning/ are version-controlled project data — do not ignore
+# .storyhook.toml and .planning/ are version-controlled project data — do not ignore.
+# storyhook keeps story data in ONE SQLite store outside every repo (`story help
+# storage`); the repo carries only the .storyhook.toml pointer naming its project.
+# There is no per-repo storyhook directory to commit — see AGE-11 and AGE-27.
 
 # Freshen plugin signals (ephemeral, consumed on clear)
 .freshen/

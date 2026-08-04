@@ -145,6 +145,38 @@ Every macOS `deploy` also publishes a GitHub release on the **app's own repo**
   download that opens without the Gatekeeper prompt, configure notarization
   (`[macos] notarize`). Full details in `references/github-release.md`.
 
+## Build configuration
+
+`deploy` passes **no** `-configuration` to `xcodebuild` — the scheme's Archive
+action decides, exactly as Archiving from Xcode would. (Before v3.0.0 deployit
+forced `Debug`, which overrides the scheme, so every OTA build shipped
+unoptimized with `#if DEBUG` code compiled in.)
+
+Before archiving, `deploy` asks xcodebuild what the archive resolves to and
+**refuses an unoptimized archive that has not been acknowledged**, on every
+platform. The check is substance-based (`SWIFT_OPTIMIZATION_LEVEL`, falling back
+to `GCC_OPTIMIZATION_LEVEL`), never the configuration name, so a `Release`-named
+build compiled `-Onone` is still caught. If xcodebuild cannot answer, `deploy`
+refuses too.
+
+A project that deploys unoptimized builds on purpose acknowledges it in its own
+`.deployit/config.toml`:
+
+```toml
+[build]
+allow_debug = true
+```
+
+That is an acknowledgement, not a setting — it never chooses or changes the
+configuration. It does **not** authorise publishing: an unoptimized archive is
+still refused when the deploy would publish a Developer-ID-signed GitHub release
+(escape via `--no-release` or `[github] release = false`), and it does not
+silence an unresolved-settings refusal. There is deliberately no
+`[build] configuration` value key — the scheme already declares that, and a
+second authority could diverge from it silently. Every build records its
+`configuration` and `optimization_level` in `_meta.json` and the index entry.
+Full details in `references/build-configuration.md`.
+
 ## Per-project toolchain pin
 
 A project can pin the Xcode toolchain `deploy` archives/exports with, via its
@@ -192,6 +224,7 @@ appended to the original command.
 - `references/macos.md` — macOS Developer-ID signing + notarytool
 - `references/github-release.md` — macOS GitHub release: version/tag rules, notes, notarization, recovery
 - `references/post-deploy-tests.md` — out-of-band post-deploy test suites via `.deployit/post-deploy-test.sh`
+- `references/build-configuration.md` — which configuration is archived, the unoptimized-archive refusal, and `[build] allow_debug`
 - `references/toolchain.md` — per-project Xcode toolchain pin via `.deployit/config.toml [toolchain]`
 - `references/sparkle.md` — macOS Sparkle auto-update: appcast + EdDSA signing + app wiring
 - `references/visionos.md` — visionOS specifics (mostly ≡ iOS)

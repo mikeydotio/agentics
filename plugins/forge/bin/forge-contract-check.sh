@@ -273,6 +273,17 @@ if [[ "$(echo "$REAL_SUBCOMMANDS_JSON" | jq 'length')" -eq 0 ]]; then
   exit 0
 fi
 
+# A documentation wildcard rather than a dispatch target: the docs
+# legitimately write `story project <subcommand>` and
+# `story relate <a> <relationship> <b>`. A placeholder, flag, quoted span or
+# comment in a checked slot names nothing the live CLI could validate.
+is_placeholder() {
+  case "${1:-}" in
+    ''|-*|'<'*|'['*|'('*|'{'*|'$'*|'"'*|"'"*|'`'*|'|'*|'#'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 verb_is_enforced() {
   echo "$REAL_SUBCOMMANDS_JSON" | jq -e --arg v "$1" 'has($v)' >/dev/null
 }
@@ -381,19 +392,10 @@ while IFS= read -r f; do
       read -ra subtoks <<< "$rest"
       sub="${subtoks[0]:-}"
       sub="${sub%,}"
-      # A placeholder, flag or quoted span in the subcommand slot is a
-      # documentation wildcard rather than a dispatch target — the docs
-      # legitimately write `story project <subcommand>`.
-      case "$sub" in
-        ''|-*|'<'*|'['*|'('*|'{'*|'$'*|'"'*|"'"*|'`'*|'|'*|'#'*)
-          : ;;
-        *)
-          if ! is_valid_subcommand "$verb" "$sub"; then
-            add_subcommand_violation "$rel_f" "$lineno" "$verb" "$sub" "$trimmed"
-            continue
-          fi
-          ;;
-      esac
+      if ! is_placeholder "$sub" && ! is_valid_subcommand "$verb" "$sub"; then
+        add_subcommand_violation "$rel_f" "$lineno" "$verb" "$sub" "$trimmed"
+        continue
+      fi
     fi
 
     case "$verb" in
@@ -401,13 +403,7 @@ while IFS= read -r f; do
         read -ra resttoks <<< "$rest"
         relation="${resttoks[1]:-}"
         relation="${relation%,}"
-        # Same wildcard rule as the subcommand slot above: the docs
-        # legitimately write `story relate <a> <relationship> <b>` as a
-        # signature. A placeholder there names no relation to validate.
-        case "$relation" in
-          -*|'<'*|'['*|'('*|'{'*|'$'*|'"'*|"'"*|'`'*|'|'*|'#'*) relation="" ;;
-        esac
-        if [[ -n "$relation" ]] && ! is_valid_relation "$relation"; then
+        if ! is_placeholder "$relation" && ! is_valid_relation "$relation"; then
           add_relation_violation "$rel_f" "$lineno" "$relation" "$trimmed"
         fi
         ;;

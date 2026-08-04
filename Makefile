@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -56,6 +56,15 @@ test-storyhook-path-guard:
 # and has an ok:false cannot-verify path. Plain bash so it always runs.
 test-storyhook-contract-root:
 	bash tests/with-isolated-store.sh bash tests/storyhook-contract-root.sh
+
+# An early-exit consumer (grep -q, grep -m N, head) must not drain a producer
+# that is still writing, in a file that arms pipefail: the producer dies of
+# SIGPIPE and pipefail reports 141 for a match that SUCCEEDED. Three such sites
+# existed on 2026-08-04 (AGE-21). Behavioral arms run against real git on a
+# fixture sized past the pipe buffer, so they test a certainty and not a race.
+# Plain bash so it always runs.
+test-sigpipe-shape-guard:
+	bash tests/with-isolated-store.sh bash tests/sigpipe-shape-guard.sh
 
 # Claude 5 prompt-realignment regression guard (#118): model/effort tiering
 # stays alias-only and never pinned up, no self-verification instructions or

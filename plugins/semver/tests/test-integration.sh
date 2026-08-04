@@ -51,7 +51,7 @@ test_pre_bump_failure_prevents_version_change() {
     assert_eq "" "$tag_exists" "no new tag should exist" &&
 
     local log
-    log=$(git -C "$repo" log --oneline | head -1)
+    log=$(git -C "$repo" log --oneline -1)
     assert_file_not_contains <(echo "$log") "chore(release)" "no release commit"
 }
 

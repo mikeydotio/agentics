@@ -49,7 +49,7 @@ echo "$out" | grep -q '"new_version": "v1.0.1"' \
     || { echo "FAIL: VERSION not updated: $(cat VERSION)"; exit 1; }
 
 git log -1 --pretty=%s | grep -q "chore(release): v1.0.1" \
-    || { echo "FAIL: release commit missing"; git log --oneline | head -5; exit 1; }
+    || { echo "FAIL: release commit missing"; git log --oneline -5; exit 1; }
 git show --name-only --pretty=format: HEAD | grep -qx "app.txt" \
     || { echo "FAIL: dirty app.txt not folded into release commit"; git show --stat HEAD; exit 1; }
 [[ -z "$(git status --porcelain)" ]] \

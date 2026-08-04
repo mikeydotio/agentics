@@ -14,12 +14,12 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-24** — unblocked by AGE-32, and its job is now much smaller than filed. See below. |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-24** — inline-backtick span extraction for `forge-contract-check.sh`. |
+| **Next story** | **AGE-31** — unblocked by AGE-32. Placeholder verbs in `START_RE`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32 |
 | **Repo version** | **v3.1.0** — minor: AGE-32 added a capability and two additive JSON keys. |
-| **Last updated by** | AGE-32 session, 2026-08-04 |
+| **Last updated by** | AGE-24 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session

@@ -16,7 +16,7 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-32** (the unblocker — AGE-24/30/31 stay out of `ready` until it closes) |
+| **Next story** | **AGE-32** — ⚠ **`story next` disagrees and says AGE-12; take AGE-32 anyway, see below** |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28 |
 | **Repo version** | **v3.0.0** — first MAJOR of this marketplace. Chair ruling, reasoning below. |
 | **Last updated by** | AGE-28 session, 2026-08-04 |
@@ -28,6 +28,17 @@ via freshen, and stops.
 ---
 
 ## Known state (updated 2026-08-04 by the AGE-28 session)
+
+- **⚠ `story next` says AGE-12. Take AGE-32 instead — this is deliberate, not drift.** Both are
+  `todo`, `ready` and `medium`, so `story next` is breaking the tie by **ID order alone**. This
+  table's own rule breaks it by the **dependency graph**: **AGE-32 unblocks three stories**
+  (AGE-24, AGE-30, AGE-31 are all `blocked-by` it, directly or transitively, and storyhook keeps
+  them out of `ready` until it closes), while AGE-12 unblocks none. Clearing AGE-32 returns three
+  stories to the queue; clearing AGE-12 returns zero.
+  - This is the one place the standing *"`story list` outranks this file"* rule needs care: trust
+    `story list` for **state** (what is open/blocked/claimed — it is authoritative and this file
+    goes stale within the hour), but the **ordering rationale** lives here, because `story next`
+    cannot see it. Do not "correct" the queue to AGE-12.
 
 - **⚠ THE REPO IS NOW AT v3.0.0 — the first MAJOR bump of this marketplace.** AGE-28 makes
   `deployit deploy` **refuse** an unacknowledged unoptimized archive, so a project that

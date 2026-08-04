@@ -364,6 +364,148 @@ EOF
   [ "$(jq_field '.relation_violations[0].relation')" = "precedes" ]
 }
 
+# --- Negative-example suppression (AGE-32) ---
+#
+# A doc must be able to name a dead form IN ORDER TO DENY IT without the guard
+# flagging that correct sentence. The marker is bound to the reported TOKEN, so
+# it is an executable assertion that the named form is still dead — not a
+# blanket line-ignore. Every marker that suppresses nothing is itself an error,
+# found by a WHOLE-FILE scan so a marker on an unscanned line fails loud rather
+# than sitting as a silent no-op.
+
+@test "contract-check: a token-bound marker suppresses the violation it names" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story HP-N is done <!-- contract-check: expect-dead HP-N -- id-first form does not exist -->
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+  # Effect oracle: proves the line was SCANNED and deliberately suppressed,
+  # not merely never read (the AGE-27 failure shape).
+  [ "$(jq_field '.suppressions | length')" -eq 1 ]
+  [ "$(jq_field '.suppressions[0].token')" = "HP-N" ]
+  [ "$(jq_field '.suppressions[0].line')" -eq 4 ]
+  [ "$(jq_field '.suppressions[0].reason')" = "id-first form does not exist" ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
+}
+
+@test "contract-check: a marker naming a DIFFERENT token does not suppress the violation" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story project init <!-- contract-check: expect-dead HP-N -- unrelated dead form -->
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  # The real drift is still reported — the marker cannot shield a same-line substitution.
+  [ "$(jq_field '.subcommand_violations | length')" -eq 1 ]
+  [ "$(jq_field '.subcommand_violations[0].subcommand')" = "init" ]
+  # ...and the marker that shielded nothing is itself an error.
+  [ "$(jq_field '.stale_suppressions | length')" -eq 1 ]
+  [ "$(jq_field '.stale_suppressions[0].kind')" = "token_mismatch" ]
+  [ "$(jq_field '.suppressions | length')" -eq 0 ]
+  # The marker text must not leak into the reported command.
+  [ "$(jq_field '.subcommand_violations[0].command')" = "story project init" ]
+}
+
+@test "contract-check: a marker on a form that is REAL is a stale suppression" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story project new --prefix AGE <!-- contract-check: expect-dead new -- this form is alive -->
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 1 ]
+  [ "$(jq_field '.stale_suppressions[0].kind')" = "form_is_valid" ]
+  [ "$(jq_field '.stale_suppressions[0].token')" = "new" ]
+}
+
+@test "contract-check: a marker on a line the extractor never reads is a stale suppression" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+There is no id-first form (`story HP-N is done`). <!-- contract-check: expect-dead HP-N -- denied in prose -->
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Pre-AGE-24 this line sits at fence depth 0 and is never extracted. The
+  # marker must say so loudly rather than pass as a silent no-op.
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 1 ]
+  [ "$(jq_field '.stale_suppressions[0].kind')" = "not_scanned" ]
+}
+
+@test "contract-check: a marker with no reason is malformed and suppresses nothing" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story HP-N is done <!-- contract-check: expect-dead HP-N -->
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.suppressions | length')" -eq 0 ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 1 ]
+  [ "$(jq_field '.stale_suppressions[0].kind')" = "malformed" ]
+}
+
+@test "contract-check: a placeholder-token marker is a signature, not a suppression" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+Write `<!-- contract-check: expect-dead <token> -- why it is dead -->` to deny a form.
+
+```bash
+story next --json
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Documenting the convention must not self-apply.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.suppressions | length')" -eq 0 ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
+}
+
+@test "contract-check: the marker binds to the subcommand and relation slots too" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story project init <!-- contract-check: expect-dead init -- renamed to `new` in storyhook 2.0 -->
+story relate HP-1 precedes HP-2 <!-- contract-check: expect-dead precedes -- never existed -->
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
+  [ "$(jq_field '.relation_violations | length')" -eq 0 ]
+  [ "$(jq_field '.suppressions | length')" -eq 2 ]
+}
+
+@test "contract-check: real committed forge docs carry no suppressions and none stale" {
+  run bash "$SCRIPT" "$FORGE_ROOT"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
+}
+
 # --- Schema stability across every exit path (AGE-18 lock) ---
 
 @test "contract-check: the CLI-missing early exit still emits the new keys" {
@@ -372,6 +514,8 @@ EOF
   [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
   echo "$output" | jq -e 'has("real_subcommands")' >/dev/null
   echo "$output" | jq -e 'has("subcommand_violations")' >/dev/null
+  echo "$output" | jq -e 'has("suppressions")' >/dev/null
+  echo "$output" | jq -e 'has("stale_suppressions")' >/dev/null
 }
 
 # --- Output shape ---

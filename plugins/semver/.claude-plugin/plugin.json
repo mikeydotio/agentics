@@ -1,6 +1,6 @@
 {
   "name": "semver",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Semantic versioning lifecycle management with auto-bump, changelog generation, and version-aware Claude Code hooks",
   "author": {
     "name": "mikeydotio"

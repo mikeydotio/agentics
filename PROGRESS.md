@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-32** |
-| **Next story** | AGE-12 (AGE-24 and AGE-31 unblock when AGE-32 closes — re-derive from `story list --ready`) |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28 |
-| **Repo version** | **v3.0.0** — first MAJOR of this marketplace. Chair ruling, reasoning below. |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-24** — unblocked by AGE-32, and its job is now much smaller than filed. See below. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32 |
+| **Repo version** | **v3.1.0** — minor: AGE-32 added a capability and two additive JSON keys. |
 | **Last updated by** | AGE-32 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -26,6 +26,57 @@ via freshen, and stops.
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-32 session)
+
+- **AGE-32 closed the F103 guard's suppression gap — AGE-24 and AGE-31 are UNBLOCKED.** Confirm
+  with `story list --ready` rather than trusting this line.
+- **⚠ Measure the widening before you write it — AGE-24's job just got much smaller.** A naive
+  full inline widening of `forge-contract-check.sh` produces **28 violations on the real 29-file
+  corpus, every one a false positive**, in four classes. But **span extraction fixes three of the
+  four classes at once**: extract each inline-backtick span and feed *the span* to the checker
+  rather than the whole line. Measured residual after span extraction + AGE-32's relation-slot
+  placeholder exemption: **exactly ONE violation in the entire corpus** —
+  `references/storyhook-contract.md:8`, the negative example. That one is what AGE-32's marker is
+  for. Do not re-derive this by hand; the simulation takes ~2 minutes.
+  - The three mechanical classes are: English prose (`story data lives in a SQLite store`),
+    unstripped trailing backticks on the harvested token, and placeholder signatures in the
+    relation slot. Span extraction kills all three, because the span *is* the invocation —
+    a backticked `story relate` followed by the prose word "call" yields no token at position 1
+    at all, so there is nothing to misread.
+- **The suppression marker is now live**, and it is NOT an ordinary ignore-comment. A doc denies a
+  dead form by annotating that line: `<!-- contract-check: expect-dead <token> -- <reason> -->`.
+  Four things will bite you if you assume otherwise:
+  - **It is bound to the reported TOKEN, not the line.** A marker naming the wrong token does not
+    suppress *and* is reported as `token_mismatch`. You cannot mute a line.
+  - **A marker that suppresses nothing FAILS the gate** (`stale_suppressions`, folded into
+    `contract_ok`). Markers are found by a whole-file scan deliberately independent of extraction,
+    so one at fence depth 0 today reports `not_scanned` rather than passing silently. **So the
+    marker for `storyhook-contract.md:8` must land INSIDE AGE-24's PR — add it in the same commit
+    that widens the scan, never before, or the gate reds.**
+  - **The reason is mandatory.** No reason → `malformed`, suppresses nothing.
+  - **A placeholder token (`<token>`) is a signature, not a suppression** — that is what lets the
+    convention be written down inside a scanned file without self-applying.
+- **A latent false positive was fixed on the way**: the guard exempted placeholders in the
+  *subcommand* slot but had no equivalent for the *relation* slot, so a fenced
+  `story relate <a> <relationship> <b>` was reported as an unsupported relationship. Reachable
+  today, not only under widening — no committed forge doc merely happens to have one inside a fence.
+- **`forge-contract-check.sh` still has ZERO runtime call sites** (re-verified). Only its own
+  `.bats` executes it. It is shipped and cache-keyed, so it costs a bump, but nothing in the
+  pipeline calls it.
+- **Five mutations were run to prove AGE-32's tests are worth having**, each went red: token-blind
+  suppression, marker scan narrowed to the extracted region, `stale_suppressions` dropped from
+  `contract_ok`, placeholder-token exemption removed, mandatory-reason requirement removed. Note
+  the third reds only the two tests whose *sole* signal is staleness — tests that also carry a real
+  violation stay red for the right reason, so a naive "all four must go red" expectation is wrong.
+  If you extend this mechanism, mutate before you trust the suite.
+- **`make -k test` had exactly ONE red across the whole run**, the expected
+  `test_shipped_content_matches_tagged_release`, cleared by the bump. **No `SKIP_PREPUSH_TESTS=1`
+  was needed** — four sessions running now. 593 bats assertions across 5 plans, all 18 suites
+  reached, zero suites skipped. **AGE-21's `test-cli-rm.sh` flake did NOT fire, and AGE-35's
+  `test-bootstrap-dirs.sh` PASSED** under the full run.
+- **Wall clock for the full gate was ~2h**, matching AGE-11's figure. Start it early and do not
+  touch the working tree while it runs — `forge-integrity.bats` snapshots the real tree (AGE-34).
 
 ## Known state (updated 2026-08-04 by the AGE-28 session)
 
@@ -325,8 +376,9 @@ without recording why in this file.
 | ✅ | ~~**AGE-4**, **AGE-5**, **AGE-6**, **AGE-7**, **AGE-10**, **AGE-8**~~ | med/low | **DONE — PR #137 merged** (`20c31d2`) while AGE-27 was in flight. All six are `done` in storyhook. The `#118` scope collision this file warned about for eight sessions is **resolved and closed**. |
 | ✅ | ~~**AGE-33**~~ | crit | **DONE — released as v2.41.0** (PR #139). #137's 48 shipped files had never reached any install. See the version bullet above. |
 | ✅ | ~~**AGE-28**~~ | high | **DONE — shipped as v3.0.0**, the marketplace's first major. The hardcode is gone, the scheme decides, and an unacknowledged unoptimized archive is now refused on every platform. See "What AGE-28 turned out to be" below. **Owes a Lillist-side story.** |
-| 1 | **AGE-32** | med | **Unblocks the whole `forge-contract-check` chain.** AGE-24, AGE-30 and AGE-31 are all `blocked-by` it (directly or transitively), so storyhook will not dispatch any of them until it closes. It is a *design decision* story: pick how a doc can name a dead form in order to deny it without the guard flagging it. |
-| — | **AGE-24** | med | **BLOCKED by AGE-32** — storyhook excludes it from `ready`. Do not try to work it first; its fix reds the gate on `storyhook-contract.md:8`, which is a correct document. |
+| ✅ | ~~**AGE-32**~~ | med | **DONE — shipped as v3.1.0.** Token-bound `expect-dead` marker, ruled unanimously by `/council-vote`. Unblocks AGE-24 and AGE-31. See "What AGE-32 turned out to be" below. |
+| 1 | **AGE-24** | med | **UNBLOCKED.** Widen the scan to inline-backtick spans. **Read the AGE-32 section first** — span extraction collapses 3 of the 4 false-positive classes, leaving exactly one site, and the `storyhook-contract.md:8` marker must land in this PR, not before it. |
+| 2 | **AGE-31** | med | **UNBLOCKED.** Placeholder verbs: `START_RE` demands `[A-Za-z]` after `story `, so `story <id> is done` never matches. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
 | 8 | **AGE-19** | med | No storyhook major-version pin. |
@@ -341,6 +393,45 @@ without recording why in this file.
 
 **AGE-2, AGE-3, AGE-11, AGE-14, AGE-15, AGE-16, AGE-17 and AGE-18 are already `done`** — do not
 touch them.
+
+### What AGE-32 turned out to be — the story was right, and the answer was smaller than feared
+
+AGE-32's diagnosis reproduced exactly: a naive widening yields 28 violations on the real corpus,
+all false positives, in the four classes the story named. Two things it did **not** know:
+
+1. **Three of the four classes have ONE fix, not three.** Extracting the inline-backtick *span* and
+   checking the span — rather than the line the span sits on — dissolves prose, trailing-backtick
+   artifacts and relation-slot signatures simultaneously. Measured residual: **1 violation, corpus-
+   wide.** That is a gift to AGE-24, which the story framed as three mechanical fixes plus a design
+   decision.
+2. **The undecidable class is a population of one** (`storyhook-contract.md:8`). The mechanism was
+   designed for a known site count of one — which is an argument for making it *strict*, not loose.
+
+**The council was unanimous 3-0 in round one, with two of three seats voting against their own
+proposals** and each naming the precise defect in their own design. Both losing seats then asked
+for the same single graft from the runner-up. Full audit trail:
+`.council/age32-negative-example-suppression/DECISION.md`.
+
+**Four lessons worth carrying forward:**
+
+1. **A suppression mechanism must be able to fail.** The losing line-scoped ignore "can never itself
+   fail" — its own author's words. Binding the marker to the *reported token* turns it into an
+   executable assertion that the form is still dead, so the guard gets **stronger** with a marker
+   than without one: if storyhook ever made the form real, the doc's denial becomes false and the
+   marker reports `form_is_valid`.
+2. **Site the staleness check where it can actually fire.** Seat 2's design put it inside the
+   per-line loop over *extracted* lines — where it could never fire for a marker on a line the
+   extractor never reads, which is the exact case it existed to catch. Moving it to a whole-file
+   scan is the difference between a guard and a decoration. This is the AGE-18/AGE-21/AGE-27 class,
+   caught in design review instead of six sessions later.
+3. **An escape hatch needs an exemption for its own documentation.** A marker whose token is a
+   placeholder is a signature, not a suppression — otherwise writing the convention down inside a
+   scanned file self-applies. The repo has hit this before: `tests/storyhook-path-guard.sh`
+   assembles the retired name from string fragments for the same reason.
+4. **Expect a mutation to red the *right* tests, not all of them.** Dropping `stale_suppressions`
+   from `contract_ok` reds only the tests whose sole signal is staleness; the ones that also carry a
+   real violation stay red legitimately. A "they should all go red" expectation was wrong and would
+   have sent a session hunting a non-bug.
 
 ### What AGE-28 turned out to be — the council's sharpest round yet
 

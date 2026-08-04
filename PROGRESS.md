@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | **IN FLIGHT** |
-| **Story in flight** | **AGE-28** (claimed `in-progress`, branch `fix/AGE-28-archive-configuration`) |
-| **Next story** | **AGE-32** (the unblocker for AGE-24/30/31) |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33 |
-| **Repo version** | **v2.41.0** — AGE-28 ships a **MAJOR** bump (council chair ruling, see below) |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-32** (the unblocker — AGE-24/30/31 stay out of `ready` until it closes) |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28 |
+| **Repo version** | **v3.0.0** — first MAJOR of this marketplace. Chair ruling, reasoning below. |
 | **Last updated by** | AGE-28 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -26,6 +26,55 @@ via freshen, and stops.
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-28 session)
+
+- **⚠ THE REPO IS NOW AT v3.0.0 — the first MAJOR bump of this marketplace.** AGE-28 makes
+  `deployit deploy` **refuse** an unacknowledged unoptimized archive, so a project that
+  deliberately archives Debug (Lillist does) must commit `[build] allow_debug = true` before its
+  next deploy works. CLAUDE.md's major criterion — *"behavior changes that require consumers to
+  update"* — is met literally, so the chair ruled major over the two seats that guessed minor.
+  - **The marketplace shares one `VERSION`, so every plugin moved to 3.0.0**, not just deployit.
+    That is the honest aggregate signal (*something here breaks consumers*), but it is
+    marketplace-wide and Mikey should know it was a deliberate call, not a slip.
+  - Rejected counter-argument, recorded so it is not re-litigated blind: *"the CLI surface is
+    purely additive (one optional table), so it is minor."* Strict semver treats **newly rejecting
+    previously-accepted input** as breaking regardless of whether a symbol was removed — and
+    AGE-33's lesson is asymmetric: under-signalling stranded every install, over-signalling costs
+    a digit.
+- **⚠ A companion Lillist story is OWED and NOT YET FILED.** Lillist's next deploy will fail until
+  it commits `[build] allow_debug = true` (or changes `Apps/Lillist-iOS/project.yml:339-340`).
+  This is intentional — the setting was previously invisible — but it is a cross-repo consequence
+  landed from agentics. **File it against Lillist, not agentics.**
+- **Story premises can be right in diagnosis and wrong in framing — AGE-28 was both.** Its stated
+  defect reproduced exactly. But its claim that Option A is *"correct by default"* was falsified:
+  Lillist's `archive: config: Debug` is **deliberate**, committed at `project.yml:339-340`, and
+  **predates deployit's hardcode by one day** (2026-05-20, in *"feat(deploy): on-demand iOS test
+  build deploy"*, vs `c383611` on 2026-05-21). deployit's Debug was never arbitrary — it encoded
+  *"these are test builds"*, a premise that broke when deployit grew to publish moshtail releases
+  and Developer-ID macOS GitHub releases. **Check the direction of causality before calling a
+  downstream config a victim of your bug.**
+- **⚠ `python3` on this machine is 3.9.6 and has NO `tomllib`.** So deployit's *regex fallback* in
+  `_read_project_config` is the **only** TOML path that ever executes locally — and before AGE-28
+  it ended `return {"toolchain": toolchain} if toolchain else {}`, silently discarding every other
+  table. Two standing consequences:
+  - **Any new `.deployit/config.toml` table must be added to the fallback**, or it is dead on
+    arrival on this Mac. It is now `_parse_project_config_text()`, a pure function, so test it
+    **directly** — a test that only drives `_read_project_config` passes vacuously on a 3.11+
+    interpreter while proving nothing where it matters.
+  - **Bools in that parser are *presence* tests** (`enabled\s*=\s*true`), not the quoted-string
+    captures used for the `[toolchain]` keys. A quoted regex copied from those lines silently
+    never matches an unquoted TOML bool.
+- **`_meta.json` is written from an explicit key ALLOWLIST at two sites** (`_stage_ios_or_visionos`
+  and `_stage_macos`). A field threaded only through `meta_full` is **silently dropped at both**.
+  Worse, adding a key with `meta_full[k]` broke 4 existing tests with `KeyError`, because they call
+  the staging functions directly. Advisory provenance fields are now read with `.get()`; the
+  required keys stay strict so a genuinely missing one still fails loudly.
+- **`do_release` is macOS-only** (`args.platform == "macos" and …`). Any gate keyed on it is
+  **False for every iOS/visionOS deploy by construction** — a trap that cost two council seats
+  their design. AGE-28 uses it as a *ceiling on an escape hatch*, never as a refusal trigger.
+- **The deployit suite passed 50/50**, including AGE-21's flaky `test-cli-rm.sh`, which did **not**
+  fire this run.
 
 ## Known state (updated 2026-08-04 by the AGE-27 session)
 
@@ -264,8 +313,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-27**~~ | high | **DONE** — `AGENTS.md` regenerated, `.gitignore:10` corrected, and a new Layer 3 guards the retired surfaces. **No bump.** See "What AGE-27 turned out to be" below; the council rejected the story's own stated fix. Filed **AGE-30**, **AGE-31**, **AGE-32** and split **AGE-29**. |
 | ✅ | ~~**AGE-4**, **AGE-5**, **AGE-6**, **AGE-7**, **AGE-10**, **AGE-8**~~ | med/low | **DONE — PR #137 merged** (`20c31d2`) while AGE-27 was in flight. All six are `done` in storyhook. The `#118` scope collision this file warned about for eight sessions is **resolved and closed**. |
 | ✅ | ~~**AGE-33**~~ | crit | **DONE — released as v2.41.0** (PR #139). #137's 48 shipped files had never reached any install. See the version bullet above. |
-| 1 | **AGE-28** | **high** | **Leads on priority-first** — the only `high` open, and `story next` agrees. deployit hardcodes `-configuration Debug` in `_xcodebuild_archive()` (`plugins/deployit/bin/deployit-cli:691`), so every OTA build ever produced shipped unoptimized with `#if DEBUG` code compiled in. Touches `plugins/deployit/**` → **bump required in your own PR**. |
-| 2 | **AGE-32** | med | **Unblocks the whole `forge-contract-check` chain.** AGE-24, AGE-30 and AGE-31 are all `blocked-by` it (directly or transitively), so storyhook will not dispatch any of them until it closes. It is a *design decision* story: pick how a doc can name a dead form in order to deny it without the guard flagging it. |
+| ✅ | ~~**AGE-28**~~ | high | **DONE — shipped as v3.0.0**, the marketplace's first major. The hardcode is gone, the scheme decides, and an unacknowledged unoptimized archive is now refused on every platform. See "What AGE-28 turned out to be" below. **Owes a Lillist-side story.** |
+| 1 | **AGE-32** | med | **Unblocks the whole `forge-contract-check` chain.** AGE-24, AGE-30 and AGE-31 are all `blocked-by` it (directly or transitively), so storyhook will not dispatch any of them until it closes. It is a *design decision* story: pick how a doc can name a dead form in order to deny it without the guard flagging it. |
 | — | **AGE-24** | med | **BLOCKED by AGE-32** — storyhook excludes it from `ready`. Do not try to work it first; its fix reds the gate on `storyhook-contract.md:8`, which is a correct document. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
@@ -281,6 +330,53 @@ without recording why in this file.
 
 **AGE-2, AGE-3, AGE-11, AGE-14, AGE-15, AGE-16, AGE-17 and AGE-18 are already `done`** — do not
 touch them.
+
+### What AGE-28 turned out to be — the council's sharpest round yet
+
+The defect reproduced exactly as filed. What the story got wrong was its **framing**, and both of
+its proposed options were rejected — Option A as insufficient, Option B's value key outright.
+
+**Round 1 was split B=2 / C=1 / A=0 with EVERY seat voting against its own proposal.** That has not
+happened before in this repo. After one deliberation round all three **independently converged on
+the same design**, each abandoning the half of its own proposal the others had holed. Full audit
+trail: `.council/age28-archive-configuration/DECISION.md` (14 chair-verified facts).
+
+**What shipped:** delete the hardcode and pass no `-configuration` ever; ask xcodebuild itself
+(`-showBuildSettings -json … archive`) what the archive resolves to; refuse an *unacknowledged*
+unoptimized archive on **every** platform via a substance-based ladder
+(`SWIFT_OPTIMIZATION_LEVEL` → `GCC_OPTIMIZATION_LEVEL` → unresolved); `[build] allow_debug = true`
+acknowledges a deliberate one; `do_release` is a **ceiling on that hatch**, never the trigger;
+unresolved hard-fails and `allow_debug` does not silence it; and the verdict is **persisted** to
+`_meta.json` + the index entry.
+
+**Six lessons worth carrying forward:**
+
+1. **Measure the premise, not just the defect.** The story's "moshtail's scheme already says
+   Release, so this is correct by default" was true for 3 of 4 projects and false for the fourth —
+   and the chair's own counter-framing ("Lillist would be silently left broken") was *also* false,
+   because Lillist's Debug is deliberate and predates the bug. **Both** the story's framing and the
+   chair's first correction of it were wrong. Facts measured after dispatch changed the outcome
+   twice; that is why they were injected into the ballot rather than held.
+2. **A gate's stated predicate and its actual predicate can differ — check.** Two seats designed a
+   refusal at "the point of irreversibility" and both actually built one at "macOS", because
+   `do_release` is platform-scoped. Seat 1's own words: *"I believed I was drawing the boundary at
+   reversibility; I actually drew it at platform… and I shipped it."*
+3. **Never gate on a name when the substance is available.** A `Release`-*named* configuration
+   built `-Onone` passes every name-based check. The optimization level is persisted alongside the
+   name for exactly this reason: *the name is the field that can lie.*
+4. **Absence can be the healthy signal.** A real Release archive **omits**
+   `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `GCC_OPTIMIZATION_LEVEL`. A proposal that hard-failed
+   on "missing keys" would have refused every correct build, and `None.split()` would have crashed
+   the happy path. Measured, not reasoned.
+5. **Ask the component whose answer is definitionally correct.** Both the `.xcscheme` XML parser
+   and the `project.yml` reader were rejected as *second implementations of Xcode's own
+   resolution*. Note `_read_yaml_scalar` is a first-occurrence regex and every Lillist
+   `project.yml` orders `run: config: Debug` **before** `archive:` — so reading it returns the
+   **run** configuration. A guard built on that would have lied.
+6. **Mutate your tests before you trust them.** Three mutations were run and each went red:
+   re-adding the hardcode, emptying the acknowledged warning list, and silently gating the refusal
+   to macOS. The last is caught by an **invariance assertion** (the unacknowledged verdict must be
+   identical across all six platform × publish pairs), which a row-by-row table alone would miss.
 
 ### What AGE-27 turned out to be — the story's *diagnosis* was right and its *prescription* was wrong
 

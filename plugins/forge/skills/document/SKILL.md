@@ -92,17 +92,15 @@ The technical writer may also create or update other documentation files (README
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/DOCUMENTATION.md` (and any other doc files)
-2. Write `.forge/handoffs/handoff-document.md` (content: see step-handoff.md's Document Handoff
-   table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step document \
-     --summary "project documentation" --next "/forge continue"
-   ```
-   If the technical writer created or updated files outside `.forge/` (README.md, API docs, etc.
-   per Step 1 above), pass each as its own `--extra-path` so they ride along in the same commit.
-4. STOP
+**If `--orchestrated`:** Write `.forge/DOCUMENTATION.md` (and any other doc files), then follow
+the Step Exit Protocol (`references/step-handoff.md`) — write `handoff-document.md` (Document
+Handoff table) and run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step document \
+  --summary "project documentation" --next "/forge continue"
+```
+If the technical writer created or updated files outside `.forge/` (README.md, API docs, etc.),
+pass each as its own `--extra-path` so they ride along in the same commit.
 
 The orchestrator enters the **post-document pause** on next `continue` — it ALWAYS pauses here for user review, never auto-advances to deploy.
 

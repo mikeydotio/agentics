@@ -138,14 +138,12 @@ to spawn, so a wrong name here breaks every step that reads it):
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/research/SUMMARY.md` and `.forge/TEAM.md`
-2. Write `.forge/handoffs/handoff-research.md` (content: see step-handoff.md's Research Handoff
-   table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step research \
-     --summary "domain research + team roster" --next "/forge design --orchestrated"
-   ```
-4. STOP
+**If `--orchestrated`:** Write `.forge/research/SUMMARY.md` and `.forge/TEAM.md`, then follow the
+Step Exit Protocol (`references/step-handoff.md`) — write `handoff-research.md` (Research Handoff
+table) and run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step research \
+  --summary "domain research + team roster" --next "/forge design --orchestrated"
+```
 
 **If standalone:** Write outputs, report completion to user, exit.

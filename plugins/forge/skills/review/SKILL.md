@@ -97,14 +97,12 @@ If multiple agents flag the same issue, merge into a single finding with the hig
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/REVIEW-REPORT.md`
-2. Write `.forge/handoffs/handoff-review.md` (content: see step-handoff.md's Review Handoff table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step review \
-     --summary "static analysis complete" --next "/forge continue"
-   ```
-4. STOP
+**If `--orchestrated`:** Write `.forge/REVIEW-REPORT.md`, then follow the Step Exit Protocol
+(`references/step-handoff.md`) — write `handoff-review.md` (Review Handoff table) and run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step review \
+  --summary "static analysis complete" --next "/forge continue"
+```
 
 **Note:** Review never checks for `.forge/VALIDATE-REPORT.md` before deciding whether to queue
 freshen — that file-presence "whoever finishes second queues" coordination previously deadlocked

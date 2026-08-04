@@ -14,18 +14,100 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-22** — preventative guard for AGE-16's `$(timeout … cmd)` class. |
-| **Next story** | TBD on merge — re-derive from `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19 |
-| **Repo version** | **v3.6.0** — unchanged. AGE-19 touched **no `plugins/**` at all** (root `tests/`, `Makefile`, `CLAUDE.md` only), so **no bump was owed**. |
-| **Last updated by** | AGE-19 session, 2026-08-04 |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-26** — greenlight auto-approves the whole `story` CLI on a premise storyhook 2.0 falsified; the remaining work is the trust-boundary judgement (queue row 16). Lowest-ID ready `medium`, so `story next` and this table **agree**. Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22 |
+| **Repo version** | **v3.6.0** — unchanged. AGE-22 touched **no `plugins/**` at all** (root `tests/`, `Makefile`, `CLAUDE.md` only), so **no bump was owed** — same as AGE-19 and AGE-21 before it. |
+| **Last updated by** | AGE-22 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-22 session)
+
+- **AGE-22 is DONE. No bump — the repo stays at v3.6.0.** It touched only `tests/`, `Makefile` and
+  `CLAUDE.md`; the shipped-plugin pathspec diff is **empty**. Verify before assuming it applies to
+  you: `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **empty means no bump.**
+- **⚠ THE NEW GUARD WILL RED ON YOU BY DESIGN, and that is the feature.** `tests/bounded-capture-guard.sh`
+  (`make test-bounded-capture-guard`) positively pins **four censuses**. Writing a new
+  `timeout`/`gtimeout` call site, **or a new call of `run_with_timeout`/`run_explorer`/`run_bounded`**,
+  reds the gate. That is the guard asking you to decide whether the new output can ever reach a
+  caller's substitution pipe — **not a nuisance to silence by bumping the pin.** If it can, add the
+  wrapper's name to `REGISTRY` in that file. Layers: L1 no bounded command at a COMMAND POSITION
+  inside `$()`/backticks; L2 the bounded sites are exactly `{session-stop.sh:2, greenlight-explore.sh:1}`,
+  total 3; L3 no capture of a registry name + each name's definition found by a pattern matching
+  **both** `() {` and `() (`; L4 registry-name occurrences are exactly 9.
+- **⚠ THE STORY WAS RIGHT AND ITS WORDING WAS TOO BROAD — implementing it literally reds a correct
+  line.** AGE-22 says *"a bounded command must never have its output captured"*. The real invariant
+  is narrower: **the hazard is the bounded command's stdout BEING the substitution's pipe.** A
+  wrapper that redirects its child internally severs the chain. So `plugins/rca/tests/test-repro.sh:35`
+  — `out=$(bash "$REPRO" run … --timeout 1 || true)`, a `$()` capture whose text contains `timeout`
+  — is **CORRECT**, and any substring guard reds it on day one. It ships in the BENIGN corpus so
+  the calibration is executable rather than a claim in a header.
+- **⚠ TWO FALSE GREENS WERE FOUND IN THE WINNING DESIGN ITSELF, after it won the vote.** Both
+  measured, both now pinned by their own arms:
+  - The command-position anchor as first written matched `$(timeout 5 x)` but **missed 5 of 6
+    probes** — the backtick-opened form and all four of `env`/`command`/`nohup`/`xargs`. So
+    `$(env timeout 5 story handoff)`, a **one-token** rewrite of AGE-16's own defect, passed green.
+    ⚠ But the exec prefix must **not** admit flags: `(-[^ ]+ )*` makes `command -v timeout` — a
+    probe, present 3× here — read as an invocation. Mutation M2 pins both directions at once.
+  - **`grep -c` counts LINES.** Appending `; timeout 9 evil` to an already-pinned line left the
+    census sitting at 3. Measured `grep -c`=1 vs `grep -o`=2. **If you pin a count anywhere, count
+    matches.**
+- **⚠ A DERIVED CLOSURE OVER FUNCTION BODIES IS DISQUALIFIED HERE — three seats found it
+  independently.** `run_explorer() (` at `greenlight-explore.sh:135` is **paren-bodied and is the
+  ONLY such definition in the repo**, while the house body-extractor idiom
+  (`sigpipe-shape-guard.sh:115`, `:272`) keys on `/^name() {/`. A closure built on it silently loses
+  one of the only two propagating wrappers, and **an empty derived set is indistinguishable from a
+  correct one**. Worse, `rca-bisect.sh`'s `run_bounded` is text inside a `<<'WRAP'` heredoc, not a
+  definition in that file at all. If you ever extract shell function bodies in this repo, handle
+  both body forms and heredocs, or don't.
+- **⚠ A REDIRECT HEURISTIC IS ALSO DISQUALIFIED — proposed, voted for, then withdrawn by its own
+  author.** Five shapes break it, all in the UNSAFE direction: `2>/dev/null` alone leaves stdout on
+  the pipe; `2>&1 >file` sends stderr to the ORIGINAL stdout while *reading* as redirected;
+  `| tee f` launders rather than severs; `exec >"$f"` earlier in a body is not on the invocation
+  line; and **`session-stop.sh:196`'s redirect sits on `:197` behind a backslash continuation**, so
+  a per-line test misreads the blessed live call site as unredirected.
+- **⚠ THE GUARD'S OWN CALIBRATION FOUND A FALSE POSITIVE ON THE DOCUMENTATION DESCRIBING AGE-16.**
+  `session-stop.bats:83` reads *"…escapes the process group `timeout` signals…"* — English inside a
+  **Python docstring inside a heredoc**, so it is NOT a `#` line and `strip_comments` cannot reach
+  it. Fixed **mechanically, not by exemption**: the token's trailing class excludes a backtick, so
+  an inline-code span (`` `timeout` ``) does not match while a real backtick substitution
+  (`` `timeout 5 x` ``) does. **The registry detector deliberately uses a WIDER tail that does
+  admit the backtick** — the prose hazard is specific to `timeout`, an ordinary English word.
+- **⚠ `set -o pipefail` + `grep`'s no-match exit 1 SILENTLY ATE EVERY DIAGNOSTIC.** The first draft's
+  L1/L3 arms assigned `hits=$(…grep…)`; on a clean tree grep exits 1, `pipefail` propagates it, and
+  the runner's `set -e` killed the arm **before it printed anything** — so a clean tree and a broken
+  regex both surfaced as a bare `FAIL` with no output. This is AGE-21's class one door down (there
+  it was SIGPIPE; here it is a legitimate no-match). `scan_lines`'s `|| true` is load-bearing and
+  mutation M9 pins it, as does `test_scan_lines_plumbing_can_report_a_hit` — **an arm whose PASS is
+  an empty result is vacuous unless something proves the plumbing can emit at all.**
+- **The scan set is INDEX-BASED (`git ls-files`), not the working tree.** A brand-new script is
+  invisible until `git add`. Correct for a pre-push gate; surprising while iterating. It is derived
+  from git rather than a filesystem glob deliberately — that reaches the **9 tracked extensionless
+  shell scripts** (`plugins/*/tests/fakes/{gh,story,tmux,tailscale}`) an extension glob misses,
+  correctly excludes the extensionless **Python** `deployit-posttest` (whose docstring says
+  "timeout"), and avoids pinning stale `.claude/worktrees/` copies.
+- **Mutation battery: 9 run, 9 caught**, every mutation asserted APPLIED (anchor-miss aborts) and
+  every restore asserted tracked-and-clean. M2 (exec prefix admitting flags) reds the **L2 census**,
+  because `command -v timeout` becomes a fourth site — the census catches detector widening, not
+  just new code. M8 (broken pathspec) reds 5 arms, proving the censuses are not vacuity-passing.
+- **The gate was green with NO bypass — twelve sessions running.** `MAKE_EXIT=0`, **628 bats
+  assertions + 307 shell checks, zero `not ok`, zero shell FAIL, zero make errors, 5 bats plans**.
+  The new guard reports **25 passed, 0 failed** inside the full run. Wall clock ~13 min.
+- **Filed: AGE-51** (low) — five shipped `$( … story … )` captures (`forge-state.sh:275`,
+  `forge-status.sh:70`, `forge-crash-recover.sh:37`, `forge-mapping-scaffold.sh:66`,
+  `storywork/tests/test-real-story-cas.sh:156`) are unbounded and storyhook auto-spawns a daemon
+  that outlives the client. **Measured NOT exposed**: on storyhook **2.0.0** the capture returns in
+  0.03s and every daemon holds fd 0 on `/dev/null` with **no fd 1 or fd 2 at all**. But that is an
+  upstream implementation detail, not a contract — SH-94 recorded the daemon holding a pipe at
+  **fd 7** — and nothing here pins it. All three council seats said independently: do **not** widen
+  the guard to red five working sites on an unmeasured theory; measure it and file it.
 
 ## Known state (updated 2026-08-04 by the AGE-19 session)
 
@@ -832,7 +914,7 @@ without recording why in this file.
 | ✅ | ~~**AGE-12**~~ | med | **DONE — shipped as v3.6.0.** The failed claim now confirms the vocabulary via `story state list` and refuses with `reason: "claim-state-missing"` + `story doctor --fix`. **The story's central claim was false** — the cause was already named; only the remedy and the discriminator were missing. See the AGE-12 block above. Filed **AGE-45** and upstream **storyhook SH-180**. |
 | ✅ | ~~**AGE-21**~~ | med | **DONE — no bump** (test-only). Its stated cause was false, and so were the two theories that replaced it. The real defect was `git log \| grep -q` under `pipefail` returning **141 on a successful match**; the fix is a shape fix, not a longer retry. See the AGE-21 block above. Filed **AGE-47** (closed here), **AGE-48**, **AGE-49**. |
 | ✅ | ~~**AGE-19**~~ | med | **DONE — no bump** (root `tests/`, `Makefile`, `CLAUDE.md` only). The story was right and its numbers wrong both ways: **87** failures, not ~60; **3** suites, not 7. `tests/storyhook-version-pin.sh` pins `STORYHOOK_MAJOR=2`. Its regex is **strictly anchored** — an unanchored scan reads a version out of a warning banner and passes a major-3 binary. Make prerequisite edges were measured **better** and still declined (they red the meta-gate). See the AGE-19 block above. Filed **AGE-50**. |
-| 1 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. **Now next**; `story next` agrees (lowest-ID ready `medium`). |
+| ✅ | ~~**AGE-22**~~ | med | **DONE — no bump** (root `tests/`, `Makefile`, `CLAUDE.md` only). `tests/bounded-capture-guard.sh` pins four censuses; it reds on any new `timeout` site or wrapper call **by design**. The story's wording was too broad — implementing it literally reds a *correct* line (`test-repro.sh:35`). A derived closure and a redirect heuristic were both proposed and both **withdrawn on measurement**. See the AGE-22 block above. Filed **AGE-51**. |
 | — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7; PR #137 carries its remaining scope too. Close both AGE-7 and AGE-8 once #137 merges. |
 | 12 | **AGE-9** | low | Council-decision story, independent. |
 | 13 | **AGE-13** | low | Council-decision story, independent. |
@@ -1446,6 +1528,12 @@ on why it was held out of AGE-31's PR.
 | Story | Pri | What |
 |---|---|---|
 | **AGE-50** | low | **A gate that reports PASS having verified nothing — AGE-18's class, one layer down.** `plugins/storywork/tests/test-real-story-cas.sh:22` exits **0** with `SKIP: real story CLI not on PATH`, and its runner maps exit 0 to **PASS** — so the one file whose entire purpose is proving `story.sh` works against the REAL storyhook binary silently proves nothing when the binary is missing. Its four real-CLI properties (JSON-shape parity, redundant-move suppression, the concurrent-claim race, the state-vocabulary premise) all go unasserted. **Largely shadowed by AGE-19**: the version pin now hard-fails the gate before any suite runs when `story` is absent, so it is unreachable via `make test`; it stays live on the direct-runner path (`bash plugins/storywork/tests/run-tests.sh`), which is how you iterate on that suite. **Needs a decision, not just a patch** — either make the skip a hard failure (consistent with AGE-18) or give the plain-bash runners a real SKIP state distinct from PASS, which would apply repo-wide. ⚠ Do **not** "unify" this with `forge-crash-recover.sh`'s `story_cli_missing` or `forge-contract-check.sh`'s `ok:false`: those are SHIPPED RUNTIME scripts on end users' machines where storyhook is genuinely optional — a different audience with a different correct answer. Both the devops and architect council seats flagged it independently and both said explicitly it must not ride along with AGE-19. |
+
+### Stories filed by the AGE-22 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-51** | low | **A safety property that holds today for a reason nothing pins.** Five shipped sites capture the `story` CLI through `$( … )` with no bound, and storyhook auto-spawns a daemon that outlives the client (`tests/store-isolation.sh:41`) — the exact precondition for AGE-16's hazard. **Measured NOT exposed on storyhook 2.0.0**: the capture returns in 0.03s and every `story … daemon --serve` holds fd 0 on `/dev/null` with **no fd 1 or fd 2**. But that is an upstream implementation detail, not a contract, and SH-94 records the daemon holding a pipe at **fd 7** — so the class is one storyhook release away from live, with no local signal. Fix direction is an assertion that a spawned daemon holds no fd 1/2 (turning a future silent hang into a named red) **or** an upstream request to make "the daemon closes stdio" contractual — **not** redirecting the five working sites to temp files. Deliberately kept out of AGE-22's guard on all three council seats' advice. |
 
 ### Stories filed by the AGE-24 session
 

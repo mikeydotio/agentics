@@ -38,6 +38,19 @@ Agentics is a Claude Code plugin marketplace (`mikeydotio/agentics`) providing p
 
 **storyhook** is a hard test-time requirement, and this repository's suites are written against **storyhook major 2** (>=2.0.0, <3.0.0). The pin is enforced by `tests/storyhook-version-pin.sh` (`make test-storyhook-version-pin`), which fails the gate naming the observed and expected versions — an incompatible or unverifiable CLI is never skipped into a green. Measured on the real v1.0.0 binary: 87 failing assertions across three suites, none naming a version. Raising the pin means porting the suites, then changing `STORYHOOK_MAJOR` in that file *and* this sentence together.
 
+**Bounded commands must never be captured through `$(…)`** — `timeout` signals only the process
+group it created, so a descendant that `setsid()`s out of that group survives, keeps the
+substitution's pipe open, and holds the caller for its whole lifetime while the bound *looks*
+intact (measured **30.08s against a 5s bound**; redirect-to-file is 0.03s; `--kill-after` does not
+help). Redirect to a temp file and read it back with `$(<file)` — see
+`plugins/forge/hooks/session-stop.sh:194-200`. Enforced by `tests/bounded-capture-guard.sh`
+(`make test-bounded-capture-guard`) in four positively-pinned layers, so **writing a new
+`timeout`/`gtimeout` call site, or a new call of a bounding wrapper, reds the gate by design** —
+that is the layer asking you to decide whether the new output can ever reach a caller's pipe, not
+a nuisance to silence. If it can, add the wrapper's name to `REGISTRY` in that file. Deliberately
+*not* covered: hand-rolled bounds (background pid + `kill -TERM`, used twice in rca), `perl -e
+alarm`, and bounds reached through a variable.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

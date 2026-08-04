@@ -3,6 +3,41 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.7.0] - 2026-08-04
+
+### Fixed
+- classify the story CLI by verb instead of allowlisting it whole (1145e94)
+- give the runner a per-run log and record exit statuses (7b5d786)
+- replace an assertion that fails 9-46% when it should pass (37f0483)
+
+### Changed
+- Merge pull request #155 from mikeydotio/chore/AGE-22-bounded-capture-guard (502fbd2)
+- Merge pull request #154 from mikeydotio/chore/AGE-19-storyhook-version-pin (51f9ad4)
+- Merge pull request #153 from mikeydotio/fix/AGE-21-rm-test-ambient-daemon (4dfd5bc)
+- Merge pull request #152 from mikeydotio/docs/AGE-12-fix-queue-note (63a9bfc)
+- Merge pull request #151 from mikeydotio/docs/AGE-12-note-age46 (ee8ae26)
+- Merge pull request #150 from mikeydotio/fix/AGE-12-claim-state-diagnostic (06b22c0)
+
+### Documentation
+- claim AGE-26 (greenlight story allowlist trust boundary) (d695415)
+- close out AGE-22 and hand off to AGE-26 (a8491e7)
+- close out AGE-19 and hand off to AGE-22 (0143d44)
+- close out AGE-21 and hand off to AGE-19 (664d884)
+- claim AGE-21 and mark the loop IN FLIGHT (5eea183)
+- correct a false 'story next agrees' claim in the AGE-12 handoff (df2f18e)
+- record AGE-46, the unpublished v3.3.0 release (84489f1)
+- close out AGE-12 and hand off to AGE-21 (da9f6ad)
+
+### Testing
+- record that the scan set is index-based, not working-tree (e84ace9)
+- guard the bounded-command-captured-via-substitution class (AGE-22) (55405ae)
+- record the rc-check test as subsumed, with the measurement (ce3cfee)
+- pin the storyhook major this repo's suites target (AGE-19) (41d036f)
+- guard the early-exit-consumer-over-a-still-writing-producer shape (8b69f6a)
+- sweep the two sibling early-exit pipelines over a stream walker (3051f10)
+
+_[manual]_
+
 ## [v3.6.0] - 2026-08-04
 
 ### Fixed

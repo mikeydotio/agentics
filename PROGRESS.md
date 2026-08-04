@@ -14,10 +14,10 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-27** |
-| **Next story** | AGE-24 (pending the AGE-27 scope council — see below) |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11 |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-32** |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27 |
 | **Last updated by** | AGE-27 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -25,6 +25,37 @@ via freshen, and stops.
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-27 session)
+
+- **⚠ ANOTHER SESSION IS LIVE AND IS WORKING THIS BACKLOG.** `AGE-4` and `AGE-5` flipped from
+  `todo` to `in-progress` *during* the AGE-27 session and now carry real commits
+  (`79943a9` at 04:28, `47ced2a` at 04:30) from the `age-118` worktree, whose branch has moved to
+  `feat/claude5-realign-rca-remaining`. **Do not claim AGE-4, AGE-5 or AGE-7.** This is not the
+  crashed-session case in Recovery — those stories are actively being worked. Re-check
+  `story list` at session start rather than trusting this file's queue table.
+- **`AGE-28` (high) appeared mid-session from another session** — deployit archives with a
+  hardcoded `-configuration Debug`, so every OTA build ever produced shipped unoptimized. It is
+  `todo` and unclaimed, and it is the highest-priority open story, so it **leads the queue** on the
+  table's own priority-first rule.
+- **The repo is still at v2.40.1 — AGE-27 needed NO bump.** It touched no shipped `plugins/**`.
+  If your story does touch `plugins/**`, the bump is still mandatory; see step 7.
+- **⚠ `tests/storyhook-path-guard.sh` gained a LAYER 3 (AGE-27).** It greps an **allowlist** of
+  repo-root agent-instruction files — `AGENTS.md`, `CLAUDE.md`, `README.md`, `.gitignore` — for
+  retired storyhook *surfaces*: the per-repo directory **and** `mcp-config`. Two things will bite
+  you if you don't know:
+  - **The allowlist is pinned** (`test_layer3_allowlist_is_pinned`) and its entries are asserted to
+    **exist** (`test_layer3_allowlist_entries_all_exist`). Adding a root instruction file, or
+    renaming one, fails the suite until you update the pin deliberately. That is the point — a
+    pathspec matching nothing passes vacuously.
+  - **`CHANGELOG.md`, `PROGRESS.md` and `.planning/` are deliberately NOT scanned**, and a test
+    pins that. They name these surfaces legitimately, to record or deny them. **This file is one of
+    them** — which is why the paragraph you are reading can spell `mcp-config` out. Do not "tidy"
+    that exclusion away.
+- **`AGENTS.md` is now GENERATED.** It is byte-identical to `story scaffold agents-md` output below
+  a `<!-- BEGIN GENERATED -->` marker, under a provenance header that survives regeneration. **Do
+  not hand-edit it** — regenerate. A hand-edited copy is exactly how it came to teach three false
+  things for a year.
 
 ## Known state (updated 2026-08-04 by the AGE-11 session)
 
@@ -196,10 +227,11 @@ without recording why in this file.
 | ✅ | ~~**AGE-18**~~ | high | **DONE** — the gate now fails instead of skipping. See "What AGE-18 turned out to be" below; **no version bump was needed** (it touched no shipped `plugins/**`). |
 | ✅ | ~~**AGE-17**~~ | high | **DONE** — the guard now validates two-token forms. See "What AGE-17 turned out to be" below. Shipped as **v2.40.0** (minor: additive JSON keys). Filed **AGE-24** and **AGE-25** on the way. |
 | ✅ | ~~**AGE-11**~~ | med | **DONE** — the dead `--extra-path` calls are gone and a two-layer guard stops them returning. Shipped as **v2.40.1** (patch). See "What AGE-11 turned out to be" below. Filed **AGE-26** and **AGE-27** on the way. |
-| 1 | **AGE-27** | **high** | **New, filed by the AGE-11 session. Leads the queue on the table's own priority-first rule** — it is the only `high` open. Repo-root `AGENTS.md` is auto-discovered by *every* agent, unprompted, and teaches three false things; two of them are commands that error exit 2. ⚠ **Collides with AGE-24 on `forge-contract-check.sh`** — see the note below the table before choosing an order. |
-| 2 | **AGE-24** | med | It is the *other half* of AGE-17: the guard still cannot catch the drift it exists to catch. **Read "What AGE-17 turned out to be" first** — and note its fix collides with a deliberate existing test. |
-| 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
-| 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
+| ✅ | ~~**AGE-27**~~ | high | **DONE** — `AGENTS.md` regenerated, `.gitignore:10` corrected, and a new Layer 3 guards the retired surfaces. **No bump.** See "What AGE-27 turned out to be" below; the council rejected the story's own stated fix. Filed **AGE-30**, **AGE-31**, **AGE-32** and split **AGE-29**. |
+| 1 | **AGE-28** | **high** | **New, filed mid-session by another session. Leads on priority-first** — the only `high` open. deployit hardcodes `-configuration Debug` in `_xcodebuild_archive()`, so every OTA build ever produced shipped unoptimized with `#if DEBUG` code compiled in. Touches `plugins/deployit/**` → **bump required**. |
+| 2 | **AGE-32** | med | **Unblocks the whole `forge-contract-check` chain.** AGE-24, AGE-30 and AGE-31 are all `blocked-by` it (directly or transitively), so storyhook will not dispatch any of them until it closes. It is a *design decision* story: pick how a doc can name a dead form in order to deny it without the guard flagging it. |
+| — | **AGE-24** | med | **BLOCKED by AGE-32** — storyhook excludes it from `ready`. Do not try to work it first; its fix reds the gate on `storyhook-contract.md:8`, which is a correct document. |
+| — | **AGE-4**, **AGE-5** | med | **⚠ ACTIVELY IN PROGRESS in another session** (commits `79943a9`, `47ced2a` from the `age-118` worktree). **Do not claim.** |
 | 5 | **AGE-6** | med | WS-C, rca realign. Independent. **Check `gh issue view 118` before starting** — see the scope collision above. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
@@ -217,6 +249,69 @@ without recording why in this file.
 
 **AGE-2, AGE-3, AGE-11, AGE-14, AGE-15, AGE-16, AGE-17 and AGE-18 are already `done`** — do not
 touch them.
+
+### What AGE-27 turned out to be — the story's *diagnosis* was right and its *prescription* was wrong
+
+All three false claims reproduced exactly as filed. But AGE-27's stated durable fix — "extend
+`forge-contract-check.sh`'s scan set to repo-root agent-instruction files, **which would have
+caught claim #2 automatically**" — was **rejected unanimously by `/council-vote` (3-0)**, and the
+premise underneath it was measured false. Two of three seats voted against their own proposals.
+
+**Measure the guard before you trust a story that says the guard would have caught it.** Copying
+the current `AGENTS.md` into a fixture's `references/` — so scan scope was *not* the variable —
+flagged exactly **1 of 5** bad invocations. The other four were missed for reasons the story did
+not know, and each is now its own story:
+
+| Missed | Why |
+|---|---|
+| `story <id> is done` (:21) | **twice** — an indented fence (**AGE-29**) *and* a `<placeholder>` in the verb slot (**AGE-31**) |
+| `story context` (:9) | indented fence (**AGE-29**) |
+| `story HP-<n>` ×3 (:34,:36,:37) | inline backticks at fence depth 0 (**AGE-24**) — three id-first claims the story's table never listed |
+
+**The load-bearing correction: the durable fix never had to live in `forge-contract-check.sh`.**
+Every option the chair framed inherited that assumption from the story. Three chair-verified facts
+killed it:
+
+- `forge-contract-check.sh "$(pwd)"` at repo root → `{ok:true, contract_ok:true, files_scanned:[]}`
+  — **PASS having read nothing.**
+- `DOCS_ROOT` defaults to the forge *plugin* root, so a `$DOCS_ROOT/AGENTS.md` line is **dead** in
+  the default path.
+- The script has **zero runtime call sites**. It is shipped and cache-keyed, but only its own
+  `.bats` ever executes it.
+
+And its reach is a fraction *by construction*: 28% of the regenerated file today, 34% with AGE-29,
+and a **64% ceiling** even with AGE-24 fully implemented — because `forge-contract-check.bats:175`
+deliberately requires placeholder signatures stay ignored and 19 of 35 inline spans carry them.
+**"Make the guard read what it claims to read" is not reachable in one PR.**
+
+So the guard went into `tests/storyhook-path-guard.sh` instead, as Layer 3: a raw `git grep`, which
+reads **100% of every file it scans by construction** — no fence depth, no backtick reachability,
+nothing to be wrong about. Repo-local, so no bump and no AGE-24 collision. Seat 1's framing of why
+that is a boundary and not a dodge: these are **two different defect classes** — myth eradication
+(fixed dead strings) vs grammar conformance (live-binary vocabulary) — and an **exclusion list
+fails closed** where the hand-maintained **scan list** the story proposed **fails open**.
+
+**Four transferable lessons:**
+
+1. **A partial guard on a file is worse than none if its green will be read as file coverage.**
+   Shipping the story's fix would have manufactured a fourth instance of the AGE-16/AGE-18/AGE-21
+   class inside the PR whose whole purpose was deleting false claims.
+2. **Deferral is only honest if it re-enters the queue mechanically.** AGE-30 carries `blocked-by`
+   edges to AGE-24/29/31, not a note in this file. Verified it does not appear in
+   `story list --ready`. *"Prose in PROGRESS.md is not a mechanism. A blocked-by edge is."*
+3. **Don't hand-trim a generated artifact.** The council's first instinct was to prune the 131
+   generated lines; its author withdrew that, because hand-editing is precisely how the file rotted.
+   It is now byte-identical to the generator below a marker, with the header above it.
+4. **Verify the severity premise, not just the defect.** AGE-27 was `high` because `AGENTS.md` is
+   "auto-discovered by every agent, unprompted". Unverified — and this session's own context loaded
+   three `CLAUDE.md` files and **no** `AGENTS.md`. The fix was still right; the priority probably
+   was not.
+
+**Correction to this file:** the "Either order works" line below is **falsified** — order is
+strictly constrained, because scan scope is a *multiplier* on extraction reach. The collision is
+moot anyway: AGE-27 did not touch `forge-contract-check.sh` at all.
+
+Full audit trail: `.council/age27-pr-scope/DECISION.md`.
 
 ### ⚠ AGE-27 × AGE-24 both edit `forge-contract-check.sh` — pick an order deliberately
 
@@ -529,3 +624,12 @@ the chain simply stops. To restart:
 
 `bash plugins/freshen/bin/freshen.sh status` shows whether a signal is still pending; `… cancel
 --all` clears a wedged one. Never run `freshen enable`/`disable` — those are the user's alone.
+
+### Stories filed by the AGE-27 session
+
+| Story | Pri | What | Blocked by |
+|---|---|---|---|
+| **AGE-29** | med | *Retitled + split.* Now the **indented-fence** half only: `forge-contract-check.sh:409`'s fence detector is `/^```/`, anchored at column 0, so a fence indented inside a numbered list is never scanned. **Measured free**: the relaxation produced 0 new violations on the real 27-file corpus with 23/23 bats green — but it is shipped content, so it still costs a bump and a full gate. | — |
+| **AGE-30** | med | `forge-contract-check.sh` cannot reach repo-root agent-instruction files. This is AGE-27's residue and covers **claim #2 only**. An **interface** decision (file args vs multiple roots vs a repo-local caller), not a scan-list append — `:284-288` says the scan set is deliberately shape-based, "not a hand-maintained filename list". | AGE-24, AGE-29, AGE-31 |
+| **AGE-31** | med | *Split from AGE-29.* The **placeholder-verb** half: `START_RE` demands `[A-Za-z]` after `story `, so `story <id> is done` never matches — the guard cannot see id-first grammar in the spelling docs actually use. | AGE-32 |
+| **AGE-32** | med | **The unblocker.** `forge-contract-check.sh` has no way to exempt a doc that names a dead form *in order to deny it*. `plugins/forge/references/storyhook-contract.md:8` quotes `story HP-N is done` inside the sentence saying it does not exist — any inline widening reds the gate on a **correct** document. Measured: a full inline widening produces **27 false positives** across 4 classes, 3 mechanical and 1 **undecidable**. Pick a suppression mechanism. Known freebie to hand the implementer: `:388` exempts placeholders in the *subcommand* slot but `:404` has no equivalent for the *relation* slot. | — |

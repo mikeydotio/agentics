@@ -246,9 +246,18 @@ test_verdict_rejects_the_recorded_schema_refusal() {
         || { fail "the recorded v1.0.0 schema refusal was not rejected"; return 1; }
 }
 
-# MUTATION-CRITICAL: the only test that reds if the rc check is dropped. Every
-# recorded error case above merely shifts from nonzero_exit to unparseable —
-# still failing — so none of them can catch that mutation.
+# SUBSUMED, AND KEPT DELIBERATELY — do not "simplify" this away.
+#
+# It was designed as the uniquely-load-bearing test for the rc check, on the
+# reasoning that the recorded error cases above merely shift from nonzero_exit
+# to unparseable (still failing) and so could not catch that mutation. MEASURED,
+# that is false HERE: those tests assert the exact verdict TOKEN, not just
+# "fails", so dropping the rc check reds three tests and this is not the only
+# one. It survives because it pins a DIFFERENT property than they do — that rc
+# outranks a perfectly parseable stdout — where they only cover it incidentally,
+# because their recorded text happens not to parse. Loosen those assertions to a
+# boolean, or record a future banner that does parse, and this becomes the only
+# guard again. Subsumed defence-in-depth, not a redundancy.
 test_verdict_rejects_a_nonzero_exit_whose_text_parses_as_a_version() {
     [ "$(verdict 5 'story 2.0.0')" = nonzero_exit ] \
         || { fail "a CLI that EXITED NON-ZERO was trusted because its stdout happened to parse — rc must be checked before the text"; return 1; }

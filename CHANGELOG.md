@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.4.0] - 2026-08-04
+
+### Fixed
+- model fenced blocks instead of toggling on marker-shaped lines (d76cf85)
+
+### Changed
+- Merge pull request #147 from mikeydotio/docs/AGE-31-progress (d22bd02)
+- Merge pull request #146 from mikeydotio/fix/AGE-31-placeholder-verb (d88a416)
+
+### Documentation
+- claim AGE-29 and mark the loop in flight (4c6305c)
+- close out AGE-31 and hand off to AGE-29 (89b50ad)
+
+_[manual]_
+
 ## [v3.3.0] - 2026-08-04
 
 ### Fixed

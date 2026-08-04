@@ -26,8 +26,8 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh acquire --session-id "$SESSION_ID" 
   Discriminator** below) — this recovery sequence does not apply; follow execute/SKILL.md's Fresh
   Start entry mode instead.
 - If present but malformed → report clear error, exit (do not guess)
-- `status` is only ever `"running"` or `"paused"` (see `references/execution-loop.md`'s Complete
-  block) — there is no `"complete"` status to check here. Whether execution should hand off to
+- `status` is only ever `"running"` or `"paused"` (see `references/execution-loop-complete.md`) —
+  there is no `"complete"` status to check here. Whether execution should hand off to
   review_validate is decided by storyhook + `forge-state.sh`, never by state.json alone (Hard Rule
   1: storyhook is authoritative for story-level state).
 
@@ -62,11 +62,10 @@ story next --json
 
 Check what's available:
 - Stories available → proceed to execution loop
-- No stories, all `done` → follow the Complete path in `references/execution-loop.md` (write
-  handoff, commit, queue freshen to `/forge continue`) so the pipeline hands off to review_validate
-  — even if state.json said `paused`. Do NOT write `.forge/COMPLETION.md` here (see the note
-  in `execution-loop.md`'s Complete section — that artifact is the pipeline's terminal marker,
-  owned by deploy).
+- No stories, all `done` → follow `references/execution-loop-complete.md` (write handoff,
+  commit, queue freshen to `/forge continue`) so the pipeline hands off to review_validate —
+  even if state.json said `paused`. Do NOT write `.forge/COMPLETION.md` here (see the note
+  there — that artifact is the pipeline's terminal marker, owned by deploy).
 - No stories, some (but not all) `blocked` and at least one `todo`/`in-progress`/`verifying` →
   proceed to execution loop as normal (there is still actionable work)
 - No stories, and every non-`done` story is `blocked` → pause: `forge-state.sh` reports this as

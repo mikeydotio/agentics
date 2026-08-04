@@ -16,16 +16,74 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-30** — unblocked by AGE-29; it was the last blocker. Confirm with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free) |
-| **Repo version** | **v3.4.0** — minor: AGE-29 added detection reach to a shipped guard, non-breaking. |
-| **Last updated by** | AGE-29 session, 2026-08-04 |
+| **Next story** | **AGE-12** — storywork's in-progress claim diagnostic. Nothing is blocked any more (`blocked: 0`), so the dependency-graph rule no longer overrides `story next`; it and this table now agree. Confirm with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30 |
+| **Repo version** | **v3.5.0** — minor, NOT the `patch` AGE-30 predicted. See the level note below. |
+| **Last updated by** | AGE-30 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-30 session)
+
+- **AGE-30 is DONE and shipped as v3.5.0. AGE-12 leads the queue.** Nothing in the backlog is
+  blocked any more (`story summary` → `blocked: 0`), so the dependency-graph rule that has
+  outranked `story next` for six sessions is now spent — the two agree. Confirm with
+  `story list --ready`, not this line.
+- **⚠ THE STORY'S OWN REACH TABLE UNDERSTATED ITS VALUE BY A THIRD, and its bump level was wrong.**
+  AGE-30 argued for landing last on a predicted ceiling of *"34/53 = 64%"*. Re-measured after
+  AGE-24/29/31 landed: `AGENTS.md` is **54/58 = 93%**. The story's figure was computed before its
+  own blockers shipped, and every blocked story in this queue carries the same hazard —
+  **a precondition measured against a corpus your blockers will change is not a precondition.**
+  - It also predicted `patch` ("adds no JSON key"). It added a **CLI flag and two error codes**
+    (`missing_file`, `usage`), so **AGE-17's precedent governs**: that story shipped a *minor* for
+    adding two keys to *this same script's* documented output. Shipped **minor**. Over-signalling
+    costs a digit; AGE-33's lesson is that under-signalling strands every install.
+- **⚠ `CLAUDE.md` contributes ZERO detection and is in the scan set anyway — do not "optimise" it
+  out.** Its single `story` occurrence is English prose (*"parent story could permanently
+  deadlock"*), correctly ignored. It is pinned for **blast radius, not yield**: it is read as
+  instruction by every agent unprompted, so it is exactly where a silent coverage drop hides.
+  `README.md` is excluded by the opposite reasoning — 0 occurrences **and** 4 fence markers, i.e.
+  pure false-positive surface. Both calls are recorded in the suite header; neither is arbitrary.
+- **⚠ A COUNT CANNOT SEE A SWAP — this is the sharpest reusable result of the session.** The new
+  suite asserts **exact membership** of `files_scanned`, not a count and not a floor. Mutation
+  proof: an argv that drifts from `--file AGENTS.md --file CLAUDE.md` to `--file AGENTS.md --file
+  README.md` keeps the count at 2, keeps the allowlist pin green, keeps *"root files are clean"*
+  green — and **only** the membership assertion reds. A second mutation (argv expands empty) scans
+  **29 forge plugin files** and still reports *"clean"*. If you assert on `files_scanned` anywhere,
+  name the set.
+- **⚠ `files_scanned` COULD NAME A FILE NOBODY READ, and that is now fixed.** `SCANNED_FILES_JSON`
+  was built from the *requested* list before the per-file `[[ -f ]]` check, so the field this repo
+  uses as its anti-vacuity oracle could itself lie. Latent under shape discovery (`find` yields only
+  existing files); `--file` would have made it reachable. Now accumulated **inside** the loop, past
+  the existence check. Note honestly: **its mutation reds nothing today**, because the new hard
+  error makes the branch unreachable — it is defence-in-depth, correct by construction rather than
+  by caller discipline.
+- **A mutation that reds nothing is not automatically a gap.** Removing the `.ok=="true"` assertion
+  and hiding the `story` CLI was predicted (by the seat that designed the oracle) to make every
+  planted-drift test pass vacuously. It **did not** — the oracle also asserts the reported *token*
+  and *file*, which are `null` without a CLI. Redundant coverage, not a gap; `.ok` was kept because
+  it turns *"expected AGE-1, got null"* into *"checker could not verify"*. **Verify the predicted
+  failure actually happens before treating a green mutation as a hole — or as a pass.**
+- **⚠ Run a mutated suite IN PLACE, never a copy in the scratchpad.** `REPO_ROOT` is derived from
+  `$(dirname "$0")/..`, so a copy executed from the scratchpad resolved `REPO_ROOT` to the
+  scratchpad's parent and reported 8 failures that meant nothing. Cost one wasted cycle. Restore
+  from a pristine copy and assert `diff -q` after every mutation (that part worked, four times).
+- **The gate was green with NO bypass — eight sessions running.** `MAKE_EXIT=0`, **628 bats
+  assertions + 247 shell checks, zero failures, 20 suites reached, zero skipped**.
+  `test_shipped_content_matches_tagged_release` PASS on the bump. AGE-21's flaky `test-cli-rm.sh`
+  did **not** fire. Wall clock ~20 min — the AGE-24 ordering (targeted suites → bump → **one** full
+  `make -k test`) held for the fourth time.
+- **AGE-23 is confirmed for the THIRD time and still costs a tool call.** The council plugin's
+  `references/*.md` resolve at the **plugin root**, not skill-relative. Commented on AGE-23.
+- **Filed: AGE-44** (low) — `AGENTS.md` is GENERATED, so no `expect-dead` marker below
+  `<!-- BEGIN GENERATED -->` survives regeneration; the file most exposed to a future false positive
+  is the one where the escape hatch cannot durably live. Mitigated, not solved: the hatch is the
+  **pin, not the marker**, and a fence-latch canary now reds on an unbalanced regenerated fence
+  *before* it becomes a mystery violation.
 
 ## Known state (updated 2026-08-04 by the AGE-29 session)
 
@@ -519,8 +577,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-24**~~ | med | **DONE — shipped as v3.2.0.** Inline backtick *spans* are now scanned outside fences; the `storyhook-contract.md:8` marker landed in the same commit. See "What AGE-24 turned out to be" below. Filed **AGE-37**. |
 | ✅ | ~~**AGE-31**~~ | med | **DONE — shipped as v3.3.0** (PR #146). Angle placeholders in the verb slot are violations; only a placeholder naming the slot itself is exempt, by equality-per-segment. See "What AGE-31 turned out to be" below. Filed **AGE-38** and **AGE-39**. |
 | ✅ | ~~**AGE-29**~~ | med | **DONE — shipped as v3.4.0.** The fence detector now models structure instead of toggling. Its own prescribed fix was **disqualified by measurement** — see the AGE-29 block above. **Closed AGE-41 for free.** Filed **AGE-40**, **AGE-42**, **AGE-43**. |
-| 1 | **AGE-30** | med | **Unblocked by AGE-29 — it leads.** `forge-contract-check.sh` cannot reach repo-root agent-instruction files. An **interface** decision (file args vs multiple roots vs a repo-local caller), not a scan-list append — `:284-288` says the scan set is deliberately shape-based, "not a hand-maintained filename list". ⚠ Read AGE-27's four transferable lessons before starting: its *stated* durable fix was rejected 3-0 and the guard's reach has a measured ceiling. |
-| 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
+| ✅ | ~~**AGE-30**~~ | med | **DONE — shipped as v3.5.0.** The shipped script gained a repeatable `--file`; a new repo-local `tests/storyhook-contract-root.sh` supplies the pinned list (`AGENTS.md` + `CLAUDE.md`), so the scan set stays shape-based in the plugin and the filename knowledge stays in the repo. Council ruled the interface by ranked-choice majority after a 1-1-1 round-1 split. See the AGE-30 block above — the story's reach table understated the value by a third and its bump level was wrong. Filed **AGE-44**. |
+| 1 | **AGE-12** | med | storywork claim diagnostic. Independent. **Now genuinely first** — nothing is blocked any more, so `story next` and this table agree for the first time in six sessions. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
 | 8 | **AGE-19** | med | No storyhook major-version pin. |
 | 9 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. |
@@ -1117,6 +1175,12 @@ on why it was held out of AGE-31's PR.
 | ~~**AGE-41**~~ | low | **DONE — closed by AGE-29, no separate PR.** A nested 4-backtick block containing an ODD number of 3-backtick lines desynchronised the toggle and false-positived on true prose, identically under the shipped detector and both regex candidates. The run-length rule makes it unrepresentable. Its repro ships as the "a shorter marker cannot close a longer fence" regression test. |
 | **AGE-42** | low | **Agent-run `grep` is ugrep 7.5.0, not the `grep` your tests run.** Its `[[:punct:]]` does not match `` ` ``, `>` or `+`; bats/hooks get `/usr/bin/grep`. A hand-run marker count therefore under-counts **in the green direction**, turning a completeness oracle into the vacuous green it exists to prevent. Found when a council seat tested its own proposed test. Shipped code is unaffected (all six POSIX-class users run under bash). Fix is documentation plus optionally a guard. |
 | **AGE-43** | **med** | **A false positive REACHABLE ON THE SHIPPED SCRIPT TODAY.** `MID_RE` harvests the remainder with `(.*)$`, which runs past an inline span's closing backtick, so inside a fence `` Then run `story project new` to start. `` reports subcommand `` new` `` — reddening the gate on the *correct* modern spelling. Verified on the unmodified script with a plain column-0 fence; zero corpus occurrences today. One-token fix (`([^`]*)`), but ⚠ **do not sell it as a safety precondition for a detector change** — it was measured NOT to fix the prose-verb false-positive class, because it bounds the *argument* capture, not the *verb* capture. Ships with an invariant test: no reported token may end in a backtick. |
+
+### Stories filed by the AGE-30 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-44** | low | **Logged tech debt, not a live failure.** `AGENTS.md` is now in the grammar guard's scan set and is GENERATED by `story scaffold agents-md` — only the header above `<!-- BEGIN GENERATED -->` survives regeneration. The `expect-dead` marker is line-bound, so it must sit inside the generated region: **the file most exposed to a future false positive is the one where the escape hatch cannot durably live.** Two triggers: a storyhook release whose generator emits a form its own `--help` rejects (no local remedy), or a regeneration landing an unbalanced fence (already caught early by the fence-latch canary). Workaround is the **pin, not the marker** — removing `AGENTS.md` from `ROOT_GRAMMAR_FILES` reds `test_root_grammar_allowlist_is_pinned` unless the same commit updates the pin and links an upstream story, making the coverage loss attributable rather than silent. Costs 93% of measured reach while in force. |
 
 ### Stories filed by the AGE-24 session
 

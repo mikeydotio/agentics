@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -46,6 +46,16 @@ test-plugin-content-drift:
 # --extra-path that isn't on disk (AGE-11). Plain bash so it always runs.
 test-storyhook-path-guard:
 	bash tests/with-isolated-store.sh bash tests/storyhook-path-guard.sh
+
+# The grammar half of the same job (AGE-30). Layer 3 above greps root
+# instruction files for retired storyhook SURFACES, which are fixed strings; the
+# dead id-first form `story <id> is done` is pattern-shaped, so only a grammar
+# guard can hold it. Points forge-contract-check.sh at AGENTS.md and CLAUDE.md
+# via its --file interface, which shape-based discovery cannot reach. Kept
+# separate from the path guard on purpose: this one needs the live `story` CLI
+# and has an ok:false cannot-verify path. Plain bash so it always runs.
+test-storyhook-contract-root:
+	bash tests/with-isolated-store.sh bash tests/storyhook-contract-root.sh
 
 # Claude 5 prompt-realignment regression guard (#118): model/effort tiering
 # stays alias-only and never pinned up, no self-verification instructions or

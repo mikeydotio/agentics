@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.5.0] - 2026-08-04
+
+### Added
+- reach explicitly named docs via --file (5b42ad5)
+
+### Changed
+- Merge pull request #148 from mikeydotio/fix/AGE-29-indented-fences (2b0bf3a)
+
+### Documentation
+- claim AGE-30 and mark the loop in flight (e9664e2)
+- close out AGE-29 and hand off to AGE-30 (585696c)
+
+### Testing
+- guard repo-root instruction files with the grammar check (5a64afe)
+
+_[manual]_
+
 ## [v3.4.0] - 2026-08-04
 
 ### Fixed

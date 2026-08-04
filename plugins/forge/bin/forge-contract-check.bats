@@ -1096,3 +1096,98 @@ EOF
   [ "$(jq_field '.contract_ok')" = "true" ]
   [ "$(jq_field '.files_scanned | length')" -eq 0 ]
 }
+
+# --- Explicit --file arguments (AGE-30) ---
+#
+# The shape-based scan set cannot reach a file that lives under neither
+# references/ nor skills/ — which is every repo-root agent-instruction file
+# (AGENTS.md, CLAUDE.md). --file is the interface that closes that, decided by
+# /council-vote; see .council/age30-repo-root-scan-interface/DECISION.md.
+#
+# Two properties below are load-bearing rather than incidental:
+#   * The reported path is the string the caller passed, never re-rooted. A
+#     violation reported at `references/AGENTS.md` for a file living at the repo
+#     root sends its author to a directory that does not exist.
+#   * A named file that does not exist is a HARD ERROR, never a silent skip, and
+#     must not appear in files_scanned. That array is this guard's anti-vacuity
+#     oracle, and an oracle that names a file nobody read is the exact
+#     vacuous-green shape the guard exists to prevent.
+
+@test "contract-check: --file scans a file under neither references/ nor skills/" {
+  printf 'Close it with `story AGE-1 is done`.\n' > "$FIXTURE_DIR/AGENTS.md"
+  run bash "$SCRIPT" --file "$FIXTURE_DIR/AGENTS.md"
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 1 ]
+  [ "$(jq_field '.verb_violations[0].verb')" = "AGE-1" ]
+}
+
+@test "contract-check: --file reports the path exactly as passed, never re-rooted" {
+  printf 'Close it with `story AGE-1 is done`.\n' > "$FIXTURE_DIR/AGENTS.md"
+  cd "$FIXTURE_DIR"
+  run bash "$SCRIPT" --file AGENTS.md
+  [ "$(jq_field '.verb_violations[0].file')" = "AGENTS.md" ]
+  [ "$(jq_field '.files_scanned[0]')" = "AGENTS.md" ]
+}
+
+@test "contract-check: --file is repeatable and scans exactly the named set" {
+  printf 'ok\n' > "$FIXTURE_DIR/AGENTS.md"
+  printf 'ok\n' > "$FIXTURE_DIR/CLAUDE.md"
+  cd "$FIXTURE_DIR"
+  run bash "$SCRIPT" --file AGENTS.md --file CLAUDE.md
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '[.files_scanned[]] | sort | join(" ")')" = "AGENTS.md CLAUDE.md" ]
+}
+
+# The degradation that makes an exact-membership assertion necessary downstream:
+# with no positional root, DOCS_ROOT defaults to the forge PLUGIN root. If
+# --file were merely additive to a defaulted root, naming two files would scan
+# 31, and a caller whose --file argv expanded empty would scan 29 and report
+# green over entirely the wrong input set.
+@test "contract-check: --file suppresses the default plugin-root discovery" {
+  printf 'ok\n' > "$FIXTURE_DIR/AGENTS.md"
+  run bash "$SCRIPT" --file "$FIXTURE_DIR/AGENTS.md"
+  [ "$(jq_field '.files_scanned | length')" -eq 1 ]
+}
+
+@test "contract-check: an explicit root still unions with --file" {
+  printf 'ok\n' > "$FIXTURE_DIR/references/a.md"
+  printf 'ok\n' > "$FIXTURE_DIR/AGENTS.md"
+  run bash "$SCRIPT" "$FIXTURE_DIR" --file "$FIXTURE_DIR/AGENTS.md"
+  [ "$(jq_field '.files_scanned | length')" -eq 2 ]
+}
+
+@test "contract-check: a --file that does not exist is a hard error, not a silent skip" {
+  run bash "$SCRIPT" --file "$FIXTURE_DIR/nope.md"
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "false" ]
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.error')" = "missing_file" ]
+}
+
+# The graft from the runner-up proposal, and the reason it is soundness-critical:
+# SCANNED_FILES_JSON was built from the REQUESTED list before the per-file
+# existence check, so files_scanned could name a file that was never opened.
+# Every downstream membership assertion is an assertion over this field.
+@test "contract-check: files_scanned never names a file that was not read" {
+  printf 'ok\n' > "$FIXTURE_DIR/AGENTS.md"
+  run bash "$SCRIPT" --file "$FIXTURE_DIR/AGENTS.md" --file "$FIXTURE_DIR/nope.md"
+  [ "$(jq_field '.ok')" = "false" ]
+  [ "$(jq_field '.error')" = "missing_file" ]
+  echo "$output" | jq -e '[.files_scanned[] | select(test("nope"))] | length == 0' >/dev/null
+}
+
+@test "contract-check: --file without a value is a usage error" {
+  run bash "$SCRIPT" --file
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "false" ]
+  [ "$(jq_field '.error')" = "usage" ]
+}
+
+@test "contract-check: an unknown flag is a usage error, not a docs-root" {
+  run bash "$SCRIPT" --nope
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "false" ]
+  [ "$(jq_field '.error')" = "usage" ]
+}

@@ -14,8 +14,8 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-21** (claimed 2026-08-04) |
 | **Next story** | **AGE-21** — deployit's `test-cli-rm.sh` needs a live local daemon. **⚠ `story next` says AGE-19; take AGE-21 anyway** — see the tie-break note directly below. Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12 |
 | **Repo version** | **v3.6.0** — minor. See the level note below; AGE-12's own text implied a patch. |

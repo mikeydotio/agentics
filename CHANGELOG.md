@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.0.0] - 2026-08-04
+
+### Fixed
+- stop forcing -configuration Debug; refuse unacknowledged unoptimized archives (6ed4e24)
+
+### Changed
+- extract _archive_argv as a pure function (b6ddf71)
+- Merge pull request #140 from mikeydotio/docs/progress-age27-handoff (c7873e0)
+- Merge pull request #139 from mikeydotio/chore/bump-v2.41.0 (b184796)
+
+### Documentation
+- document the archive build configuration and the refusal (1d4bf13)
+- claim AGE-28 and record the council ruling (3a29506)
+- record the v2.41.0 release and hand off to AGE-28 (dbe0dac)
+
+_[manual]_
+
 ## [v2.41.0] - 2026-08-03
 
 ### Fixed

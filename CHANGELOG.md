@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.6.0] - 2026-08-04
+
+### Fixed
+- name the remedy when the claim state is missing (1d64582)
+
+### Changed
+- Merge pull request #149 from mikeydotio/fix/AGE-30-repo-root-scan (77f3679)
+
+### Documentation
+- claim AGE-12 and mark the loop in flight (6910852)
+- close out AGE-30 and hand off to AGE-12 (c438521)
+
+_[manual]_
+
 ## [v3.5.0] - 2026-08-04
 
 ### Added

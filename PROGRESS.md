@@ -14,10 +14,10 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-18** |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
 | **Next story** | **AGE-17** |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16 |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18 |
 | **Last updated by** | AGE-18 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -26,10 +26,24 @@ via freshen, and stops.
 
 ---
 
-## Known state (updated 2026-08-04 by the AGE-16 session)
+## Known state (updated 2026-08-04 by the AGE-18 session)
 
 Read this before you conclude something you did broke the build.
 
+- **⚠ The gate now MEANS something — and it is stricter than it was.** Before AGE-18 the five
+  bats targets exited 0 when `bats` was missing, so `make test` could report success having
+  verified nothing. That swallow is gone: a missing `bats` now hard-fails the gate. There is
+  **deliberately no `ALLOW_MISSING_TOOLS` override** — the only sanctioned bypass remains
+  `SKIP_PREPUSH_TESTS=1` / `--no-verify`, which announces itself. If you land on a machine
+  without bats, `brew install bats-core`; do not reintroduce a skip.
+- **`tests/gate-integrity.sh` (target `test-gate-integrity`) now pins this and will fail you**
+  if you: reintroduce a `command -v <tool>` branch or an `echo … skipping` into a Makefile
+  *recipe*; make a bats target fail unconditionally (there is an effect-oracle assertion that
+  the suite is actually reached, via a recording stub `bats`); or add a `plugins/*/tests/test-*.sh`
+  that skips because an in-repo path is missing. `command -v` **platform** skips (the ~10
+  non-macOS hdiutil/ditto/PlistBuddy ones) are still legal — that predicate means "not
+  applicable", not "cannot verify". Its detector was validated against all four shapes; the
+  `exit 0` must fall within 2 lines of the predicate (documented limit).
 - **`make test` is green for everything this loop controls.** The one failure you may still hit is
   a pre-existing defect with its own story (**AGE-21**), not something you broke. The gate is
   live: **do not bypass it except under the evidence rule below.**
@@ -74,10 +88,10 @@ whether #118 has merged**; if it has, re-scope or close AGE-6/AGE-7 against it r
 redoing the work. The user was asked to rule on ownership and had not replied when this session
 ended.
 
-**Still unresolved as of the AGE-16 session (2026-08-04):** issue #118 is still `OPEN` and its
+**Still unresolved as of the AGE-18 session (2026-08-04):** issue #118 is still `OPEN` and its
 worktree is still live, as is `age-117` (issue #117, also open). Nothing has merged, so the
-collision is intact — AGE-6 is now queue row 6, which buys several stories of runway before it
-matters. Re-check `gh issue view 118` when you reach it rather than trusting this line.
+collision is intact — AGE-6 is now queue row 5, which still buys several stories of runway before
+it matters. Re-check `gh issue view 118` when you reach it rather than trusting this line.
 
 ### What AGE-14 turned out to be
 
@@ -125,47 +139,91 @@ without recording why in this file.
 > **Reordered 2026-08-04 by the AGE-16 session, reason recorded as the rule requires.** AGE-11
 > (`medium`) had been sitting ahead of AGE-18 and AGE-17 (both `high`), which contradicts this
 > table's own priority-first rule; `story next` independently picks from the `high` pair. AGE-18
-> leads because it is the most foundational: while `make test` can exit 0 with `bats` absent, no
-> green result from this loop means what it claims — including the one AGE-16 just relied on.
+> led because it was the most foundational: while `make test` could exit 0 with `bats` absent, no
+> green result from this loop meant what it claimed — including the one AGE-16 relied on.
+>
+> **AGE-18 landed 2026-08-04**, so that premise is now discharged: a green `make test` from here
+> on is a real claim that every suite ran. AGE-17 inherits the lead as the remaining `high`. Rows
+> renumbered; no other reordering.
 
 | # | Story | Pri | Why here |
 |---|---|---|---|
 | ✅ | ~~**AGE-14** + **AGE-15**~~ | high | **DONE** — merged together as one PR. See "What AGE-14 turned out to be" above. |
 | ✅ | ~~**AGE-16**~~ | high | **DONE** — the `blocks-ci` flake is gone. See "What AGE-16 turned out to be" below; its filed diagnosis was wrong in an instructive way. |
-| 1 | **AGE-18** | high | `make test` exits 0 when `bats` is absent — the gate is vacuously green on any machine without it. **Do this first:** every "the suite is green" claim this loop makes rests on it, including AGE-16's. |
-| 2 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — first token only, so the F103 drift guard is blind to every subcommand rename. Same class as AGE-18 (a guard that does not guard); pairs naturally with it. |
-| 3 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
-| 4 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
-| 5 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
-| 6 | **AGE-6** | med | WS-C, rca realign. Independent. |
-| 7 | **AGE-12** | med | storywork claim diagnostic. Independent. |
-| 8 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
-| 9 | **AGE-19** | med | No storyhook major-version pin. |
-| 10 | **AGE-22** | med | **New, filed by this session.** Preventative guard for AGE-16's defect class — see below. |
-| 11 | **AGE-10** | low | **Pulled ahead of its priority** — AGE-7 is `blocked-by` it, and storyhook will refuse to dispatch AGE-7 until it closes. |
-| 12 | **AGE-7** | med | WS-D + the prompt-hygiene lint. Needs AGE-10 done. **On merge, also close AGE-8** (below). |
+| ✅ | ~~**AGE-18**~~ | high | **DONE** — the gate now fails instead of skipping. See "What AGE-18 turned out to be" below; **no version bump was needed** (it touched no shipped `plugins/**`). |
+| 1 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — first token only, so the F103 drift guard is blind to every subcommand rename. Same class as AGE-18 (a guard that does not guard). **Read AGE-18's contract-check correction first** — that file's always-exit-0 JSON contract is deliberate and must be preserved; AGE-17 is about the `awk '{print $2}'` verb derivation *only*. |
+| 2 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
+| 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
+| 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
+| 5 | **AGE-6** | med | WS-C, rca realign. Independent. **Check `gh issue view 118` before starting** — see the scope collision above. |
+| 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
+| 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
+| 8 | **AGE-19** | med | No storyhook major-version pin. |
+| 9 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. |
+| 10 | **AGE-10** | low | **Pulled ahead of its priority** — AGE-7 is `blocked-by` it, and storyhook will refuse to dispatch AGE-7 until it closes. |
+| 11 | **AGE-7** | med | WS-D + the prompt-hygiene lint. Needs AGE-10 done. **On merge, also close AGE-8** (below). |
 | — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7 and storyhook already excludes it from `ready`. When AGE-7 merges, close it: `story move AGE-8 done` with a comment pointing at AGE-7's PR. |
-| 13 | **AGE-9** | low | Council-decision story, independent. |
-| 14 | **AGE-13** | low | Council-decision story, independent. |
+| 12 | **AGE-9** | low | Council-decision story, independent. |
+| 13 | **AGE-13** | low | Council-decision story, independent. |
+| 14 | **AGE-23** | low | **New, filed by this session.** Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. |
 | 15 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
 
-**AGE-2, AGE-3, AGE-14, AGE-15 and AGE-16 are already `done`** — do not touch them.
+**AGE-2, AGE-3, AGE-14, AGE-15, AGE-16 and AGE-18 are already `done`** — do not touch them.
 
 ### Unscheduled stories — slot these in
 
 Filed rather than fixed, per the "defects become stories" rule. They are now placed in the queue
-above; this table keeps the detail. **AGE-18** and **AGE-17** are the recommended next pair after
-AGE-11 — they are the reason a 60-test breakage went unseen, and every "the suite is green" claim
-this loop makes is only as trustworthy as they are.
+above; this table keeps the detail. **AGE-17 is next** — it is the other half of the reason a
+60-test breakage went unseen.
 
 | Story | Pri | What |
 |---|---|---|
-| **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — **first token only**, so `story project init` validated as verb `project` and passed. The F103 drift guard is structurally blind to every subcommand rename. |
-| **AGE-18** | high | `make test` **exits 0 when `bats` is absent** (`Makefile` `else echo "skipping"`, ~6 targets), so the pre-push gate is vacuously green on any machine without it. Same class: contract-check `exit 0`s on `story_cli_missing`. |
+| **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — **first token only**, so `story project init` validated as verb `project` and passed. The F103 drift guard is structurally blind to every subcommand rename. **Scope note from AGE-18:** that file's always-exit-0-with-JSON contract is deliberate and correct — do **not** "fix" the `exit 0` skip paths. AGE-17 is the verb derivation only. |
 | **AGE-22** | med | **Filed by the AGE-16 session.** Preventative guard for AGE-16's defect class: nothing stops the next `$(timeout … cmd)` from being written. The repo is currently clean — `rca-repro.sh:25` and `greenlight-explore.sh:146` both already redirect to a file. Note a council seat reported greenlight as a sibling site; **the sweep disproved that**. Watch for AGE-17's trap when writing the guard: match the whole command, not the first token. |
+| **AGE-23** | low | **Filed by the AGE-18 session.** Every plugin ships `references/*.md` at the **plugin root**, but each `SKILL.md` cites them as a bare relative `references/<topic>.md` — and a skill's runtime base directory is `skills/<name>/`, so the literal path does not resolve. Nothing is broken (agents recover by searching); it costs tool calls and context on every reference load, which for forge and rca is most invocations. Measured 3 wasted calls invoking `/council-vote` this session. Fix is a one-line convention decision applied repo-wide — see the story for three options. Relates to AGE-8. |
 | **AGE-19** | med | No storyhook **major-version pin** anywhere. An upstream major surfaces as ~60 unattributable failures instead of one assertion. |
 | **AGE-21** | med | `plugins/deployit/tests/test-cli-rm.sh` depends on a **live local deployit backend daemon** (`:8729`); when it is unavailable the test fails and blocks unrelated pushes. Passed 3/3 in earlier runs, failed once under contention from the `age-117` session, passed again immediately after. Same class as AGE-18 — a gate that does not mean what it says. |
 | **AGE-20** | low | Ten duplicated storyhook fixture-creation sites across two plugins — why one upstream rename cost ten edits. **Deliberately deferred**: the 10th site is in a *different plugin*, so a shared helper is a new cross-plugin module boundary, not a mechanical extraction. Land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
+
+### What AGE-18 turned out to be — and the two claims in it that were wrong
+
+The core defect was real and reproduced on the first try (`PATH=/usr/bin:/bin make test-root-bats`
+→ exit 0). Two of the story's supporting claims were not:
+
+1. **"The runners need fixing too" — no.** All five runners (`tests/run-tests.sh` + four
+   `plugins/*/tests/run-tests.sh`) *already* hard-fail with an actionable message. The Makefile
+   wrapper never called them. So the fix was **deletion**, not a new guard: the conditional was a
+   second, wrong copy of a policy that already had an owner one layer down. Deleting it also
+   covers the direct `bash plugins/forge/tests/run-tests.sh` entry path, which a Make-level
+   `require-bats` prerequisite could never reach — that argument is what made the council
+   unanimous.
+2. **"`forge-contract-check.sh`'s `exit 0` paths are the same class" — falsified.** That script's
+   always-exit-0-with-JSON contract is documented and deliberate, and its only caller already
+   asserts `.ok == "true"`, so a missing `story` CLI already turns it red. Changing it would break
+   a documented contract and a deliberate test to fix nothing. Full disproof is a comment on
+   AGE-18. **This matters for AGE-17, which touches the same file.**
+
+**Two traps worth carrying forward:**
+
+- **Never guard the gate at Make *parse* time** (`$(error)`/`$(shell)`). It makes `make -n test`
+  non-zero, and the pre-push hook's detection (line 49) then falls through to *"no test command
+  detected — skipping the gate"* — upgrading a partial vacuous green into a **total** one. Verify
+  `make -n test` still exits 0 after any Makefile change.
+- **A new helper script invoked from a recipe trips `tests/store-isolation.sh:24-27`**, whose grep
+  demands the literal `with-isolated-store.sh bash` on every suite recipe line. Route anything new
+  through the wrapper rather than editing that guard's exemption list.
+
+Also fixed the one genuine sibling (`plugins/deployit/tests/test-cli-bump.sh` skipped when
+`semver-cli` was absent — an in-repo path, so absence means a broken checkout; its runner counted
+that exit 0 as PASS). And note the shape of the fix: when you write a test that asserts *failure*,
+pair it with an **effect oracle** proving the thing still runs on the happy path — otherwise
+`target: false` satisfies your test perfectly.
+
+**Harness gotcha that cost this session two debug cycles:** the plain-bash test harness runs each
+`test_*` fn under `set -e`. Both `cmd; rc=$?` (unchecked failing command aborts before the status
+is read) and `[ cond ] && arr+=(x)` (a false trailing `&&` list is itself non-zero) silently abort
+the function, reporting your assertion red against a *working* fix. Use `cmd || rc=$?` and a full
+`if`.
 
 ---
 

@@ -312,6 +312,53 @@ is_placeholder() {
   esac
 }
 
+# A placeholder in the VERB slot is a violation, not a wildcard — unless it
+# names the verb slot itself (AGE-31).
+#
+# This inverts the rule the subcommand (:600) and relation (:613) slots use,
+# and the asymmetry is the whole point. Position 2's legal set is sometimes
+# genuinely unknowable — an OPEN verb takes free-form arguments there — so
+# `story project <subcommand>` states something true. Position 1's legal set is
+# ALWAYS the derived verb list and never free-form, so `story <id> is done`
+# asserts a grammar that does not exist: the id-first drift F103 exists to kill,
+# in the spelling documentation actually uses.
+#
+# The exception is a doc naming the slot itself (`story <verb> --json` means
+# "any verb"), which is a true sentence about the live grammar. Note this is an
+# OWNED constant, not a derived one, and that distinction is what keeps it clear
+# of the no-hardcoded-vocabulary rule above: storyhook's help never writes a
+# placeholder in position 1 at all, so there is no live source to ask — the
+# binary is not a lapsed authority here, it was never an authority. The script
+# already owns a language of its own on the same footing (the expect-dead marker
+# syntax). Because it is owned, it is pinned by a test fixing BOTH the accepted
+# and the rejected sets, so it cannot widen silently.
+#
+# Matching is EQUALITY PER SEGMENT, never substring. A substring rule silently
+# exempts `<transaction>` (via "action"), `<verbatim>` and `<verbose>` (via
+# "verb") and `<cmdlet>` (via "cmd") — false negatives in a drift guard, the one
+# direction it cannot afford. Segments split on space, tab, `-`, `_` and `|` so
+# compound spellings (`<the-verb>`, `<sub_command>`, `<verb | subcommand>`) are
+# admitted while `<the story id>` stays flagged.
+#
+# Known and accepted: a compound pairing a slot word with an entity word
+# (`<command-id>`, `<verb-id>`) is exempt. Closing it needs a last-segment rule,
+# which would reject `<cmd-name>` — a spelling this is measured to want. The
+# realistic id-first spellings (`<id>`, `<story-id>`, `<n>`) are all flagged.
+verb_slot_is_wildcard() {
+  local tok="${1:-}" seg segs=()
+  [[ "$tok" == '<'*'>' ]] || return 1
+  tok="${tok#<}"
+  tok="${tok%>}"
+  tok="$(printf '%s' "$tok" | tr '[:upper:]' '[:lower:]')"
+  IFS=$' \t-_|' read -ra segs <<< "$tok"
+  for seg in "${segs[@]}"; do
+    case "$seg" in
+      verb|command|cmd|subcommand|action) return 0 ;;
+    esac
+  done
+  return 1
+}
+
 verb_is_enforced() {
   echo "$REAL_SUBCOMMANDS_JSON" | jq -e --arg v "$1" 'has($v)' >/dev/null
 }
@@ -378,8 +425,21 @@ fi
 # line via `&&`/`;` — if that ever changes, this needs a loop over repeated
 # matches). Inline prose is unaffected: each span is its own unit, so two
 # spans on one line are both checked.
-START_RE='^[[:space:]]*\$?[[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
-MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
+# The verb slot admits an angle placeholder as well as a literal word
+# (AGE-31), because `story <id> is done` is the dead id-first grammar in the
+# spelling docs actually use — invisible while the group demanded [A-Za-z].
+# What the token MEANS is decided by verb_slot_is_wildcard above; admitting it
+# here only makes it reachable. Flags (`story --help`) and shell variables
+# (`story $verb list`) are deliberately still unmatched: the first is a
+# legitimate invocation this very script executes, the second is unknowable.
+#
+# The inner class is `[^>]*` rather than something tighter on measurement:
+# `[^>]*` cannot cross a `>`, so it is already bounded by the first one, and
+# an unclosed `story <unclosed is done` matches under neither. Tightening it to
+# forbid whitespace only loses `story <the story id> is done` — a true positive
+# in a multi-word spelling docs plausibly use.
+START_RE='^[[:space:]]*\$?[[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*|<[^>]*>)(.*)$'
+MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*|<[^>]*>)(.*)$'
 
 # ── Negative-example suppression (AGE-32) ──
 #
@@ -458,12 +518,27 @@ collect_markers() {
 }
 
 # Does a well-formed marker on $1 name exactly the token $2?
+#
+# A placeholder token is NOT refused here (AGE-31). AGE-32 refused one on
+# the grounds that a marker naming `<token>` is the convention's own
+# signature rather than a suppression — true, but it was written when no
+# placeholder could ever BE reported: the subcommand and relation checks
+# skip placeholders outright, so `$2` was always a concrete token. The
+# verb-slot widening below makes `<id>` reportable, and refusing to
+# suppress it would leave the one form this guard newly catches with no
+# way for a document to deny it — a guard satisfiable only by deleting a
+# true sentence, which AGE-11 ruled out.
+#
+# The exact-match on line 2 below is what keeps the signature case safe:
+# a marker naming `<token>` suppresses only a violation whose reported
+# token is literally `<token>`, so documenting the convention still
+# cannot mute a real finding. Staleness keeps its broader placeholder
+# exemption — see classify_stale_markers.
 marker_suppresses() {
   local ln tok reason
   [[ -n "$FILE_MARKERS" ]] || return 1
   while IFS=$'\t' read -r ln tok reason; do
     [[ "$ln" == "$1" ]] || continue
-    is_placeholder "$tok" && return 1
     [[ -n "$reason" ]] || return 1
     [[ "$tok" == "$2" ]] || return 1
     return 0
@@ -504,6 +579,25 @@ try_suppress() {
 
 # Every marker that suppressed nothing is a failure — classified, because the
 # three cases call for three different corrections.
+#
+# ACCEPTED GAP, and the reason it is accepted (AGE-31). A marker whose token is
+# a placeholder is skipped below, so it can suppress (marker_suppresses no
+# longer refuses it) but can never be reported stale. That asymmetry is
+# deliberate and it is a debt, not a design: narrowing this exemption to the
+# `<token>` sentinel would red the gate on a CORRECT document — one that quotes
+# the marker convention by example, e.g. `<!-- … expect-dead <id> … -->` inside
+# a backtick span. Measured: with the exemption narrowed that fixture reports
+# `contract_ok:false`, and it does so even with AGE-37's origin fix applied,
+# which only relabels the kind (`form_is_valid` -> `not_scanned`) and leaves the
+# false verdict standing. The blocker is that collect_markers cannot tell an
+# APPLIED marker from a QUOTED one — AGE-37's territory.
+#
+# What holds the invariant meanwhile: forge-contract-check.bats asserts
+# markers == suppressions + stale_suppressions over the real corpus. That keeps
+# "a marker never silently does nothing" enforced from OUTSIDE the script, where
+# it cannot manufacture a false positive. Verified to catch the exact case this
+# gap leaves open (markers=1, accounted=0). Narrow this only once AGE-37 can
+# distinguish a quoted marker from an applied one.
 classify_stale_markers() {
   local rel_f="$1" ln tok reason
   [[ -n "$FILE_MARKERS" ]] || return 0
@@ -582,7 +676,7 @@ while IFS= read -r f; do
       continue
     fi
 
-    if ! is_valid_verb "$verb"; then
+    if ! verb_slot_is_wildcard "$verb" && ! is_valid_verb "$verb"; then
       try_suppress "$rel_f" "$lineno" "$verb" "$trimmed" && continue
       VIOLATED_LINES="${VIOLATED_LINES}${VIOLATED_LINES:+$'\n'}${lineno}"
       add_verb_violation "$rel_f" "$lineno" "$verb" "$trimmed"

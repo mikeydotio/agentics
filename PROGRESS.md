@@ -14,12 +14,12 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-31** — unblocked by AGE-32, and now the last blocker but one on AGE-30. See below. |
+| **Loop status** | **IN FLIGHT** |
+| **Story in flight** | **AGE-31** — placeholder verbs; `START_RE` demands `[A-Za-z]` after `story `. |
+| **Next story** | AGE-29 or AGE-12 — re-derive from `story list --ready` when AGE-31 merges. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24 |
 | **Repo version** | **v3.2.0** — minor: AGE-24 expanded a shipped guard's behaviour, non-breaking. |
-| **Last updated by** | AGE-24 session, 2026-08-04 |
+| **Last updated by** | AGE-31 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session

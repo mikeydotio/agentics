@@ -14,10 +14,10 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-17** |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
 | **Next story** | **AGE-11** |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18 |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17 |
 | **Last updated by** | AGE-17 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -26,7 +26,22 @@ via freshen, and stops.
 
 ---
 
-## Known state (updated 2026-08-04 by the AGE-18 session)
+## Known state (updated 2026-08-04 by the AGE-17 session)
+
+- **The repo is at v2.40.0** (AGE-17 shipped a `minor` — it added two keys to
+  `forge-contract-check.sh`'s documented JSON output, which CLAUDE.md classes as a non-breaking
+  public-API addition, not a patch).
+- **`make test` was fully green on a clean tree before AGE-17's change** (`MAKE_EXIT=0`, zero
+  failures across every suite) and fully green again after the bump. Two sessions running now.
+  **No `SKIP_PREPUSH_TESTS=1` was needed.** Treat a bypass as a red flag.
+- **⚠ `plugin-content-drift` is HEAD-sensitive, so a `make test` you started before committing
+  reports a STALE result.** The check is `git diff v<VERSION> HEAD`; if your work is still
+  uncommitted, it compares the tag against the tagged commit and passes vacuously. This session
+  hit it: a 15-minute run reported drift green, and re-running the one suite after committing
+  turned it red as it should be. **Commit first, then run the gate** — or at minimum re-run
+  `bash tests/with-isolated-store.sh bash tests/plugin-content-drift.sh` after your last commit.
+
+## Known state (from the AGE-18 session)
 
 Read this before you conclude something you did broke the build.
 
@@ -151,8 +166,9 @@ without recording why in this file.
 | ✅ | ~~**AGE-14** + **AGE-15**~~ | high | **DONE** — merged together as one PR. See "What AGE-14 turned out to be" above. |
 | ✅ | ~~**AGE-16**~~ | high | **DONE** — the `blocks-ci` flake is gone. See "What AGE-16 turned out to be" below; its filed diagnosis was wrong in an instructive way. |
 | ✅ | ~~**AGE-18**~~ | high | **DONE** — the gate now fails instead of skipping. See "What AGE-18 turned out to be" below; **no version bump was needed** (it touched no shipped `plugins/**`). |
-| 1 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — first token only, so the F103 drift guard is blind to every subcommand rename. Same class as AGE-18 (a guard that does not guard). **Read AGE-18's contract-check correction first** — that file's always-exit-0 JSON contract is deliberate and must be preserved; AGE-17 is about the `awk '{print $2}'` verb derivation *only*. |
-| 2 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
+| ✅ | ~~**AGE-17**~~ | high | **DONE** — the guard now validates two-token forms. See "What AGE-17 turned out to be" below. Shipped as **v2.40.0** (minor: additive JSON keys). Filed **AGE-24** and **AGE-25** on the way. |
+| 1 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
+| 2 | **AGE-24** | med | **New, filed by this session. Pulled to the front of the medium block** — reason recorded as the rule requires: it is the *other half* of AGE-17, the guard still cannot catch the drift it exists to catch, and the context for it is fresher now than it will ever be again. **Read "What AGE-17 turned out to be" first** — and note its fix collides with a deliberate existing test. |
 | 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
 | 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
 | 5 | **AGE-6** | med | WS-C, rca realign. Independent. **Check `gh issue view 118` before starting** — see the scope collision above. |
@@ -165,25 +181,57 @@ without recording why in this file.
 | — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7 and storyhook already excludes it from `ready`. When AGE-7 merges, close it: `story move AGE-8 done` with a comment pointing at AGE-7's PR. |
 | 12 | **AGE-9** | low | Council-decision story, independent. |
 | 13 | **AGE-13** | low | Council-decision story, independent. |
-| 14 | **AGE-23** | low | **New, filed by this session.** Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. |
-| 15 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
+| 14 | **AGE-23** | low | Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. **Confirmed live again this session:** the council skill's own `references/council-protocol.md` failed to resolve skill-relative and cost a wasted tool call. |
+| 15 | **AGE-25** | low | **New, filed by this session.** AGE-17's own safety mechanisms are unproven — see below. |
+| 16 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
 
 **AGE-2, AGE-3, AGE-14, AGE-15, AGE-16 and AGE-18 are already `done`** — do not touch them.
 
 ### Unscheduled stories — slot these in
 
 Filed rather than fixed, per the "defects become stories" rule. They are now placed in the queue
-above; this table keeps the detail. **AGE-17 is next** — it is the other half of the reason a
-60-test breakage went unseen.
+above; this table keeps the detail. **AGE-11 is next**; **AGE-24 follows it** and is the other
+half of AGE-17.
 
 | Story | Pri | What |
 |---|---|---|
-| **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — **first token only**, so `story project init` validated as verb `project` and passed. The F103 drift guard is structurally blind to every subcommand rename. **Scope note from AGE-18:** that file's always-exit-0-with-JSON contract is deliberate and correct — do **not** "fix" the `exit 0` skip paths. AGE-17 is the verb derivation only. |
 | **AGE-22** | med | **Filed by the AGE-16 session.** Preventative guard for AGE-16's defect class: nothing stops the next `$(timeout … cmd)` from being written. The repo is currently clean — `rca-repro.sh:25` and `greenlight-explore.sh:146` both already redirect to a file. Note a council seat reported greenlight as a sibling site; **the sweep disproved that**. Watch for AGE-17's trap when writing the guard: match the whole command, not the first token. |
 | **AGE-23** | low | **Filed by the AGE-18 session.** Every plugin ships `references/*.md` at the **plugin root**, but each `SKILL.md` cites them as a bare relative `references/<topic>.md` — and a skill's runtime base directory is `skills/<name>/`, so the literal path does not resolve. Nothing is broken (agents recover by searching); it costs tool calls and context on every reference load, which for forge and rca is most invocations. Measured 3 wasted calls invoking `/council-vote` this session. Fix is a one-line convention decision applied repo-wide — see the story for three options. Relates to AGE-8. |
 | **AGE-19** | med | No storyhook **major-version pin** anywhere. An upstream major surfaces as ~60 unattributable failures instead of one assertion. |
 | **AGE-21** | med | `plugins/deployit/tests/test-cli-rm.sh` depends on a **live local deployit backend daemon** (`:8729`); when it is unavailable the test fails and blocks unrelated pushes. Passed 3/3 in earlier runs, failed once under contention from the `age-117` session, passed again immediately after. Same class as AGE-18 — a gate that does not mean what it says. |
+| **AGE-24** | med | **Filed by the AGE-17 session.** `forge-contract-check.sh` extracts candidates ONLY from inside fenced ```` ``` ```` blocks (`:226`, `d==1`). Every `story ...` written as inline-backtick prose is invisible. **All eight `story project ` occurrences in the scanned docs sit at fence depth 0** — so even with AGE-17 landed, the guard would have caught NONE of the historical `project init` drift. ⚠ Its fix collides with a **deliberate** existing test (`forge-contract-check.bats:175` asserts inline signatures like `` `story relate <a> <relationship> <b>` `` are ignored), so widening must distinguish a concrete invocation from a placeholder signature. Not a one-liner. |
+| **AGE-25** | low | **Filed by the AGE-17 session.** AGE-17's own safety mechanisms are unproven: (1) the monotone-safe `real_verbs` filter is unexercised by any input — zero non-verb tokens reach position 1 under synopsis-only harvest, so it catches nothing and no test covers it; (2) the "global help is the enforcement floor" invariant bounds the verb *domain* but not the *vocabulary* — per-verb help is a strict superset for `web` only, so a degraded `story help <verb>` costs `web` its `status` and would flag a doc using `story web status`. One-token false positive, invisible to the `>= 11` cardinality floor. |
 | **AGE-20** | low | Ten duplicated storyhook fixture-creation sites across two plugins — why one upstream rename cost ten edits. **Deliberately deferred**: the 10th site is in a *different plugin*, so a shared helper is a new cross-plugin module boundary, not a mechanical extraction. Land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
+
+### What AGE-17 turned out to be — the story was RIGHT, and still not enough
+
+Unusually for this loop, AGE-17's diagnosis was accurate as written and reproduced on the first
+try: a fixture with `story project init`, `story project bogus` and `story hooks nonexistent`
+yielded `contract_ok: true, verb_violations: []`. The fix landed as specified. But three things
+are worth carrying forward:
+
+1. **⚠ The fix does NOT close the hole it was filed for — AGE-24 does.** The guard scans only
+   *inside* fenced blocks, and every one of the eight `story project ` occurrences in the scanned
+   docs is inline-backtick prose at fence depth 0. So AGE-17 + AGE-24 together are what the F103
+   guard needed; AGE-17 alone is half. This was found by a council seat and **verified
+   independently before filing** — do not skip AGE-24 believing AGE-17 covered it.
+2. **Neither ground-truth source is complete, so the union is forced — this is not a style
+   choice.** `story --help`'s usage block is the ONLY source for `type add`, `state add`,
+   `member add`, `store new`, `epic *`, `plugin *` (there is no `story help <verb>` topic for
+   those five verbs at all). `story help web` is the ONLY source for `web status`. A single-source
+   implementation either misses renames or **falsely flags working docs** — forge docs use
+   `story type add` three times. The bats effect oracle asserts both halves precisely because
+   that pair is unsatisfiable by any single-source implementation.
+3. **`story help <verb>` output contains prose that looks like usage.** `story help hooks` line 4
+   is the sentence "story events occur (create, state change, close, etc.)" — ordinary prose that
+   wrapped onto a line starting with `story `. A naive harvest invents a verb named `events`
+   (observed live). Closed by harvesting **synopsis regions only** (truncate at the first blank
+   line), anchoring to the queried verb, and filtering candidates through `real_verbs` so any
+   surviving prose can only widen a vocabulary, never narrow one.
+
+**Design ruled by `/council-vote`** — unanimous on the decision (two-token depth, lenient
+open-node leniency, additive schema), IRV majority on the implementation spec. Full audit trail
+including the accepted dissent: `.council/age17-subcommand-guard/DECISION.md`.
 
 ### What AGE-18 turned out to be — and the two claims in it that were wrong
 

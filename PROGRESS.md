@@ -14,18 +14,94 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-21** (claimed 2026-08-04) |
-| **Next story** | **AGE-21** — deployit's `test-cli-rm.sh` needs a live local daemon. **⚠ `story next` says AGE-19; take AGE-21 anyway** — see the tie-break note directly below. Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12 |
-| **Repo version** | **v3.6.0** — minor. See the level note below; AGE-12's own text implied a patch. |
-| **Last updated by** | AGE-12 session, 2026-08-04 |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-19** — no storyhook major-version pin. `story next` and this table **agree** for the first time in eight sessions; AGE-21 was the last row where they diverged. Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47) |
+| **Repo version** | **v3.6.0** — unchanged. AGE-21 touched **no shipped `plugins/**`** (only `plugins/*/tests/**`, which the shipped pathspec excludes), so **no bump was owed**. |
+| **Last updated by** | AGE-21 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-21 session)
+
+- **AGE-21 is DONE. No bump — the repo stays at v3.6.0.** Everything it touched is under
+  `plugins/*/tests/**` (excluded from the shipped pathspec), root `tests/`, or the `Makefile`.
+  Verify the rule yourself before assuming it applies to you:
+  `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **empty means no bump.**
+- **⚠ THREE CAUSAL STORIES FOR ONE FAILURE, ALL THREE REFUTED. This is the sharpest result yet of
+  the "the story can be wrong" rule, because the *correction* was wrong too, twice.** Filed as
+  **AGE-49**; do not close it by asserting any of them.
+  1. **AGE-21 as filed** — *"depends on a live local backend daemon (:8729)"*. False three ways:
+     the refresh runs **after** the push and only inside `if published:` (`deployit-cli:2607` vs
+     `:2593`); the test configures **port 8731**, where nothing has ever listened, so :8729 is never
+     contacted; and its `warning: local backend refresh failed` line appears on **10 of 10 PASSING
+     runs**. A constant cannot explain an intermittent failure.
+  2. **The chair's own replacement theory** (the SIGPIPE class below caused it) — **retracted mid-
+     council.** P(50 consecutive poll failures) ≈ 1e-17 on this fixture.
+  3. **A `DEPLOYIT_SKIP_GC_PUSH` rival** found by the skeptic seat — reproduces the failing line
+     **deterministically 4/4**, and was still **refuted by the recorded artifact**: `cmd_rm:2606`
+     *skips* the backend refresh when that variable is set, so such a run emits **zero** of the
+     `warning:` lines that the recorded output contains. **If a design argument rests on a
+     mechanism, check what that mechanism SUPPRESSES as well as what it produces.**
+- **⚠ THE REAL DEFECT, AND THE NUMBER THAT EXPLAINS SIX WEEKS OF CONFUSION.**
+  `git log --oneline | grep -q X` under `set -o pipefail` returns **141 (SIGPIPE) on a match that
+  SUCCEEDED**: `grep -q` exits first, `git log` dies mid-write, `pipefail` propagates the signal
+  status. **The rate is a function of OUTPUT SIZE, not environment:**
+
+  | commits | `log --oneline` | failures |
+  |---|---|---|
+  | 2 | 130 B | 13/60 |
+  | 50 | 3.3 KB | **60/60** |
+  | 2000 | 134 KB | **60/60** |
+
+  It saturates at 100% once output exceeds the 64 KiB pipe buffer. **Every disputed measurement in
+  this council — 0, 9, 11, 21, 22, 37, 46, 65% — was taken on the 2-commit fixture, the only region
+  where the outcome is a coin flip.** One seat measured **0/400** and was neither wrong nor
+  anomalous. If you are ever handed contradictory flake rates, **look for the size/scale variable
+  nobody varied** before blaming the harness.
+- **⚠ `git checkout -- <file>` CANNOT RESTORE AN UNTRACKED FILE, AND `git diff --quiet` ON ONE
+  RETURNS 0.** This session's mutation loop therefore reported `[restored OK]` while two mutations
+  silently **accumulated** in the new guard, and the third mutation's result was read against a
+  doubly-mutated file. Caught only by re-reading the counts. **Commit a new guard BEFORE you mutate
+  it**, and make the restore assertion prove the file is *tracked and clean*, not merely
+  "unchanged". This is the AGE-24 warning ("restore first and assert the restore") with the exact
+  hole that warning did not cover.
+- **The fix is a SHAPE fix, not a retry.** `remote_has`'s 50-iteration poll (added by `23d1dcd` on a
+  *"receive-pack post-receive settle"* theory that is also falsified — it reproduces on a repo
+  settled 2 s, and 32/32 non-pipeline reads saw the ref advanced immediately) is **deleted**. The
+  replacement `origin_published` consumes git's output whole and asserts the **pushed content**, not
+  just the commit subject: a publisher committing the right message with nothing staged
+  (`--allow-empty`) **passes** a subject-only check — measured, 0 vs 1. A failed git read now exits
+  **2**, because *"I cannot verify this"* is not *"the rm was not pushed"*.
+- **⚠ A guard now bans this shape repo-wide: `tests/sigpipe-shape-guard.sh` (`make
+  test-sigpipe-shape-guard`).** Two things will bite you:
+  - **It excludes comment lines on purpose.** `test-cli-rm.sh` quotes the banned form in a comment
+    telling you never to reintroduce it. A guard you can satisfy by deleting a true sentence is the
+    wrong guard (the AGE-11 rule).
+  - **It enumerates walkers** (`git log|rev-list|shortlog|grep|blame`, `find`, `locate`), so a
+    `python3` generator, a streaming `curl`, a `jq --stream` or an `awk` over a large file have the
+    property and are **not** matched. That limit is the dissenting seat's objection, recorded in the
+    file header rather than papered over. Treat green as *"none of the known walkers"*.
+- **The gate was green with NO bypass — ten sessions running.** See the gate bullet at the end of
+  this block for the run's numbers. `run-tests.sh` now records each failing test's **exit status**,
+  so a future `exit 141` names this class instead of inviting a fourth guess.
+- **Filed: AGE-47** (med, **closed by this PR**) — the deployit runner wrote every test's output to
+  the fixed path `/tmp/deployit-test.log`, so concurrent runs interleave and *the diagnostic block
+  you reason from may belong to a different run*. AGE-21's filed root cause was inferred from
+  exactly such a block. **AGE-48** (med, open) — `_commit_and_push_index` returns `published: True`
+  after a purely local write under `DEPLOYIT_SKIP_GC_PUSH`, so any test asserting a real push runs
+  **wholly vacuous** if that variable leaks in; shipped code, so it costs a bump. **AGE-49** (low,
+  open) — the unexplained failure above.
+- **Council: all three seats voted against their own proposals, then all three revised to the same
+  one.** Round 1 A=2/B=1; after deliberation the ballot was unanimous for A. The class guard shipped
+  **2-1 over the skeptic's dissent**, and the dissent is answered in the guard's header rather than
+  overruled. Full trail: `.council/age21-sigpipe-assertion/DECISION.md`.
 
 ## Known state (updated 2026-08-04 by the AGE-12 session)
 
@@ -661,8 +737,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-29**~~ | med | **DONE — shipped as v3.4.0.** The fence detector now models structure instead of toggling. Its own prescribed fix was **disqualified by measurement** — see the AGE-29 block above. **Closed AGE-41 for free.** Filed **AGE-40**, **AGE-42**, **AGE-43**. |
 | ✅ | ~~**AGE-30**~~ | med | **DONE — shipped as v3.5.0.** The shipped script gained a repeatable `--file`; a new repo-local `tests/storyhook-contract-root.sh` supplies the pinned list (`AGENTS.md` + `CLAUDE.md`), so the scan set stays shape-based in the plugin and the filename knowledge stays in the repo. Council ruled the interface by ranked-choice majority after a 1-1-1 round-1 split. See the AGE-30 block above — the story's reach table understated the value by a third and its bump level was wrong. Filed **AGE-44**. |
 | ✅ | ~~**AGE-12**~~ | med | **DONE — shipped as v3.6.0.** The failed claim now confirms the vocabulary via `story state list` and refuses with `reason: "claim-state-missing"` + `story doctor --fix`. **The story's central claim was false** — the cause was already named; only the remedy and the discriminator were missing. See the AGE-12 block above. Filed **AGE-45** and upstream **storyhook SH-180**. |
-| 1 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. **Did not fire in the last five gate runs**, so reproduce before believing it. |
-| 8 | **AGE-19** | med | No storyhook major-version pin. |
+| ✅ | ~~**AGE-21**~~ | med | **DONE — no bump** (test-only). Its stated cause was false, and so were the two theories that replaced it. The real defect was `git log \| grep -q` under `pipefail` returning **141 on a successful match**; the fix is a shape fix, not a longer retry. See the AGE-21 block above. Filed **AGE-47** (closed here), **AGE-48**, **AGE-49**. |
+| 1 | **AGE-19** | med | No storyhook major-version pin. **Now genuinely next** — `story next` agrees. |
 | 9 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. |
 | — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7; PR #137 carries its remaining scope too. Close both AGE-7 and AGE-8 once #137 merges. |
 | 12 | **AGE-9** | low | Council-decision story, independent. |

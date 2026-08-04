@@ -49,9 +49,10 @@
 #                          binary was found and its help output parsed).
 #                          false means the check was skipped, not that the
 #                          contract is clean.
-#     contract_ok        - true if zero violations were found. Only
-#                          meaningful when ok is true. THIS is the
-#                          regression-guard pass/fail signal.
+#     contract_ok        - true if zero violations AND zero stale
+#                          suppressions were found. Only meaningful when ok
+#                          is true. THIS is the regression-guard pass/fail
+#                          signal.
 #     verb_violations    - array of {file, line, verb, command}. `verb` is
 #                          always a SINGLE token; a bad subcommand under a
 #                          real verb is reported separately (below), because
@@ -65,8 +66,29 @@
 #                          position 2. Emitted so an operator debugging a
 #                          misfire can read the derivation instead of
 #                          reverse-engineering it.
+#     suppressions       - array of {file, line, token, reason, command}: a
+#                          violation deliberately withheld because the line
+#                          carries a marker naming that exact token (see
+#                          "Negative-example suppression" below). Emitted so
+#                          a green result can be told apart from a line that
+#                          was never scanned.
+#     stale_suppressions - array of {file, line, token, kind}: a marker that
+#                          suppressed nothing. `kind` is one of
+#                          `form_is_valid` (the line was scanned and is
+#                          clean — the doc's denial is now FALSE),
+#                          `not_scanned` (the extractor never read that
+#                          line), `token_mismatch` (the line violated on a
+#                          different token) or `malformed` (no token, or no
+#                          mandatory reason). Any entry fails contract_ok.
 #     story_source       - which resolution path found the CLI (env/path).
 #     display            - human-readable summary.
+#
+# Negative-example suppression: a doc may name a dead form in order to DENY
+# it by annotating that line with
+#   <!-- contract-check: expect-dead <token> -- <reason> -->
+# The marker is bound to the reported token, so it asserts the form is still
+# dead rather than muting the line. Full rationale at the mechanism itself,
+# below the violation collectors.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -86,7 +108,7 @@ fi
 
 if [[ -z "$STORY_BIN" ]]; then
   jq -n '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
-          subcommand_violations: [],
+          subcommand_violations: [], suppressions: [], stale_suppressions: [],
           real_verbs: [], real_relations: [], real_subcommands: {},
           files_scanned: [], story_source: "",
           error: "story_cli_missing",
@@ -110,7 +132,7 @@ REAL_VERBS_JSON="$(printf '%s\n' "$real_verbs_out" \
 if [[ "$(echo "$REAL_VERBS_JSON" | jq 'length')" -eq 0 ]]; then
   jq -n --arg src "$STORY_SOURCE" \
     '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
-      subcommand_violations: [],
+      subcommand_violations: [], suppressions: [], stale_suppressions: [],
       real_verbs: [], real_relations: [], real_subcommands: {},
       files_scanned: [], story_source: $src,
       error: "story_help_unparseable",
@@ -139,7 +161,7 @@ REAL_RELATIONS_JSON="$(printf '%s\n' "$real_relate_help" \
 if [[ "$(echo "$REAL_RELATIONS_JSON" | jq 'length')" -eq 0 ]]; then
   jq -n --arg src "$STORY_SOURCE" --argjson verbs "$REAL_VERBS_JSON" \
     '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
-      subcommand_violations: [],
+      subcommand_violations: [], suppressions: [], stale_suppressions: [],
       real_verbs: $verbs, real_relations: [], real_subcommands: {},
       files_scanned: [], story_source: $src,
       error: "story_relate_help_unparseable",
@@ -265,13 +287,24 @@ if [[ "$(echo "$REAL_SUBCOMMANDS_JSON" | jq 'length')" -eq 0 ]]; then
   jq -n --arg src "$STORY_SOURCE" --argjson verbs "$REAL_VERBS_JSON" \
         --argjson relations "$REAL_RELATIONS_JSON" \
     '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
-      subcommand_violations: [],
+      subcommand_violations: [], suppressions: [], stale_suppressions: [],
       real_verbs: $verbs, real_relations: $relations, real_subcommands: {},
       files_scanned: [], story_source: $src,
       error: "story_subcommands_unparseable",
       display: "[forge] contract check skipped: could not derive a subcommand vocabulary from `story --help` / `story help <verb>`"}'
   exit 0
 fi
+
+# A documentation wildcard rather than a dispatch target: the docs
+# legitimately write `story project <subcommand>` and
+# `story relate <a> <relationship> <b>`. A placeholder, flag, quoted span or
+# comment in a checked slot names nothing the live CLI could validate.
+is_placeholder() {
+  case "${1:-}" in
+    ''|-*|'<'*|'['*|'('*|'{'*|'$'*|'"'*|"'"*|'`'*|'|'*|'#'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 verb_is_enforced() {
   echo "$REAL_SUBCOMMANDS_JSON" | jq -e --arg v "$1" 'has($v)' >/dev/null
@@ -314,10 +347,149 @@ fi
 START_RE='^[[:space:]]*\$?[[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
 MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
 
+# ── Negative-example suppression (AGE-32) ──
+#
+# Some documentation has to name a dead form IN ORDER TO DENY IT — this
+# document's own line 8 says `story HP-N is done` does not exist. Omission
+# leaves a wrong prior intact where only negation overwrites it, so a guard
+# you can satisfy by deleting a true sentence is the wrong guard.
+#
+# The escape hatch is a marker on the denied form's own line:
+#
+#   <!-- contract-check: expect-dead <token> -- <reason> -->
+#
+# It is bound to the TOKEN this script would report, not to the line. That
+# makes it an executable assertion that the named form is still dead rather
+# than a blanket ignore:
+#
+#   - It suppresses only a violation whose reported token matches. A
+#     different drift appearing on the same line is still reported, so the
+#     marker can never shield a substitution.
+#   - A marker that suppresses nothing is itself a failure. Markers are
+#     collected by a WHOLE-FILE scan, deliberately independent of the
+#     extraction above, so a marker on a line the extractor never reads
+#     fails loud instead of sitting as a silent no-op. That is what stops
+#     this mechanism becoming the vacuous-green shape it exists to avoid.
+#   - The reason is mandatory. A marker without one is malformed and
+#     suppresses nothing, so it cannot degrade into a silent mute button.
+#   - A marker whose token is itself a placeholder (`<token>`) is a
+#     signature, not a suppression: it neither suppresses nor goes stale.
+#     That is what lets this convention be documented in a scanned file
+#     without self-applying.
+#
+# Stale markers are discriminated, because the distinction is the actionable
+# part: `form_is_valid` (the line was scanned and is clean — storyhook made
+# the form real, so the doc's denial is now FALSE and the sentence must be
+# rewritten), `not_scanned` (the line never reached extraction — today that
+# means a marker at fence depth 0, pending the inline widening), and
+# `token_mismatch` (the line violated on a different token than the marker
+# names).
+MARKER_ANY_RE='<!--[[:space:]]*contract-check:[[:space:]]*expect-dead(.*)-->'
+MARKER_FULL_RE='^[[:space:]]+([^[:space:]]+)[[:space:]]+--[[:space:]]+(.*[^[:space:]])[[:space:]]*$'
+MARKER_TOKEN_ONLY_RE='^[[:space:]]+([^[:space:]]+)[[:space:]]*$'
+
 VERB_VIOLATIONS=""
 RELATION_VIOLATIONS=""
 SUBCOMMAND_VIOLATIONS=""
+SUPPRESSIONS=""
+STALE_SUPPRESSIONS=""
 SCANNED_FILES_JSON="[]"
+
+# Per-file state, reset by collect_markers.
+FILE_MARKERS=""      # records: <lineno>\t<token>\t<reason>
+MARKER_HIT_LINES=""  # linenos whose marker suppressed at least one violation
+SCANNED_LINES=""     # linenos the extractor actually handed to the checker
+VIOLATED_LINES=""    # linenos that produced at least one violation
+
+collect_markers() {
+  FILE_MARKERS=""
+  MARKER_HIT_LINES=""
+  SCANNED_LINES=""
+  VIOLATED_LINES=""
+  local n=0 line inner tok reason
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    n=$((n + 1))
+    [[ "$line" =~ $MARKER_ANY_RE ]] || continue
+    inner="${BASH_REMATCH[1]}"
+    tok=""
+    reason=""
+    if [[ "$inner" =~ $MARKER_FULL_RE ]]; then
+      tok="${BASH_REMATCH[1]}"
+      reason="${BASH_REMATCH[2]}"
+    elif [[ "$inner" =~ $MARKER_TOKEN_ONLY_RE ]]; then
+      tok="${BASH_REMATCH[1]}"
+    fi
+    FILE_MARKERS="${FILE_MARKERS}${FILE_MARKERS:+$'\n'}${n}"$'\t'"${tok}"$'\t'"${reason}"
+  done < "$1"
+}
+
+# Does a well-formed marker on $1 name exactly the token $2?
+marker_suppresses() {
+  local ln tok reason
+  [[ -n "$FILE_MARKERS" ]] || return 1
+  while IFS=$'\t' read -r ln tok reason; do
+    [[ "$ln" == "$1" ]] || continue
+    is_placeholder "$tok" && return 1
+    [[ -n "$reason" ]] || return 1
+    [[ "$tok" == "$2" ]] || return 1
+    return 0
+  done <<< "$FILE_MARKERS"
+  return 1
+}
+
+add_suppression() {
+  local rec
+  rec="$(jq -n --arg file "$1" --arg line "$2" --arg token "$3" --arg reason "$4" \
+                --arg command "$5" \
+    '{file: $file, line: ($line | tonumber), token: $token, reason: $reason,
+      command: $command}')"
+  SUPPRESSIONS="${SUPPRESSIONS}${SUPPRESSIONS:+$'\n'}${rec}"
+  MARKER_HIT_LINES="${MARKER_HIT_LINES}${MARKER_HIT_LINES:+$'\n'}${2}"
+}
+
+add_stale_suppression() {
+  local rec
+  rec="$(jq -n --arg file "$1" --arg line "$2" --arg token "$3" --arg kind "$4" \
+    '{file: $file, line: ($line | tonumber), token: $token, kind: $kind}')"
+  STALE_SUPPRESSIONS="${STALE_SUPPRESSIONS}${STALE_SUPPRESSIONS:+$'\n'}${rec}"
+}
+
+# Reported token matched a marker → record the suppression instead of the
+# violation. Returns 0 when the caller should skip reporting.
+try_suppress() {
+  local file="$1" lineno="$2" token="$3" command="$4" reason ln tok r
+  marker_suppresses "$lineno" "$token" || return 1
+  while IFS=$'\t' read -r ln tok r; do
+    [[ "$ln" == "$lineno" && "$tok" == "$token" ]] || continue
+    reason="$r"
+    break
+  done <<< "$FILE_MARKERS"
+  add_suppression "$file" "$lineno" "$token" "${reason:-}" "$command"
+  return 0
+}
+
+# Every marker that suppressed nothing is a failure — classified, because the
+# three cases call for three different corrections.
+classify_stale_markers() {
+  local rel_f="$1" ln tok reason
+  [[ -n "$FILE_MARKERS" ]] || return 0
+  while IFS=$'\t' read -r ln tok reason; do
+    [[ -n "$ln" ]] || continue
+    is_placeholder "$tok" && continue
+    if [[ -z "$tok" || -z "$reason" ]]; then
+      add_stale_suppression "$rel_f" "$ln" "$tok" "malformed"
+      continue
+    fi
+    printf '%s\n' "$MARKER_HIT_LINES" | grep -qx -- "$ln" && continue
+    if ! printf '%s\n' "$SCANNED_LINES" | grep -qx -- "$ln"; then
+      add_stale_suppression "$rel_f" "$ln" "$tok" "not_scanned"
+    elif printf '%s\n' "$VIOLATED_LINES" | grep -qx -- "$ln"; then
+      add_stale_suppression "$rel_f" "$ln" "$tok" "token_mismatch"
+    else
+      add_stale_suppression "$rel_f" "$ln" "$tok" "form_is_valid"
+    fi
+  done <<< "$FILE_MARKERS"
+}
 
 add_verb_violation() {
   local rec
@@ -350,10 +522,18 @@ while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   [[ -f "$f" ]] || continue
   rel_f="${f#"$DOCS_ROOT"/}"
+  collect_markers "$f"
 
   while IFS=$'\t' read -r lineno content; do
     [[ -z "${content:-}" ]] && continue
+    SCANNED_LINES="${SCANNED_LINES}${SCANNED_LINES:+$'\n'}${lineno}"
+    # The marker annotates the line; it is not part of the command. Strip it
+    # before matching so it can never leak into a reported invocation or
+    # displace a token the checker reads.
+    content="${content%%<!--*}"
     trimmed="${content#"${content%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    [[ -z "$trimmed" ]] && continue
     [[ "$trimmed" == \#* ]] && continue
 
     verb=""
@@ -369,6 +549,8 @@ while IFS= read -r f; do
     fi
 
     if ! is_valid_verb "$verb"; then
+      try_suppress "$rel_f" "$lineno" "$verb" "$trimmed" && continue
+      VIOLATED_LINES="${VIOLATED_LINES}${VIOLATED_LINES:+$'\n'}${lineno}"
       add_verb_violation "$rel_f" "$lineno" "$verb" "$trimmed"
       continue
     fi
@@ -381,19 +563,12 @@ while IFS= read -r f; do
       read -ra subtoks <<< "$rest"
       sub="${subtoks[0]:-}"
       sub="${sub%,}"
-      # A placeholder, flag or quoted span in the subcommand slot is a
-      # documentation wildcard rather than a dispatch target — the docs
-      # legitimately write `story project <subcommand>`.
-      case "$sub" in
-        ''|-*|'<'*|'['*|'('*|'{'*|'$'*|'"'*|"'"*|'`'*|'|'*|'#'*)
-          : ;;
-        *)
-          if ! is_valid_subcommand "$verb" "$sub"; then
-            add_subcommand_violation "$rel_f" "$lineno" "$verb" "$sub" "$trimmed"
-            continue
-          fi
-          ;;
-      esac
+      if ! is_placeholder "$sub" && ! is_valid_subcommand "$verb" "$sub"; then
+        try_suppress "$rel_f" "$lineno" "$sub" "$trimmed" && continue
+        VIOLATED_LINES="${VIOLATED_LINES}${VIOLATED_LINES:+$'\n'}${lineno}"
+        add_subcommand_violation "$rel_f" "$lineno" "$verb" "$sub" "$trimmed"
+        continue
+      fi
     fi
 
     case "$verb" in
@@ -401,12 +576,17 @@ while IFS= read -r f; do
         read -ra resttoks <<< "$rest"
         relation="${resttoks[1]:-}"
         relation="${relation%,}"
-        if [[ -n "$relation" ]] && ! is_valid_relation "$relation"; then
-          add_relation_violation "$rel_f" "$lineno" "$relation" "$trimmed"
+        if ! is_placeholder "$relation" && ! is_valid_relation "$relation"; then
+          if ! try_suppress "$rel_f" "$lineno" "$relation" "$trimmed"; then
+            VIOLATED_LINES="${VIOLATED_LINES}${VIOLATED_LINES:+$'\n'}${lineno}"
+            add_relation_violation "$rel_f" "$lineno" "$relation" "$trimmed"
+          fi
         fi
         ;;
     esac
   done < <(awk 'BEGIN{d=0} /^```/{d=1-d; next} d==1{printf "%d\t%s\n", NR, $0}' "$f")
+
+  classify_stale_markers "$rel_f"
 done <<< "$FILES"
 
 verb_violations_json="[]"
@@ -421,19 +601,37 @@ subcommand_violations_json="[]"
 if [[ -n "$SUBCOMMAND_VIOLATIONS" ]]; then
   subcommand_violations_json="$(printf '%s\n' "$SUBCOMMAND_VIOLATIONS" | jq -s '.')"
 fi
+suppressions_json="[]"
+if [[ -n "$SUPPRESSIONS" ]]; then
+  suppressions_json="$(printf '%s\n' "$SUPPRESSIONS" | jq -s '.')"
+fi
+stale_suppressions_json="[]"
+if [[ -n "$STALE_SUPPRESSIONS" ]]; then
+  stale_suppressions_json="$(printf '%s\n' "$STALE_SUPPRESSIONS" | jq -s '.')"
+fi
 
 verb_count="$(echo "$verb_violations_json" | jq 'length')"
 relation_count="$(echo "$relation_violations_json" | jq 'length')"
 subcommand_count="$(echo "$subcommand_violations_json" | jq 'length')"
+stale_count="$(echo "$stale_suppressions_json" | jq 'length')"
+# A marker that suppresses nothing is a failure in its own right — otherwise
+# the escape hatch degrades into exactly the silent no-op it exists to avoid.
 contract_ok="true"
-if [[ "$verb_count" -gt 0 || "$relation_count" -gt 0 || "$subcommand_count" -gt 0 ]]; then
+if [[ "$verb_count" -gt 0 || "$relation_count" -gt 0 || "$subcommand_count" -gt 0 \
+      || "$stale_count" -gt 0 ]]; then
   contract_ok="false"
 fi
 
 if [[ "$contract_ok" == "true" ]]; then
   display="[forge] contract check: OK — every documented \`story\` verb and relationship matches the real CLI (source: $STORY_SOURCE)"
 else
-  display="[forge] contract check: FAILED — ${verb_count} bad verb(s), ${subcommand_count} bad subcommand(s), ${relation_count} bad relationship(s) found (source: $STORY_SOURCE)"
+  display="[forge] contract check: FAILED — ${verb_count} bad verb(s), ${subcommand_count} bad subcommand(s), ${relation_count} bad relationship(s), ${stale_count} stale suppression(s) found (source: $STORY_SOURCE)"
+  if [[ "$stale_count" -gt 0 ]]; then
+    while IFS= read -r s; do
+      display="$display
+  - stale suppression ($(echo "$s" | jq -r '.kind')) for '$(echo "$s" | jq -r '.token')' at $(echo "$s" | jq -r '.file'):$(echo "$s" | jq -r '.line') — the marker suppressed nothing"
+    done <<< "$(echo "$stale_suppressions_json" | jq -c '.[]')"
+  fi
   if [[ "$subcommand_count" -gt 0 ]]; then
     while IFS= read -r s; do
       s_verb="$(echo "$s" | jq -r '.verb')"
@@ -454,6 +652,15 @@ else
   - unsupported relationship '$(echo "$r" | jq -r '.relation')' at $(echo "$r" | jq -r '.file'):$(echo "$r" | jq -r '.line'): $(echo "$r" | jq -r '.command')"
     done <<< "$(echo "$relation_violations_json" | jq -c '.[]')"
   fi
+  # The cheapest way to satisfy this guard must never be deleting a true
+  # sentence — say so here, where the author is actually looking.
+  display="$display
+
+  If a form is named in order to DENY it, annotate that line instead of
+  removing the sentence:
+    <!-- contract-check: expect-dead <token> -- why it is dead -->
+  where <token> is the exact token reported above. A marker that suppresses
+  nothing is reported as a stale suppression."
 fi
 
 jq -n \
@@ -461,6 +668,8 @@ jq -n \
   --argjson verb_violations "$verb_violations_json" \
   --argjson relation_violations "$relation_violations_json" \
   --argjson subcommand_violations "$subcommand_violations_json" \
+  --argjson suppressions "$suppressions_json" \
+  --argjson stale_suppressions "$stale_suppressions_json" \
   --argjson real_verbs "$REAL_VERBS_JSON" \
   --argjson real_relations "$REAL_RELATIONS_JSON" \
   --argjson real_subcommands "$REAL_SUBCOMMANDS_JSON" \
@@ -469,7 +678,9 @@ jq -n \
   --arg display "$display" \
   '{ok: true, contract_ok: $contract_ok, verb_violations: $verb_violations,
     relation_violations: $relation_violations,
-    subcommand_violations: $subcommand_violations, real_verbs: $real_verbs,
+    subcommand_violations: $subcommand_violations,
+    suppressions: $suppressions, stale_suppressions: $stale_suppressions,
+    real_verbs: $real_verbs,
     real_relations: $real_relations, real_subcommands: $real_subcommands,
     files_scanned: $files_scanned,
     story_source: $story_source, display: $display}'

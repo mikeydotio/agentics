@@ -59,6 +59,58 @@ kept only for human readability. Setting the prefix without the type silently di
 drifted anyway — it was missing `governed_explorer`. A hand-synced duplicate of machine-readable
 defaults is a defect waiting to happen; the instruction to sync it by hand is not a mitigation.
 
+## How a doc names a dead `story` form in order to deny it
+
+`forge-contract-check.sh` reports any `story <verb> …` invocation the live CLI would reject. Some
+documentation has to name a dead form **in order to correct the reader** — `references/storyhook-contract.md`
+says the id-first form does not exist, and an LLM-facing doc especially needs that, because omission
+leaves a wrong prior intact where only negation overwrites it. Widening the guard's reach (AGE-24
+inline spans, AGE-31 placeholder verbs) turns those true sentences into violations.
+
+The standing principle, settled by AGE-11's council and reaffirmed here:
+
+> A guard you can satisfy by deleting true sentences is the wrong guard.
+
+So the denied form's own line may carry a marker:
+
+```
+<!-- contract-check: expect-dead <token> -- <reason> -->
+```
+
+Four properties are load-bearing; none is decoration.
+
+- **Bound to the reported TOKEN, not to the line.** It suppresses only a violation whose token
+  matches, so a *different* drift appearing on the same line is still reported. A line-scoped
+  ignore would shield same-line substitutions and could never itself fail.
+- **Markers are found by a whole-file scan, deliberately independent of extraction.** A marker that
+  suppresses nothing is a failure (`stale_suppressions`, which fails `contract_ok`). Siting the
+  staleness check inside the per-line loop would make it unable to fire for a marker on a line the
+  extractor never reads — precisely the case it exists to catch. This is what stops the escape
+  hatch becoming the silent no-op class this repo has shipped before (AGE-18, AGE-21, AGE-27).
+- **The reason is mandatory**, so the marker cannot decay into a mute button.
+- **A placeholder token (`<token>`) is a signature, not a suppression** — mirroring the rule already
+  applied to the subcommand and relation slots. That is what lets the convention be written down
+  inside a scanned file without self-applying.
+
+Because the marker asserts the form is still dead, the guard gets *stronger*: if storyhook ever made
+the form real, the doc's denial would be false and the marker reports `form_is_valid`. Stale markers
+are discriminated — `form_is_valid`, `not_scanned`, `token_mismatch`, `malformed` — because the four
+call for different corrections.
+
+Two things were considered and rejected. A **per-file allowlist** is too coarse: `storyhook-contract.md`
+is the densest source of *real* invocations in the corpus, so exempting the file would unguard exactly
+the document the guard exists for. A **negation-context heuristic** ("there is no…", "does not
+exist") fails **open** — it would swallow genuine drift that happens to sit near those words, and
+makes the guard's correctness depend on English phrasing.
+
+The marker syntax is HTML-comment delimited. Matching it syntax-agnostically (so it also works in a
+`#` comment) was requested by two council seats and deliberately **deferred to AGE-30**, which is the
+story that would widen the scan to `bin/*.sh`; a bare substring cannot be quoted in a scanned
+document without self-applying, and there is no second wrapper to serve until that widening exists.
+
+Ruled by `/council-vote`, unanimous 3-0 in round one, two of three seats voting against their own
+proposals. Full audit trail: `.council/age32-negative-example-suppression/DECISION.md`.
+
 ## What was deliberately not built
 
 A full forge supervisor. `forge-state.sh` emits `category` / `auto_advance` / `transition_id` as

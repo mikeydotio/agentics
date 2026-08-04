@@ -1,6 +1,6 @@
 {
   "name": "deployit",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "On-tailnet OTA deploys for iOS, macOS, and visionOS apps. Archives, signs, and serves Development-method builds from each Mac via Tailscale Serve; cross-machine shared listing rendered from a git-backed index. Semver-aware: reports the project's semver version when the semver plugin is active, and bumps it on deploy when it has not changed since the last build.",
   "author": {
     "name": "mikeydotio"

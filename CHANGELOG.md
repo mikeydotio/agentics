@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.1.0] - 2026-08-04
+
+### Added
+- let a doc deny a dead `story` form via a token-bound marker (46d884a)
+
+### Fixed
+- treat a placeholder in the relation slot as a wildcard (f5a7b7f)
+
+### Changed
+- extract the placeholder-slot rule into is_placeholder() (71029b2)
+- Merge pull request #142 from mikeydotio/docs/AGE-28-handoff-note (e053492)
+- Merge pull request #141 from mikeydotio/fix/AGE-28-archive-configuration (a2e4412)
+
+### Documentation
+- record the negative-example suppression decision (89cb106)
+- claim AGE-32 and mark the loop in flight (5366a08)
+- record why the queue takes AGE-32 over story next's AGE-12 (0c1dde7)
+- close out AGE-28 and hand off to AGE-32 (c236bf1)
+
+_[manual]_
+
 ## [v3.0.0] - 2026-08-04
 
 ### Fixed

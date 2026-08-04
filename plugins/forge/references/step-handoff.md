@@ -45,8 +45,9 @@ follows. Every orchestrated step follows the same pattern:
      correlate) — the logged line reads `transition_id=none` instead of failing.
    - `--extra-path <path>` (repeatable) — stage additional paths beyond `.forge/` in the same
      commit instead of a broad `git add -A`. Use this whenever a step's commit must also capture
-     changes outside `.forge/` (decompose and execute's Complete path both need
-     `--extra-path .storyhook/`; validate needs one `--extra-path <file>` per test file it wrote).
+     changes outside `.forge/` — validate, for instance, needs one `--extra-path <file>` per test
+     file it wrote. **Storyhook is never such a path**: story state lives in a store outside the
+     repository, so no step commits it (see `references/handoff-format.md`).
    - The script itself resolves its own location via `SCRIPT_DIR`, so `bash
      ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh` is the only invocation form to use — never a
      bare `plugins/forge/bin/forge-step-exit.sh` relative path.

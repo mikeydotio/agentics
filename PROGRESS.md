@@ -16,9 +16,9 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-11** |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17 |
-| **Last updated by** | AGE-17 session, 2026-08-04 |
+| **Next story** | **AGE-27** |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11 |
+| **Last updated by** | AGE-11 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
@@ -26,7 +26,35 @@ via freshen, and stops.
 
 ---
 
-## Known state (updated 2026-08-04 by the AGE-17 session)
+## Known state (updated 2026-08-04 by the AGE-11 session)
+
+- **The repo is at v2.40.1** (AGE-11 shipped a `patch` — the flag it deleted was a no-op, so
+  nothing about forge's actual behaviour changed).
+- **`make -k test` had exactly ONE red across the whole run before the bump**, and it was the
+  expected `test_shipped_content_matches_tagged_release`. It cleared on the bump. **No
+  `SKIP_PREPUSH_TESTS=1` was needed** — three sessions running now. Treat a bypass as a red flag.
+  Wall clock was **~2 hours**, not the ~15 min this file used to claim; budget accordingly and
+  start the run early. AGE-21's `test-cli-rm.sh` flake did **not** fire this run.
+- **⚠ There is a NEW gate suite: `tests/storyhook-path-guard.sh` (`make test-storyhook-path-guard`).**
+  It has two layers and they have deliberately different scopes — read the header before you
+  fight it:
+  - **Layer 1** bans `--extra-path` naming storyhook's retired per-repo dir, in any spelling,
+    **repo-wide, no exceptions**. It matches the *unslashed* form too, because `.storyhook` and
+    `.storyhook/` are the same git pathspec.
+  - **Layer 2** bans the bare path name in **shipped content only**, reusing
+    `plugin-content-drift.sh`'s `SHIPPED_PATHSPEC` verbatim. The `plugins/*/tests/**`, `**/*.bats`
+    and `plugins/*/README.md` exclusions are **load-bearing, not laziness**: they preserve
+    historical comments that name the retired path in order to *deny* it (e.g.
+    `forge-crash-recover.bats:132`). Do not "tidy" them away — a guard you can satisfy by deleting
+    true sentences is the wrong guard. If you change `SHIPPED_PATHSPEC` in one file, change it in
+    both.
+  - The guard **assembles the retired name from string fragments** rather than writing it out, so
+    it does not trip its own scan. That is why it needs no self-exemption. Don't "simplify" it.
+- **`tests/init.bats` and `tests/helpers.bash` still build a fake per-repo storyhook fixture.**
+  Layer 2 does not reach them (they are not under `plugins/`) and that is **AGE-13's** job, not a
+  miss.
+
+## Known state (from the AGE-17 session)
 
 - **The repo is at v2.40.0** (AGE-17 shipped a `minor` — it added two keys to
   `forge-contract-check.sh`'s documented JSON output, which CLAUDE.md classes as a non-breaking
@@ -167,8 +195,9 @@ without recording why in this file.
 | ✅ | ~~**AGE-16**~~ | high | **DONE** — the `blocks-ci` flake is gone. See "What AGE-16 turned out to be" below; its filed diagnosis was wrong in an instructive way. |
 | ✅ | ~~**AGE-18**~~ | high | **DONE** — the gate now fails instead of skipping. See "What AGE-18 turned out to be" below; **no version bump was needed** (it touched no shipped `plugins/**`). |
 | ✅ | ~~**AGE-17**~~ | high | **DONE** — the guard now validates two-token forms. See "What AGE-17 turned out to be" below. Shipped as **v2.40.0** (minor: additive JSON keys). Filed **AGE-24** and **AGE-25** on the way. |
-| 1 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
-| 2 | **AGE-24** | med | **New, filed by this session. Pulled to the front of the medium block** — reason recorded as the rule requires: it is the *other half* of AGE-17, the guard still cannot catch the drift it exists to catch, and the context for it is fresher now than it will ever be again. **Read "What AGE-17 turned out to be" first** — and note its fix collides with a deliberate existing test. |
+| ✅ | ~~**AGE-11**~~ | med | **DONE** — the dead `--extra-path` calls are gone and a two-layer guard stops them returning. Shipped as **v2.40.1** (patch). See "What AGE-11 turned out to be" below. Filed **AGE-26** and **AGE-27** on the way. |
+| 1 | **AGE-27** | **high** | **New, filed by the AGE-11 session. Leads the queue on the table's own priority-first rule** — it is the only `high` open. Repo-root `AGENTS.md` is auto-discovered by *every* agent, unprompted, and teaches three false things; two of them are commands that error exit 2. ⚠ **Collides with AGE-24 on `forge-contract-check.sh`** — see the note below the table before choosing an order. |
+| 2 | **AGE-24** | med | It is the *other half* of AGE-17: the guard still cannot catch the drift it exists to catch. **Read "What AGE-17 turned out to be" first** — and note its fix collides with a deliberate existing test. |
 | 3 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
 | 4 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
 | 5 | **AGE-6** | med | WS-C, rca realign. Independent. **Check `gh issue view 118` before starting** — see the scope collision above. |
@@ -182,10 +211,26 @@ without recording why in this file.
 | 12 | **AGE-9** | low | Council-decision story, independent. |
 | 13 | **AGE-13** | low | Council-decision story, independent. |
 | 14 | **AGE-23** | low | Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. **Confirmed live again this session:** the council skill's own `references/council-protocol.md` failed to resolve skill-relative and cost a wasted tool call. |
-| 15 | **AGE-25** | low | **New, filed by this session.** AGE-17's own safety mechanisms are unproven — see below. |
-| 16 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
+| 15 | **AGE-25** | low | AGE-17's own safety mechanisms are unproven — see below. |
+| 16 | **AGE-26** | med | **New, filed by the AGE-11 session.** greenlight auto-approves the whole `story` CLI on a premise storyhook 2.0 falsified. Its *comment* is already corrected (AGE-11, v2.40.1); what remains is the trust-boundary judgement — see below. |
+| 17 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
 
-**AGE-2, AGE-3, AGE-14, AGE-15, AGE-16 and AGE-18 are already `done`** — do not touch them.
+**AGE-2, AGE-3, AGE-11, AGE-14, AGE-15, AGE-16, AGE-17 and AGE-18 are already `done`** — do not
+touch them.
+
+### ⚠ AGE-27 × AGE-24 both edit `forge-contract-check.sh` — pick an order deliberately
+
+They are orthogonal widenings of the same script: **AGE-24 widens *what text* is scanned** (it only
+reads inside fenced blocks today, so inline-backtick prose is invisible), while **AGE-27's durable
+half widens *which files* are scanned** (`:290-297` builds the list from `<root>/references/*.md`
+plus `<root>/skills/*/SKILL.md`, so repo-root `AGENTS.md` is in neither set). Either order works;
+whichever lands second must rebase onto the first.
+
+**AGE-27 splits cleanly if you want it to.** Its text half — regenerate `AGENTS.md`, fix
+`.gitignore:10` — touches neither `plugins/**` nor `forge-contract-check.sh`, so it needs **no
+version bump** and cannot conflict with AGE-24. A defensible alternative to the queue order above
+is: land AGE-27's text half now, fold its guard-scope half into AGE-24, and close AGE-27 against
+that PR. Decide with `/council-vote`, don't just drift into it.
 
 ### Unscheduled stories — slot these in
 
@@ -202,6 +247,59 @@ half of AGE-17.
 | **AGE-24** | med | **Filed by the AGE-17 session.** `forge-contract-check.sh` extracts candidates ONLY from inside fenced ```` ``` ```` blocks (`:226`, `d==1`). Every `story ...` written as inline-backtick prose is invisible. **All eight `story project ` occurrences in the scanned docs sit at fence depth 0** — so even with AGE-17 landed, the guard would have caught NONE of the historical `project init` drift. ⚠ Its fix collides with a **deliberate** existing test (`forge-contract-check.bats:175` asserts inline signatures like `` `story relate <a> <relationship> <b>` `` are ignored), so widening must distinguish a concrete invocation from a placeholder signature. Not a one-liner. |
 | **AGE-25** | low | **Filed by the AGE-17 session.** AGE-17's own safety mechanisms are unproven: (1) the monotone-safe `real_verbs` filter is unexercised by any input — zero non-verb tokens reach position 1 under synopsis-only harvest, so it catches nothing and no test covers it; (2) the "global help is the enforcement floor" invariant bounds the verb *domain* but not the *vocabulary* — per-verb help is a strict superset for `web` only, so a degraded `story help <verb>` costs `web` its `status` and would flag a doc using `story web status`. One-token false positive, invisible to the `>= 11` cardinality floor. |
 | **AGE-20** | low | Ten duplicated storyhook fixture-creation sites across two plugins — why one upstream rename cost ten edits. **Deliberately deferred**: the 10th site is in a *different plugin*, so a shared helper is a new cross-plugin module boundary, not a mechanical extraction. Land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
+| **AGE-26** | med | **Filed by the AGE-11 session.** `greenlight.sh` auto-approves the *entire* `story` CLI (`story) return 0 ;;`). Its stated grounds — "only mutates a git-tracked per-repo dir, so a `git checkout` away from reverted, never leaves the project directory" — are false in every clause since storyhook 1.0.0. **AGE-11 already corrected the comment** (comment-only, two hats) and pointed it at this story; what is left is the judgement: `story delete` / `story purge --force` / `story project delete` are auto-approved against un-revertible global state shared by every repo on the machine. Options in the story: (a) keep the blanket allow, since the real justification is the forge hot path (F076/F077) and that survives; (b) split the verb surface — but note AGE-17's lesson, a first-token match cannot tell `story project list` from `story project delete`, so it needs two-token depth. |
+| **AGE-27** | **high** | **Filed by the AGE-11 session.** Repo-root `AGENTS.md` (54 lines, a stale storyhook-1.x generated artifact) teaches agents three false things: the retired per-repo dir is "version-controlled project data, do NOT gitignore it"; `story <id> is done` (**verified: `error: unknown command`, exit 2** — and `storyhook-contract.md:7-9` explicitly says no id-first form exists); and an entire "MCP Server" section with `story mcp-config` (**verified: exit 2** — and `storyhook-contract.md:3-4` says flatly "There is no MCP server"). `.gitignore:10` carries the first claim too. **Higher stakes than the forge-internal case AGE-11 fixed**: root `AGENTS.md` is read by convention, unprompted, so it reaches agents that never load a forge skill. Mechanical fix is `story scaffold agents-md`, but that swaps 54 reviewed lines for ~130 unreviewed ones promoting surfaces forge is silent on — needs a read-through, not a ride-along. |
+
+### What AGE-11 turned out to be — the diagnosis was right, the *inventory* was badly short
+
+AGE-11's stated cause was correct and reproduced immediately: `story help storage` says a repo
+"carries a single committed file — `.storyhook.toml` — … and no story data at all", and
+`forge-step-exit.sh` skips a nonexistent `--extra-path`, so all three calls were dead no-ops. What
+the story got wrong was **size**:
+
+1. **9 sites → 26 occurrences across 12 files.** Even the audit-correction comment (which raised 6
+   to 9) undercounted by a factor of ~3. Two of the misses mattered:
+   `plugins/greenlight/hooks/greenlight.sh:471` (a *different plugin*) and
+   `plugins/forge/bin/forge-crash-recover.bats:132` (a mention that is **correct** — it names the
+   retired path in order to deny it). **Grep the whole tree before you trust any "Where" list in
+   this backlog.** Two of three council seats independently found the same missing site the chair
+   had missed.
+2. **The myth had escaped `plugins/` entirely** — repo-root `AGENTS.md:45` and `.gitignore:10`
+   carry it too. Filed as **AGE-27** (high), because `AGENTS.md` also documents two commands that
+   do not exist.
+
+**The guard-shape lesson (the genuinely contested part).** The chair proposed one exceptionless
+literal ban. The council rejected that shape unanimously, for a reason worth keeping:
+
+> A guard you can satisfy by **deleting true sentences** is the wrong guard.
+
+Some documentation has to *name the wrong thing in order to correct the reader* — and an
+LLM-facing doc especially, because omission leaves a wrong prior intact where only negation
+overwrites it. Hence two layers with different scopes: exceptionless for the *invocation form*
+(nobody ever legitimately writes it), shipped-content-only for the *bare name* (historical
+rationale comments live in `.bats` and belong there). The exclusions are reused from
+`plugin-content-drift.sh` rather than invented, so "shipped" has one definition.
+
+Two more things carried forward:
+
+- **AGE-17's mistake was nearly repeated.** The first two guard proposals matched only the spelling
+  **with** the trailing slash — but the same flag with the *unslashed* spelling is the identical
+  git pathspec and would have sailed through green. Both authors conceded this and switched. When
+  you write a guard, enumerate the *equivalent spellings*, not the one you happened to find.
+- **The guard's first catch was this file.** An earlier draft of the bullet above wrote the banned
+  flag-and-path pair out in full, to explain it — and Layer 1 blocked the push. That is the layer
+  working as specified, not a false positive to file down: prose can always describe the pattern
+  without typing an executable-looking invocation, and keeping Layer 1 genuinely exceptionless is
+  worth more than the two words it cost to reword. **Expect this if you write about the defect.**
+- **The effect oracle was worth it.** The "silently skips a nonexistent path" test asserted only
+  exit 0, which would still pass if the script died right after the staging loop. It now asserts
+  the commit, the state.json patch and the freshen fallback — and a mutation (dropping the
+  `[ -e "$p" ]` guard) was run to **prove the new assertions actually go red**. Do this; it is
+  cheap and it is the difference between a test and a decoration.
+
+**Design ruled by `/council-vote`** — unanimous 3-0 in round one, with both losing authors voting
+against their own proposals after naming the specific defect in each. Full audit trail:
+`.council/age11-storyhook-extra-path/DECISION.md`.
 
 ### What AGE-17 turned out to be — the story was RIGHT, and still not enough
 

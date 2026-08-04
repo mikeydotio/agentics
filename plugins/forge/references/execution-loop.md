@@ -425,9 +425,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" 
   #    best-effort, never a precondition for anything below).
   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .
   # Ignore `.ok`/`.reason` beyond logging: `no_plan_mapping`, `story_cli_missing`,
-  # etc. are all fine to silently continue past. Only `.closed == true` means
-  # `.storyhook/` actually changed and needs to ride along in item 5's commit
-  # below.
+  # etc. are all fine to silently continue past. `.closed` is informational
+  # only -- the close writes to storyhook's own store, which is outside the
+  # repository, so item 5's commit has nothing to pick up either way.
 
   # 3. Storyhook report
   story summary
@@ -440,12 +440,12 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" 
     - Notable decisions and patterns
     - Duration and session count
 
-  # 5. Release the lock, then step-exit: commit (include .storyhook/ in case
-  #    Step 2 closed the project story) and queue freshen for the NEXT step
-  #    (review_validate) — do NOT cancel.
+  # 5. Release the lock, then step-exit: commit and queue freshen for the NEXT
+  #    step (review_validate) — do NOT cancel. No --extra-path is needed:
+  #    storyhook keeps story state outside the repository.
   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh release --session-id "$SESSION_ID" --forge-dir .forge
   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
-    --summary "all stories complete" --next "/forge continue" --extra-path .storyhook/
+    --summary "all stories complete" --next "/forge continue"
   # status stays in the same two-value space as every other exit path
   # ("running" while looping, "paused" once the loop has exited for any
   # reason) — forge-step-exit.sh's own patch sets it. There is no third

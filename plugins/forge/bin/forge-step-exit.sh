@@ -18,11 +18,13 @@
 #                       a new one — there is no next command to resume to.
 #
 # --extra-path <path> may be repeated. Use it when a step's commit must also
-# capture changes outside .forge/ (e.g. decompose/execute committing
-# `.storyhook/`, or validate committing new test files it wrote) instead of
-# reaching for a broad `git add -A`, which sweeps in unrelated untracked
-# files. A path that doesn't exist on disk is silently skipped (e.g.
-# `.storyhook/` on a project with no storyhook data yet).
+# capture changes outside .forge/ (e.g. validate committing new test files it
+# wrote) instead of reaching for a broad `git add -A`, which sweeps in
+# unrelated untracked files. A path that doesn't exist on disk is silently
+# skipped, and skipping one does not stop the others from being staged.
+#
+# Storyhook is never an --extra-path: story state lives in a store outside the
+# repository, so there is no repo path for a step to commit (AGE-11).
 #
 # --transition-id <id> (optional, agentics#33) — the `transition_id` from
 # the `forge-state.sh --record-transition` JSON output the router read

@@ -124,9 +124,10 @@ Write `.forge/TRIAGE.md`:
 2. Write `.forge/handoffs/handoff-triage.md` (content: see step-handoff.md's Triage Handoff table)
 3. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step triage \
-     --summary "[FIX count] FIX, [ESCALATE count] ESCALATE" --next "/forge continue" \
-     --extra-path .storyhook/
+     --summary "[FIX count] FIX, [ESCALATE count] ESCALATE" --next "/forge continue"
    ```
+   No `--extra-path` is needed: any ESCALATE stories this step created live in storyhook's own
+   store outside the repository (see `references/handoff-format.md`).
 4. STOP
 
 The orchestrator reads TRIAGE.md on next `continue`:

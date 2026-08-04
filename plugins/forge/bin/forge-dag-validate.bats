@@ -35,7 +35,7 @@ jq_field() {
 
 # --- Uninitialized project ---
 
-@test "dag-validate: ok is false when .storyhook project is not initialized" {
+@test "dag-validate: ok is false when the storyhook project is not initialized" {
   UNINIT_DIR="$(mktemp -d)"
   run bash "$SCRIPT" "$UNINIT_DIR"
   [ "$status" -eq 0 ]

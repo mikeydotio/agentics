@@ -1,8 +1,8 @@
 # Storyhook Command Contract
 
 This document maps forge operations to the real `story` CLI. Storyhook has **one** interface: the
-CLI. There is no MCP server — storyhook does not expose one. No direct file manipulation of
-`.storyhook/` data files.
+CLI. There is no MCP server — storyhook does not expose one, and there is no data file to edit:
+story data lives in a SQLite store outside the repository (`story help storage`).
 
 The CLI is strictly **verb-first**: the first token after `story` must be a known subcommand.
 There is no id-first form (`story HP-N is done` does not exist and errors with `unknown command`,
@@ -250,8 +250,8 @@ one line per state as `<slug> (<SUPER>[, active])[ — N open]`, and `story stat
 returns `{"result":"ok","message":"<that same rendered text>"}`: states are **not** structured, so
 presence detection is a grep on rendered text, not a JSON query. Callers that need idempotency
 should still tolerate/ignore the specific exit-2 "already exists" error rather than pre-checking.
-There is no `.storyhook/states.toml` to hand-edit — state definitions live in storyhook's global
-store, and the `story state` verbs are the only way to change them.
+There is no per-repo file to hand-edit — state definitions live in storyhook's global store, and
+the `story state` verbs are the only way to change them.
 
 ## Decompose
 
@@ -338,4 +338,6 @@ Track consecutive storyhook command failures. Reset the counter to 0 on ANY succ
   free-form structured data.
 - **`unknown type "<slug>"`** (exit 2): `story_type` not yet registered — see **Custom Types** above.
 - **Invalid state**: state not yet created — see **Custom States** above.
-- **Permission error**: `.storyhook/` not writable.
+- **Permission error**: storyhook's store is not writable. It is outside the repository — resolve
+  its location with `story help storage` (`$STORYHOOK_DATA_DIR`, else `$XDG_DATA_HOME/storyhook`,
+  else `~/.local/share/storyhook`); do not look for it under the project directory.

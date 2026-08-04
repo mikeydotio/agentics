@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.40.1] - 2026-08-03
+
+### Fixed
+- retire the .storyhook/ path forge could never have committed (95d3d5d)
+
+### Changed
+- Merge pull request #135 from mikeydotio/fix/AGE-17-subcommand-verb-guard (03af3a1)
+
+### Documentation
+- correct the falsified premise behind the story allowlist (a6d0494)
+- close out AGE-17 and requeue the backlog (2f5938d)
+
+### Testing
+- guard storyhook's retired per-repo path against reintroduction (283efb2)
+
+_[manual]_
+
 ## [v2.40.0] - 2026-08-03
 
 ### Fixed

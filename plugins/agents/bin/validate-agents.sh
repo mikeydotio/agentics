@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # validate-agents.sh — Structural validation for shared agent definitions
-# Run from repo root: bash plugins/agents/bin/validate-agents.sh
+# Runnable from anywhere: bash plugins/agents/bin/validate-agents.sh
 
 set -euo pipefail
 
-AGENTS_DIR="plugins/agents/agents"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AGENTS_DIR="$(cd "$SCRIPT_DIR/../agents" && pwd)"
 ERRORS=0
 AGENTS=0
 

@@ -175,16 +175,13 @@ introduced by resuming an existing `plan-mapping.json` (Step 1's "Continue" path
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/plan-mapping.json`
-2. Write `.forge/handoffs/handoff-decompose.md` (content: see step-handoff.md's Decompose Handoff
-   table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step decompose \
-     --summary "create stories from plan" --next "/forge execute --orchestrated"
-   ```
-   No `--extra-path` is needed: the stories this step just created live in storyhook's own store
-   outside the repository, so there is no repo path to commit (see `references/handoff-format.md`).
-4. STOP
+**If `--orchestrated`:** Write `.forge/plan-mapping.json`, then follow the Step Exit Protocol
+(`references/step-handoff.md`) — write `handoff-decompose.md` (Decompose Handoff table) and run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step decompose \
+  --summary "create stories from plan" --next "/forge execute --orchestrated"
+```
+No `--extra-path` is needed: the stories this step just created live in storyhook's own store
+outside the repository, so there is no repo path to commit (see `references/handoff-format.md`).
 
 **If standalone:** Write outputs, report story count and structure to user, exit.

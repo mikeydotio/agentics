@@ -1,7 +1,8 @@
 ---
 name: rca
-description: Use when a KNOWN bug, regression, or defect needs its true root cause found and fixed well — not for discovering whether bugs exist. Scientific-debugging pipeline - reproduction-gated (automated failing test first), Kepner-Tregoe differential intake, deterministic git forensics (bisect/blame/pickaxe/hotspots), competing-hypothesis falsification in disposable worktrees, ODC classification, calibrated surgical-vs-redesign verdicts, gated two-hats fixes, committed blameless postmortems. Resumable; latches to GitHub/storyhook issues.
+description: Use when a KNOWN bug, regression, or defect needs its true root cause found and fixed well — not for discovering whether bugs exist. Reproduction-gated scientific-debugging pipeline: Kepner-Tregoe intake, deterministic git forensics (bisect/blame/pickaxe/hotspots), competing-hypothesis falsification in disposable worktrees, ODC classification, surgical-vs-redesign verdicts, gated two-hats fixes, committed blameless postmortems. Resumable; latches to GitHub/storyhook issues.
 argument-hint: "[bug description] | full|light <desc> | --issue <ref> <desc> | continue [slug] | status | abandon <slug>"
+effort: high
 ---
 
 # RCA: Root Cause Analysis Orchestrator

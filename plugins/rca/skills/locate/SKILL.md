@@ -2,6 +2,7 @@
 name: locate
 description: RCA step 3 (FULL tier) — deterministic git forensics. Bisect the regression in a disposable worktree, run blame/pickaxe/SZZ-lite and hotspot analysis, and have the investigator synthesize a facts-only ORIGIN.md.
 argument-hint: "[slug]"
+effort: high
 ---
 
 # RCA Locate — Origin Forensics

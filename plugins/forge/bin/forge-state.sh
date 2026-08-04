@@ -252,7 +252,7 @@ detect_handoff() {
 # done" computation below; a completely separate, best-effort close of the
 # project story (for `story list`/`story summary` hygiene, not correctness)
 # happens at the execute loop's Complete step via
-# forge-close-project-story.sh — see references/execution-loop.md. This read
+# forge-close-project-story.sh — see references/execution-loop-complete.md. This read
 # is intentionally side-effect-free: forge-state.sh is invoked from many
 # non-execute contexts (hooks, `/forge status`) and must stay a pure detector.
 read_project_story() {

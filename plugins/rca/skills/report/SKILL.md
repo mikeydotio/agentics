@@ -2,6 +2,8 @@
 name: report
 description: RCA step 5 — turn the verified diagnosis into durable REPORT.md + REMEDIATION.md via the software-architect, post findings to the latched issue, and run the caller gate: proceed to the fix, or hand off.
 argument-hint: "[slug]"
+model: sonnet
+effort: medium
 ---
 
 # RCA Report — Remediation Design & the Caller Gate

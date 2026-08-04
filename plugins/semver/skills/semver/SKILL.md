@@ -2,7 +2,8 @@
 name: semver
 description: Use when the user wants to manage semantic versioning for their project. Handles version tracking (start/stop), version bumping (major/minor/patch) with changelog generation, assigning an explicit version (set), one-shot initialization (init), reading current version, auto-bump configuration, and sync integrity validation/repair. Commands are /semver current, /semver bump, /semver set, /semver init, /semver tracking, /semver auto-bump, /semver validate, and /semver repair.
 argument-hint: <current | bump <major|minor|patch> [--force] | set <vX.Y.Z> | init [vX.Y.Z] | tracking <start [options]|stop> | auto-bump <start|stop> | validate | repair>
-model: claude-sonnet-4-6
+model: sonnet
+effort: medium
 ---
 
 # Semantic Versioning Orchestrator
@@ -132,3 +133,13 @@ If the router returns `needs_input: true` with questions, ask the question, then
 **pure passthrough**: route once, check `ok`, show the `display` field, and stop. They
 never return a `questions` array or prompt hooks — do **not** enter the Question Loop or
 perform any extra analysis (e.g. reading the git log) for these.
+
+## References
+
+- `references/user-hooks.md` — pre/post-bump hook contract: directory structure, env vars, exit codes, `PROMPT_HOOK.md` AI hooks
+- `references/config-schema.md` — `.semver/config.yaml` schema: tracking, auto_bump, version_prefix, git_tagging, changelog_format
+- `references/changelog-format.md` — CHANGELOG.md layout: grouped vs. flat formats, group categories, version-header format
+- `references/sync-validation.md` — the six `/semver validate` checks and their guided repair procedures
+- `references/set-and-init.md` — the `set`/`init` two-phase run/execute contract
+- `references/archive-format.md` — `VERSIONING_ARCHIVE.md`'s structure, written by `tracking stop` and read back by a later `tracking start`
+- `references/claude-md-injection.md` — the `<!-- semver:start -->`-delimited block injected into a project's CLAUDE.md by `tracking start`

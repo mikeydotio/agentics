@@ -1,7 +1,8 @@
 ---
 name: reconcile-pr
-description: Rebase a GitHub PR's branch onto the latest tip of its base branch, resolve any merge conflicts while preserving BOTH the pre-existing base behavior and the PR's new behavior, verify with exhaustive testing, force-push the reconciled branch under a leased safety guard, then comment on the PR summarizing the conflicts and their resolution. Use when the user says "reconcile PR N", "rebase PR N onto main", "resolve conflicts on PR N", or "bring PR N up to date". Requires an authenticated gh CLI and a git repo.
+description: Rebase a GitHub PR onto the latest tip of its base branch, resolve conflicts while preserving both the base and the PR's new behavior, verify with exhaustive testing, then force-push under a leased safety guard and comment the resolution on the PR. Use when the user says "reconcile PR N", "rebase PR N onto main", or "resolve conflicts on PR N". Requires an authenticated gh CLI and a git repo.
 argument-hint: "<pr-number>"
+effort: high
 ---
 
 # Reconcile PR

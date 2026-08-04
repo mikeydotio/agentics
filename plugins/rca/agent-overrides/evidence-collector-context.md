@@ -11,7 +11,7 @@ Collect facts the grid's distinctions point at: how errors are handled along the
 (swallowed? transformed?); test coverage over the implicated code (uncovered paths are
 evidence); sibling code that does the same job correctly (the diff between working and failing
 patterns is gold); environmental/config dependencies; TODO/FIXME/assumption comments near the
-implicated lines. Facts only — no causal theories; those are the dispatching skill's job.
+implicated lines (no causal theories — those are the dispatching skill's job).
 
 Expected return: categorized evidence with file:line citations, ranked by relevance to the
 symptom, plus an explicit "looked and found nothing" list (absence of evidence is evidence).
@@ -32,5 +32,5 @@ search commands you used (so the sweep is reproducible and auditable).
 
 ## Constraints (both sections)
 
-Read-only; you return a report and the dispatching skill persists artifacts. Stay within the
+You return a report and the dispatching skill persists artifacts. Stay within the
 target project; `.rca/<slug>/` paths in your prompt are context, not a workspace.

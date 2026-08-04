@@ -38,7 +38,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-prechecks.sh --story-id <id> --mapping .for
 
 - `all_passed: true` → proceed to the evaluator (Step 5 of `references/execution-loop.md`).
 - `all_passed: false` → find the failing check(s) in `checks[]`, store its `details` as a storyhook
-  comment, and go to retry (`references/execution-loop.md`'s Retry step) — do not invoke the
+  comment, and go to retry (`references/execution-loop-retry.md`) — do not invoke the
   evaluator on a failing pre-check.
 - A check's own `flaky_tests` (tests) or `unexpected_modified` (scope) fields are informational,
   not failures — they don't block proceeding to the evaluator.

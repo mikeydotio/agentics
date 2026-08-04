@@ -119,16 +119,14 @@ Write `.forge/TRIAGE.md`:
 
 ## Exit
 
-**If `--orchestrated`:** Follow the Step Exit Protocol (`references/step-handoff.md`):
-1. Write `.forge/TRIAGE.md`
-2. Write `.forge/handoffs/handoff-triage.md` (content: see step-handoff.md's Triage Handoff table)
-3. ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step triage \
-     --summary "[FIX count] FIX, [ESCALATE count] ESCALATE" --next "/forge continue"
-   ```
-   No `--extra-path` is needed: any ESCALATE stories this step created live in storyhook's own
-   store outside the repository (see `references/handoff-format.md`).
-4. STOP
+**If `--orchestrated`:** Write `.forge/TRIAGE.md`, then follow the Step Exit Protocol
+(`references/step-handoff.md`) — write `handoff-triage.md` (Triage Handoff table) and run:
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step triage \
+  --summary "[FIX count] FIX, [ESCALATE count] ESCALATE" --next "/forge continue"
+```
+No `--extra-path` is needed: any ESCALATE stories this step created live in storyhook's own
+store outside the repository (see `references/handoff-format.md`).
 
 The orchestrator reads TRIAGE.md on next `continue`:
 - If FIX items exist and cycle < max → archives current cycle, dispatches to plan (FIX loop)

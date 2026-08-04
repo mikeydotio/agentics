@@ -2,6 +2,8 @@
 name: freshen
 description: Manage automatic context clearing — queue a /clear + re-invocation, check status, or cancel pending signals. Requires tmux.
 argument-hint: queue <command> --source <name> [--summary <text>] | status | cancel [--source <name> | --all] | enable | disable
+model: sonnet
+effort: low
 ---
 
 # Freshen: Automatic Context Clearing

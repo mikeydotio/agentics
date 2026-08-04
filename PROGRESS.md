@@ -16,7 +16,7 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-11** |
+| **Next story** | **AGE-18** |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16 |
 | **Last updated by** | AGE-16 session, 2026-08-04 |
 
@@ -122,13 +122,19 @@ prescribed test would have proved nothing. Reproduce, instrument, and *attribute
 Ordered by priority first, then constrained by the storyhook dependency graph. Do not reorder
 without recording why in this file.
 
+> **Reordered 2026-08-04 by the AGE-16 session, reason recorded as the rule requires.** AGE-11
+> (`medium`) had been sitting ahead of AGE-18 and AGE-17 (both `high`), which contradicts this
+> table's own priority-first rule; `story next` independently picks from the `high` pair. AGE-18
+> leads because it is the most foundational: while `make test` can exit 0 with `bats` absent, no
+> green result from this loop means what it claims — including the one AGE-16 just relied on.
+
 | # | Story | Pri | Why here |
 |---|---|---|---|
 | ✅ | ~~**AGE-14** + **AGE-15**~~ | high | **DONE** — merged together as one PR. See "What AGE-14 turned out to be" above. |
 | ✅ | ~~**AGE-16**~~ | high | **DONE** — the `blocks-ci` flake is gone. See "What AGE-16 turned out to be" below; its filed diagnosis was wrong in an instructive way. |
-| 1 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
-| 2 | **AGE-18** | high | `make test` exits 0 when `bats` is absent — the gate is vacuously green on any machine without it. Highest-value remaining: every "the suite is green" claim this loop makes rests on it. |
-| 3 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — first token only, so the F103 drift guard is blind to every subcommand rename. Pairs naturally with AGE-18. |
+| 1 | **AGE-18** | high | `make test` exits 0 when `bats` is absent — the gate is vacuously green on any machine without it. **Do this first:** every "the suite is green" claim this loop makes rests on it, including AGE-16's. |
+| 2 | **AGE-17** | high | `forge-contract-check.sh:87` derives verbs with `awk '{print $2}'` — first token only, so the F103 drift guard is blind to every subcommand rename. Same class as AGE-18 (a guard that does not guard); pairs naturally with it. |
+| 3 | **AGE-11** | med | First of the three stories that edit `execution-loop.md` / `step-handoff.md`. Smallest of the trio — land it before the two that restructure those files. |
 | 4 | **AGE-4** | med | Splits `execution-loop.md`. After AGE-11. |
 | 5 | **AGE-5** | med | Rewrites around `step-handoff.md`. After AGE-11. |
 | 6 | **AGE-6** | med | WS-C, rca realign. Independent. |

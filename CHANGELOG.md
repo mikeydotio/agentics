@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.3.0] - 2026-08-04
+
+### Fixed
+- catch placeholder verbs like `story <id> is done` (857450c)
+- let a marker suppress a placeholder token (0e96c23)
+
+### Changed
+- Merge pull request #145 from mikeydotio/fix/AGE-24-inline-backtick-scan (b4b807b)
+
+### Documentation
+- claim AGE-31 and mark the loop in flight (06ef90c)
+- close out AGE-24 and hand off to AGE-31 (bd69c3d)
+
+_[manual]_
+
 ## [v3.2.0] - 2026-08-04
 
 ### Fixed

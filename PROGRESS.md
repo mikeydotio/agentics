@@ -16,16 +16,87 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-12** — storywork's in-progress claim diagnostic. Nothing is blocked any more (`blocked: 0`), so the dependency-graph rule no longer overrides `story next`; it and this table now agree. Confirm with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30 |
-| **Repo version** | **v3.5.0** — minor, NOT the `patch` AGE-30 predicted. See the level note below. |
-| **Last updated by** | AGE-30 session, 2026-08-04 |
+| **Next story** | **AGE-21** — deployit's `test-cli-rm.sh` needs a live local daemon; the last known source of pre-push gate noise. Nothing is blocked (`blocked: 0`), so `story next` and this table agree. Confirm with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12 |
+| **Repo version** | **v3.6.0** — minor. See the level note below; AGE-12's own text implied a patch. |
+| **Last updated by** | AGE-12 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-12 session)
+
+- **AGE-12 is DONE and shipped as v3.6.0. AGE-21 leads the queue.** Nothing is blocked
+  (`blocked: 0`); confirm with `story list --ready`, not this line.
+- **⚠ THE STORY'S CENTRAL CLAIM WAS FALSE, AND ONLY REPRODUCTION REVEALED IT.** AGE-12 states the
+  failure surfaces *"only a generic `story move ... failed` message"* and that *"nothing in the
+  error names the actual cause"*. Reproduced live, the shipped script already emitted ``story move
+  TST-1 in-progress failed: state `in-progress` is not defined.`` — the cause **was** named,
+  because `story.sh:282` has interpolated the CLI's `.error` since its first commit. The real gap
+  was narrower and different: **no remedy, and no machine-readable discriminator.** Implementing
+  what was filed would have changed nothing.
+- **⚠ THE CONDITION CANNOT BE CREATED THROUGH THE CLI ANY MORE — the repro needed SQLite surgery
+  on the store.** storyhook 2.0.0 enforces a four-state invariant (SH-125): `state remove
+  in-progress` refuses, `state set in-progress --super CLOSED` refuses, and while `in-progress` is
+  missing **every other `state add` refuses too**. It is reachable only via a legacy store (this
+  repo's own AGE project until AGE-2), direct surgery, or an upstream regression. Consequence:
+  **no committed regression test may build the broken vocabulary.** The fake models it; the
+  real-CLI tier (case R3) instead pins the *premise* of the parse against a healthy project, which
+  is the part that would silently rot.
+- **⚠ THE OBVIOUS IMPLEMENTATION IS A TRAP.** Matching the move's own error text (``state `X` is
+  not defined``) looks like the cheap fix. storyhook emits **that same sentence** when the
+  undefined state is the `--if-state` value — the story's *current* state — a different fault with
+  a different remedy. A regex answers confidently and wrongly. The shipped fix **observes**
+  instead: it reads the vocabulary via `story state list` on the already-failed path. Presence of a
+  state is a fact; wording is version-coupled guesswork.
+- **⚠ THE COUNCIL'S DECIDING FACT KILLED TWO OF ITS OWN SEATS' RATIONALES.** Both losing proposals
+  rested on `reason` being a key conductor could branch on. It is not:
+  `conductor/conductord/dispatch.py` turns every `ok:false` into `DispatchError(display)` and
+  **never reads `reason`**, and it **pre-claims via `storyx.claim_ready` before invoking story.sh
+  at all** — so this path is human-operator-only and `display` is the entire payload. The chair
+  re-read `dispatch.py` from source rather than trusting the seat; seat 2 recorded in its own vote
+  that this *"falsifies my own Proposal B's rationale"*. **If a design argument rests on what a
+  downstream consumer does, go read the consumer.**
+- **⚠ MUTATION TESTING FOUND A REAL GAP AND A REAL REDUNDANCY — they look identical until you
+  check.** Nine mutations: seven red the intended assertion, two red nothing, and the two were
+  **not the same thing**:
+  - The **empty-message** and **parsed-states** guards were **mutually masking** — deleting either
+    alone reds nothing because the other catches the fixture; deleting **both** reds three tests. A
+    new case (11e: a non-empty message that parses to zero states) pins the one only the
+    parsed-states guard can catch, and that mutation now reds. **A genuine hole.**
+  - The empty-message guard's own mutation still reds nothing, and it was **kept anyway**, with the
+    reason written into the source so the next reader does not "simplify" it. Subsumed
+    defence-in-depth, not a hole. Same symptom, opposite verdict — only the **combined** mutation
+    told them apart.
+- **The remedy string is `story doctor --fix`, and the alternative was measured, not assumed.**
+  `doctor --fix` restores the state in the correct board position but **without** the `active`
+  role; `story state add in-progress --super OPEN --role active` — what AGE-12's own fix direction
+  prescribes — sets the role but appends the state **after `done`**, leaving the board visibly
+  wrong. Neither fully restores the default shape. `doctor --fix` wins because it is what
+  storyhook's own invariant error already tells users to run, and a wrapper that contradicts the
+  tool it wraps creates two rival instructions for one fault.
+- **The gate was green with NO bypass — nine sessions running.** `MAKE_EXIT=0`, **628 bats
+  assertions + 595 shell checks, zero `not ok`, zero make errors, 5 bats plans, zero skipped
+  suites**. `test_shipped_content_matches_tagged_release` was the ONLY red before the bump and
+  named exactly the changed file; it cleared on the bump. **AGE-21's flaky `test-cli-rm.sh` did not
+  fire** (deployit 50/50). The AGE-24 ordering (targeted suites → bump → **one** full `make -k
+  test`) held for the fifth time; wall clock ~20 min.
+- **Bump level: `minor` (v3.6.0), by the AGE-30/AGE-17 precedent.** The script's documented JSON
+  output gains a new `reason` value on a path that previously emitted no `reason` key at all — the
+  same class as AGE-30's two error codes and AGE-17's two JSON keys. Not major: nothing previously
+  accepted is now rejected, and `ok:false`/exit 1 on that path are unchanged.
+- **Filed: AGE-45** (low) — `dispatch --dry-run` returns `ok:true` for plans certain to fail.
+  Deliberately split out rather than patched here: dry-run returns at `:350`, **before**
+  base-commit resolution, the worktree/branch collision pre-check, and every tmux call, so the
+  state case is one of at least four. The council ruled a state-specific patch would *"fake a
+  validation guarantee dry-run does not make"*. Fix the contract, not one symptom.
+- **Filed upstream: storyhook SH-180** (med) — `story move`'s undefined-state error omits the
+  ``Run `story doctor --fix` `` guidance storyhook's *own* invariant error already carries. That is
+  the origin fix; everything shipped here is a downstream workaround that can be retired once
+  SH-180 lands. It also records the `doctor --fix`-loses-the-`active`-role finding above.
 
 ## Known state (updated 2026-08-04 by the AGE-30 session)
 
@@ -578,8 +649,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-31**~~ | med | **DONE — shipped as v3.3.0** (PR #146). Angle placeholders in the verb slot are violations; only a placeholder naming the slot itself is exempt, by equality-per-segment. See "What AGE-31 turned out to be" below. Filed **AGE-38** and **AGE-39**. |
 | ✅ | ~~**AGE-29**~~ | med | **DONE — shipped as v3.4.0.** The fence detector now models structure instead of toggling. Its own prescribed fix was **disqualified by measurement** — see the AGE-29 block above. **Closed AGE-41 for free.** Filed **AGE-40**, **AGE-42**, **AGE-43**. |
 | ✅ | ~~**AGE-30**~~ | med | **DONE — shipped as v3.5.0.** The shipped script gained a repeatable `--file`; a new repo-local `tests/storyhook-contract-root.sh` supplies the pinned list (`AGENTS.md` + `CLAUDE.md`), so the scan set stays shape-based in the plugin and the filename knowledge stays in the repo. Council ruled the interface by ranked-choice majority after a 1-1-1 round-1 split. See the AGE-30 block above — the story's reach table understated the value by a third and its bump level was wrong. Filed **AGE-44**. |
-| 1 | **AGE-12** | med | storywork claim diagnostic. Independent. **Now genuinely first** — nothing is blocked any more, so `story next` and this table agree for the first time in six sessions. |
-| 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
+| ✅ | ~~**AGE-12**~~ | med | **DONE — shipped as v3.6.0.** The failed claim now confirms the vocabulary via `story state list` and refuses with `reason: "claim-state-missing"` + `story doctor --fix`. **The story's central claim was false** — the cause was already named; only the remedy and the discriminator were missing. See the AGE-12 block above. Filed **AGE-45** and upstream **storyhook SH-180**. |
+| 1 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. **Did not fire in the last five gate runs**, so reproduce before believing it. |
 | 8 | **AGE-19** | med | No storyhook major-version pin. |
 | 9 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. |
 | — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7; PR #137 carries its remaining scope too. Close both AGE-7 and AGE-8 once #137 merges. |
@@ -1181,6 +1252,13 @@ on why it was held out of AGE-31's PR.
 | Story | Pri | What |
 |---|---|---|
 | **AGE-44** | low | **Logged tech debt, not a live failure.** `AGENTS.md` is now in the grammar guard's scan set and is GENERATED by `story scaffold agents-md` — only the header above `<!-- BEGIN GENERATED -->` survives regeneration. The `expect-dead` marker is line-bound, so it must sit inside the generated region: **the file most exposed to a future false positive is the one where the escape hatch cannot durably live.** Two triggers: a storyhook release whose generator emits a form its own `--help` rejects (no local remedy), or a regeneration landing an unbalanced fence (already caught early by the fence-latch canary). Workaround is the **pin, not the marker** — removing `AGENTS.md` from `ROOT_GRAMMAR_FILES` reds `test_root_grammar_allowlist_is_pinned` unless the same commit updates the pin and links an upstream story, making the coverage loss attributable rather than silent. Costs 93% of measured reach while in force. |
+
+### Stories filed by the AGE-12 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-45** | low | `storywork dispatch --dry-run` returns `ok:true` for plans that cannot succeed. Dry-run returns at `bin/story.sh:350` — **before** base-commit resolution (`:378-393`), the worktree/branch collision pre-check (`:396`), every tmux call, and the claim itself. So "the plan looks validated" is false in at least four conditions, and AGE-12's was only one of them. **Deliberately split out, not patched in AGE-12**: the council ruled a state-specific patch would *"fake a validation guarantee dry-run does not make"*. The decision is a product one — narrow the contract (document dry-run as *"what I would run"*) or widen it (hoist the read-only checks ahead of the dry-run return). Do not do it one condition at a time. |
+| **SH-180** | med | **Upstream, filed against `mikeydotio/storyhook`, not agentics.** `story move`'s undefined-state error is bare (``state `in-progress` is not defined``) while storyhook's OWN state-invariant error for the same condition already ends *"Run `story doctor --fix` to add it"*. Every downstream caller inherits the poorer message, so one fix upstream fixes all of them — which is why AGE-12's shipped code is explicitly a **workaround** that can be retired once SH-180 lands. Also records that neither repair fully restores the default shape: `doctor --fix` gets board order right but drops the `active` role; `state add ... --role active` sets the role but appends after `done`. |
 
 ### Stories filed by the AGE-24 session
 

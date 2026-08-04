@@ -133,4 +133,34 @@ assert_eq "$conflict_count" "$((N - 1))" \
 state_r2="$(real_story_state "$repo_r2" "$id_r2")"
 assert_eq "$state_r2" "in-progress" "R2: the real story lands in-progress exactly once, not corrupted by the race"
 
+# ==============================================================================
+# Case R3 (AGE-12): the PREMISE of missing_claim_state_vocabulary's parse, held
+# against the real CLI.
+#
+# That helper decides whether to reclassify a failed claim by reading `story
+# state list --json` and parsing `.message` — an UNSTRUCTURED prose blob. Its
+# two load-bearing assumptions are therefore upstream's to break: that the
+# message names each state, and that a state's slug is the first
+# whitespace-delimited token of its line. `tests/fakes/story` encodes both, so
+# without this case the whole classifier could be verified entirely against
+# the fake's copy of an assumption that had already stopped being true.
+#
+# The BROKEN vocabulary is deliberately NOT constructed here. storyhook 2.0.0
+# enforces the four-state invariant (SH-125): `state remove in-progress` is
+# refused, so the only ways to build one are direct store surgery or a legacy
+# store — neither of which belongs in a committed regression test. What is
+# checkable against a live CLI is the parse's premise on a HEALTHY project,
+# and that is exactly what would silently rot.
+# ==============================================================================
+repo_r3=$(mk_real_story_repo)
+list_r3=$( cd "$repo_r3" && story state list --json 2>/dev/null )
+msg_r3=$(jqf "$list_r3" '.message // ""')
+assert_contains "$msg_r3" "in-progress" \
+  "R3: the real \`story state list --json\` message names the claim state (the loose-containment gate's premise)"
+slugs_r3=$(printf '%s\n' "$msg_r3" | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $1 }')
+assert_contains "$slugs_r3" "in-progress" \
+  "R3: the slug is the first whitespace-delimited token of its line (the line-parse's premise)"
+assert_contains "$slugs_r3" "todo" \
+  "R3: the same parse recovers the other states, so the observed-vocabulary clause is real output, not a fixture"
+
 finish

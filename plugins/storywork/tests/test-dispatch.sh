@@ -162,6 +162,11 @@ wname7=$(expected_wname "$repo7" "SH-7")
 out7=$(FAKE_STORY_STATE=todo FAKE_STORY_MOVE_FAIL=1 dispatch_real "$repo7" SH-7)
 assert_eq "$(jqf "$out7" .ok)" "false" "case7: ok:false when story move fails"
 assert_contains "$(jqf "$out7" .display)" "story move" "case7: display names the move failure"
+# PRECISION (AGE-12): the vocabulary here is HEALTHY, so a generic move error
+# must stay a generic `fail`. This is the assertion that goes red if the
+# missing-state classifier ever fires on evidence it does not have.
+assert_eq "$(jqf "$out7" .reason)" "null" \
+  "case7: a generic move failure against a HEALTHY vocabulary is NOT reclassified"
 [ -e "$repo7/.claude/worktrees/$wname7" ] \
   && fail_test "case7: no worktree should be created when story move fails" || :
 
@@ -245,5 +250,94 @@ assert_contains "$(cat "$log10")" "move SH-10 todo --if-state in-progress" \
   "case10: a rollback move was attempted after the tmux new-window failure"
 ( cd "$repo10" && git show-ref --verify --quiet "refs/heads/worktree-$wname10" ) \
   && fail_test "case10: the worktree branch should have been rolled back by the existing tmux-failure cleanup" || :
+
+# ==============================================================================
+# Case 11 (AGE-12): the project's state VOCABULARY has no `in-progress`, so the
+# claim can never succeed. The move's own error already names the cause (it is
+# delegated verbatim from the CLI), but nothing names the REMEDY and nothing
+# distinguishes this — a permanent, operator-fixable misconfiguration — from a
+# transient storyhook error worth retrying.
+#
+# The classification is CONFIRMED, never inferred: story.sh reads the actual
+# vocabulary via `story state list` on the already-failed path, and re-classifies
+# ONLY on a positively-parsed absence. Every other outcome degrades to the
+# generic `fail` of case 7 (11b/11c below). Council ruling:
+# .council/age12-claim-state-missing/DECISION.md (unanimous 3-0).
+# ==============================================================================
+BROKEN_STATES=$'todo (OPEN) — 1 open\nblocked (OPEN)\ndone (CLOSED)'
+
+repo11=$(mk_dispatch_repo)
+wname11=$(expected_wname "$repo11" "SH-11")
+log11=$(mktemp /tmp/storywork-log.XXXXXX)
+
+out11=$(FAKE_STORY_STATE=todo FAKE_STORY_STATES="$BROKEN_STATES" FAKE_STORY_LOG="$log11" \
+        dispatch_real "$repo11" SH-11)
+assert_eq "$(jqf "$out11" .ok)" "false" "case11: ok:false when the claim state is missing"
+assert_eq "$(jqf "$out11" .reason)" "claim-state-missing" \
+  "case11: reason is machine-distinguishable from a generic move failure"
+# The three payload halves are asserted SEPARATELY: a mutation that deletes any
+# one of them must go red on its own, which a single combined assertion on
+# `display` could not detect.
+assert_contains "$(jqf "$out11" .display)" "in-progress" \
+  "case11: display names the missing state"
+assert_contains "$(jqf "$out11" .display)" "story doctor --fix" \
+  "case11: display names the REMEDY, not just the cause"
+assert_contains "$(jqf "$out11" .display)" "is not defined" \
+  "case11: upstream's own error survives verbatim — layers add context, none removes it"
+assert_contains "$(jqf "$out11" .display)" "todo, blocked, done" \
+  "case11: display reports the vocabulary it actually OBSERVED (proves confirmation, not inference)"
+# Effect oracles: nothing was created, and nothing was rolled back — the claim
+# never succeeded, so a rollback move would be a spurious state transition.
+[ -e "$repo11/.claude/worktrees/$wname11" ] \
+  && fail_test "case11: no worktree should be created when the claim state is missing" || :
+( cd "$repo11" && git show-ref --verify --quiet "refs/heads/worktree-$wname11" ) \
+  && fail_test "case11: no worktree branch should be created when the claim state is missing" || :
+assert_not_contains "$(cat "$log11")" "move SH-11 todo --if-state in-progress" \
+  "case11: no rollback move — the claim never succeeded, so there is nothing to roll back"
+assert_contains "$(cat "$log11")" "state list" \
+  "case11: the vocabulary was actually read (the confirmation call happened)"
+
+# ---- Case 11b: the confirmation call itself FAILS. The condition is real, but
+# story.sh cannot prove it, so it must degrade to case 7's generic failure
+# rather than assert a class it has no evidence for. ----
+repo11b=$(mk_dispatch_repo)
+out11b=$(FAKE_STORY_STATE=todo FAKE_STORY_STATES="$BROKEN_STATES" FAKE_STORY_STATE_LIST_FAIL=1 \
+         dispatch_real "$repo11b" SH-11B)
+assert_eq "$(jqf "$out11b" .ok)" "false" "case11b: still ok:false"
+assert_eq "$(jqf "$out11b" .reason)" "null" \
+  "case11b: an unconfirmable absence is NOT classified — degrades to the generic fail"
+assert_contains "$(jqf "$out11b" .display)" "is not defined" \
+  "case11b: upstream's cause is still surfaced, so the operator loses nothing"
+
+# ---- Case 11c: the confirmation call succeeds but its output is unparseable
+# (an upstream output-shape change). Same rule: no evidence, no class. This is
+# the assertion that keeps AGE-19's unpinned-upstream risk costing accuracy
+# rather than causing a misdiagnosis. ----
+repo11c=$(mk_dispatch_repo)
+out11c=$(FAKE_STORY_STATE=todo FAKE_STORY_STATES="$BROKEN_STATES" FAKE_STORY_STATE_LIST_EMPTY=1 \
+         dispatch_real "$repo11c" SH-11C)
+assert_eq "$(jqf "$out11c" .reason)" "null" \
+  "case11c: an unparseable vocabulary is NOT classified — degrades to the generic fail"
+
+# ---- Case 11e: the vocabulary is non-empty but parses to NO states (a
+# whitespace-only message). Added because mutation testing found the
+# empty-message and parsed-states guards mutually masking: deleting either
+# alone reds nothing, because the other still catches the fixture in 11c. This
+# is the case only the parsed-states guard can catch, so it is what makes that
+# guard a guard rather than decoration. ----
+repo11e=$(mk_dispatch_repo)
+out11e=$(FAKE_STORY_STATE=todo FAKE_STORY_STATES=$'\n   \n' dispatch_real "$repo11e" SH-11E)
+assert_eq "$(jqf "$out11e" .ok)" "false" "case11e: still ok:false"
+assert_eq "$(jqf "$out11e" .reason)" "null" \
+  "case11e: a message that parses to zero states is NOT classified — degrades to the generic fail"
+
+# ---- Case 11d: ZERO happy-path cost. The confirmation is a failure-path call
+# only; a successful claim must never pay for it. ----
+repo11d=$(mk_dispatch_repo)
+log11d=$(mktemp /tmp/storywork-log.XXXXXX)
+out11d=$(FAKE_STORY_STATE=todo FAKE_STORY_LOG="$log11d" dispatch_real "$repo11d" SH-11D)
+assert_eq "$(jqf "$out11d" .ok)" "true" "case11d: the happy path still succeeds"
+assert_not_contains "$(cat "$log11d")" "state list" \
+  "case11d: no vocabulary read on the happy path — the confirmation costs nothing when the claim works"
 
 finish

@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -17,6 +17,18 @@ test-store-isolation:
 # a green `make test` from here on is a claim that every suite actually ran.
 test-gate-integrity:
 	bash tests/with-isolated-store.sh bash tests/gate-integrity.sh
+
+# storyhook is an out-of-repo CLI resolved from PATH, so upgrading it changes
+# this repo's test outcome with no commit here — which is why git bisect cannot
+# attribute the result. Measured (AGE-19): the real v1.0.0 binary produces 87
+# failing assertions across forge, storywork and storyhook-contract-root, and
+# not one of 2,693 log lines names a version; 59 of them say "unknown command
+# `project`", which blames the caller. This declares the supported major once
+# and fails first with one sentence. Runs after gate-integrity so the meta-gate
+# still certifies the run before a subject-matter gate speaks. Plain bash so it
+# always runs.
+test-storyhook-version-pin:
+	bash tests/with-isolated-store.sh bash tests/storyhook-version-pin.sh
 
 # Root bats suite (storyhook state machine).
 #

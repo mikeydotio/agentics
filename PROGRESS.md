@@ -16,16 +16,109 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-19** — no storyhook major-version pin. `story next` and this table **agree** for the first time in eight sessions; AGE-21 was the last row where they diverged. Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47) |
-| **Repo version** | **v3.6.0** — unchanged. AGE-21 touched **no shipped `plugins/**`** (only `plugins/*/tests/**`, which the shipped pathspec excludes), so **no bump was owed**. |
-| **Last updated by** | AGE-21 session, 2026-08-04 |
+| **Next story** | **AGE-22** — preventative guard for AGE-16's `$(timeout … cmd)` class. `story next` and this table **agree** (lowest-ID ready `medium`). Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19 |
+| **Repo version** | **v3.6.0** — unchanged. AGE-19 touched **no `plugins/**` at all** (root `tests/`, `Makefile`, `CLAUDE.md` only), so **no bump was owed**. |
+| **Last updated by** | AGE-19 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-19 session)
+
+- **AGE-19 is DONE. No bump — the repo stays at v3.6.0.** It touched only root `tests/`,
+  `Makefile` and `CLAUDE.md`; the shipped-plugin pathspec diff is **empty**. Verify before
+  assuming it applies to you:
+  `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **empty means no bump.**
+- **⚠ THE STORY WAS RIGHT — and its numbers were wrong in BOTH directions.** Reproduced with the
+  real upstream **v1.0.0 binary**, not a simulation
+  (`gh release download v1.0.0 --repo mikeydotio/storyhook`):
+
+  | Story said | Measured |
+  |---|---|
+  | "~60 failures" | **87** failing assertions |
+  | "across 7 suites" | **3** (forge 72, storywork 14, contract-root 1) |
+  | Extent: forge, storywork, forge contract check | **exactly right** |
+
+  greenlight and root-bats **passed** under 1.0.0. Zero of the 2 693 log lines contain "version",
+  "incompat" or "upgrade".
+- **⚠ THE SYMPTOM BLAMES THE CALLER, which is worse than merely unattributable.** 59 of the
+  failures are ``error: unknown command `project` ``. A reader lands on
+  `forge-close-project-story.bats:14`, sees *this repo* invoking a command storyhook says does not
+  exist, and the natural next move is to "fix" this repo. It points at the **wrong repository**.
+  Note storyhook 1.0.0 has no `story project` verb **at all** — the 2.0 break is bigger than the
+  `init`→`new` rename AGE-19 describes.
+- **⚠ "CANNOT OBTAIN A VERSION" IS NOT AN EDGE CASE — IT IS WHAT THE OLDEST REAL MAJOR DOES.**
+  Measured on real binaries, and this one fact decided the whole design:
+  - **v0.2.0 cannot report a version under ANY condition.** `--help` lists no version flag. Two
+    different outputs, **both exit 3**: outside a project ``error: story project not initialized in
+    this directory; run `story init` ``; inside one ``error: story `--version` not found``.
+  - **v1.0.0 exits 5 outside an isolated store**, refusing *every* invocation including
+    `--version` (schema 8 vs "understands up to version 2"). Under the wrapper it exits 0.
+  So a guard treating cannot-verify as *pass* would go **vacuously green against the most broken
+  binary in the wild**. Absent / non-zero-exit / unparseable are one boolean with four sentences.
+  Consequence: **the pin must run inside `with-isolated-store.sh`**, or a readable 1.x binary is
+  misreported as unreadable.
+- **⚠ THE UNANCHORED VERSION REGEX IS A SILENT FALSE GREEN — measured, and it overrode a 2-1
+  council majority.** Given `warning: 2.0.0 config format is deprecated` followed by `story 3.0.0`,
+  a first-triple-anywhere scan reads **2.0.0 and PASSES a major-3 binary**. `grep -E` is per-line,
+  so the strict `^story[[:space:]]+v?<triple>` anchor skips the banner. A cosmetic rebrand
+  (`storyhook 2.1.0`) is rejected too, but lands in the *unparseable* branch which fails **naming
+  the observed output** — bounded and loud, not silent. **The transferable rule, from the seat that
+  found it: a false red is bounded, loud and self-announcing; a false green on the exact scenario
+  being guarded is silent.**
+- **⚠ MAKE PREREQUISITE EDGES WOULD BE BETTER UNDER `-k` AND WERE STILL DECLINED — know why before
+  you "improve" this.** Measured: a failing phony prereq makes `make -k` **skip** dependents
+  entirely (87 failures suppressed, unrelated targets still run, rc=2), where ordering only
+  *attributes* them. Declined because `gate-integrity.sh` sub-makes `make -C . test-forge` asserting
+  **exit 0** while building its PATH by dropping **every directory containing a `bats`** — so on any
+  machine where `bats` and `story` share a directory, an edge reds the **meta-gate** for a storyhook
+  reason. Safe here only by luck (`/opt/homebrew/bin` vs `~/.local/bin`). **Revisit trigger,
+  recorded rather than hypothetical:** if a future major bump shows the attributing line was lost in
+  `-k` noise, reopen it *together with* a fix preserving `story` in gate-integrity's filtered PATH —
+  that file already does exactly this for `make` (`MAKE_BIN` resolved before filtering).
+- **⚠ `test-greenlight` and `tests/storyhook-path-guard.sh` DO NOT DRIVE THE `story` CLI.** The
+  chair's own brief said they did and was wrong; two seats inherited the error. `path-guard` is pure
+  git-grep (`command -v git` only, `:398`); `greenlight.bats` never execs `story`. **The
+  reproduction proved it independently — greenlight exited 0 under storyhook 1.0.0.** The real
+  storyhook-driving set is exactly **forge, storywork, storyhook-contract-root**. Do not re-add the
+  other two to an ordering pin.
+- **Council: ALL THREE SEATS VOTED AGAINST THEIR OWN PROPOSAL** (B won 2-1; B's own author defected
+  to C). The architect withdrew its differentiator mid-council on evidence and was right about two
+  facts the chair's brief got wrong. **The chair overrode the 2-1 majority on the regex** because
+  the losing seat produced a falsifying measurement the majority never saw — *a measurement beats a
+  majority formed without it.* Full trail: `.council/age19-storyhook-version-pin/DECISION.md`.
+- **⚠ A COUNCIL SEAT REPORTED A FABRICATED "RECORDED" FIXTURE, and it nearly shipped.** The QA seat
+  proposed committing `error: story --version not found` as a corpus string labelled *recorded from
+  a real binary*. That string is **never emitted** — the chair downloaded v0.2.0 and found two
+  different real outputs. It owned the error immediately when challenged. **Re-run a seat's
+  "measured" strings before committing them; a fixture labelled recorded that is not is exactly the
+  defect class this repo's guards exist to stop.**
+- **Mutation battery: 7 run, 7 caught.** M1 comparator neutered → 4 reds; M2 rc check dropped → 3;
+  M3 regex un-anchored → 2 (incl. the false-green test); M4 unparseable→ok → 2; M5 absence branch
+  deleted → 1; M6 pin→3 → **10** (proves the guard reads the live CLI *and* that the doc pin fires);
+  M7 `head -1`→`tail -1` → 1. **One honest finding: the "mutation-critical" rc test turned out
+  SUBSUMED** — designed as uniquely load-bearing, but the recorded cases assert the exact verdict
+  *token*, so they red too. Kept with the reason written into the source (AGE-12's precedent),
+  because it pins that rc outranks a *parseable* stdout.
+- **⚠ COMMIT A NEW GUARD BEFORE YOU MUTATE IT.** AGE-21's warning, followed here and it worked: the
+  battery restores with `git checkout --` and asserts **tracked-and-clean**, impossible for an
+  untracked file. One mutation's `sed` silently changed nothing (delimiter clashed with a `|` in the
+  pattern) and the battery caught that too, because it aborts unless the file actually changed.
+  **Assert the mutation APPLIED, not merely that the tests ran.**
+- **The gate was green with NO bypass — eleven sessions running.** `MAKE_EXIT=0`, **628 bats
+  assertions + 282 shell checks, zero `not ok`, zero make errors, 5 bats plans**. AGE-21's old
+  `test-cli-rm.sh` flake **passed**. Wall clock ~12 min.
+- **Filed: AGE-50** (low) — `plugins/storywork/tests/test-real-story-cas.sh:22` exits 0 with `SKIP`
+  when `story` is absent and its runner counts that as **PASS**, so the one file proving story.sh
+  works against the REAL binary reports PASS having verified nothing. Two seats flagged it
+  independently and **both said not to fold it in** — different defect, and mixing it would blur the
+  attribution AGE-19 exists to create. Largely shadowed by the new pin (the gate now halts first);
+  live only on the direct-runner path.
 
 ## Known state (updated 2026-08-04 by the AGE-21 session)
 
@@ -738,8 +831,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-30**~~ | med | **DONE — shipped as v3.5.0.** The shipped script gained a repeatable `--file`; a new repo-local `tests/storyhook-contract-root.sh` supplies the pinned list (`AGENTS.md` + `CLAUDE.md`), so the scan set stays shape-based in the plugin and the filename knowledge stays in the repo. Council ruled the interface by ranked-choice majority after a 1-1-1 round-1 split. See the AGE-30 block above — the story's reach table understated the value by a third and its bump level was wrong. Filed **AGE-44**. |
 | ✅ | ~~**AGE-12**~~ | med | **DONE — shipped as v3.6.0.** The failed claim now confirms the vocabulary via `story state list` and refuses with `reason: "claim-state-missing"` + `story doctor --fix`. **The story's central claim was false** — the cause was already named; only the remedy and the discriminator were missing. See the AGE-12 block above. Filed **AGE-45** and upstream **storyhook SH-180**. |
 | ✅ | ~~**AGE-21**~~ | med | **DONE — no bump** (test-only). Its stated cause was false, and so were the two theories that replaced it. The real defect was `git log \| grep -q` under `pipefail` returning **141 on a successful match**; the fix is a shape fix, not a longer retry. See the AGE-21 block above. Filed **AGE-47** (closed here), **AGE-48**, **AGE-49**. |
-| 1 | **AGE-19** | med | No storyhook major-version pin. **Now genuinely next** — `story next` agrees. |
-| 9 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. |
+| ✅ | ~~**AGE-19**~~ | med | **DONE — no bump** (root `tests/`, `Makefile`, `CLAUDE.md` only). The story was right and its numbers wrong both ways: **87** failures, not ~60; **3** suites, not 7. `tests/storyhook-version-pin.sh` pins `STORYHOOK_MAJOR=2`. Its regex is **strictly anchored** — an unanchored scan reads a version out of a warning banner and passes a major-3 binary. Make prerequisite edges were measured **better** and still declined (they red the meta-gate). See the AGE-19 block above. Filed **AGE-50**. |
+| 1 | **AGE-22** | med | Preventative guard for AGE-16's defect class — see below. **Now next**; `story next` agrees (lowest-ID ready `medium`). |
 | — | **AGE-8** | low | **Do not work this story.** It is `obviated-by` AGE-7; PR #137 carries its remaining scope too. Close both AGE-7 and AGE-8 once #137 merges. |
 | 12 | **AGE-9** | low | Council-decision story, independent. |
 | 13 | **AGE-13** | low | Council-decision story, independent. |
@@ -1347,6 +1440,12 @@ on why it was held out of AGE-31's PR.
 | **AGE-45** | low | `storywork dispatch --dry-run` returns `ok:true` for plans that cannot succeed. Dry-run returns at `bin/story.sh:350` — **before** base-commit resolution (`:378-393`), the worktree/branch collision pre-check (`:396`), every tmux call, and the claim itself. So "the plan looks validated" is false in at least four conditions, and AGE-12's was only one of them. **Deliberately split out, not patched in AGE-12**: the council ruled a state-specific patch would *"fake a validation guarantee dry-run does not make"*. The decision is a product one — narrow the contract (document dry-run as *"what I would run"*) or widen it (hoist the read-only checks ahead of the dry-run return). Do not do it one condition at a time. |
 | **AGE-46** | low | **⚠ NEEDS MIKEY'S DECISION — do not just fix it.** Tag `v3.3.0` is reachable from `main` but **no GitHub Release was ever published for it**; every other v3.x tag has one, so the Releases page shows v3.2.0 jumping to v3.4.0. Cosmetic only — tag, CHANGELOG and manifests are all correct and installs are keyed off the manifest, so nothing is stranded. Filed rather than fixed because the obvious backfill (`gh release create v3.3.0`) is **not** Mikey's recorded preference for this scenario (his was: publish only the current tip with rolled-up notes, prune the skipped tags) and pruning a public tag is destructive. Found by the AGE-12 session while doing the protocol's own release step. Closing the CLASS would mean a gate asserting every `v*` tag reachable from `main` has a Release — same shape as AGE-33's un-built preventative half. |
 | **SH-180** | med | **Upstream, filed against `mikeydotio/storyhook`, not agentics.** `story move`'s undefined-state error is bare (``state `in-progress` is not defined``) while storyhook's OWN state-invariant error for the same condition already ends *"Run `story doctor --fix` to add it"*. Every downstream caller inherits the poorer message, so one fix upstream fixes all of them — which is why AGE-12's shipped code is explicitly a **workaround** that can be retired once SH-180 lands. Also records that neither repair fully restores the default shape: `doctor --fix` gets board order right but drops the `active` role; `state add ... --role active` sets the role but appends after `done`. |
+
+### Stories filed by the AGE-19 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-50** | low | **A gate that reports PASS having verified nothing — AGE-18's class, one layer down.** `plugins/storywork/tests/test-real-story-cas.sh:22` exits **0** with `SKIP: real story CLI not on PATH`, and its runner maps exit 0 to **PASS** — so the one file whose entire purpose is proving `story.sh` works against the REAL storyhook binary silently proves nothing when the binary is missing. Its four real-CLI properties (JSON-shape parity, redundant-move suppression, the concurrent-claim race, the state-vocabulary premise) all go unasserted. **Largely shadowed by AGE-19**: the version pin now hard-fails the gate before any suite runs when `story` is absent, so it is unreachable via `make test`; it stays live on the direct-runner path (`bash plugins/storywork/tests/run-tests.sh`), which is how you iterate on that suite. **Needs a decision, not just a patch** — either make the skip a hard failure (consistent with AGE-18) or give the plain-bash runners a real SKIP state distinct from PASS, which would apply repo-wide. ⚠ Do **not** "unify" this with `forge-crash-recover.sh`'s `story_cli_missing` or `forge-contract-check.sh`'s `ok:false`: those are SHIPPED RUNTIME scripts on end users' machines where storyhook is genuinely optional — a different audience with a different correct answer. Both the devops and architect council seats flagged it independently and both said explicitly it must not ride along with AGE-19. |
 
 ### Stories filed by the AGE-24 session
 

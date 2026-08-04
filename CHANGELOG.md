@@ -3,6 +3,41 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.41.0] - 2026-08-03
+
+### Fixed
+- replace the dated model pin with the sonnet alias (285dd36)
+- regenerate from the live CLI and guard the retired surfaces (83609b0)
+- stop asserting a per-repo storyhook directory exists (cd4a157)
+- hard-fail a release deploy that cannot EdDSA-sign (bcb576c)
+- resolve sign_update by intent, prefer SwiftPM, sort by version (d467459)
+
+### Changed
+- Merge pull request #138 from mikeydotio/fix/AGE-27-root-agents-md (48f962d)
+- Merge remote-tracking branch 'origin/main' into fix/AGE-27-root-agents-md (bc50f14)
+- Merge pull request #137 from mikeydotio/feat/claude5-realign-rca-remaining (20c31d2)
+- trim over-budget skill descriptions and tier the remaining plugins (3161e20)
+- reconnect the orphaned reference tree to the skill (2a7e831)
+- stop restating the step-exit sequence in nine step skills (47ced2a)
+- split execution-loop's Retry and Complete into conditional references (79943a9)
+- scope agent overrides to pipeline-only content (140c384)
+- tier the eight rca skills by role and trim the router description (a895438)
+- Merge pull request #130 from mikeydotio/fix/117-sparkle-signing-required (06842a2)
+- Merge pull request #136 from mikeydotio/fix/AGE-11-retire-storyhook-extra-path (c801315)
+
+### Documentation
+- point PROGRESS.md's #118 scope-collision note at PR #137 (c103762)
+- drop unresolvable finding-ID citations from model-read prose (f67cdf5)
+- close out AGE-27 and requeue the backlog (abf7755)
+- claim AGE-27 as in flight (1ca8590)
+- close out AGE-11 and requeue the backlog (80bb877)
+- document the required-signing policy and tool ladder (5cbb832)
+
+### Testing
+- gate prompt hygiene and wire validate-agents.sh into make test (7bc1f39)
+
+_[manual]_
+
 ## [v2.40.1] - 2026-08-03
 
 ### Fixed

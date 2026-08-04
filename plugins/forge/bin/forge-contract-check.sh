@@ -9,8 +9,14 @@
 # hand. This script is the automated version of that read: it never
 # hardcodes a verb or relationship list — it asks the live `story` binary.
 #
-# What it checks, for every fenced ```...``` code block in
-# <docs-root>/references/*.md and <docs-root>/skills/*/SKILL.md:
+# What it reads, in <docs-root>/references/*.md and
+# <docs-root>/skills/*/SKILL.md: every line inside a fenced ```...``` block,
+# plus every inline single-backtick `span` outside one. The second half
+# matters more than it sounds — forge documents most of its storyhook surface
+# as inline prose in tables and paragraphs, so a fenced-only scan left the
+# majority of the contract unguarded (see "Extraction scope" below).
+#
+# What it checks, for each of those:
 #   1. Every `story <word>` invocation's <word> must be a real dispatchable
 #      verb — i.e. one `story --help`'s usage block actually lists. An
 #      id-first form like `story HP-N is done` fails this because `HP-N`
@@ -331,19 +337,47 @@ if [[ -d "$DOCS_ROOT/skills" ]]; then
   fi
 fi
 
-# ── Extract and check every `story <verb> ...` fenced-block invocation ──
+# ── Extract and check every `story <verb> ...` invocation ──
 #
-# A line qualifies as a story invocation only when "story" appears either
-# at the start of the (trimmed, optionally "$ "-prefixed) line, or right
-# after a shell separator ( ( ; & | ` ). This deliberately excludes plain
-# English prose that happens to contain the word "story" inside a fenced
-# pseudocode/comment block (e.g. "if story reached done:") while still
-# catching real invocations embedded in an aside, e.g. "next story (story
-# next --json)" correctly resolves to the verb `next`, not the prose noun.
+# EXTRACTION SCOPE (AGE-24). Two shapes reach the checker, and the unit
+# differs between them:
 #
-# Known limitation: only the first qualifying invocation per line is
-# checked (no forge doc currently chains two `story` calls on one line via
-# `&&`/`;` — if that ever changes, this needs a loop over repeated matches).
+#   1. Inside a fenced block, the unit is the LINE. A fence is an explicit
+#      "this is code" marker, so the whole line can be trusted as one.
+#   2. Outside a fence, the unit is each inline single-backtick SPAN, and
+#      the span alone is handed over — never the line it sits on.
+#
+# Rule 2 is not an optimisation, it is what makes the widening safe. forge
+# writes most of its storyhook contract as inline prose in tables and
+# paragraphs: at v2.39.1 all eight `story project ` occurrences in this
+# corpus sat at fence depth 0, so a fenced-only scan would have caught NONE
+# of storyhook 2.0's `project init` -> `project new` rename even with the
+# subcommand check (AGE-17) landed. But scanning those lines WHOLE produced
+# 28 violations corpus-wide, every one a false positive: English like
+# "story data lives in a SQLite store" reads as an invocation the moment a
+# separator precedes it, and a harvested token keeps the trailing backtick
+# of the span it ran past. Checking the span dissolves both classes at
+# once, because the span IS the invocation — there is no surrounding prose
+# left to misread. Measured residual after this change: one violation
+# corpus-wide, the deliberate negative example at
+# references/storyhook-contract.md:8, which carries a marker (below).
+#
+# False positives are worse than false negatives here: this guard gates
+# `make test`, which is the pre-push gate.
+#
+# Within either unit, "story" qualifies only at the start of the (trimmed,
+# optionally "$ "-prefixed) text, or right after a shell separator
+# ( ( ; & | ` ). That excludes plain English that happens to contain the
+# word "story" inside a fenced pseudocode/comment block (e.g. "if story
+# reached done:") while still catching real invocations embedded in an
+# aside, e.g. "next story (story next --json)" correctly resolves to the
+# verb `next`, not the prose noun.
+#
+# Known limitation: only the first qualifying invocation per UNIT is
+# checked (no forge doc currently chains two `story` calls in one fenced
+# line via `&&`/`;` — if that ever changes, this needs a loop over repeated
+# matches). Inline prose is unaffected: each span is its own unit, so two
+# spans on one line are both checked.
 START_RE='^[[:space:]]*\$?[[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
 MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
 
@@ -380,10 +414,10 @@ MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*)(.*)$'
 # Stale markers are discriminated, because the distinction is the actionable
 # part: `form_is_valid` (the line was scanned and is clean — storyhook made
 # the form real, so the doc's denial is now FALSE and the sentence must be
-# rewritten), `not_scanned` (the line never reached extraction — today that
-# means a marker at fence depth 0, pending the inline widening), and
-# `token_mismatch` (the line violated on a different token than the marker
-# names).
+# rewritten), `not_scanned` (the line never reached extraction — since AGE-24
+# that means the denied form was written as bare prose rather than inside a
+# `span`, so nothing was ever checked), and `token_mismatch` (the line
+# violated on a different token than the marker names).
 MARKER_ANY_RE='<!--[[:space:]]*contract-check:[[:space:]]*expect-dead(.*)-->'
 MARKER_FULL_RE='^[[:space:]]+([^[:space:]]+)[[:space:]]+--[[:space:]]+(.*[^[:space:]])[[:space:]]*$'
 MARKER_TOKEN_ONLY_RE='^[[:space:]]+([^[:space:]]+)[[:space:]]*$'
@@ -584,7 +618,17 @@ while IFS= read -r f; do
         fi
         ;;
     esac
-  done < <(awk 'BEGIN{d=0} /^```/{d=1-d; next} d==1{printf "%d\t%s\n", NR, $0}' "$f")
+  done < <(awk '
+    BEGIN { d = 0 }
+    /^```/ { d = 1 - d; next }
+    d == 1 { printf "%d\t%s\n", NR, $0; next }
+    {
+      rest = $0
+      while (match(rest, /`[^`]+`/)) {
+        printf "%d\t%s\n", NR, substr(rest, RSTART + 1, RLENGTH - 2)
+        rest = substr(rest, RSTART + RLENGTH)
+      }
+    }' "$f")
 
   classify_stale_markers "$rel_f"
 done <<< "$FILES"

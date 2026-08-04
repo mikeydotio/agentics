@@ -172,14 +172,84 @@ EOF
   [ "$(jq_field '.contract_ok')" = "true" ]
 }
 
-@test "contract-check: ignores inline single-backtick template signatures outside fenced blocks" {
+# --- Inline-backtick extraction (AGE-24) ---
+#
+# forge documents most of its storyhook surface as inline single-backtick
+# prose in tables and paragraphs rather than fenced blocks: at v2.39.1 all
+# eight `story project ` occurrences in the scanned corpus sat at fence depth
+# 0, so a green result said nothing about the majority of the contract — the
+# guard would have caught NONE of storyhook 2.0's `project init` ->
+# `project new` rename even with AGE-17's subcommand check landed.
+#
+# What is checked outside a fence is the backtick SPAN, never the line it sits
+# on. That distinction is load-bearing: the span IS the invocation, so the
+# surrounding English can neither be mistaken for one nor displace a token.
+
+@test "contract-check: inline single-backtick template signatures still pass" {
   cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
 # Fixture
 
 | Dependency between stories | `story relate <a> <relationship> <b>` | Only 8 relations exist |
 EOF
   run bash "$SCRIPT" "$FIXTURE_DIR"
+  # Since AGE-24 this span IS scanned; it passes because `<relationship>` is a
+  # placeholder wildcard, not because the line is skipped. The next test is the
+  # effect oracle that tells those two reasons apart.
   [ "$(jq_field '.contract_ok')" = "true" ]
+}
+
+@test "contract-check: catches an inline-backtick invocation outside any fence" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+| Create a project | `story project init --prefix AGE` | Seeds the state vocabulary |
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "true" ]
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 1 ]
+  [ "$(jq_field '.subcommand_violations[0].verb')" = "project" ]
+  [ "$(jq_field '.subcommand_violations[0].subcommand')" = "init" ]
+  [ "$(jq_field '.subcommand_violations[0].line')" -eq 3 ]
+  # The reported command is the SPAN alone — proof the extractor read the span
+  # and not the table row around it.
+  [ "$(jq_field '.subcommand_violations[0].command')" = "story project init --prefix AGE" ]
+}
+
+# Failure oracle for the signature test above: a placeholder wildcard must not
+# swallow a CONCRETE dead form sharing the same line. Without this, skipping
+# inline spans entirely would satisfy the signature test perfectly.
+@test "contract-check: each backtick span on a line is checked independently" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+Use `story relate <a> <relationship> <b>`, never `story relate HP-1 precedes HP-2`.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.relation_violations | length')" -eq 1 ]
+  [ "$(jq_field '.relation_violations[0].relation')" = "precedes" ]
+  [ "$(jq_field '.relation_violations[0].command')" = "story relate HP-1 precedes HP-2" ]
+}
+
+# The class the span boundary exists to exclude: English that reads as an
+# invocation once a shell separator precedes the word "story". Scanning the
+# whole unfenced line instead of its spans produced 28 of these on the real
+# corpus, every one a false positive.
+@test "contract-check: unfenced English prose is never treated as an invocation" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+There is no data file to edit; story data lives in a SQLite store outside the repo.
+Prefer letting `story decompose --stdin` create these edges automatically.
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
 }
 
 # --- Subcommand drift detection (AGE-17) ---
@@ -436,11 +506,12 @@ EOF
   cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
 # Fixture
 
-There is no id-first form (`story HP-N is done`). <!-- contract-check: expect-dead HP-N -- denied in prose -->
+There is no id-first form: story HP-N is done does not exist. <!-- contract-check: expect-dead HP-N -- denied in prose -->
 EOF
   run bash "$SCRIPT" "$FIXTURE_DIR"
   echo "$output" >&2
-  # Pre-AGE-24 this line sits at fence depth 0 and is never extracted. The
+  # Since AGE-24 the unread region is un-backticked prose: this author denied
+  # the form but never put it in a span, so nothing reaches the checker. The
   # marker must say so loudly rather than pass as a silent no-op.
   [ "$(jq_field '.contract_ok')" = "false" ]
   [ "$(jq_field '.stale_suppressions | length')" -eq 1 ]
@@ -499,11 +570,18 @@ EOF
   [ "$(jq_field '.suppressions | length')" -eq 2 ]
 }
 
-@test "contract-check: real committed forge docs carry no suppressions and none stale" {
+@test "contract-check: the real corpus carries exactly one suppression and none stale" {
   run bash "$SCRIPT" "$FORGE_ROOT"
   echo "$output" >&2
   [ "$(jq_field '.contract_ok')" = "true" ]
   [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
+  # references/storyhook-contract.md names the dead id-first form in order to
+  # deny it — the single undecidable site the inline widening (AGE-24) exposed.
+  # Pinning the count keeps the escape hatch from spreading unnoticed: a second
+  # suppression is a deliberate decision, not a ride-along.
+  [ "$(jq_field '.suppressions | length')" -eq 1 ]
+  [ "$(jq_field '.suppressions[0].file')" = "references/storyhook-contract.md" ]
+  [ "$(jq_field '.suppressions[0].token')" = "HP-N" ]
 }
 
 # --- Schema stability across every exit path (AGE-18 lock) ---

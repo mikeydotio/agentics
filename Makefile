@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -38,6 +38,14 @@ test-plugin-versions:
 # serves stale code (issue #71). Plain bash so it always runs in the pre-push gate.
 test-plugin-content-drift:
 	bash tests/with-isolated-store.sh bash tests/plugin-content-drift.sh
+
+# Storyhook's retired per-repo directory must not come back: no --extra-path may
+# name it (any spelling, repo-wide), and shipped plugin content must not assert
+# it exists. It was a dead no-op in three shipped forge call sites for over a
+# year with no failure mode, because forge-step-exit.sh silently skips an
+# --extra-path that isn't on disk (AGE-11). Plain bash so it always runs.
+test-storyhook-path-guard:
+	bash tests/with-isolated-store.sh bash tests/storyhook-path-guard.sh
 
 test-semver:
 	bash tests/with-isolated-store.sh bash plugins/semver/tests/run-tests.sh

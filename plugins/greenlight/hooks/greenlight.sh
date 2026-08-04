@@ -467,15 +467,26 @@ is_always_safe() {
     instruments|xctrace|xcresulttool|otool|nm) return 0 ;;
     # F076/F077: storyhook's `story` CLI — forge's execute loop runs this
     # on nearly every iteration (next/list/summary/move/comment/set/
-    # prioritize/block/unblock/relate/handoff/...). Every subcommand only
-    # mutates .storyhook/ (git-tracked per CLAUDE.md, so any change is a
-    # `git checkout` away from reverted), never touches system state,
-    # never escalates privilege, never leaves the project directory. Left
-    # off this list, EVERY one of those calls was "uncertain": either an
-    # AI round-trip per call (token/latency cost on the hot path) or a
-    # deferred user prompt that stalls the autonomous loop. Treat the whole
-    # CLI surface as safe, the same trust boundary already given to `git
-    # status`/`jq`/other project-local bookkeeping tools above.
+    # prioritize/block/unblock/relate/handoff/...). Left off this list,
+    # EVERY one of those calls was "uncertain": either an AI round-trip per
+    # call (token/latency cost on the hot path) or a deferred user prompt
+    # that stalls the autonomous loop. That hot-path cost is the whole
+    # justification for the blanket allow below.
+    #
+    # ⚠ It is NOT justified by revertibility, whatever this comment used to
+    # say. The original rationale — "every subcommand only mutates a
+    # git-tracked per-repo directory, so any change is a `git checkout` away
+    # from reverted, and it never leaves the project directory" — was
+    # falsified by storyhook 1.0.0 (2026-07-29) and every clause of it is now
+    # wrong: story data lives in ONE SQLite store outside every repository
+    # (`story help storage`), those writes are not tracked by git and have no
+    # revert path short of a snapshot restore, and the store is shared by
+    # every repo on the machine. So `story delete` / `story purge --force` /
+    # `story project delete` are auto-approved against un-revertible global
+    # state. Whether the blanket allow still SURVIVES that is a live
+    # trust-boundary question tracked as AGE-26 — do not extend this entry on
+    # the strength of the old premise. Corrected, behaviour untouched, by
+    # AGE-11.
     story) return 0 ;;
     *) return 1 ;;
   esac

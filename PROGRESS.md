@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | **IN FLIGHT** |
-| **Story in flight** | **AGE-31** — placeholder verbs; `START_RE` demands `[A-Za-z]` after `story `. |
-| **Next story** | AGE-29 or AGE-12 — re-derive from `story list --ready` when AGE-31 merges. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24 |
-| **Repo version** | **v3.2.0** — minor: AGE-24 expanded a shipped guard's behaviour, non-breaking. |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-29** — now the **last** blocker on AGE-30. See below. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31 |
+| **Repo version** | **v3.3.0** — minor: AGE-31 added a detection capability to a shipped guard, non-breaking. |
 | **Last updated by** | AGE-31 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -26,6 +26,48 @@ via freshen, and stops.
 > reads.
 
 ---
+
+## Known state (updated 2026-08-04 by the AGE-31 session)
+
+- **AGE-31 is DONE and shipped as v3.3.0 (PR #146, `d88a416`). AGE-29 leads the queue.** AGE-30's
+  blockers were AGE-24 (done), AGE-31 (done) and **AGE-29 — now the last one**. Clearing AGE-29
+  returns AGE-30 to `ready`; nothing else in the queue unblocks anything. That is the same
+  dependency-graph rule that put AGE-32 ahead of `story next`'s AGE-12, and it still outranks
+  `story next`, which is breaking a `medium`/`ready` tie by ID order alone. Confirm with
+  `story list --ready`, not this line.
+- **⚠ AGE-29's "measured free" figure is STALE — re-measure before you trust it.** Its note says
+  the indented-fence relaxation produced *"0 new violations on the real 27-file corpus"*. That
+  was measured **before AGE-24 (span extraction) and AGE-31 (placeholder verbs)**, and the corpus
+  is now **29 files** with a strictly larger reachable surface. An indented fence's unit is the
+  LINE, so relaxing the fence detector hands whole indented lines to a checker that now also
+  matches `<...>` in the verb slot. Re-run it; the simulation takes ~2 minutes.
+- **⚠ The full gate was green with NO bypass, and the drift guard cleared on the bump.**
+  `MAKE_EXIT=0`, **607 bats assertions + 238 shell checks, zero failures, zero skipped suites**
+  (607 = AGE-24's 596 + 11 new tests). `test_shipped_content_matches_tagged_release` PASS.
+  `/semver validate` 6/6, tag verified an ancestor of `main`. **Six sessions with no
+  `SKIP_PREPUSH_TESTS=1`.** Wall clock ~45 min this run, not the ~2h this file has been quoting —
+  budget for 2h anyway, it varies with load.
+- **The ordering from AGE-24 held up again and is now twice-proven**: targeted suites first
+  (`make test-forge` + the three fast guards, ~6 min), then bump, then **one** full `make -k test`
+  post-bump. One gate run, and the state that ships is the state the gate verified.
+- **⚠ `git switch main` FAILS in this checkout** — `main` is held by the `age-118` worktree
+  (`fatal: 'main' is already used by worktree at .claude/worktrees/age-118`). The protocol's
+  step 10 tells you to `git switch main && git pull --ff-only`; you cannot. Branch from
+  `origin/main` directly (`git fetch origin main && git switch -c <branch> origin/main`) and push
+  the tag without ever checking main out. Verify the tag landed with
+  `git merge-base --is-ancestor v<X.Y.Z> origin/main` instead. **GitHub auto-deletes the branch on
+  merge**, so step 10's `push origin --delete` errors with *"remote ref does not exist"* — that is
+  success, not a failure.
+- **⚠ A placeholder token can now be REPORTED, which it never could before.** `is_placeholder` no
+  longer means "skip" everywhere: in the subcommand (`:600`) and relation (`:613`) slots it still
+  skips, but the verb slot now treats an angle placeholder as a **violation** unless it names the
+  slot itself. If you touch that file, do not "unify" the three placeholder semantics — the
+  asymmetry is the design, and it is pinned by tests on both sides.
+- **`forge-contract-check.sh` still has ZERO runtime call sites** (re-verified). Only its own
+  `.bats` executes it — but note the skeptic seat's correction to how this file has been phrasing
+  that: a lint has no runtime call sites *by design*, and this one **is** reached by `make test` →
+  `test-forge` → its bats suite, which runs it against the real corpus. Stop treating "zero call
+  sites" as evidence the guard does not matter.
 
 ## Known state (updated 2026-08-04 by the AGE-24 session)
 
@@ -410,7 +452,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-28**~~ | high | **DONE — shipped as v3.0.0**, the marketplace's first major. The hardcode is gone, the scheme decides, and an unacknowledged unoptimized archive is now refused on every platform. See "What AGE-28 turned out to be" below. **Owes a Lillist-side story.** |
 | ✅ | ~~**AGE-32**~~ | med | **DONE — shipped as v3.1.0.** Token-bound `expect-dead` marker, ruled unanimously by `/council-vote`. Unblocks AGE-24 and AGE-31. See "What AGE-32 turned out to be" below. |
 | ✅ | ~~**AGE-24**~~ | med | **DONE — shipped as v3.2.0.** Inline backtick *spans* are now scanned outside fences; the `storyhook-contract.md:8` marker landed in the same commit. See "What AGE-24 turned out to be" below. Filed **AGE-37**. |
-| 1 | **AGE-31** | med | **UNBLOCKED, and now leads.** Placeholder verbs: `START_RE` demands `[A-Za-z]` after `story `, so `story <id> is done` never matches. **Note AGE-24 changed what `START_RE` runs against outside a fence** — a span, not a line. |
+| ✅ | ~~**AGE-31**~~ | med | **DONE — shipped as v3.3.0** (PR #146). Angle placeholders in the verb slot are violations; only a placeholder naming the slot itself is exempt, by equality-per-segment. See "What AGE-31 turned out to be" below. Filed **AGE-38** and **AGE-39**. |
+| 1 | **AGE-29** | med | **Now the LAST blocker on AGE-30, so it leads.** Indented fences: `:409`'s detector is `/^```/`, anchored at column 0, so a fence indented inside a numbered list is never scanned. ⚠ Its "measured free / 0 new violations" figure is **stale** — see the warning at the top. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
 | 7 | **AGE-21** | med | deployit's `test-cli-rm.sh` needs a live local daemon — the last known source of pre-push gate noise now that AGE-16 is closed. |
 | 8 | **AGE-19** | med | No storyhook major-version pin. |
@@ -425,6 +468,55 @@ without recording why in this file.
 
 **AGE-2, AGE-3, AGE-11, AGE-14, AGE-15, AGE-16, AGE-17 and AGE-18 are already `done`** — do not
 touch them.
+
+### What AGE-31 turned out to be — the diagnosis was right and the PREMISE was false
+
+AGE-31's stated defect reproduced exactly on the first try. But the premise its fix direction
+rested on — *"there is no legitimate `story <verb> ...` prose in these docs"* — is **false**, and
+the counterexample is in this repo. Five things worth carrying forward:
+
+1. **The counterexample is in the ADR that states the rule it violates.**
+   `docs/decisions/forge-hardening.md:64` writes `` `story <verb> …` `` in an inline span, in a
+   true sentence describing this guard — and its next paragraph reads *"A guard you can satisfy by
+   deleting true sentences is the wrong guard."* A bare widening reports
+   `verb_violations:["<verb>"]` on it. It is **not in the scan set today**, so the story's
+   precondition test (*"verify whether any scanned doc legitimately writes `story <verb>`"*) came
+   back clean — but it asked the wrong question, because **AGE-30, the story this one exists to
+   unblock, is exactly what moves that boundary.** A precondition evaluated against a corpus your
+   own dependent will change is not a precondition.
+2. **Two failure directions are not interchangeable, and the tiebreaker is not lexicographic.**
+   Three candidate wildcard rules on one 14-token table: **segment equality 14/14**; substring
+   8/14 with all 6 misses **silent false negatives** (`<transaction>` via "action", `<verbatim>`
+   via "verb", `<cmdlet>` via "cmd"); closed-set 11/14 with all 3 misses **false positives on true
+   sentences**. Segment equality is not a compromise — it beats both on every differing row. The
+   skeptic seat then refined the principle it had been asserting: *"loud-beats-silent is a
+   tiebreaker that holds when the two classes are comparably likely"* — substring's misses were
+   ordinary English and unbounded; the residual `<command-id>` class is contrived.
+3. **A fix for a related bug can leave the blocking defect fully intact.** The seat that wanted
+   `classify_stale_markers` narrowed offered a verified one-line AGE-37 origin fix as the unblock.
+   Measured: with that fix applied, the false positive **survives** — the kind relabels
+   `form_is_valid` → `not_scanned` and the verdict stays `contract_ok:false` on a correct
+   document. **Check that a proposed prerequisite actually changes the verdict, not just the
+   message.** That measurement is the whole reason AGE-37 stayed out of this PR.
+4. **An invariant can be enforced from outside the thing it constrains.** The council deadlocked
+   between AGE-32's *"a suppression mechanism must be able to fail"* and a measured false positive.
+   Resolution: keep the script permissive and assert
+   `markers == suppressions + stale_suppressions` **in the bats suite**, over the real corpus,
+   where it cannot manufacture a false positive. Verified to catch the exact case the gap leaves
+   open (`markers=1, accounted=0`). The residual is logged as **AGE-39** with a redesign trigger,
+   per CLAUDE.md's deliberate-tech-debt rule.
+5. **The chair produced a vacuous green mid-council and nearly balloted on it.** Scratchpad script
+   variants were run **without a root argument**, so `DOCS_ROOT` defaulted to `SCRIPT_DIR/..` and
+   they scanned *nothing* — read as a real 1→0 behaviour change. Fix: **assert `files_scanned` in
+   every comparison.** This is the AGE-18/21/27 class, self-inflicted, in the session whose whole
+   subject was a guard that must not lie.
+
+**Design ruled by `/council-vote`** — round 1 was a **perfect three-way cycle with every seat
+voting against its own proposal**; all three had independently chosen the same regex and all three
+ruled fix-in-this-PR, so the questions *as filed* were settled 3-0 before any vote. After
+deliberation the panel converged on seat-1-rev, 2 of 3 first preferences, seat 2 formally
+withdrawing and merging onto it. Full audit trail including the recorded dissent:
+`.council/age31-placeholder-verb/DECISION.md`.
 
 ### What AGE-24 turned out to be — the story was right, and the previous session had done the hard part
 
@@ -938,6 +1030,18 @@ the chain simply stops. To restart:
 | Story | Pri | What |
 |---|---|---|
 | **AGE-36** | med | **⚠ The pre-push gate this file tells you to rely on cannot pass here.** `~/.claude/hooks/pre-push-tests.sh` is registered in `~/.claude/settings.json` with `"timeout": 900` (15 min), but `make test` in this repo takes **~2h** — so it cannot complete inside its own budget on any push from agentics. Confirmed: the matcher *does* match this loop's HTTPS-override push form, and `make -n test` exits 0 so detection succeeds (it is **not** the AGE-18 "no test command detected" fall-through), and `git-readonly-allow.py` exits 0 with no output so it does not short-circuit. Observed but not instrumented: the AGE-32 push returned in well under 600s with **no** `pre-push-tests: running …` line, which the hook prints unconditionally before running the suite. **Practical consequence for you: do not assume the hook re-runs the suite. Run `make -k test` yourself and read the result — this loop's green results have all come from sessions doing exactly that.** Same economics as AGE-34; fix them together. |
+
+### Stories filed by the AGE-31 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-38** | low | **Pre-existing, not caused by AGE-31.** `MID_RE` (`:382`) treats `\|` as a shell separator, so *inside a fence* — where the unit is the whole LINE — a markdown table row is read as an invocation: `\| story HP-1 \| the id column \|` reports `verb_violations:["HP-1"]` on **today's shipped script**. Zero occurrences in the corpus, so the gate is green. `\|` is load-bearing for real pipelines (`jq … \| story …`), so it cannot simply be dropped from the class. |
+| **AGE-39** | med | **Logged deliberate debt** (CLAUDE.md's rule: name the flaw, the patch's limits, the redesign trigger). `marker_suppresses` no longer refuses a placeholder token, but `classify_stale_markers` still skips one — so a placeholder marker **can suppress but can never go stale**, and one whose justification expired does nothing silently. Not fixed because narrowing the exemption reds the gate on a correct document, **even with AGE-37's origin fix applied** (measured). Held meanwhile by the corpus-level marker-accounting assertion in the bats suite. Redesign trigger: once `collect_markers` can tell a QUOTED marker from an APPLIED one. |
+
+**AGE-37 also gained a comment** carrying a verified one-line origin fix (move the `SCANNED_LINES`
+append after the invocation match, so a line counts as scanned only once an invocation was found —
+turns a false `form_is_valid` into a true `not_scanned`, existing tests stay green) plus the ruling
+on why it was held out of AGE-31's PR.
 
 ### Stories filed by the AGE-24 session
 

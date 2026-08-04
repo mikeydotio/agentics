@@ -14,11 +14,11 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-11** |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-11** |
+| **Next story** | **AGE-24** |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17 |
-| **Last updated by** | AGE-17 session, 2026-08-04 |
+| **Last updated by** | AGE-11 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session

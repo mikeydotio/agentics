@@ -20,8 +20,8 @@
 # closes the project story for real, so `story list` / `story summary`
 # don't show a permanently-open story to anyone inspecting the project later.
 # The execute loop's Complete step (references/execution-loop.md) calls this
-# once all real work is done, folding the resulting `.storyhook/` change into
-# its own completion commit.
+# once all real work is done. The close writes to storyhook's own store, which
+# is outside the repository, so nothing about it reaches a commit (AGE-11).
 #
 # Usage: forge-close-project-story.sh [project-dir]
 #

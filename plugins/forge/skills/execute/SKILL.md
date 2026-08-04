@@ -144,10 +144,11 @@ Exercises full loop logic without API credits.
 
 ## Exit
 
-Both paths below end in `forge-step-exit.sh` (`references/step-handoff.md`), but neither uses its
-default commit scope unmodified: Pause needs the session counter incremented first (a field
-`forge-step-exit.sh` doesn't know about), and Complete needs `--extra-path .storyhook/` (the
-project-story close in its step 2 can change `.storyhook/`).
+Both paths below end in `forge-step-exit.sh` (`references/step-handoff.md`). Pause does not use its
+default commit scope unmodified: it needs the session counter incremented first (a field
+`forge-step-exit.sh` doesn't know about). Complete uses the default scope — closing the project
+story in its step 2 writes to storyhook's own store, which is outside the repository and has no
+path to commit (see `references/handoff-format.md`).
 
 ### Pause (session limit, blocked, error)
 
@@ -178,12 +179,13 @@ never reaches `done` through the loop itself):
      exact state.json patch)
 2. Close the project story (hygiene only, best-effort — never a precondition for anything below):
    `bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-close-project-story.sh .` — ignore `.ok`/`.reason` beyond
-   logging; only `.closed == true` means `.storyhook/` changed and must ride along in step 5's commit.
+   logging. `.closed` is informational only: the close writes to storyhook's store, not the repo,
+   so there is nothing for step 5's commit to pick up either way.
 3. Generate storyhook report: `story summary` + `story handoff`
 4. Write handoff to `.forge/handoffs/handoff-execute.md`
 5. ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-step-exit.sh --step execute \
-     --summary "all stories complete" --next "/forge continue" --extra-path .storyhook/
+     --summary "all stories complete" --next "/forge continue"
    ```
 6. STOP
 

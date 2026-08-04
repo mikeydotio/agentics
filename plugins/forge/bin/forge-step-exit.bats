@@ -190,38 +190,96 @@ teardown() {
 
 # --- --extra-path ---
 
+# Fixture paths here are deliberately ORDINARY repo paths (`docs/`,
+# `tests/new_test.sh`). They used to be `.storyhook/`, which was never a real
+# thing under storyhook 1.0.0+ — story state lives in a store outside the
+# repository — so the suite was asserting the mechanism against a path no
+# project has (AGE-11). `--extra-path` itself is generic; a directory form with
+# a trailing slash and a single-file form are the two pathspec shapes worth
+# covering, and neither has anything to do with storyhook.
+
 @test "step-exit: --extra-path stages and commits an additional path" {
   cd "$TEST_DIR"
-  mkdir -p "$TEST_DIR/.storyhook"
-  echo "story data" > "$TEST_DIR/.storyhook/db.toml"
-  run bash "$SCRIPT" --step decompose --summary "stories created" --next "/forge execute --orchestrated" --extra-path .storyhook/
+  mkdir -p "$TEST_DIR/docs"
+  echo "generated doc" > "$TEST_DIR/docs/overview.md"
+  run bash "$SCRIPT" --step decompose --summary "stories created" --next "/forge execute --orchestrated" --extra-path docs/
   [ "$status" -eq 0 ]
   local tracked
-  tracked="$(git -C "$TEST_DIR" show --stat -1 --format="" | tr -s ' ' | grep -c '.storyhook/db.toml' || true)"
+  tracked="$(git -C "$TEST_DIR" show --stat -1 --format="" | tr -s ' ' | grep -c 'docs/overview.md' || true)"
   [ "$tracked" -ge 1 ]
 }
 
+# Effect oracle, not just a status reading (AGE-18): a missing --extra-path must
+# be SKIPPED, not merely survived. `[ -e "$p" ] && git add "$p"` is the last
+# command in the staging loop, so under `set -euo pipefail` its false branch is
+# exempt from ERR only because it sits left of the `&&`. Asserting exit 0 alone
+# would still pass if the script died right after the loop. These assertions
+# prove the code AFTER the loop ran: the commit happened, state.json was patched
+# to paused, and the freshen fallback was reached.
 @test "step-exit: --extra-path silently skips a path that doesn't exist" {
   cd "$TEST_DIR"
-  run bash "$SCRIPT" --step decompose --summary "no storyhook dir yet" --next "/forge execute --orchestrated" --extra-path .storyhook/
+  echo '{"status":"running"}' > "$TEST_DIR/.forge/state.json"
+  run bash "$SCRIPT" --step decompose --summary "no such path" --next "/forge execute --orchestrated" --extra-path does/not/exist/
   [ "$status" -eq 0 ]
-  local ok
-  ok="$(echo "$output" | jq -r '.ok')"
-  [ "$ok" = "true" ]
+  [ "$(echo "$output" | jq -r '.ok')" = "true" ]
+  [ "$(echo "$output" | jq -r '.committed')" = "true" ]
+
+  local files
+  files="$(git -C "$TEST_DIR" show --stat -1 --format="")"
+  [[ "$files" == *".forge/handoffs/handoff-research.md"* ]]
+  [[ "$files" != *"does/not/exist"* ]]
+
+  [ "$(jq -r '.status' "$TEST_DIR/.forge/state.json")" = "paused" ]
+  [ "$(echo "$output" | jq -r '.fallback_message')" != "null" ]
 }
 
 @test "step-exit: --extra-path can be repeated" {
   cd "$TEST_DIR"
-  mkdir -p "$TEST_DIR/.storyhook" "$TEST_DIR/tests"
-  echo "story data" > "$TEST_DIR/.storyhook/db.toml"
+  mkdir -p "$TEST_DIR/docs" "$TEST_DIR/tests"
+  echo "generated doc" > "$TEST_DIR/docs/overview.md"
   echo "test content" > "$TEST_DIR/tests/new_test.sh"
   run bash "$SCRIPT" --step validate --summary "hardened tests" --next "/forge continue" \
-    --extra-path .storyhook/ --extra-path tests/new_test.sh
+    --extra-path docs/ --extra-path tests/new_test.sh
   [ "$status" -eq 0 ]
   local files
   files="$(git -C "$TEST_DIR" show --stat -1 --format="")"
-  [[ "$files" == *".storyhook/db.toml"* ]]
+  [[ "$files" == *"docs/overview.md"* ]]
   [[ "$files" == *"tests/new_test.sh"* ]]
+}
+
+# The mixed case the suite never had: every prior repeat test passed two paths
+# that BOTH existed, so nothing proved a missing path leaves its siblings alone.
+# Both orders matter and fail differently — a missing path LAST is the one whose
+# false `[ -e ]` decides the loop's own exit status.
+
+@test "step-exit: a missing --extra-path does not suppress a present one before it" {
+  cd "$TEST_DIR"
+  mkdir -p "$TEST_DIR/tests"
+  echo "test content" > "$TEST_DIR/tests/new_test.sh"
+  echo '{"status":"running"}' > "$TEST_DIR/.forge/state.json"
+  run bash "$SCRIPT" --step validate --summary "present then missing" --next "/forge continue" \
+    --extra-path tests/new_test.sh --extra-path does/not/exist/
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.committed')" = "true" ]
+  local files
+  files="$(git -C "$TEST_DIR" show --stat -1 --format="")"
+  [[ "$files" == *"tests/new_test.sh"* ]]
+  [ "$(jq -r '.status' "$TEST_DIR/.forge/state.json")" = "paused" ]
+}
+
+@test "step-exit: a missing --extra-path does not suppress a present one after it" {
+  cd "$TEST_DIR"
+  mkdir -p "$TEST_DIR/tests"
+  echo "test content" > "$TEST_DIR/tests/new_test.sh"
+  echo '{"status":"running"}' > "$TEST_DIR/.forge/state.json"
+  run bash "$SCRIPT" --step validate --summary "missing then present" --next "/forge continue" \
+    --extra-path does/not/exist/ --extra-path tests/new_test.sh
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.committed')" = "true" ]
+  local files
+  files="$(git -C "$TEST_DIR" show --stat -1 --format="")"
+  [[ "$files" == *"tests/new_test.sh"* ]]
+  [ "$(jq -r '.status' "$TEST_DIR/.forge/state.json")" = "paused" ]
 }
 
 # --- --terminal (deploy: cancel instead of queue) ---

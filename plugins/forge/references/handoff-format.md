@@ -15,7 +15,14 @@ Forge handoffs use four complementary persistence layers:
 | Config + State | `.forge/config.json` + `.forge/state.json` | Machine-readable settings and runtime state | config: yes, state: no |
 | Handoff | `.forge/handoffs/handoff-execute.md` | Human-readable session narrative | Yes (version-controlled, per `references/step-handoff.md`) |
 | Verdict Log | `.forge/verdicts.jsonl` | Structured evaluator history | No (ephemeral) |
-| Storyhook | `.storyhook/` | Story-level state and comments | Yes |
+| Storyhook | storyhook's own store, outside the repo | Story-level state and comments | No — see below |
+
+**Storyhook is not a repo layer.** Story data lives in one SQLite store outside every repository
+(`$STORYHOOK_DATA_DIR`, else `$XDG_DATA_HOME/storyhook`, else `~/.local/share/storyhook`); run
+`story help storage` for the authoritative description. The only storyhook artifact a repository
+carries is the committed pointer file `.storyhook.toml`, which names the project's uuid and prefix
+so a fresh clone resolves the same project — it holds no story state. Nothing forge does can, or
+should, commit story state: there is no repo path to add.
 
 **Priority**: config.json + state.json + storyhook are required for mechanical recovery.
 `handoff-execute.md` is the primary context source — if missing, pause and ask the user (see

@@ -45,10 +45,21 @@
 #   If neither resolves, the check is skipped (ok:false) rather than failing
 #   the gate on an environment problem — mirrors forge-dag-validate.sh.
 #
-# Usage: forge-contract-check.sh [docs-root]
+# Usage: forge-contract-check.sh [docs-root] [--file <path>]...
 #   docs-root defaults to the forge plugin root (one level up from bin/).
 #   Tests point this at a throwaway fixture tree shaped like
 #   <root>/references/*.md and <root>/skills/*/SKILL.md.
+#
+#   --file names a file explicitly, for documents that live under neither
+#   references/ nor skills/ — repo-root agent-instruction files such as
+#   AGENTS.md and CLAUDE.md, which shape discovery cannot reach at all
+#   (AGE-30). Repeatable. Naming files suppresses the default plugin-root
+#   discovery, so a --file argv that expands empty scans nothing instead of
+#   silently falling back to this plugin's own corpus; passing an explicit
+#   docs-root re-enables discovery and unions the two. A named file that does
+#   not exist is a hard error (see missing_file below), never a silent skip.
+#   The path is reported exactly as passed — run the caller from the repo root
+#   with repo-relative paths and violations render as `AGENTS.md:144`.
 #
 # Output (always exit 0 — callers branch on the JSON, not the exit code):
 #   {ok, contract_ok, verb_violations, relation_violations,
@@ -88,8 +99,20 @@
 #                          line), `token_mismatch` (the line violated on a
 #                          different token) or `malformed` (no token, or no
 #                          mandatory reason). Any entry fails contract_ok.
+#     files_scanned      - the files actually READ, accumulated past the
+#                          per-file existence check rather than copied from the
+#                          requested list. This is the anti-vacuity oracle: a
+#                          caller proves its run was not empty by asserting on
+#                          it, so it must never name a file nobody opened.
+#                          Assert exact MEMBERSHIP, not a count — a count
+#                          cannot see one file substituted for another.
 #     story_source       - which resolution path found the CLI (env/path).
 #     display            - human-readable summary.
+#
+#   Error codes, all with ok:false and contract_ok:false: story_cli_missing,
+#   story_help_unparseable, story_relate_help_unparseable,
+#   story_subcommands_unparseable, missing_file (a --file path does not exist)
+#   and usage (a malformed argument list).
 #
 # Negative-example suppression: a doc may name a dead form in order to DENY
 # it by annotating that line with
@@ -100,7 +123,83 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOCS_ROOT="${1:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# ── Arguments ──
+#
+# Shape discovery (below) can only reach files under <docs-root>/references/ and
+# <docs-root>/skills/*/. A repo-root agent-instruction file — AGENTS.md,
+# CLAUDE.md — lives under neither, and pointing docs-root at a repo root finds
+# nothing: it reports files_scanned:[] with contract_ok:true, a green having
+# read nothing. `--file` is the interface that closes that (AGE-30, decided by
+# /council-vote; see .council/age30-repo-root-scan-interface/DECISION.md).
+#
+# Deliberately NOT a filename baked into this script. The scan set stays
+# shape-based here (see "Locate every doc" below); WHICH root files a given repo
+# treats as storyhook documentation is that repo's knowledge, supplied by its
+# caller, so this script keeps owning grammar and nothing else.
+#
+# Two rules carry weight beyond convenience:
+#   * A named file that does not exist is a HARD ERROR, never a silent skip.
+#     files_scanned is this guard's anti-vacuity oracle; a caller whose path
+#     went stale must be told, not quietly given a smaller scan.
+#   * Naming files SUPPRESSES the default plugin-root discovery. Otherwise a
+#     caller whose --file argv expanded empty would silently fall back to
+#     scanning this plugin's own 29 files and report green over an input set
+#     nobody asked for.
+# An explicit docs-root still unions with --file, so both can be checked at once.
+usage_error() {
+  jq -n --arg err "$1" --arg display "$2" \
+    '{ok: false, contract_ok: false, verb_violations: [], relation_violations: [],
+      subcommand_violations: [], suppressions: [], stale_suppressions: [],
+      real_verbs: [], real_relations: [], real_subcommands: {},
+      files_scanned: [], story_source: "",
+      error: $err, display: $display}'
+  exit 0
+}
+
+ROOT_ARG=""
+EXPLICIT_FILES=""
+HAVE_EXPLICIT=0
+while (( $# )); do
+  case "$1" in
+    --file)
+      if [[ $# -lt 2 ]]; then
+        usage_error usage "[forge] contract check: \`--file\` requires a path argument"
+      fi
+      EXPLICIT_FILES="${EXPLICIT_FILES}${EXPLICIT_FILES:+$'\n'}$2"
+      HAVE_EXPLICIT=1
+      shift 2
+      ;;
+    -*)
+      usage_error usage "[forge] contract check: unknown option \`$1\` (usage: forge-contract-check.sh [docs-root] [--file <path>]...)"
+      ;;
+    *)
+      if [[ -n "$ROOT_ARG" ]]; then
+        usage_error usage "[forge] contract check: only one docs-root may be given (got \`$ROOT_ARG\` and \`$1\`); name additional files with --file"
+      fi
+      ROOT_ARG="$1"
+      shift
+      ;;
+  esac
+done
+
+# DOCS_ROOT keeps its historical default even when only --file is given: it is
+# what rel_f strips to render a reported path. A repo-root file shares no prefix
+# with the plugin root, so the strip is a no-op and the path is reported exactly
+# as the caller spelled it — `AGENTS.md:144`, never re-rooted under a
+# references/ directory the file does not live in.
+DOCS_ROOT="${ROOT_ARG:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+# Validated before any work: a stale path is a caller bug, and reporting it
+# early keeps it out of files_scanned entirely.
+if [[ "$HAVE_EXPLICIT" -eq 1 ]]; then
+  while IFS= read -r _ef; do
+    [[ -z "$_ef" ]] && continue
+    if [[ ! -f "$_ef" ]]; then
+      usage_error missing_file "[forge] contract check failed: \`--file $_ef\` does not exist or is not a regular file"
+    fi
+  done <<< "$EXPLICIT_FILES"
+fi
 
 # ── Resolve the ground-truth `story` binary ──
 
@@ -376,14 +475,23 @@ is_valid_subcommand() {
 # automatically, which is the whole point of a drift guard.
 
 FILES=""
-if [[ -d "$DOCS_ROOT/references" ]]; then
-  FILES="$(find "$DOCS_ROOT/references" -maxdepth 1 -name '*.md' -type f | sort)"
-fi
-if [[ -d "$DOCS_ROOT/skills" ]]; then
-  skill_files="$(find "$DOCS_ROOT/skills" -mindepth 2 -maxdepth 2 -name 'SKILL.md' -type f | sort)"
-  if [[ -n "$skill_files" ]]; then
-    FILES="$(printf '%s\n%s' "$FILES" "$skill_files" | grep -vE '^$' || true)"
+# Shape discovery runs unless --file named the scan set outright. An explicit
+# docs-root always re-enables it, so a root and --file union.
+if [[ "$HAVE_EXPLICIT" -eq 0 || -n "$ROOT_ARG" ]]; then
+  if [[ -d "$DOCS_ROOT/references" ]]; then
+    FILES="$(find "$DOCS_ROOT/references" -maxdepth 1 -name '*.md' -type f | sort)"
   fi
+  if [[ -d "$DOCS_ROOT/skills" ]]; then
+    skill_files="$(find "$DOCS_ROOT/skills" -mindepth 2 -maxdepth 2 -name 'SKILL.md' -type f | sort)"
+    if [[ -n "$skill_files" ]]; then
+      FILES="$(printf '%s\n%s' "$FILES" "$skill_files" | grep -vE '^$' || true)"
+    fi
+  fi
+fi
+# Appended verbatim, never re-rooted or canonicalised: the string the caller
+# passed is the string a violation is reported against.
+if [[ -n "$EXPLICIT_FILES" ]]; then
+  FILES="$(printf '%s\n%s' "$FILES" "$EXPLICIT_FILES" | grep -vE '^$' || true)"
 fi
 
 # ── Extract and check every `story <verb> ...` invocation ──
@@ -672,13 +780,17 @@ add_subcommand_violation() {
   SUBCOMMAND_VIOLATIONS="${SUBCOMMAND_VIOLATIONS}${SUBCOMMAND_VIOLATIONS:+$'\n'}${rec}"
 }
 
-if [[ -n "$FILES" ]]; then
-  SCANNED_FILES_JSON="$(printf '%s\n' "$FILES" | jq -R -s 'split("\n") | map(select(length > 0))')"
-fi
+# files_scanned is accumulated INSIDE the loop, past the existence check, so it
+# lists what was actually read rather than what was requested (AGE-30). Built
+# from the requested list it could name a file the loop skipped — and since this
+# field is what callers assert on to prove a run was not vacuous, an oracle that
+# names an unread file is the very failure it exists to detect.
+SCANNED_OK=""
 
 while IFS= read -r f; do
   [[ -z "$f" ]] && continue
   [[ -f "$f" ]] || continue
+  SCANNED_OK="${SCANNED_OK}${SCANNED_OK:+$'\n'}${f}"
   rel_f="${f#"$DOCS_ROOT"/}"
   collect_markers "$f"
 
@@ -770,6 +882,10 @@ while IFS= read -r f; do
 
   classify_stale_markers "$rel_f"
 done <<< "$FILES"
+
+if [[ -n "$SCANNED_OK" ]]; then
+  SCANNED_FILES_JSON="$(printf '%s\n' "$SCANNED_OK" | jq -R -s 'split("\n") | map(select(length > 0))')"
+fi
 
 verb_violations_json="[]"
 if [[ -n "$VERB_VIOLATIONS" ]]; then

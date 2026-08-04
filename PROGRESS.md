@@ -14,9 +14,9 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-30** — unblocked by AGE-29; it was the last blocker. Confirm with `story list --ready`. |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-30** |
+| **Next story** | **AGE-12** — after AGE-30 lands. Confirm with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free) |
 | **Repo version** | **v3.4.0** — minor: AGE-29 added detection reach to a shipped guard, non-breaking. |
 | **Last updated by** | AGE-29 session, 2026-08-04 |

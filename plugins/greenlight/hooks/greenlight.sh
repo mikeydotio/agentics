@@ -465,29 +465,14 @@ is_always_safe() {
     json_verify|json_reformat|xml_pp|xmllint|tidy) return 0 ;;
     # Apple profiling / analysis / inspection (readonly)
     instruments|xctrace|xcresulttool|otool|nm) return 0 ;;
-    # F076/F077: storyhook's `story` CLI — forge's execute loop runs this
-    # on nearly every iteration (next/list/summary/move/comment/set/
-    # prioritize/block/unblock/relate/handoff/...). Left off this list,
-    # EVERY one of those calls was "uncertain": either an AI round-trip per
-    # call (token/latency cost on the hot path) or a deferred user prompt
-    # that stalls the autonomous loop. That hot-path cost is the whole
-    # justification for the blanket allow below.
-    #
-    # ⚠ It is NOT justified by revertibility, whatever this comment used to
-    # say. The original rationale — "every subcommand only mutates a
-    # git-tracked per-repo directory, so any change is a `git checkout` away
-    # from reverted, and it never leaves the project directory" — was
-    # falsified by storyhook 1.0.0 (2026-07-29) and every clause of it is now
-    # wrong: story data lives in ONE SQLite store outside every repository
-    # (`story help storage`), those writes are not tracked by git and have no
-    # revert path short of a snapshot restore, and the store is shared by
-    # every repo on the machine. So `story delete` / `story purge --force` /
-    # `story project delete` are auto-approved against un-revertible global
-    # state. Whether the blanket allow still SURVIVES that is a live
-    # trust-boundary question tracked as AGE-26 — do not extend this entry on
-    # the strength of the old premise. Corrected, behaviour untouched, by
-    # AGE-11.
-    story) return 0 ;;
+    # ⚠ storyhook's `story` CLI is NOT here, and must never be re-added.
+    # It is verb-classified by is_safe_story() in the conditional dispatch
+    # below, because this table's header promise — "no flags or arguments can
+    # make them destructive" — is false for it: `story purge` and `story
+    # project delete` are documented "There is no undo", `story update`
+    # atomically replaces the running executable, and the store they write
+    # lives outside every repository. Re-adding it here would ALSO make
+    # is_safe_story dead code, since this function is consulted first. AGE-26.
     *) return 1 ;;
   esac
 }
@@ -548,6 +533,9 @@ destructive_reason() {
     sudo|su|doas|pkexec) echo "privilege escalation" ;;
     apt-get|apt|yum|dnf|pacman|brew) echo "package installation/removal" ;;
     systemctl|service) echo "service management" ;;
+    # AGE-26 — each mirrors the peer named beside it in is_safe_story.
+    'story purge'|'story project delete') echo "irreversible storyhook deletion (no undo, global store)" ;;
+    'story update'|'story plugin install'|'story plugin uninstall') echo "storyhook binary/plugin installation (modifies system)" ;;
     *) echo "potentially destructive operation" ;;
   esac
 }
@@ -728,6 +716,164 @@ is_safe_gh() {
       fi
       return 0 ;;
     status|help|version) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ── story (storyhook): verb-classified — see AGE-26 ──
+#
+# THE PRINCIPLE, for a verb you do not find below:
+#
+#   ALLOW (0)  iff the worst case is a wrong story RECORD in the current
+#              project, repairable by another `story` command.
+#   HARD (2)   only if is_known_destructive ALREADY ranks an equivalent
+#              operation at 2 BY COMMAND NAME. Membership requires naming the
+#              existing peer, in a comment, at the arm. No peer -> 1, however
+#              bad the verb feels.
+#   UNCERTAIN (1) everything else, including every verb not listed.
+#
+# The peer requirement is what keeps bucket 2 honest AND self-limiting: it
+# cannot grow without someone first adding an unconditional entry to
+# is_known_destructive, a far louder act than editing this list. It is also why
+# no rename was needed — every `story` verb at 2 mirrors an existing entry at
+# 2, so "destructive" remains the correct word for all of them.
+#
+# Deliberately NOT flag-aware. `story doctor --fix` rewrites project data, but
+# splitting on the flag buys one narrow case and costs a permanent bypass
+# surface (`--fix=true`, abbreviations, a flag after the positional), so
+# `doctor` is denied whole. Same for `github-sync --dry-run`: a vendor's
+# dry-run is not a security boundary.
+#
+# Sets STORY_VERB_PATH to the two-token form so the caller's warning can name
+# the verb; without it the banner reads "…operation: `story`" and the whole
+# split is invisible where a human actually sees it.
+#
+# Returns 0 = allow, 1 = uncertain, 2 = destructive.
+STORY_VERB_PATH=""
+is_safe_story() {
+  local segment="$1"
+  local verb action
+  STORY_VERB_PATH="story"
+
+  # Extractor modelled on is_safe_git, NOT is_safe_gh. storyhook accepts global
+  # flags BEFORE the verb, and two of them TAKE A VALUE (`--store-path <file>`,
+  # `--project <slug>`) — so gh's naive $(i+1) form reads `--json` as the verb,
+  # and a flag-skipping form that does not consume values reads the PATH as the
+  # verb. Both misreads are silent. Matching on the basename also catches an
+  # absolute invocation like /Users/x/.local/bin/story.
+  verb="$(printf '%s\n' "$segment" | awk '{
+    f=0
+    for(i=1;i<=NF;i++){
+      if($i=="story"||$i~/\/story$/){f=1;continue}
+      if(!f)continue
+      if($i=="--store-path"||$i=="--project"){i++;continue}
+      if($i~/^--store-path=/||$i~/^--project=/){continue}
+      if($i~/^-/){continue}
+      print $i;exit
+    }
+  }')"
+
+  action="$(printf '%s\n' "$segment" | awk -v v="$verb" '{
+    f=0; seen=0
+    for(i=1;i<=NF;i++){
+      if($i=="story"||$i~/\/story$/){f=1;continue}
+      if(!f)continue
+      if($i=="--store-path"||$i=="--project"){i++;continue}
+      if($i~/^--store-path=/||$i~/^--project=/){continue}
+      if($i~/^-/){continue}
+      if(!seen){seen=1;continue}
+      print $i;exit
+    }
+  }')"
+
+  # An unresolvable verb (bare `story`, or an extractor miss) must fail closed.
+  [[ -z "$verb" ]] && return 1
+
+  STORY_VERB_PATH="story $verb"
+
+  # ── bucket 2: destructive. Each arm names the peer that licenses it. ──
+  case "$verb" in
+    # peer: rm|rmdir|unlink|shred  (# file removal / destruction)
+    # "Remove a soft-deleted story permanently … There is no undo."
+    purge) STORY_VERB_PATH="story purge"; return 2 ;;
+    # peer: apt-get|apt|yum|dnf|pacman|zypper|brew  (# package installation)
+    # "atomically replaces the running executable"
+    update) STORY_VERB_PATH="story update"; return 2 ;;
+    plugin)
+      case "$action" in
+        # peer: apt-get|apt|… — `story plugin install <target>` installs code.
+        install|uninstall) STORY_VERB_PATH="story plugin $action"; return 2 ;;
+        *) return 1 ;;
+      esac ;;
+    project)
+      case "$action" in
+        # peer: rm|rmdir|unlink|shred — "Permanently deletes the project,
+        # every story, every event … There is no undo."
+        delete) STORY_VERB_PATH="story project delete"; return 2 ;;
+        # `settings` needs a third token: list/get read, set/unset write.
+        settings)
+          if printf '%s\n' "$segment" | grep -qE 'settings[[:space:]]+(list|get)([[:space:]]|$)'; then
+            return 0
+          fi
+          return 1 ;;
+        # `project new` writes .storyhook.toml and AGENTS.md into the cwd and
+        # registers a project in the shared store — the 394-project incident.
+        list) return 0 ;;
+        *) return 1 ;;
+      esac ;;
+  esac
+
+  # ── bucket 0: allow. Two-token verbs first — AGE-17's rule, a first-token
+  # match cannot tell `story state list` from `story state remove`. ──
+  case "$verb" in
+    state|type|hooks)
+      [[ "$action" == "list" ]] && return 0
+      return 1 ;;
+    phase|epic)
+      case "$action" in
+        list|show) return 0 ;;
+        *) return 1 ;;
+      esac ;;
+    web)
+      case "$action" in
+        status|address) return 0 ;;
+        *) return 1 ;;
+      esac ;;
+  esac
+
+  case "$verb" in
+    # BEGIN allow-verbs  (pinned by greenlight-story.bats — set equality)
+    #
+    # Reads: stdout only. `report --html`, `export`, `load-context` and
+    # `handoff` were each measured to write no file; redirection is the
+    # caller's job and is checked separately by the hook.
+    list|next|show|summary|search|export|graph|handoff|report|help|load-context) return 0 ;;
+    #
+    # Reversible record annotation, current project only. Every one of these
+    # is undone by another `story` verb.
+    new|move|comment|set|assign|prioritize|label|unlabel) return 0 ;;
+    block|unblock|relate|unrelate|link|unlink|reopen) return 0 ;;
+    #
+    # `delete` is SOFT — `story reopen` restores it, and `story purge` refuses
+    # a story that was not soft-deleted first. storyhook's own two-step design
+    # IS the boundary, so gating `purge` alone gates the whole irreversible
+    # path without costing the reversible one.
+    delete) return 0 ;;
+    #
+    # `decompose` creates only story records, each individually deletable, and
+    # forge's decompose step instructs an agent to type it (fenced, at
+    # references/storyhook-contract.md and references/story-decomposition.md).
+    # Denying it would change a shipped instruction's verdict. Note `import`
+    # satisfies the same principle but has zero shipped call sites, so it is
+    # left uncertain rather than allowed on an untested premise.
+    decompose) return 0 ;;
+    # END allow-verbs
+    #
+    # Container verbs whose read actions were handled above; reaching here
+    # means the action was not a read, so they must not fall through to allow.
+    # (Outside the pin markers: their allow surface is per-action, not
+    # per-verb, and is asserted behaviourally instead.)
+    state|type|hooks|phase|epic|web|project) return 1 ;;
     *) return 1 ;;
   esac
 }
@@ -1231,6 +1377,18 @@ is_safe_segment() {
     unzip)                            is_safe_unzip "$segment" && return 0 ;;
     git)                              is_safe_git "$segment" && return 0 ;;
     gh)                               is_safe_gh "$segment" && return 0 ;;
+    # story is three-way: unlike every other helper here it can return 2, for
+    # the five verbs that mirror an existing unconditional entry in
+    # is_known_destructive. DESTRUCTIVE_CMD carries the VERB, not a bare
+    # "story", or the warning names nothing useful. AGE-26.
+    story)
+      local story_rc
+      is_safe_story "$segment"; story_rc=$?
+      case $story_rc in
+        0) return 0 ;;
+        2) DESTRUCTIVE_CMD="$STORY_VERB_PATH"; return 2 ;;
+        *) return 1 ;;
+      esac ;;
     npm|yarn|pnpm|bun|pip|pip3|cargo|go)
                                       is_safe_pkg_manager "$segment" "$cmd_name" && return 0 ;;
     tailscale)                        is_safe_tailscale "$segment" && return 0 ;;

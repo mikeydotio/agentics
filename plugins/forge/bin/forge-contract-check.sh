@@ -401,6 +401,12 @@ while IFS= read -r f; do
         read -ra resttoks <<< "$rest"
         relation="${resttoks[1]:-}"
         relation="${relation%,}"
+        # Same wildcard rule as the subcommand slot above: the docs
+        # legitimately write `story relate <a> <relationship> <b>` as a
+        # signature. A placeholder there names no relation to validate.
+        case "$relation" in
+          -*|'<'*|'['*|'('*|'{'*|'$'*|'"'*|"'"*|'`'*|'|'*|'#'*) relation="" ;;
+        esac
         if [[ -n "$relation" ]] && ! is_valid_relation "$relation"; then
           add_relation_violation "$rel_f" "$lineno" "$relation" "$trimmed"
         fi

@@ -329,6 +329,41 @@ EOF
   [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
 }
 
+@test "contract-check: treats a placeholder in the relation slot as a wildcard" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story relate <a> <relationship> <b>
+story unrelate <a> <relationship> <b>
+story relate [from] [rel] [to]
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '.relation_violations | length')" -eq 0 ]
+}
+
+# Failure oracle for the exemption above: the wildcard must not swallow a
+# CONCRETE dead relation sitting in the same slot. Without this, `relation=""`
+# for everything would satisfy the test above perfectly.
+@test "contract-check: the relation wildcard still catches a concrete dead relation" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```bash
+story relate <a> <relationship> <b>
+story relate HP-1 precedes HP-2
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '.relation_violations | length')" -eq 1 ]
+  [ "$(jq_field '.relation_violations[0].relation')" = "precedes" ]
+}
+
 # --- Schema stability across every exit path (AGE-18 lock) ---
 
 @test "contract-check: the CLI-missing early exit still emits the new keys" {

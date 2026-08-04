@@ -16,8 +16,9 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-32** |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27 |
+| **Next story** | **AGE-28** (`story next` agrees — it is the only `high` open) |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33 |
+| **Repo version** | **v2.41.0** — released and published |
 | **Last updated by** | AGE-27 session, 2026-08-04 |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -44,8 +45,27 @@ via freshen, and stops.
   hardcoded `-configuration Debug`, so every OTA build ever produced shipped unoptimized. It is
   `todo` and unclaimed, and it is the highest-priority open story, so it **leads the queue** on the
   table's own priority-first rule.
-- **The repo is still at v2.40.1 — AGE-27 needed NO bump.** It touched no shipped `plugins/**`.
-  If your story does touch `plugins/**`, the bump is still mandatory; see step 7.
+- **The repo is at v2.41.0, released and published.** AGE-27 itself needed no bump (it touched no
+  shipped `plugins/**`), but PR #137 had landed **48 shipped files with no bump**, leaving `main`
+  red and — far worse — leaving every install stranded on 2.40.1 content, because Claude Code
+  caches plugins by version string. That is the **issue-#71 class**. Filed as **AGE-33**, fixed by
+  a `minor` bump (PR #139), tag pushed clean, GitHub release published. `/semver validate` is
+  all-PASS 6/6.
+  - **The lesson for you: the bump is owed by whoever merges shipped content, and nothing gates
+    it at merge time.** If you touch `plugins/**`, bump in your own PR (step 7). If you inherit a
+    red `plugin-content-drift` you did not cause, attribute it before assuming it is yours:
+    `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+    ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **empty means it is
+    not from your branch.**
+- **⚠ NEVER run two `make test` runs against this checkout at once.** `forge-integrity.bats`
+  snapshots the **real working tree**, so a second run's fixture churn reads as tampering and you
+  get ~7 spurious failures, some surfacing as confusing `jq: parse error` lines rather than clean
+  assertion failures. This session lost a debug cycle to it: a background `make -k test` was still
+  running when a `git push` fired the pre-push hook, which starts its **own** `make test`. All 19
+  pass in isolation on the identical tree. Filed as **AGE-34**.
+  - Practical rule: **run the gate, let it finish, then push** — and do not background a gate you
+    are about to push behind. The hook re-runs the whole suite regardless, so a push costs ~2h on
+    top of your own run; AGE-34 proposes a lock that would fix both the waste and the hazard.
 - **⚠ `tests/storyhook-path-guard.sh` gained a LAYER 3 (AGE-27).** It greps an **allowlist** of
   repo-root agent-instruction files — `AGENTS.md`, `CLAUDE.md`, `README.md`, `.gitignore` — for
   retired storyhook *surfaces*: the per-repo directory **and** `mcp-config`. Two things will bite
@@ -243,7 +263,8 @@ without recording why in this file.
 | ✅ | ~~**AGE-11**~~ | med | **DONE** — the dead `--extra-path` calls are gone and a two-layer guard stops them returning. Shipped as **v2.40.1** (patch). See "What AGE-11 turned out to be" below. Filed **AGE-26** and **AGE-27** on the way. |
 | ✅ | ~~**AGE-27**~~ | high | **DONE** — `AGENTS.md` regenerated, `.gitignore:10` corrected, and a new Layer 3 guards the retired surfaces. **No bump.** See "What AGE-27 turned out to be" below; the council rejected the story's own stated fix. Filed **AGE-30**, **AGE-31**, **AGE-32** and split **AGE-29**. |
 | ✅ | ~~**AGE-4**, **AGE-5**, **AGE-6**, **AGE-7**, **AGE-10**, **AGE-8**~~ | med/low | **DONE — PR #137 merged** (`20c31d2`) while AGE-27 was in flight. All six are `done` in storyhook. The `#118` scope collision this file warned about for eight sessions is **resolved and closed**. |
-| 1 | **AGE-28** | **high** | **New, filed mid-session by another session. Leads on priority-first** — the only `high` open. deployit hardcodes `-configuration Debug` in `_xcodebuild_archive()`, so every OTA build ever produced shipped unoptimized with `#if DEBUG` code compiled in. Touches `plugins/deployit/**` → **bump required**. |
+| ✅ | ~~**AGE-33**~~ | crit | **DONE — released as v2.41.0** (PR #139). #137's 48 shipped files had never reached any install. See the version bullet above. |
+| 1 | **AGE-28** | **high** | **Leads on priority-first** — the only `high` open, and `story next` agrees. deployit hardcodes `-configuration Debug` in `_xcodebuild_archive()` (`plugins/deployit/bin/deployit-cli:691`), so every OTA build ever produced shipped unoptimized with `#if DEBUG` code compiled in. Touches `plugins/deployit/**` → **bump required in your own PR**. |
 | 2 | **AGE-32** | med | **Unblocks the whole `forge-contract-check` chain.** AGE-24, AGE-30 and AGE-31 are all `blocked-by` it (directly or transitively), so storyhook will not dispatch any of them until it closes. It is a *design decision* story: pick how a doc can name a dead form in order to deny it without the guard flagging it. |
 | — | **AGE-24** | med | **BLOCKED by AGE-32** — storyhook excludes it from `ready`. Do not try to work it first; its fix reds the gate on `storyhook-contract.md:8`, which is a correct document. |
 | 6 | **AGE-12** | med | storywork claim diagnostic. Independent. |
@@ -644,3 +665,10 @@ the chain simply stops. To restart:
 | **AGE-30** | med | `forge-contract-check.sh` cannot reach repo-root agent-instruction files. This is AGE-27's residue and covers **claim #2 only**. An **interface** decision (file args vs multiple roots vs a repo-local caller), not a scan-list append — `:284-288` says the scan set is deliberately shape-based, "not a hand-maintained filename list". | AGE-24, AGE-29, AGE-31 |
 | **AGE-31** | med | *Split from AGE-29.* The **placeholder-verb** half: `START_RE` demands `[A-Za-z]` after `story `, so `story <id> is done` never matches — the guard cannot see id-first grammar in the spelling docs actually use. | AGE-32 |
 | **AGE-32** | med | **The unblocker.** `forge-contract-check.sh` has no way to exempt a doc that names a dead form *in order to deny it*. `plugins/forge/references/storyhook-contract.md:8` quotes `story HP-N is done` inside the sentence saying it does not exist — any inline widening reds the gate on a **correct** document. Measured: a full inline widening produces **27 false positives** across 4 classes, 3 mechanical and 1 **undecidable**. Pick a suppression mechanism. Known freebie to hand the implementer: `:388` exempts placeholders in the *subcommand* slot but `:404` has no equivalent for the *relation* slot. | — |
+
+### Stories filed by the AGE-27 session — second batch (post-merge)
+
+| Story | Pri | What |
+|---|---|---|
+| ~~**AGE-33**~~ | crit | **DONE.** PR #137 landed 48 shipped `plugins/**` files with no bump, so `main` was red and no install could ever receive that content (issue-#71 class). Fixed by the `minor` bump to **v2.41.0**, tag pushed, release published. **Its preventative half is NOT done** — nothing gates the bump at merge time, so this recurs the next time a PR touches shipped content without bumping. Fold that into AGE-34's work or file it. |
+| **AGE-34** | med | `forge-integrity.bats` snapshots the **real working tree**, so two concurrent `make test` runs in one checkout fail each other spuriously. Same class as AGE-21 and AGE-18 — a gate that does not mean what it reports. Its cheapest fix (a repo-level lock on the `test` target, or having the pre-push hook reuse an in-flight run) *also* kills the duplicated ~4h-per-push gate this loop pays on every story. |

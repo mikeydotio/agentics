@@ -2,7 +2,7 @@
 
 How consuming plugins (forge, rca, future plugins) reference and use shared agents from the `agents` plugin.
 
-## File Path Convention (F084)
+## File Path Convention
 
 Shared agents live at `plugins/agents/agents/<name>.md`. **Do not reference them by a bare
 path from the repository root** (`plugins/agents/agents/software-architect.md`) — a consuming

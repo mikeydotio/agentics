@@ -29,7 +29,7 @@ ai_model: claude-haiku-4-5
 # AI request timeout in seconds
 ai_timeout: 10
 
-# Show AI rationale to user when AI is invoked. Off by default (F082) — the
+# Show AI rationale to user when AI is invoked. Off by default — the
 # rationale line is injected into the agent's context on every AI-approved
 # command, which adds transcript noise on a long autonomous run.
 ai_show_rationale: false

@@ -139,6 +139,23 @@ demonstrably pushes nothing — say so when you use it.
   GitHub token in `~/.claude/settings.json`. The chair's attempt to scan that file for
   credential-shaped values was **correctly blocked by the safety classifier**, and the chair did not
   work around it. Flagged to the user; do not treat it as a finding of this session.
+- **The gate was green with NO bypass — fourteen sessions running.** `MAKE_EXIT=0`, **654 bats `ok`
+  + 685 shell PASS, zero `not ok`, zero shell FAIL, zero make errors, 5 bats plans**; the new
+  `gate-deadline-guard` reports 19/0 inside the full run. (Two `FAIL` grep hits are `ok` lines whose
+  *test names* contain the word.)
+- **⚠ THAT RUN TOOK 2 229s (37m09s), AND IT IS THE BEST EVIDENCE IN THE WHOLE STORY.** Same commit,
+  same machine, same day as the 630s solo probe — but **two foreign suites were running
+  concurrently** (`storyhook/.claude/worktrees/SH-50`, `scad-caliper`, confirmed by `lsof` on their
+  cwds). **A 3.5x multiplier from load alone, and 2.5x over the entire 900s budget.** Had that been
+  a gate run it would have been cancelled and the push allowed silently. Neither foreign run was in
+  *this* checkout, so AGE-56/AGE-57 were not implicated. **If you time this suite, record what else
+  was running or your number means nothing** — that is precisely how AGE-32 and AGE-35 reached
+  opposite wrong conclusions.
+- **⚠ `pgrep -f 'make -k test'` MATCHES ITS OWN WAITER — it cost this session three ten-minute
+  stalls.** A `until ! pgrep -f 'make -k test'; do sleep; done` loop has that string in its own
+  argv, so it always finds itself and never exits, while `ps -o etime=` on the first match reports
+  the *waiter's* age and looks plausible. **Wait on a captured PID** (`while kill -0 "$pid"`), not on
+  a command-name pattern. Same family as the zsh word-splitting trap already recorded here.
 - **AGE-23 confirmed for the FIFTH time.** The council plugin's `references/` resolve at plugin root,
   not skill-relative.
 

@@ -180,13 +180,17 @@ hook run's `durationMs` (**107** agentics gate runs), plus one direct end-to-end
 | Before 2026-08-04 | 45 | ~467s | 609s | **0** |
 | 2026-08-04 → 08-05 (this backlog loop, high concurrency) | 62 | — | 900s (censored) | **12 (19.4%)** |
 | Direct probe, 2026-08-05, post-AGE-35, load 2.49→13.33 | 1 | — | **630s** | — |
+| Same suite, same day, with **two foreign suites running concurrently** (storyhook, scad-caliper) | 1 | — | **2 229s (37m09s)** | would have breached by 2.5x |
 
 Three things that distribution is load-bearing for:
 
 - **The tail is load-driven, not size-driven.** All twelve breaches fall inside one
   ~28-hour window; the 45 runs before it never exceeded 609s. The variable is concurrent
   test runs from *other repos on the same machine*, which is why a run can take 311s or
-  ≥900s with near-identical suite content.
+  ≥900s with near-identical suite content. **Measured directly**: AGE-36's own verification
+  run took **2 229s** with two foreign suites running, against **630s** solo the same day on
+  the same commit — a **3.5x** multiplier from load alone, and 2.5x over the whole budget.
+  If you are timing this suite, record what else was running or the number means nothing.
 - **Pre-AGE-35 figures understate the current suite by ~140–170s** —
   `test-deployit-capture-diagnostics` landed 2026-08-05T03:25Z, *after* every censored run
   was recorded. The median moved ~467s → ~630s.

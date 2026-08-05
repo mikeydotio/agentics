@@ -941,14 +941,15 @@ demonstrably pushes nothing — say so when you use it.
 - **The ordering from AGE-24 held up again and is now twice-proven**: targeted suites first
   (`make test-forge` + the three fast guards, ~6 min), then bump, then **one** full `make -k test`
   post-bump. One gate run, and the state that ships is the state the gate verified.
-- **⚠ `git switch main` FAILS in this checkout** — `main` is held by the `age-118` worktree
-  (`fatal: 'main' is already used by worktree at .claude/worktrees/age-118`). The protocol's
-  step 10 tells you to `git switch main && git pull --ff-only`; you cannot. Branch from
-  `origin/main` directly (`git fetch origin main && git switch -c <branch> origin/main`) and push
-  the tag without ever checking main out. Verify the tag landed with
-  `git merge-base --is-ancestor v<X.Y.Z> origin/main` instead. **GitHub auto-deletes the branch on
-  merge**, so step 10's `push origin --delete` errors with *"remote ref does not exist"* — that is
-  success, not a failure.
+- **⚠ ~~`git switch main` FAILS in this checkout~~ — RESOLVED by AGE-61 on 2026-08-05. Superseded;
+  kept only so the next reader does not re-derive it.** `main` was held by the `age-118` worktree
+  (`fatal: 'main' is already used by worktree at .claude/worktrees/age-118`). That worktree is gone,
+  local `main` was fast-forwarded 20c31d2 → 3cdbfcd, and `git switch main` succeeds again — but
+  **step 10 no longer asks you to run it, and you should not.** The release path is now decoupled
+  from any local `main` ref; see step 10 for the measurements. Two facts from this block survive and
+  are still true: verify the tag landed with `git merge-base --is-ancestor v<X.Y.Z> origin/main`,
+  and **GitHub auto-deletes the branch on merge** (`delete_branch_on_merge: true`, re-confirmed by
+  AGE-61), which is why step 10 no longer carries a `push origin --delete` line at all.
 - **⚠ A placeholder token can now be REPORTED, which it never could before.** `is_placeholder` no
   longer means "skip" everywhere: in the subcommand (`:600`) and relation (`:613`) slots it still
   skips, but the verb slot now treats an angle placeholder as a **violation** unless it names the

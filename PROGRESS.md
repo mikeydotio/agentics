@@ -14,9 +14,9 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-34** — `forge-integrity.bats` snapshots the real working tree, so two concurrent `make test` runs in one checkout fail each other spuriously. Lowest-ID ready `medium`; `story next` agrees. ⚠ Its cheapest fix also kills the duplicated gate this loop pays on every story, and it pairs with **AGE-36** (same economics — fix them together). Confirm STATE with `story list --ready`. |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-34** — ⚠ its stated root cause is **refuted**. The suite never touches the real working tree (every invocation `cd`s to a per-test `mktemp -d` fixture). The real cause is `forge-integrity.bats:26`'s blanket `rm -rf "/tmp/forge-integrity"` in `teardown()`. Controlled experiment: with that `rm` as the **only** concurrent actor — one bats run, no second suite, no tree churn — **14/19 failed**, reproducing the story's exact reported symptom (`jq: parse error: Invalid numeric literal at line 1, column 70`). |
+| **Next story** | **AGE-35** — pending this PR. ⚠ **AGE-36 does NOT pair with AGE-34** any more: its "fold into AGE-34" premise rests on AGE-34's option 1 (a repo-level `make test` lock), which is disqualified — the clobbered resource is **machine-global** (`/tmp/forge-integrity` holds live snapshots for *every* project on the box), so no repo-level lock can fix it. Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26 |
 | **Repo version** | **v3.7.0** — bumped by AGE-26 (minor). It changed shipped `plugins/greenlight/**` runtime content, so a bump was **owed** — unlike AGE-19/21/22, which touched no shipped content. |
 | **Last updated by** | AGE-26 session, 2026-08-04 |

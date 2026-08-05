@@ -52,6 +52,16 @@ if [ "$#" -eq 0 ]; then
     exit 2
 fi
 
+# Fail-closed pre-push budget check, BEFORE any temp store is created so a refusal
+# leaves nothing behind. This is a no-op unless the suite is running as the pre-push
+# gate (detected by process ancestry) — a human `make test`, a fresh clone and CI are
+# unaffected. Placed here because the wrapper already runs once per make target, which
+# makes it a between-target check bounding the whole suite rather than a per-target one.
+# See tests/gate-deadline.sh for why the budget is derived rather than hardcoded.
+# shellcheck source=tests/gate-deadline.sh
+. "$(dirname "${BASH_SOURCE[0]}")/gate-deadline.sh"
+gate_deadline_check "$*"
+
 _root="$(mktemp -d /private/tmp/agentics-store.XXXXXX)"
 export STORYHOOK_INVOKER="local"
 export STORYHOOK_DATA_DIR="$_root/data"

@@ -21,6 +21,11 @@ Thumbs.db
 # Council-vote deliberation artifacts (ephemeral, per-decision)
 .council/
 
+# Pre-push budget breadcrumb (ephemeral). Repo-local on purpose: a fixed /tmp path
+# would be machine-global state shared with every other project and every concurrent
+# run — the AGE-34 defect, with AGE-56 and AGE-57 still open on the same class.
+.gate-deadline/
+
 # Forge plugin runtime artifacts (gitignored)
 .forge/state.json
 .forge/lock.json

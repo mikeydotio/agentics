@@ -162,6 +162,55 @@ list and a nonsense path — reporting "18 files, 0 silent, 0s" when nothing had
 hit the identical fault in the same session. Use `$(cat file)` or an array; and if a sweep reports an
 implausibly fast clean result, suspect this before believing it.
 
+### Gate cost — quote this distribution, never a scalar
+
+**Every scalar this repo has written about `make test` has been misread, in both
+directions, from the same file.** `tests/gate-integrity.sh` asserted "~15 minutes" at two
+places — numerically equal to the pre-push hook's *entire* 900s budget — and two
+consecutive stories read past it to **opposite** wrong conclusions: AGE-32 concluded the
+hook was not firing, AGE-35 concluded the suite sat comfortably inside budget. Both were
+wrong. So the record is a distribution with a date and a regime, and anything quoting a
+single number is stale by construction.
+
+Measured 2026-08-05 by mining 1 966 Claude Code session transcripts, which record every
+hook run's `durationMs` (**107** agentics gate runs), plus one direct end-to-end probe:
+
+| Regime | Runs | Median | Max | Cancelled at the 900s budget |
+|---|---|---|---|---|
+| Before 2026-08-04 | 45 | ~467s | 609s | **0** |
+| 2026-08-04 → 08-05 (this backlog loop, high concurrency) | 62 | — | 900s (censored) | **12 (19.4%)** |
+| Direct probe, 2026-08-05, post-AGE-35, load 2.49→13.33 | 1 | — | **630s** | — |
+
+Three things that distribution is load-bearing for:
+
+- **The tail is load-driven, not size-driven.** All twelve breaches fall inside one
+  ~28-hour window; the 45 runs before it never exceeded 609s. The variable is concurrent
+  test runs from *other repos on the same machine*, which is why a run can take 311s or
+  ≥900s with near-identical suite content.
+- **Pre-AGE-35 figures understate the current suite by ~140–170s** —
+  `test-deployit-capture-diagnostics` landed 2026-08-05T03:25Z, *after* every censored run
+  was recorded. The median moved ~467s → ~630s.
+- **A cancelled hook ALLOWS the push.** Measured 12/12: tag pushes `v3.0.0` and `v2.39.1`,
+  a branch push and a PR creation all went out with no verdict. A PreToolUse hook that
+  exits 0 has its stderr discarded and a cancelled one never returns the exit 2 that
+  blocks — so the gate is invisible from inside a session either way, and **absence of the
+  `pre-push-tests: running …` line is not evidence the hook did not run.**
+
+`tests/gate-deadline.sh` makes the suite refuse before that cancellation point.
+⚠ **Its second claim is disclosed, not guarded:** the budget is derived from the hook's own
+declared `timeout` in `~/.claude/settings.json` (observed **900s**, 2026-08-05), a file this
+repo does not own. Lowering that value below our margin makes the guard **inert**, and
+nothing here can detect that it has — the same call `bounded-capture-guard.sh` makes in its
+"Deliberately not covered" header. The budget **cannot be raised**: it is pinned from above
+by a value this repo does not control, so the only remedy for a suite that outgrows it is a
+faster suite.
+
+⚠ **The duplication is instructed, not accidental.** The global `~/.claude/CLAUDE.md` tells
+every session to run the full suite locally before every push, and the hook then runs it
+again — so a push pays for the suite **twice**, and the second payment is concurrent load on
+the very box whose load is the measured cause of the breaches. That is a global-file fix
+(outside this repo) and is filed as **AGE-62**.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

@@ -35,7 +35,15 @@
 # It never recurses into a real suite: in (1) bats is absent by construction so
 # every target dies at its runner's check, and in (2) the `bats` on PATH is a
 # stub that records its invocation and exits 0 immediately. A full `make test`
-# takes ~15 minutes; this runs in about a second.
+# costs minutes (see the distribution in CLAUDE.md's "Gate cost" section — median
+# ~630s as of 2026-08-05, tail censored at the hook's 900s timeout); this runs in
+# about a second.
+#
+# ⚠ This line used to read "takes ~15 minutes", which is 900s — numerically equal to
+# the pre-push hook's entire budget, and stated as a bare scalar. Two consecutive
+# stories read past it to OPPOSITE wrong conclusions (AGE-32 "the hook is not
+# firing", AGE-35 "comfortably inside budget"). Quote the distribution, never a
+# scalar: every scalar this repo has written about this suite has been misread.
 #
 # Deliberately NOT here: `make test` itself is never invoked (that would recurse
 # into this very suite), and the ~10 deployit skips predicated on
@@ -85,8 +93,8 @@ bats_free_path() {
 }
 
 # A `bats` that records that it was invoked and exits 0 immediately, so the
-# positive assertions can prove the suite was REACHED without paying ~15 minutes
-# to run it for real.
+# positive assertions can prove the suite was REACHED without paying the real
+# suite's cost (minutes — see CLAUDE.md's "Gate cost") to run it for real.
 #
 # Built once per file at a stable path and warmed below: macOS assesses a freshly
 # written executable on its first exec (XProtect/syspolicyd), which cost AGE-16's

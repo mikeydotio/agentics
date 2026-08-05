@@ -171,9 +171,14 @@ for entry in (settings.get("hooks") or {}).get("PreToolUse") or []:
         # Match the hook by its command path, not by position: the FIRST timeout in
         # this file belongs to a different hook and is 5 seconds.
         if marker in str(hook.get("command", "")):
-            timeout = hook.get("timeout")
-            if isinstance(timeout, (int, float)) and timeout > 0:
-                print(int(timeout))
+            # Named `declared`, not `timeout`: bounded-capture-guard.sh scans this file
+            # as SHELL, and a Python local called `timeout` sits at what that detector
+            # reads as a shell command position. It is not a bounded command, so the
+            # honest fix is to not look like one rather than to exempt the file — the
+            # same language-vs-document distinction AGE-26 turned on.
+            declared = hook.get("timeout")
+            if isinstance(declared, (int, float)) and declared > 0:
+                print(int(declared))
                 sys.exit(0)
 sys.exit(1)
 ' "$candidate" "$GATE_HOOK_MARKER" 2>/dev/null || true)"

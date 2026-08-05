@@ -26,6 +26,35 @@ via freshen, and stops.
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
+### ⚠ Gate cost — every scalar below this line is superseded
+
+**This file contains at least thirteen mutually contradictory statements of what `make test`
+costs** — ~15 min, ~45 min, 478s, ~10.5 min, ~2h and ~4h all appear, several phrased as
+directives ("budget for 2h", "a push costs ~2h"). They are the honest observations of the
+sessions that wrote them, so they are left in place as history, **but none of them is guidance
+any more.** AGE-36 measured the real distribution; it lives in **CLAUDE.md § "Gate cost"** and
+that is the only place to quote.
+
+The short version, measured 2026-08-05 from 107 recorded gate runs plus a direct probe:
+**median ~630s post-AGE-35**, tail **censored at the hook's 900s timeout**, and the tail is
+**load-driven** (all 12 breaches fall in one 28-hour window of this loop's own concurrency;
+the 45 runs before it never exceeded 609s).
+
+Two facts that change how you work:
+
+- **A cancelled hook ALLOWS the push** — measured 12/12, including tag pushes `v3.0.0` and
+  `v2.39.1` and a PR. If your push is slow, it may be going out **ungated**.
+- **You cannot see the gate from inside your session.** A PreToolUse hook that exits 0 has its
+  stderr discarded. AGE-32 inferred from a missing `pre-push-tests: running …` line that the
+  hook was not firing; it was firing. **Do not repeat that inference.** `make -k test` yourself
+  and read your own result — which is what this loop has always actually done.
+
+`tests/gate-deadline.sh` now makes the suite refuse before the cancellation point. If it stops
+you, it prints **"BUDGET, NOT CORRECTNESS"** and exits **3** (never 1 or 2). That is not a test
+failure: re-run once on a quiet box, and if it fires again add the timing to **AGE-63** rather
+than working around it. The budget cannot be raised — it is derived from a value this repo does
+not own.
+
 ---
 
 ## Known state (updated 2026-08-05 by the AGE-35 session)

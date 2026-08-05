@@ -19,11 +19,21 @@
 #
 # HOW ACTIVATION IS SIMULATED
 #
-# The checker matches an ancestor's argv against GATE_HOOK_MARKER. So a fixture script
-# literally named `pre-push-tests.sh` that invokes the checker IS, to the checker, the
-# real thing — no mocking of ps, no injected environment. That is the whole point of
-# choosing ancestry over an env var: the mechanism cannot be faked into arming by
-# setting a variable, so the test cannot cheat either.
+# The checker matches an ancestor's argv against GATE_HOOK_MARKER. A fixture script
+# named for a per-run sentinel that invokes the checker IS, to the checker, the real
+# thing — no mocking of ps, no injected environment.
+#
+# ⚠ EVERY case here must pin its OWN marker, and the reason is not hypothetical: this
+# suite runs inside `make test`, and `make test` runs as the pre-push gate, so the
+# ambient process tree ALREADY contains a real `pre-push-tests.sh` ancestor. A first
+# draft used the real marker name and asserted the inert case by assuming no such
+# ancestor existed. That held when run by hand and FAILED the moment the suite ran as
+# the gate — turning `make test` red on every push and blocking it. Measured, not
+# reasoned: the hook blocked a real command with "elapsed 4s of a -99099s budget".
+#
+# So the inert case pins a sentinel that cannot match anything, and the activation
+# cases pin a sentinel matched only by their own fixture. The guard is then hermetic in
+# both directions: identical results whether or not it is itself running under the gate.
 
 set -uo pipefail
 
@@ -80,9 +90,41 @@ cat >"$WORK/settings-absent.json" <<'JSON'
   { "type": "command", "command": "python3 other.py", "timeout": 5 } ] } ] } }
 JSON
 
+# Markers. FIXTURE_MARKER is matched only by the fixtures below; NEVER_MARKER cannot
+# appear in any process's argv, so it makes "no hook ancestor" true by construction
+# rather than by assuming anything about the ambient process tree.
+readonly FIXTURE_MARKER="age36-fixture-hook-$$.sh"
+readonly NEVER_MARKER="age36-no-such-ancestor-sentinel-$$"
+
+# The marker identifies the hook for BOTH purposes — which ancestor arms the deadline,
+# and which entry in the settings file declares its timeout. So an activation fixture
+# needs a settings file whose command names the fixture, or the resolver correctly
+# reports the budget as underivable. Same two-entry shape as the real file, first
+# timeout 5.
+cat >"$WORK/settings-fixture.json" <<JSON
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "python3 git-readonly-allow.py", "timeout": 5 }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash $FIXTURE_MARKER", "timeout": 900 }
+        ]
+      }
+    ]
+  }
+}
+JSON
+
 # A fixture that IS the hook, as far as ancestry is concerned.
 make_fake_hook() {
-    local path="$WORK/$1/pre-push-tests.sh"
+    local path="$WORK/$1/$FIXTURE_MARKER"
     mkdir -p "$WORK/$1"
     # NOT `exec`: exec REPLACES this process, so the argv the ancestry walk matches on
     # would vanish and the checker would correctly conclude it is not under a hook.
@@ -102,6 +144,7 @@ run_under_hook() {  # <settings> <margin> [label] -> sets RC / OUT
     OUT="$(CLAUDE_SETTINGS_OVERRIDE="$settings" \
            GATE_DEADLINE_MARGIN="$margin" \
            GATE_DEADLINE_DIR="$WORK/crumbs" \
+           GATE_HOOK_MARKER="$FIXTURE_MARKER" \
            bash "$hook" "$label" 2>&1)"
     RC=$?
 }
@@ -110,14 +153,27 @@ run_under_hook() {  # <settings> <margin> [label] -> sets RC / OUT
 # 1. Inert unless under the hook — the property that makes this safe to ship
 # ---------------------------------------------------------------------------
 
+# The margin is absurd on purpose: if activation were to happen, the budget would be
+# hugely negative and the check would certainly refuse. Passing therefore proves
+# inertness rather than merely proving the budget was not yet exhausted.
 OUT="$(CLAUDE_SETTINGS_OVERRIDE="$WORK/settings-real-shape.json" \
        GATE_DEADLINE_MARGIN=99999 \
        GATE_DEADLINE_DIR="$WORK/crumbs" \
+       GATE_HOOK_MARKER="$NEVER_MARKER" \
        bash "$CHECKER" check plain-run 2>&1)"; RC=$?
 if [ "$RC" -eq 0 ]; then
     ok "no hook ancestor -> inert, even with a margin that would refuse everything"
 else
     bad "no hook ancestor -> inert" "expected rc=0, got rc=$RC: $OUT"
+fi
+
+# The inert case must stay inert while this suite is itself running as the gate. Under
+# the real hook the ambient tree DOES contain a pre-push-tests.sh ancestor, so pin that
+# the real marker is not what the case above relied on.
+if grep -q 'GATE_HOOK_MARKER="\$NEVER_MARKER"' "$0"; then
+    ok "the inert case pins a sentinel marker, so it holds when run as the gate itself"
+else
+    bad "inert case is hermetic" "it relies on the ambient process tree; running as the gate would red it and block every push"
 fi
 
 # ---------------------------------------------------------------------------
@@ -149,7 +205,7 @@ fi
 # ---------------------------------------------------------------------------
 
 # margin == timeout makes the budget 0, so any elapsed time is over budget.
-run_under_hook "$WORK/settings-real-shape.json" 900 "test-over-budget"
+run_under_hook "$WORK/settings-fixture.json" 900 "test-over-budget"
 if [ "$RC" -eq 3 ]; then
     ok "over budget -> refuses with exit 3 (not 1=test failure, not 2=hook block)"
 else
@@ -188,7 +244,7 @@ esac
 # 6. Inside budget -> proceed
 # ---------------------------------------------------------------------------
 
-run_under_hook "$WORK/settings-real-shape.json" 180 "test-inside-budget"
+run_under_hook "$WORK/settings-fixture.json" 180 "test-inside-budget"
 if [ "$RC" -eq 0 ]; then
     ok "inside budget -> proceeds"
 else
@@ -261,7 +317,11 @@ fi
 # the easy alternative (background pid + kill -TERM) is deliberately UNCOVERED by that
 # guard, so the path of least resistance would silently evade it.
 
-if grep -nE '(^|[^[:alnum:]_])(timeout|gtimeout)[[:space:]]+[0-9]' "$CHECKER" >/dev/null 2>&1; then
+# The alternation is built from a variable rather than written literally: spelled out,
+# `|gtimeout)` is itself a command-position match for bounded-capture-guard.sh, so this
+# assertion would add a phantom entry to the very census it exists to keep at three.
+bound_word='timeout'
+if grep -nE "(^|[^[:alnum:]_])(${bound_word}|g${bound_word})[[:space:]]+[0-9]" "$CHECKER" >/dev/null 2>&1; then
     bad "no bounded-command call site" "gate-deadline.sh introduced a timeout call site; it must be registered in bounded-capture-guard.sh's REGISTRY"
 else
     ok "the bound is arithmetic — no timeout/gtimeout call site introduced"

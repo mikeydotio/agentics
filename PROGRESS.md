@@ -1823,11 +1823,27 @@ gh pr merge <n> --merge        # merge commit ONLY — squash and rebase are dis
 ```
 **Push the branch only — never the tag.** After the merge lands:
 ```bash
-git switch main && git pull --ff-only
+git fetch origin main          # updates origin/main; needs no local `main` ref
 git push origin v<X.Y.Z>       # clean first push, no force needed
-git push origin --delete <branch>
 /semver validate               # expect all-PASS
 ```
+⚠ **Never `git switch main` here, and never make a release depend on a local `main`.** That line
+used to read `git switch main && git pull --ff-only`, and it is what AGE-61 removed: a leftover
+linked worktree holding `main` makes it fail outright (a branch can be checked out in only one
+worktree), and it failed at the worst possible moment — *after* the PR had already merged, with a
+tag still unpushed. Nothing needs it. Measured 2026-08-05:
+
+- **A tag push works from any HEAD.** Tag refs are repo-global, and the org is merge-commit-only,
+  which preserves your branch's SHAs into `main` — so the tag `/semver bump` cut on your branch is
+  still correct after the merge. No re-pointing, no force.
+- **`/semver validate` is branch-agnostic.** `cmd_validate` (`semver-cli:969`) reads no branch;
+  only `bump` and `set` check one.
+- **No repo code resolves a local `main` at all** — `git grep -E 'switch main|checkout main|pull
+  --ff-only'` hits this file and nothing else.
+
+Do **not** re-add a `push origin --delete <branch>` line either: the repo sets
+`delete_branch_on_merge: true`, so `gh pr merge` has already removed the remote branch and the
+explicit delete just errors.
 Auto-merge without asking — that is standing policy for this repo (see
 `/Volumes/Code/mikeyward/CLAUDE.md`) and was explicitly reconfirmed for this loop.
 

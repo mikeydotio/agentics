@@ -38,7 +38,8 @@ echo "app change" > app.txt
 
 out=$(DEPLOYIT_SEMVER_CLI="$SEMVER_CLI" \
       python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" \
-      bump --component patch 2>&1)
+      bump --component patch 2>&1) \
+    || { echo "FAIL: bump exited $? — the CLI said: $out"; exit 1; }
 
 echo "$out" | grep -q '"ok": true' \
     || { echo "FAIL: bump not ok"; echo "$out"; exit 1; }

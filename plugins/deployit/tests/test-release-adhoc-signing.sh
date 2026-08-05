@@ -36,7 +36,8 @@ assert 'Developer-ID' in d['display'], d
 
 # --- opt out -> proceeds (dry-run ok) ---
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-release" --app "$app" --project-dir "$ROOT/proj" \
-        --notes-file "$ROOT/notes.md" --repo me/Hello --no-require-developer-id --dry-run)
+        --notes-file "$ROOT/notes.md" --repo me/Hello --no-require-developer-id --dry-run) \
+    || { echo "FAIL: opt-out dry-run exited $? — it said: $out"; exit 1; }
 echo "$out" | python3 -c "import sys, json; assert json.load(sys.stdin)['ok']"
 
 echo "PASS"

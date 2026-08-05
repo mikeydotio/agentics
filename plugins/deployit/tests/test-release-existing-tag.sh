@@ -38,7 +38,8 @@ assert 'already exists' in d['display'], d
 # --- --clobber: replace the asset + notes ---
 : > "$ROOT/gh.log"
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-release" --app "$app" --project-dir "$ROOT/proj" \
-        --notes-file "$ROOT/notes.md" --repo me/Hello --clobber)
+        --notes-file "$ROOT/notes.md" --repo me/Hello --clobber) \
+    || { echo "FAIL: --clobber release exited $? — it said: $out"; exit 1; }
 echo "$out" | python3 -c "import sys, json; assert json.load(sys.stdin)['ok']"
 grep -q "release upload 1.5.0" "$ROOT/gh.log" || { echo "FAIL: expected gh release upload"; cat "$ROOT/gh.log"; exit 1; }
 grep -q -- "--clobber" "$ROOT/gh.log" || { echo "FAIL: missing --clobber"; cat "$ROOT/gh.log"; exit 1; }

@@ -25,8 +25,13 @@ export DEPLOYIT_GH_BIN="$TESTS_DIR/fakes/gh"
 export DEPLOYIT_SKIP_CODESIGN_VERIFY=1
 
 run() {  # publishes; the release does not pre-exist, so the create path is taken
+    # Discarded on success, surfaced on failure: sending the CLI's stdout to
+    # /dev/null outright would throw away the JSON diagnosis its fail() writes
+    # there, leaving `set -e` to kill the script with nothing printed (AGE-35).
+    # `run` is called bare, not in a substitution, so this `exit` ends the test.
     python3 "$PLUGIN_ROOT/bin/deployit-release" --app "$app" --project-dir "$ROOT/proj" \
-        --notes-file "$ROOT/notes.md" --repo me/Hello --target deadbeefcafe >/dev/null
+        --notes-file "$ROOT/notes.md" --repo me/Hello --target deadbeefcafe >"$ROOT/release.log" 2>&1 \
+        || { echo "FAIL: deployit-release exited $? — it said:"; cat "$ROOT/release.log"; exit 1; }
 }
 
 # --- tag absent: --target IS passed so gh creates the tag ---

@@ -24,7 +24,8 @@ export FAKE_GH_LOG="$ROOT/gh.log"
 
 # --- dry-run: JSON only, no gh calls ---
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-release" --app "$app" --project-dir "$ROOT/proj" \
-        --notes-file "$ROOT/notes.md" --repo me/Hello --target deadbeefcafe --dry-run)
+        --notes-file "$ROOT/notes.md" --repo me/Hello --target deadbeefcafe --dry-run) \
+    || { echo "FAIL: dry-run release exited $? — it said: $out"; exit 1; }
 echo "$out" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -39,7 +40,8 @@ assert '--notes-file' in cmd, cmd
 
 # --- real run via fake gh ---
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-release" --app "$app" --project-dir "$ROOT/proj" \
-        --notes-file "$ROOT/notes.md" --repo me/Hello --target deadbeefcafe)
+        --notes-file "$ROOT/notes.md" --repo me/Hello --target deadbeefcafe) \
+    || { echo "FAIL: real release exited $? — it said: $out"; exit 1; }
 echo "$out" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)

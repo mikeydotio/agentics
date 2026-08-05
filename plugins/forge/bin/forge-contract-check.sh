@@ -576,8 +576,32 @@ fi
 # an unclosed `story <unclosed is done` matches under neither. Tightening it to
 # forbid whitespace only loses `story <the story id> is done` — a true positive
 # in a multi-word spelling docs plausibly use.
+#
+# MID_RE's remainder stops at a backtick (AGE-43). Inside a fence the unit is the
+# whole LINE, so `Then run `story project new` to start.` arrives intact: the
+# backtick separator qualifies the match, `(.*)$` then ran PAST the span's closing
+# backtick, and `subtoks[0]` came out as ``new` `` — a valid invocation reported as
+# a violation, on the one spelling AGE-15 renamed TO. A backtick-initiated match is
+# introduced by a span opener, so the closing backtick is the invocation's true end.
+#
+# START_RE is deliberately NOT bounded the same way, and this asymmetry is measured
+# rather than stylistic. It has no opener, so a mid-line backtick terminates
+# nothing; bounding it costs real detections without buying a reachable fix:
+#   - `story relate `AGE-1` precedes AGE-2` — a well-formed line carrying a DEAD
+#     relation — reports `precedes` today and under this fix, and goes GREEN if
+#     START_RE is bounded. A backticked entity in slot 0 pushes the relation to
+#     slot 1, and the bound truncates before it.
+#   - the only START_RE input this would fix needs a backtick ADJACENT to the
+#     harvested token, i.e. unbalanced ticks or a span opening mid-word.
+# So bounding START_RE trades a false negative on well-formed input for a false
+# positive reachable only from malformed input. Full trail:
+# `.council/age43-midre-trailing-backtick-scope/DECISION.md`.
+#
+# This is defense-in-depth, NOT a fix for the prose-verb false-positive class: the
+# bound constrains the ARGUMENT capture, not the VERB capture, so a whole-line
+# English sentence can still report its second word as a verb.
 START_RE='^[[:space:]]*\$?[[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*|<[^>]*>)(.*)$'
-MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*|<[^>]*>)(.*)$'
+MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*|<[^>]*>)([^`]*)'
 
 # ── Negative-example suppression (AGE-32) ──
 #

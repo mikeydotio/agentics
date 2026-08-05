@@ -1191,3 +1191,199 @@ EOF
   [ "$(jq_field '.ok')" = "false" ]
   [ "$(jq_field '.error')" = "usage" ]
 }
+
+# --- AGE-43: the harvest must stop at the span that introduced the invocation ---
+#
+# Inside a fence the extraction unit is the whole LINE (deliberate, AGE-24), so a
+# line of CORRECT prose reaches the checker intact. `MID_RE`'s remainder ran past
+# the closing backtick of the span that qualified the match, so the harvested
+# token kept that backtick and a valid invocation was reported as a violation.
+# `story project new` is the modern spelling AGE-15 renamed `story project init`
+# to — the guard red on the correct answer.
+#
+# These are the four shapes measured to reproduce, plus AGE-29's indented fence.
+# They are the FALSE-POSITIVE half; the positive controls proving the bound still
+# bites live in their own test below, because an all-green fixture asserts nothing
+# on its own.
+
+# One fixture carries BOTH halves on purpose. The four backticked shapes are the
+# false positives the bound removes; the plain forms below them are dead grammar
+# that must STILL be reported, and they are what stops this test passing
+# vacuously — an all-green fixture asserts nothing, because "no token ends in a
+# backtick" is trivially true of an empty array.
+#
+# The discrimination is pinned PER ARRAY rather than over a flat join. Measured:
+# blanketing `is_placeholder` to return 0 empties subcommand_violations and
+# relation_violations while leaving verb_violations intact, because the verb slot
+# routes through verb_slot_is_wildcard — a DIFFERENT function. So a combined
+# length floor is satisfiable with a whole slot silently dead (1 verb + 2
+# subcommand + 0 relation clears a floor of 3), and a flat token set cannot see a
+# token MIGRATING between arrays, which is exactly what AGE-70's fix will produce.
+@test "contract-check: a backticked invocation inside a fence is not mangled by the harvest" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+Then run `story project new` to start a project.
+`story project new` is the modern spelling.
+| `story project new` | creates a project |
+See `story relate AGE-1 blocks` above.
+story HP-1 is done
+story project init
+story relate AGE-1 precedes AGE-2
+```
+
+1. Claim it:
+   ```
+   Then run `story project init` to start a project.
+   Use `story relate AGE-1 precedes AGE-2` to order them.
+   ```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # THE INVARIANT. Not "ends in a backtick" — CONTAINS one, so a token mangled at
+  # either edge reds it.
+  [ "$(jq_field '([.verb_violations[].verb] + [.subcommand_violations[].subcommand] + [.relation_violations[].relation]) | map(select(contains("`"))) | length')" -eq 0 ]
+  # Per-array provenance. The failure oracle is executable with no mutation of
+  # shipped source: this same fixture on the pre-fix script yields 5 mangled
+  # tokens — `new` three times, plus `init` and `blocks` — so the assertion above
+  # is proven able to fire, and the pins below are proven to be the surviving set.
+  [ "$(jq_field '[.verb_violations[].verb] | sort | join(",")')" = "HP-1" ]
+  [ "$(jq_field '[.subcommand_violations[].subcommand] | sort | join(",")')" = "init,init" ]
+  [ "$(jq_field '[.relation_violations[].relation] | sort | join(",")')" = "precedes,precedes" ]
+}
+
+# The winning council proposal disclosed this gap against itself: the pins above
+# are all satisfied by an OVER-fix too. A wider bound [^`);|&]* leaves every
+# pinned array and the backtick count identical, so nothing above would notice a
+# future widening. This arm is the missing half — it pins the reported TOKEN on a
+# span whose content legitimately carries `;` and `)`, where a wider bound
+# truncates and a correct one does not.
+@test "contract-check: the harvest bound is exactly the backtick, not a wider delimiter set" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+Run `story project foo;bar` now.
+Run `story project baz)qux` now.
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Measured: widening to [^`);|&]* reports "baz","foo" instead.
+  [ "$(jq_field '[.subcommand_violations[].subcommand] | sort | join(",")')" = "baz)qux,foo;bar" ]
+}
+
+# The marker arm lives in its OWN fixture, and that placement is load-bearing:
+# try_suppress returns BEFORE add_subcommand_violation, so a marker sharing the
+# fixture above would silently SUBTRACT from the pinned arrays and quietly weaken
+# them. Bidirectional, because the defect INVERTED this mechanism rather than
+# merely breaking it — a one-directional arm would miss a regression that
+# restored the old behaviour by flipping the other half.
+@test "contract-check: an expect-dead marker naming the real token suppresses it" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+Then run `story project init` to start. <!-- contract-check: expect-dead init -- AGE-15 renamed it -->
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Pre-fix this reported `stale: token_mismatch` with the violation STANDING:
+  # the author named the correct token and the guard rejected it, a false
+  # diagnosis of substitution drift that no author could satisfy, because the
+  # only marker that worked named a token carrying a stray backtick.
+  [ "$(jq_field '.contract_ok')" = "true" ]
+  [ "$(jq_field '[.suppressions[].token] | join(",")')" = "init" ]
+  [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
+}
+
+@test "contract-check: an expect-dead marker naming a backtick-mangled token is stale, not silent" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+Then run `story project init` to start. <!-- contract-check: expect-dead init` -- names the mangled token -->
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # The other half of the inversion. Pre-fix THIS was the spelling that worked;
+  # a marker written against the old behaviour must now fail LOUD — twice over,
+  # an unsuppressed violation AND a stale marker — never go silently inert.
+  [ "$(jq_field '.contract_ok')" = "false" ]
+  [ "$(jq_field '[.subcommand_violations[].subcommand] | join(",")')" = "init" ]
+  [ "$(jq_field '[.stale_suppressions[].kind] | join(",")')" = "token_mismatch" ]
+}
+
+# ⚠ VACUOUS TODAY, AND KEPT ANYWAY. Both corpora report zero violations, so the
+# invariant below is trivially true and contributes ZERO discrimination — it must
+# never be counted as coverage. It is a GROWTH TRIPWIRE: AGE-29 (indented fences)
+# and AGE-30 (repo-root agent files) both enlarge the whole-LINE unit population
+# that makes this defect reachable, so the arm exists to red when real content
+# first grows into it. The discriminating arms are the fixtures above.
+@test "contract-check: no token from the real corpus or the root argv carries a backtick" {
+  run bash "$SCRIPT" "$FORGE_ROOT"
+  echo "$output" >&2
+  [ "$(jq_field '.files_scanned | length')" -ge 25 ]
+  [ "$(jq_field '([.verb_violations[].verb] + [.subcommand_violations[].subcommand] + [.relation_violations[].relation]) | map(select(contains("`"))) | length')" -eq 0 ]
+  # Mirrors the argv the real gate uses (tests/storyhook-contract-root.sh): run
+  # from the repo root with repo-relative paths, which --file scans instead of
+  # the default directory discovery.
+  local repo_root
+  repo_root="$(cd "$FORGE_ROOT/../.." && pwd)"
+  run bash -c "cd '$repo_root' && bash '$SCRIPT' --file AGENTS.md --file CLAUDE.md"
+  echo "$output" >&2
+  [ "$(jq_field '.files_scanned | length')" -eq 2 ]
+  [ "$(jq_field '([.verb_violations[].verb] + [.subcommand_violations[].subcommand] + [.relation_violations[].relation]) | map(select(contains("`"))) | length')" -eq 0 ]
+}
+
+# --- Characterization pins: NOT requirements ---
+#
+# The two tests below assert behaviour that is still WRONG. They exist so the
+# scope boundary of the AGE-43 fix is executable rather than a claim in a comment,
+# and so a later correct fix reds a pin that names its own story instead of
+# landing silently. Each carries its story ID in the test NAME: if one reds on
+# you, read that story — you have probably fixed it, and the pin is what you
+# update, not the code you just wrote.
+
+@test "contract-check: AGE-69 pin — a glued delimiter still mangles the token (characterization)" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+(story project new)
+story project new; echo done
+story project new` to start a project.
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # All three are CORRECT documentation reported as violations. The backtick
+  # member of this class is what AGE-43 fixed, and only for MID_RE — the third
+  # line here is the START_RE residue, deliberately left unbounded because
+  # bounding it costs two real detections (see the AGE-70 pin below).
+  # jq sorts by codepoint: ) 0x29 < ; 0x3B < ` 0x60.
+  [ "$(jq_field '[.subcommand_violations[].subcommand] | sort | join(",")')" = "new),new;,new\`" ]
+}
+
+@test "contract-check: AGE-70 pin — a quoted span still displaces the relation slot (characterization)" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+story relate `story next --id` blocks AGE-2
+(story relate `AGE-1` precedes AGE-2)
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Line 4 is a FALSE POSITIVE unchanged by AGE-43: the slot index lands on
+  # `next`, a word from the embedded span, instead of `blocks`.
+  # Line 5 is the FALSE NEGATIVE AGE-43 knowingly bought: the pre-fix script
+  # reports the dead relation `precedes` here and this one does not, because the
+  # bound truncates the remainder before slot 1. That trade was accepted 3-0 —
+  # bounding START_RE too would have cost TWO further real detections.
+  [ "$(jq_field '[.relation_violations[].relation] | sort | join(",")')" = "next" ]
+}

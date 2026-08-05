@@ -62,7 +62,7 @@ via freshen, and stops.
   is AGE-34/AGE-57's variable-binding blind spot. `tests/deployit-capture-diagnostics.sh` is
   therefore **behavioural**: inject a `fail()`-shaped failure at the k-th CLI call, k=1..6, and pin a
   per-file verdict string (`L` explained / `H` expected-and-handled / `N` fewer than k calls / `S`
-  silent). **`S` is never acceptable; `L`→`H` is a swallow-fix and reds by design.** ~138s,
+  silent). **`S` is never acceptable; `L`→`H` is a swallow-fix and reds by design.** ~140-170s,
   `make test-deployit-capture-diagnostics`.
 - **⚠ MEMBERSHIP MUST BE DISCOVERED, NOT ASSUMED — the chair's own first draft was vacuous and a
   mutation caught it.** Iterating the pinned list and comparing the result to that same list is
@@ -77,7 +77,7 @@ via freshen, and stops.
   identical fault the same session and honestly reported a failed measurement rather than a number.
   **If a sweep reports an implausibly fast clean result, suspect this before believing it.** Use
   `$(cat file)` or an array. The chair's retracted "<1s for 18 files" was this; the honest cost is
-  138s.
+  ~140-170s.
 - **⚠ A FIXED PATH IN THE SESSION SCRATCHPAD IS SHARED WITH YOUR OWN SUBAGENTS.** A council member
   overwrote the chair's `$SCRATCHPAD/shim3/python3` with its own copy, silently invalidating a whole
   sweep (its shim expected a different env var, so every file reported NO-FIRE). Same class as

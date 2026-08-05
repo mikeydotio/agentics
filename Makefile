@@ -125,7 +125,8 @@ test-deployit:
 # `FAIL (exit 1)` above an empty block. That is why AGE-35's occurrence was
 # never diagnosable. This injects a CLI failure at each call depth and pins what
 # every covered file does about it. Behavioural, not a source census: the defect
-# has four invocation shapes and only one is visible to a regex. ~77s.
+# has four invocation shapes and only one is visible to a regex. ~140-170s,
+# machine-load dependent.
 test-deployit-capture-diagnostics:
 	bash tests/with-isolated-store.sh bash tests/deployit-capture-diagnostics.sh
 

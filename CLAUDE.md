@@ -135,7 +135,8 @@ invocation shapes and only the first is visible to a regex: plain `out=$(python3
 (`test-cli-preflight.sh:50` `out=$(run_preflight)`); and **output-discarded**
 (`test-release-tag-exists-omits-target.sh:28` `… >/dev/null` in a bare-called function). Every miss
 is the variable-binding blind spot of AGE-34/AGE-57. So `tests/deployit-capture-diagnostics.sh`
-(`make test-deployit-capture-diagnostics`, ~138s) is **behavioural**: it injects a `fail()`-shaped
+(`make test-deployit-capture-diagnostics`, **~140-170s** depending on machine load) is
+**behavioural**: it injects a `fail()`-shaped
 failure at the k-th CLI call, k=1..6, and pins a per-file verdict string (`L` explained / `H`
 expected-and-handled / `N` fewer than k calls / `S` failed silently). **`S` is never acceptable, and
 `L`→`H` is a swallow-fix** — a real failure converted to a pass — which reds by design.

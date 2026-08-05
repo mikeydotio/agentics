@@ -14,9 +14,9 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
-| **Next story** | **AGE-35** — `deployit`'s `test-bootstrap-dirs.sh` fails under full `make test` but passes in isolation. Lowest-ID ready `medium`. ⚠ **AGE-36 does NOT pair with AGE-34**, contrary to the note this table carried for one session — see the AGE-34 block. Confirm STATE with `story list --ready`. |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-35** — `deployit`'s `test-bootstrap-dirs.sh` fails under full `make test` but passes in isolation. |
+| **Next story** | **AGE-39** — `forge-contract-check`: a placeholder-token marker can suppress but can never go stale. Lowest-ID ready `medium` after AGE-35 and AGE-36. ⚠ **AGE-36 does NOT pair with AGE-34**, contrary to the note this table carried for one session — see the AGE-34 block. Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34 |
 | **Repo version** | **v3.7.0** — unchanged. AGE-34 touched only `plugins/**/*.bats`, root `tests/`, `Makefile` and docs; the shipped pathspec diff is **empty** and `test_shipped_content_matches_tagged_release` PASSED unbumped. |
 | **Last updated by** | AGE-34 session, 2026-08-05 |

@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.7.2] - 2026-08-05
+
+### Fixed
+- stop the index hatch reporting the outcome that means "reached origin" (ceb3105)
+
+### Changed
+- read the local-only fact from the status, not the environment (7ffd0fd)
+- Merge pull request #163 from mikeydotio/fix/AGE-43-midre-trailing-backtick (ef1f3fa)
+
+### Documentation
+- claim AGE-48 as in flight (cd677c1)
+
+_[manual]_
+
 ## [v3.7.1] - 2026-08-05
 
 ### Fixed

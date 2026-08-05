@@ -14,8 +14,8 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-61** |
 | **Next story** | **AGE-61** — four stale linked worktrees, one holding `main`, which is what breaks step 10 below. Not the lowest-ID ready medium; picked because **it unblocks this loop's own protocol** (same rationale as AGE-21). ⚠ **AGE-62 is `high` and outranks it on priority, but the loop cannot do it** — it and AGE-63/AGE-64 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's, and are surfaced in the hand-off. Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed) |
 | **Repo version** | **v3.7.0** — unchanged. AGE-36 touched only root `tests/`, `Makefile`, `.gitignore` and docs; the shipped pathspec diff is **empty**, so no bump was owed. Verify for your own story rather than assuming. |

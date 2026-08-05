@@ -16,11 +16,11 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-61** — four stale linked worktrees, one holding `main`, which is what breaks step 10 below. Not the lowest-ID ready medium; picked because **it unblocks this loop's own protocol** (same rationale as AGE-21). ⚠ **AGE-62 is `high` and outranks it on priority, but the loop cannot do it** — it and AGE-63/AGE-64 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's, and are surfaced in the hand-off. Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed) |
-| **Repo version** | **v3.7.0** — unchanged. AGE-36 touched only root `tests/`, `Makefile`, `.gitignore` and docs; the shipped pathspec diff is **empty**, so no bump was owed. Verify for your own story rather than assuming. |
-| **Last updated by** | AGE-36 session, 2026-08-05 |
-| **Carried debt** | **None owed to you, but one PROTOCOL STEP IS BROKEN — read this before step 10.** AGE-35 is `done`; AGE-59, AGE-60 and AGE-61 were filed. ⚠ **`git switch main` FAILS in this checkout**: `.claude/worktrees/age-118` holds `main` at a stale commit (20c31d2), and a branch can only be checked out in one worktree. Step 10's `git switch main && git pull --ff-only` therefore cannot run. **If your story needs no bump you are unaffected** — step 4's `git switch -c <branch> origin/main` works from a detached HEAD, which is how AGE-35 completed. **If your story touches shipped `plugins/**` you must push a tag from `main`, and you will hit this wall immediately after your PR merges.** Deal with it *before* you bump: see **AGE-61**, and do not blind-delete the four worktrees — two hold unmerged feature branches. |
+| **Next story** | **AGE-43** — `forge-contract-check` reports a valid invocation as a violation when a backtick trails the harvested token. **Not the lowest-ID ready medium, and the skip is deliberate:** AGE-39 is lower but is *logged deliberate debt whose redesign trigger is unmet* ("once `collect_markers` can tell a QUOTED marker from an APPLIED one"), so taking it means building that capability first, not fixing a defect. AGE-43 is a false positive **reachable on the shipped script today** with a known one-token fix. ⚠ **AGE-62 is `high` and outranks everything, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed) |
+| **Repo version** | **v3.7.0** — unchanged. AGE-61 touched only `CLAUDE.md`, `PROGRESS.md`, `.gitignore` and one untracked file; the shipped pathspec diff is **empty**, so no bump was owed. Verify for your own story rather than assuming. |
+| **Last updated by** | AGE-61 session, 2026-08-05 |
+| **Carried debt** | **None owed to you, and the broken protocol step is FIXED.** `git switch main` works again, local `main` is current (20c31d2 → 3cdbfcd), and **step 10 no longer asks you to run it** — the release path is now decoupled from any local `main` ref. ⚠ **One worktree is deliberately still there**: `.claude/worktrees/dual-host-plugin-compatibility` holds **135 uncommitted files** of dual-host (Codex) plugin work that exists **nowhere else** — unpushed, uncommitted, idle since 2026-07-20. **Do not remove it.** It is filed as **AGE-66** for Mikey's decision. If you ever need it out of the way, the remedy is `git switch --detach <path>`, **never** `git worktree remove` — measured, detach preserves modified *and* untracked files. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
@@ -62,6 +62,81 @@ three times on this session that way. `SKIP_PREPUSH_TESTS=1` is legitimate for a
 demonstrably pushes nothing — say so when you use it.
 
 ---
+
+## Known state (updated 2026-08-05 by the AGE-61 session)
+
+- **AGE-61 is DONE, and it closed AGE-67 in the same PR. No bump — the repo stays at v3.7.0.** It
+  touched only `CLAUDE.md`, `PROGRESS.md`, `.gitignore` and one untracked file. Verify before
+  assuming it applies to you: `git diff --stat origin/main HEAD -- plugins/
+  ':(exclude,glob)plugins/*/tests/**' ':(exclude,glob)plugins/**/*.bats'
+  ':(exclude,glob)plugins/*/README.md'` — **empty means no bump.**
+- **⚠ THE WARNING THIS FILE CARRIED ABOUT THE WORKTREES WAS FALSE, AND IT WOULD HAVE MISLED YOU IN
+  THE DANGEROUS DIRECTION.** `PROGRESS.md:23` said *"do not blind-delete the four worktrees — two
+  hold unmerged feature branches."* Measured with `rev-list --count origin/main..HEAD`:
+
+  | Claim | Verdict |
+  |---|---|
+  | Two worktrees hold unmerged feature branches | **False** — **all four** branch tips had **0** commits not in `origin/main` |
+  | Blind deletion is unsafe | **True — for a completely different reason** |
+
+  The real hazard was never an unmerged branch. It was **135 uncommitted files** in
+  `dual-host-plugin-compatibility`, which no branch-merged test can see. A session that had trusted
+  the stated reason would have checked merged-ness, found all four clean, and deleted the lot.
+  **Check the working tree, not just the branch.**
+- **⚠ THE STORY'S OWN FIX DIRECTION NAMED THE WRONG REMEDY.** AGE-61 says *"removing that single
+  worktree is likely sufficient and lowest-risk."* Removal is **not** lowest-risk. Measured in a
+  fixture, both topologies: `git switch --detach <worktree>` frees the branch while preserving
+  modified **and** untracked files, so it is strictly safer and does the same job. Removal is
+  irreversible and, applied to `dual-host`, would have destroyed AGE-66's only copy.
+- **⚠ THE RESIDUE HAD A STRUCTURAL CAUSE NOBODY HAD LOOKED FOR, AND A COUNCIL SEAT FOUND IT BY
+  NATURAL EXPERIMENT.** `.claude/scheduled_tasks.lock` was the **only** tracked file under
+  `.claude/`, swept into the index by `8d9f6fe` (v2.14.0). Git materializes a tracked file into every
+  new worktree; a scheduler sweep deletes it *there*; and both reclaim tools act only on `removable`
+  (`issue.sh:940`, `story.sh:579-580,642`). So the worktree became **permanently unreclaimable by
+  the verb that exists to reclaim it**. The discriminating evidence: `age-117` and `age-118` were
+  stuck at ` D .claude/scheduled_tasks.lock`, while **`age-AGE-2`, whose copy survived intact, was
+  still classified `removable`**. Untracked here; `--cached`, so the live file stays on disk.
+  - ⚠ **Scope it as the council forced: 2 of 4, not 4 of 4.** `age-AGE-2` was clean *and* removable
+    and lingered anyway, so *"nobody ran the reclaim verb"* is an **independent** cause this does not
+    address. Seat 1 made that scoping a condition of its vote.
+- **⚠ A GATE GUARD WAS DESIGNED, COSTED, VOTED FOR, AND WITHDRAWN BY ITS OWN AUTHOR — and the reason
+  is the transferable result of this session.** `tests/worktree-hygiene.sh` would have red when a
+  linked worktree held `refs/heads/main`. What killed it was **not** cost: the QA seat corrected the
+  chair's "red for 105 commits and ~23 stories" framing to *red **once**, cleared by one safe
+  command*. What killed it is that **this repo's guards exist to convert SILENT failures into loud
+  ones** (AGE-18, AGE-21, AGE-27, AGE-33, the fail-open hook, the bounded call that *looks* bounded),
+  and this failure is already loud and self-naming — verified in a fixture:
+  `fatal: refusing to fetch into branch 'refs/heads/main' checked out at '<path>'`, printing the
+  offending worktree path **verbatim**, with the detach remedy following directly from it. A guard
+  would convert a fatal that names its own cause into an earlier fatal.
+  - **Pre-registered trigger that would make it right after all** (deferred against a signal, not
+    declined on taste — the agentics#33 posture): a **second** observed capture of `refs/heads/main`
+    by a linked worktree, or any future step reintroducing a local-`main` dependency such as the
+    `git fetch origin main:main` form. **That form is the one command the residue still breaks** —
+    step 10's `git fetch origin main` is immune, measured.
+- **Step 10 is rewritten and no longer touches `main`.** Nothing needs a local `main`: a tag ref is
+  repo-global, merge-commit-only preserves the branch SHA, `cmd_validate` (`semver-cli:969`) reads no
+  branch, and `git grep -E 'switch main|checkout main|pull --ff-only'` matches **no repo code**. The
+  stale `push origin --delete <branch>` line is gone too — `delete_branch_on_merge: true` means
+  `gh pr merge` already removed it.
+- **Council: C won outright at the FIRST count (C=2, B=1, A=0) — and for the second time in this
+  loop, NO seat's own proposal was its own top choice.** Seats 1 and 2 both ranked the QA seat's
+  proposal above their own; the QA seat ranked its own **second**. **Proposal A finished last on all
+  three ballots including its author's**, after the QA seat produced a measurement refuting A's
+  central empirical claim and Seat 1 accepted the refutation rather than defend it. All three seats
+  revised during deliberation, and all three converged on the same shape. Full trail:
+  `.council/age61-stale-worktrees-durable-half/DECISION.md`.
+- **Filed: AGE-66** (med) — the `dual-host` worktree's 135 uncommitted files, which exist nowhere
+  else; **needs Mikey's decision, not the loop's**. **AGE-68** (low) — 29 of 31 local branches are
+  merged residue; ⚠ the sweep must exclude `fix/AGE-3-semver-post-bump-hooks-skipped`, which is
+  ahead=1 and may be the only copy of that commit.
+- **AGE-23 confirmed for the SIXTH time.** The council plugin's `references/` resolve at plugin root,
+  not skill-relative. It costs a tool call every single session; it is `low` and never gets picked.
+- **⚠ `${PIPESTATUS[0]}` DOES NOT WORK IN THE BASH TOOL** — it runs zsh, where the array is
+  `$pipestatus` and is 1-indexed. A `cmd | tail; echo EXIT=${PIPESTATUS[0]}` line printed an **empty**
+  exit code, which reads as success. Same family as the `for x in $VAR` word-splitting trap already
+  recorded here: **if a shell idiom silently produces nothing, suspect zsh before believing the
+  result.**
 
 ## Known state (updated 2026-08-05 by the AGE-36 session)
 
@@ -941,14 +1016,15 @@ demonstrably pushes nothing — say so when you use it.
 - **The ordering from AGE-24 held up again and is now twice-proven**: targeted suites first
   (`make test-forge` + the three fast guards, ~6 min), then bump, then **one** full `make -k test`
   post-bump. One gate run, and the state that ships is the state the gate verified.
-- **⚠ `git switch main` FAILS in this checkout** — `main` is held by the `age-118` worktree
-  (`fatal: 'main' is already used by worktree at .claude/worktrees/age-118`). The protocol's
-  step 10 tells you to `git switch main && git pull --ff-only`; you cannot. Branch from
-  `origin/main` directly (`git fetch origin main && git switch -c <branch> origin/main`) and push
-  the tag without ever checking main out. Verify the tag landed with
-  `git merge-base --is-ancestor v<X.Y.Z> origin/main` instead. **GitHub auto-deletes the branch on
-  merge**, so step 10's `push origin --delete` errors with *"remote ref does not exist"* — that is
-  success, not a failure.
+- **⚠ ~~`git switch main` FAILS in this checkout~~ — RESOLVED by AGE-61 on 2026-08-05. Superseded;
+  kept only so the next reader does not re-derive it.** `main` was held by the `age-118` worktree
+  (`fatal: 'main' is already used by worktree at .claude/worktrees/age-118`). That worktree is gone,
+  local `main` was fast-forwarded 20c31d2 → 3cdbfcd, and `git switch main` succeeds again — but
+  **step 10 no longer asks you to run it, and you should not.** The release path is now decoupled
+  from any local `main` ref; see step 10 for the measurements. Two facts from this block survive and
+  are still true: verify the tag landed with `git merge-base --is-ancestor v<X.Y.Z> origin/main`,
+  and **GitHub auto-deletes the branch on merge** (`delete_branch_on_merge: true`, re-confirmed by
+  AGE-61), which is why step 10 no longer carries a `push origin --delete` line at all.
 - **⚠ A placeholder token can now be REPORTED, which it never could before.** `is_placeholder` no
   longer means "skip" everywhere: in the subcommand (`:600`) and relation (`:613`) slots it still
   skips, but the verb slot now treats an angle placeholder as a **violation** unless it names the
@@ -1356,7 +1432,9 @@ without recording why in this file.
 | 14 | **AGE-23** | low | Skill `references/*.md` are cited skill-relative but ship at plugin root — see below. **Confirmed live again this session:** the council skill's own `references/council-protocol.md` failed to resolve skill-relative and cost a wasted tool call. |
 | 15 | **AGE-25** | low | AGE-17's own safety mechanisms are unproven — see below. |
 | ✅ | ~~**AGE-26**~~ | med | **DONE — shipped as v3.7.0.** `story` left `is_always_safe` for a verb-aware `is_safe_story()`. Return 2 is licensed **only by an existing peer** in `is_known_destructive`, which makes the bucket self-limiting and made a rename unnecessary. The story missed the premise's third clause (`story update` replaces its own binary) and the chair's own verb list missed `plugin` and `store`. A narrowing guard was proposed, voted for and **withdrawn by all three seats** — it would have read the comment describing the defect as a mandate to keep it. See the AGE-26 block above. Filed **AGE-52**, **AGE-53**, **AGE-54**. |
+| ✅ | ~~**AGE-61**~~ | med | **DONE — no bump** (`CLAUDE.md`, `PROGRESS.md`, `.gitignore` only). Three of the four worktrees removed, `dual-host` preserved for **AGE-66**, and step 10 decoupled from any local `main` ref. **Closed AGE-67 in the same PR** — a tracked runtime lock made two worktrees permanently unreclaimable. This file's own warning about the worktrees was **false** (all four branches were merged; the hazard was uncommitted files), and the story's prescribed remedy was the **less safe** of the two. A gate guard was designed and withdrawn by its own author. See the AGE-61 block above. Filed **AGE-66**, **AGE-68**. |
 | 17 | **AGE-20** | low | Deliberately deferred — land it alone, never beside a behaviour fix whose proof depends on those fixtures. |
+| 18 | **AGE-43** | med | **Next up.** A false positive reachable on the shipped script *today*, with a known one-token fix — bound the argument capture so it stops running past an inline span's closing backtick. ⚠ Its own AGE-29-block entry warns: **do not sell that fix as a safety precondition for a detector change**, because it bounds the *argument* capture, not the *verb* capture. Skips AGE-39 deliberately — see the **Next story** cell. |
 
 **AGE-2, AGE-3, AGE-11, AGE-14, AGE-15, AGE-16, AGE-17 and AGE-18 are already `done`** — do not
 touch them.
@@ -1823,11 +1901,27 @@ gh pr merge <n> --merge        # merge commit ONLY — squash and rebase are dis
 ```
 **Push the branch only — never the tag.** After the merge lands:
 ```bash
-git switch main && git pull --ff-only
+git fetch origin main          # updates origin/main; needs no local `main` ref
 git push origin v<X.Y.Z>       # clean first push, no force needed
-git push origin --delete <branch>
 /semver validate               # expect all-PASS
 ```
+⚠ **Never `git switch main` here, and never make a release depend on a local `main`.** That line
+used to read `git switch main && git pull --ff-only`, and it is what AGE-61 removed: a leftover
+linked worktree holding `main` makes it fail outright (a branch can be checked out in only one
+worktree), and it failed at the worst possible moment — *after* the PR had already merged, with a
+tag still unpushed. Nothing needs it. Measured 2026-08-05:
+
+- **A tag push works from any HEAD.** Tag refs are repo-global, and the org is merge-commit-only,
+  which preserves your branch's SHAs into `main` — so the tag `/semver bump` cut on your branch is
+  still correct after the merge. No re-pointing, no force.
+- **`/semver validate` is branch-agnostic.** `cmd_validate` (`semver-cli:969`) reads no branch;
+  only `bump` and `set` check one.
+- **No repo code resolves a local `main` at all** — `git grep -E 'switch main|checkout main|pull
+  --ff-only'` hits this file and nothing else.
+
+Do **not** re-add a `push origin --delete <branch>` line either: the repo sets
+`delete_branch_on_merge: true`, so `gh pr merge` has already removed the remote branch and the
+explicit delete just errors.
 Auto-merge without asking — that is standing policy for this repo (see
 `/Volumes/Code/mikeyward/CLAUDE.md`) and was explicitly reconfirmed for this loop.
 
@@ -1983,3 +2077,11 @@ on why it was held out of AGE-31's PR.
 | Story | Pri | What |
 |---|---|---|
 | **AGE-37** | low | `forge-contract-check.sh`'s `classify_stale_markers` reports kind `form_is_valid` for a marker on a line the extractor read but which yielded **no invocation at all** — claiming "storyhook made the form real, so the doc's denial is now FALSE", which sends a fixer to rewrite a **correct** sentence. Cause: `SCANNED_LINES` is appended *before* the marker strip and the `START_RE`/`MID_RE` match, so it conflates "handed to the checker" with "an invocation was found". The verdict is right (it still fails the gate); only the `kind` — the field whose whole job is picking which of four corrections to make — lies. Pre-dates this change (AGE-32, v3.1.0); AGE-24 enlarged its reachable surface from fenced lines to unfenced ones. |
+
+### Stories filed by the AGE-61 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-66** | med | **⚠ NEEDS MIKEY'S DECISION — do not touch it, and do not remove that worktree.** `.claude/worktrees/dual-host-plugin-compatibility` holds **69 modified tracked files and 135 total entries** of uncommitted "dual-host" work teaching every plugin to run under both Claude Code and Codex — per-plugin `.codex-plugin/`, `claude/` and `codex/` dirs, `tests/smoke-codex-tmux.sh`, and two design docs under `docs/plans/`. **It exists nowhere else**: the branch tip is fully merged (so all the value is uncommitted), `git ls-remote --heads origin 'codex/*'` returns nothing, and the newest mtime is 2026-07-20. Preferred resolution is the safe reversible one — commit it onto its branch and publish, *then* remove the worktree — but that is a judgement about whether the idea is live, which is Mikey's. |
+| ~~**AGE-67**~~ | low | **DONE — closed by AGE-61, same PR, no separate story cycle.** `.claude/scheduled_tasks.lock` was the only tracked file under `.claude/`, holding a dead 2026-05-25 sessionId/pid. Because it was tracked, git materialized it into every worktree, a scheduler sweep deleted it there, and both reclaim tools then read that worktree as permanently `dirty` and refused it forever. Filed at `low` as cosmetic noise; a council seat's natural experiment (`age-117`/`age-118` stuck dirty vs `age-AGE-2` clean-and-removable) reclassified it as the **structural cause of 2 of the 4** stale worktrees. Untracked with `--cached`, so the live file is untouched on disk; blast radius measured nil (zero references repo-wide). |
+| **AGE-68** | low | 29 of 31 local branches have **zero** commits not in `origin/main` — residue accumulating at roughly one per completed story. Harmless, just noise. ⚠ **Two exceptions the sweep must exclude**: the running session's own branch, and `fix/AGE-3-semver-post-bump-hooks-skipped` (ahead=1) — AGE-3 is `done` and CLAUDE.md records its fix as landed, so that commit is *probably* an equivalent that reached `main` by another route, but **confirm before deleting, because if it is not equivalent it is the only copy**. Use the `merge-base --is-ancestor` test against a freshened `origin/main` (what `branch_is_merged` already does), not `git branch --merged`, which judges against the current HEAD. |

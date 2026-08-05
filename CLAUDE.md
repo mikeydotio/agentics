@@ -221,6 +221,50 @@ push), **AGE-63** (the matcher fires on a push invocation anywhere in the comman
 heredoc bodies and prose cost a full suite run), **AGE-65** (SPEC for inverting the gate to
 a test-result attestation).
 
+### The release path must never require a local `main` ref — and a guard here would be the wrong shape
+
+**A tracked runtime lock file made a worktree permanently unreclaimable by the verb that exists to
+reclaim it.** `.claude/scheduled_tasks.lock` was the only tracked file under `.claude/`, swept into
+the index by `8d9f6fe`. Git materializes a tracked file into every new worktree; a scheduler sweep
+then deletes it *there*; and both reclaim tools classify a worktree with any dirt as `dirty` and act
+only on `removable` (`issue.sh:940`, `story.sh:579-580,642`). So the worktree could never be
+reclaimed, and the residue accumulated until one of them captured `refs/heads/main` and broke the
+release path. Untracked in AGE-61/AGE-67. ⚠ **Scope it honestly: that explains two of the four stale
+worktrees.** `age-AGE-2` was clean *and* `removable` and lingered anyway — "nobody ran the reclaim
+verb" is an independent cause the untracking does not touch.
+
+**A branch can be checked out in only one worktree**, so a linked worktree holding `main` makes
+`git switch main` in the primary checkout fail outright. The durable fix is not to police worktrees
+but to **stop needing a local `main` at all**: a tag ref is repo-global, the org is merge-commit-only
+so a tag cut on a feature branch stays correct after merge, `semver-cli`'s `cmd_validate` reads no
+branch, and `delete_branch_on_merge: true` means the remote branch is already gone. Measured
+2026-08-05: `git grep -E 'switch main|checkout main|pull --ff-only'` matches **no repo code**.
+
+⚠ **The remedy is `git switch --detach <worktree>`, never `git worktree remove`.** Verified in a
+fixture, both topologies: detaching preserves modified *and* untracked files while freeing the
+branch. Removal is what AGE-61's own story text suggested, and it would have destroyed the 135
+uncommitted files in `.claude/worktrees/dual-host-plugin-compatibility` (AGE-66).
+
+**A gate guard over `git worktree list` was designed, costed, voted for, and withdrawn by its own
+author** — and the reason is the transferable one. This repo's guards exist to **convert SILENT
+failures into loud ones** (AGE-18, AGE-21, AGE-27, AGE-33, the fail-open hook, the bounded call that
+*looks* bounded). This failure is already loud and self-naming:
+
+```
+fatal: refusing to fetch into branch 'refs/heads/main' checked out at '<path>'
+```
+
+It prints the offending worktree path verbatim, and the detach remedy follows directly from it. A
+guard would convert a fatal that names its own cause into an earlier fatal, priced at a hard block on
+unrelated pushes plus a mutation battery to maintain — and it would fire on a hazard the decoupling
+already made inert. Note the *cost* argument is **not** what settled this: the honest counterfactual
+is red once, cleared by one safe command, not a run of blocked stories. **Pre-registered trigger that
+would make the guard right after all** (this is deferred against a signal, not declined on taste): a
+**second** observed capture of `refs/heads/main` by a linked worktree, or any future step
+reintroducing a local-`main` dependency such as the `git fetch origin main:main` form — which is the
+one command the residue still breaks, while step 10's `git fetch origin main` is immune. Full trail:
+`.council/age61-stale-worktrees-durable-half/DECISION.md`.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

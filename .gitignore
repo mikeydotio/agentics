@@ -35,3 +35,9 @@ Thumbs.db
 
 # issue plugin per-issue git worktrees (working state, never committed)
 .claude/worktrees/
+
+# Claude Code scheduled-task runtime lock (machine-local pid/session state,
+# swept into the index by 8d9f6fe; git materializes it into every worktree,
+# where a scheduler sweep deletes it and `complete` then reads that worktree as
+# permanently dirty and refuses to reclaim it -- AGE-61/AGE-67)
+.claude/scheduled_tasks.lock

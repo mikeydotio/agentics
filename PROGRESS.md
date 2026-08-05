@@ -14,19 +14,105 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-35** — `deployit`'s `test-bootstrap-dirs.sh` fails under full `make test` but passes in isolation. |
-| **Next story** | **AGE-39** — `forge-contract-check`: a placeholder-token marker can suppress but can never go stale. Lowest-ID ready `medium` after AGE-35 and AGE-36. ⚠ **AGE-36 does NOT pair with AGE-34**, contrary to the note this table carried for one session — see the AGE-34 block. Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34 |
-| **Repo version** | **v3.7.0** — unchanged. AGE-34 touched only `plugins/**/*.bats`, root `tests/`, `Makefile` and docs; the shipped pathspec diff is **empty** and `test_shipped_content_matches_tagged_release` PASSED unbumped. |
-| **Last updated by** | AGE-34 session, 2026-08-05 |
-| **Carried debt** | **None.** The storyhook outage below cleared before the session ended and every pending operation was completed — AGE-34 is `done`, AGE-36 is corrected, AGE-58 is filed. Nothing is owed to you. |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-36** — pre-push test gate cannot pass: hook timeout 900s vs `make test` "~2h". Lowest-ID ready `medium`. ⚠ **Read the comment AGE-35 filed on it first — its premise is probably stale.** Measured green end-to-end at **478s (8 min)**, not ~2h; the gate is now ~10.5 min with AGE-35's new target. Re-measure and record conditions before fixing or closing. Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35 |
+| **Repo version** | **v3.7.0** — unchanged. AGE-35 touched only `plugins/deployit/tests/`, root `tests/`, `Makefile` and docs; the shipped pathspec diff is **empty**, so no bump was owed. Verify for your own story rather than assuming. |
+| **Last updated by** | AGE-35 session, 2026-08-05 |
+| **Carried debt** | **None.** AGE-35 is `done`; AGE-59 (the unexplained flake) and AGE-60 (the guard's coverage limits) were filed **before** closure, and AGE-36 carries a measurement that may invalidate it. Nothing is owed to you. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-05 by the AGE-35 session)
+
+- **AGE-35 is DONE. No bump — the repo stays at v3.7.0.** It touched only
+  `plugins/deployit/tests/`, root `tests/`, `Makefile` and docs. Verify before assuming it applies
+  to you: `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **empty means no bump.**
+- **⚠ THE FLAKE WAS NOT REPRODUCED, AND THIS PR DID NOT FIX IT. It shipped OBSERVABILITY.** Say this
+  plainly if anyone asks: nothing here changes the probability of recurrence, so **a future red is
+  not a regression from this work**. Filed as **AGE-59** *before* closure, per the council. 0/30 solo
+  runs, `make test-deployit` 50/50, a full `make -k test` green, and 29 twin probes across that gate
+  (max 0.14s at peak load 11.79) bound the per-run rate only to **~10% by the rule of three**. The
+  load/timeout theory is **UNREPRODUCED — not "unsupported", not refuted** — and remains the
+  *leading* candidate, because every `fail()`-reachable path in this test lies in `_derive_base_url`.
+  The chair wrote "refuted" in its brief; all three seats corrected it. **AGE-59 pre-registers the
+  discriminator**: if the recovered `display` names the 5s tailscale timeout the theory is CONFIRMED
+  for that event, anything else REFUTES it. Its closing condition is a captured diagnostic from a
+  real recurrence or an explicit accept-the-risk — *never* "it hasn't fired in N runs", which is what
+  has left AGE-49 open and rotting.
+- **⚠ THE STORY'S OWN EXPLANATION WAS WRONG, AND THE REAL DEFECT WAS DETERMINISTIC.** AGE-35 blamed
+  the pre-push hook's `tail -40`. Measured: `test-bootstrap-dirs.sh:16` captured the CLI under
+  `set -e`, and `deployit-cli`'s `fail()` prints its diagnosis to **stdout** — so the shell died at
+  the capture with the diagnosis sealed in `$out`: **0 bytes on stdout AND stderr**. A full log is
+  equally empty. Line 17's guard, written for exactly that case, was **unreachable**. But do not
+  over-claim as the chair first did: a traceback or an assertion failure at lines 19-37 *would* have
+  printed and then been dropped by the window, so **both losses are real and undiscriminated** —
+  neither may be recorded as the cause of 2026-08-04.
+- **⚠ THE FIX SET CANNOT BE FOUND BY READING SOURCE: 9 files by census, 12 by measurement.** The
+  defect has four invocation shapes and only the first is visible to a regex — plain
+  `out=$(python3 …/deployit-cli …)`; **array-bound** (`test-cli-rm.sh:87`); **function-bound**
+  (`test-cli-preflight.sh:50` `out=$(run_preflight)`); **output-discarded**
+  (`test-release-tag-exists-omits-target.sh:28` `… >/dev/null` in a bare-called function). Every miss
+  is AGE-34/AGE-57's variable-binding blind spot. `tests/deployit-capture-diagnostics.sh` is
+  therefore **behavioural**: inject a `fail()`-shaped failure at the k-th CLI call, k=1..6, and pin a
+  per-file verdict string (`L` explained / `H` expected-and-handled / `N` fewer than k calls / `S`
+  silent). **`S` is never acceptable; `L`→`H` is a swallow-fix and reds by design.** ~138s,
+  `make test-deployit-capture-diagnostics`.
+- **⚠ MEMBERSHIP MUST BE DISCOVERED, NOT ASSUMED — the chair's own first draft was vacuous and a
+  mutation caught it.** Iterating the pinned list and comparing the result to that same list is
+  self-consistent, so deleting a row deletes it from both sides and passes. **Mutation M2 walked
+  straight through it.** The k=1 sweep now runs over **all 35 candidates** independently. This is
+  Seat 3's self-exclusion objection — the insight that decided the council — reappearing inside the
+  implementation of the fix for it.
+- **⚠ `for x in $VAR` DOES NOT WORD-SPLIT IN zsh, AND IT MANUFACTURED A FALSE GREEN.** The Bash tool
+  runs zsh, where unquoted *parameter* expansion is not split (unlike `$(…)`, which is). A
+  verification loop written `for n in $COVERED` ran **once**, with `$n` bound to the whole list and a
+  nonsense path — reporting "18 files, 0 silent, **0s**" when nothing had run. A council seat hit the
+  identical fault the same session and honestly reported a failed measurement rather than a number.
+  **If a sweep reports an implausibly fast clean result, suspect this before believing it.** Use
+  `$(cat file)` or an array. The chair's retracted "<1s for 18 files" was this; the honest cost is
+  138s.
+- **⚠ A FIXED PATH IN THE SESSION SCRATCHPAD IS SHARED WITH YOUR OWN SUBAGENTS.** A council member
+  overwrote the chair's `$SCRATCHPAD/shim3/python3` with its own copy, silently invalidating a whole
+  sweep (its shim expected a different env var, so every file reported NO-FIRE). Same class as
+  AGE-34, one level up. **`mktemp -d` inside the scratchpad**, don't name a fixed subdir.
+- **⚠ DO NOT RUN TWO MUTATION BATTERIES AT ONCE.** A duplicate battery launched against the same
+  tracked files and the kill left `test-bootstrap-dirs.sh` carrying mutation M3 and the guard
+  carrying M5. Both were restored from backups and verified, but a battery that mutates *tracked*
+  files must be the only one running — `git status` after every battery, and keep the per-mutation
+  backup until the restore is `cmp`-verified.
+- **Mutation battery: 5 run, 5 caught**, each asserted APPLIED before its run and `cmp`-verified
+  byte-identical after restore. M1 revert-a-guard, M2 drop-a-manifest-row (the one that found the
+  vacuity), M3 swallow-fix, M4 candidate-set-grows, M5 shim-stops-matching. ⚠ M5 also makes the guard
+  **very slow** — an unmatched shim means all 35 candidates run to completion instead of dying at
+  their first CLI call; it is caught by the oracle arm, but budget for it.
+- **⚠ A NEW `make test` TARGET MUST GO THROUGH `tests/with-isolated-store.sh`.** The first draft's
+  recipe did not, and `tests/store-isolation.sh` greps `^\t.*\bbash (tests/|plugins/)` with only two
+  exemptions — it would have red the gate. Caught before the gate ran, but only by reading that
+  guard.
+- **The gate is ~10.5 min, and `make test` alone measured 478s (8 min) — not the ~2h AGE-36
+  asserts.** Recorded as a comment on AGE-36 as a *data point, not a refutation* (one green run on an
+  idle box). It does remove "the pre-push hook SIGTERM'd the run mid-suite" from AGE-59's candidates.
+- **Council: UNANIMOUS 3-0 for P1 in the runoff, after a 2-1-0 round 1 in which every seat again
+  voted against its own proposal.** Seat 2 withdrew its own helper refactor on a **circularity it
+  found in its own argument**; Seat 3 withdrew scope A once the gate cost turned out to be 8 minutes;
+  Seat 1 rebuilt its proposal around the two things that beat it. Seat 3's first preference was
+  **conditional** on the bounded `run-tests.sh` re-echo being re-attached — it was, at 12 lines per
+  failing test, because the inline diagnostic sits ~40 lines from the end and whether a red gate
+  explains itself was otherwise **order-dependent on the failing file's alphabetical position**. Full
+  trail: `.council/age35-deployit-bootstrap-flake-diagnostics/DECISION.md`.
+- **Filed: AGE-59** (med) — the unexplained flake, with the pre-registered discriminator and closing
+  condition above. **AGE-60** (low) — the guard classifies only paths a run *executes*, so untaken
+  branches, the 17 candidates that never fire, and sites past k=6 are uncovered; redesign trigger
+  stated in advance. Also **do not "improve" the guard by running all 50 deployit tests** — the 15
+  excluded files spawn 14 more fixed-port backend servers against still-open **AGE-56**, so narrowing
+  is a *safety* property.
 
 ## Known state (updated 2026-08-05 by the AGE-34 session)
 

@@ -116,6 +116,51 @@ sweep that found AGE-56 missed AGE-57 twice, first because `plugins/*/tests/fake
 still not safe** (AGE-56, AGE-57 remain open); AGE-34 fixed one cause of that symptom, not the
 symptom. Full trail: `.council/age34-forge-integrity-shared-snapshot-root/DECISION.md`.
 
+**A test that fails must say why, and a `$(…)` capture under `set -e` is where that gets lost.**
+`deployit-cli` and `deployit-release` each define a top-level `fail()` that prints its JSON
+diagnosis to **stdout** and exits 1. A test capturing one under `set -e` dies *at the capture*, with
+the diagnosis sealed in the variable and never printed — **0 bytes on stdout and stderr**, and the
+runner showing a bare `FAIL (exit 1)` above an empty block. Measured: that is why AGE-35's
+2026-08-04 gate failure was never diagnosable, and it is **not** what the story blamed (the pre-push
+hook's `tail -40`) — a full log is equally empty. Both losses are real and **undiscriminated**;
+`run-tests.sh` now re-echoes each failure's first 12 lines into its summary so the surviving loss is
+bounded. Fix at the capture, never at the CLI: stdout is a **protocol channel**
+(`deployit-backend:486` "CLI emits exactly one JSON object"; `ok:false` → HTTP 409), and adding a
+stderr line breaks `test-gc.sh:70` and `test-cli-redeploy.sh:104`, which `json.loads` a
+`2>&1`-merged capture.
+
+⚠ **The fix set cannot be found by reading source — measured, 9 files vs 12.** The defect takes four
+invocation shapes and only the first is visible to a regex: plain `out=$(python3 …/deployit-cli …)`;
+**array-bound** (`test-cli-rm.sh:87` `CLI=(…)` then `$("${CLI[@]}" …)`); **function-bound**
+(`test-cli-preflight.sh:50` `out=$(run_preflight)`); and **output-discarded**
+(`test-release-tag-exists-omits-target.sh:28` `… >/dev/null` in a bare-called function). Every miss
+is the variable-binding blind spot of AGE-34/AGE-57. So `tests/deployit-capture-diagnostics.sh`
+(`make test-deployit-capture-diagnostics`, ~138s) is **behavioural**: it injects a `fail()`-shaped
+failure at the k-th CLI call, k=1..6, and pins a per-file verdict string (`L` explained / `H`
+expected-and-handled / `N` fewer than k calls / `S` failed silently). **`S` is never acceptable, and
+`L`→`H` is a swallow-fix** — a real failure converted to a pass — which reds by design.
+
+⚠ **Three traps there.** **Membership must be discovered, not assumed**: an earlier draft iterated
+the pinned list and compared the result to that same list — self-consistent, so deleting a row
+deleted it from both sides and passed. Mutation M2 walked straight through it. The k=1 sweep must
+therefore run over **all** candidates, not the pinned ones. **Do not widen the run set to all 50
+deployit tests**: narrowing is a *safety* property, since the excluded files spawn 14 additional
+fixed-port backend servers (`test-backend-healthz.sh` pins 18729) against still-open AGE-56. And
+**two files keep their first call site unmediated on purpose** — `test-release-adhoc-signing.sh` and
+`test-release-existing-tag.sh` surface the cause through ordinary repo code (Python's `assert`
+dumping its second operand) and are the guard's positive control; routing them through the fix's own
+idiom would make them prove the idiom rather than prove unmediated code can explain itself. Coverage
+limits are filed as **AGE-60**; the unexplained flake itself is **AGE-59**, with a pre-registered
+discriminator naming in advance what the next occurrence must show. Full trail:
+`.council/age35-deployit-bootstrap-flake-diagnostics/DECISION.md`.
+
+⚠ **`for x in $VAR` DOES NOT SPLIT IN zsh, and it produced a false green here.** The Bash tool runs
+zsh, where unquoted *parameter* expansion is not word-split (unlike `$(…)` command substitution,
+which is). A verification loop written `for n in $COVERED` ran **once**, with `$n` bound to the whole
+list and a nonsense path — reporting "18 files, 0 silent, 0s" when nothing had run. A council seat
+hit the identical fault in the same session. Use `$(cat file)` or an array; and if a sweep reports an
+implausibly fast clean result, suspect this before believing it.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

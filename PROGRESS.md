@@ -14,8 +14,8 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-43** |
 | **Next story** | **AGE-43** — `forge-contract-check` reports a valid invocation as a violation when a backtick trails the harvested token. **Not the lowest-ID ready medium, and the skip is deliberate:** AGE-39 is lower but is *logged deliberate debt whose redesign trigger is unmet* ("once `collect_markers` can tell a QUOTED marker from an APPLIED one"), so taking it means building that capability first, not fixing a defect. AGE-43 is a false positive **reachable on the shipped script today** with a known one-token fix. ⚠ **AGE-62 is `high` and outranks everything, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed) |
 | **Repo version** | **v3.7.0** — unchanged. AGE-61 touched only `CLAUDE.md`, `PROGRESS.md`, `.gitignore` and one untracked file; the shipped pathspec diff is **empty**, so no bump was owed. Verify for your own story rather than assuming. |

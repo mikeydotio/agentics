@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-gate-deadline-guard test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-gate-deadline-guard test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -17,6 +17,16 @@ test-store-isolation:
 # a green `make test` from here on is a claim that every suite actually ran.
 test-gate-integrity:
 	bash tests/with-isolated-store.sh bash tests/gate-integrity.sh
+
+# The gate must also fit inside its own budget. The global pre-push hook is cancelled
+# by Claude Code when `make test` exceeds the hook's declared timeout, and a cancelled
+# PreToolUse hook ALLOWS the tool call — measured 12/12 on 2026-08-04..05, letting two
+# tag pushes and a PR out with no verdict. tests/gate-deadline.sh makes the suite refuse
+# first, while the hook is still alive to turn that into a real block. This pins the
+# refusal, and pins that it stays inert when not running as the gate. Runs early and
+# takes about a second.
+test-gate-deadline-guard:
+	bash tests/with-isolated-store.sh bash tests/gate-deadline-guard.sh
 
 # storyhook is an out-of-repo CLI resolved from PATH, so upgrading it changes
 # this repo's test outcome with no commit here — which is why git bisect cannot

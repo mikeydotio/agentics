@@ -265,6 +265,43 @@ reintroducing a local-`main` dependency such as the `git fetch origin main:main`
 one command the residue still breaks, while step 10's `git fetch origin main` is immune. Full trail:
 `.council/age61-stale-worktrees-durable-half/DECISION.md`.
 
+### An all-green fixture asserts nothing — and in this guard the verb slot hides it
+
+`forge-contract-check.sh` harvests an invocation's remainder and validates fixed token
+positions in it. AGE-43 fixed one harvest overrun: inside a fence the extraction unit is the
+whole LINE (AGE-24), so the remainder ran past the closing backtick of the span that had
+qualified the match, and **correct documentation reported a mangled token**. The regex change
+was one token wide. The transferable part is the **test**.
+
+"No reported token contains a backtick" is **trivially true of an empty array**, and under the
+fix every false-positive fixture goes green — so the invariant fixture must also carry dead
+grammar as **positive controls**. Stronger, and measured: blanketing `is_placeholder` to return
+0 empties `subcommand_violations` and `relation_violations` **while leaving `verb_violations`
+intact**, because the verb slot routes through `verb_slot_is_wildcard` — a *different function*.
+So a **combined length floor is satisfiable with a whole slot silently dead** (1 verb + 2
+subcommand + 0 relation clears a floor of 3), and a **flat token set cannot see a token
+migrating BETWEEN arrays** — which is exactly what AGE-70's fix will produce. **Pin per array.**
+
+⚠ Three traps. **The defect INVERTED the negative-example marker rather than breaking it**:
+pre-fix, a marker naming the correct token was reported as a stale `token_mismatch` with the
+violation standing, while only a marker naming the backtick-mangled token suppressed — so the
+sanctioned escape hatch worked only for a token no author would guess. Both directions are
+pinned, because a one-directional arm misses a regression that flips the other half.
+**Bounding `START_RE` the same way is measured wrong** — a backticked entity in the first
+argument slot displaces the relation into the second, and the bound truncates before it, losing
+a real detection on well-formed input to fix a false positive reachable only from malformed
+input; the rejected scope is pinned executably by mutation M5, not merely documented. And **no
+assertion here detects an OVER-fix** — widening the bound to a larger delimiter class leaves
+every pinned array identical — so the suite pins the reported *token* on a span whose content
+legitimately carries a semicolon and a paren. Full trail:
+`.council/age43-midre-trailing-backtick-scope/DECISION.md`.
+
+⚠ **A mutation battery without a baseline arm is not a battery.** AGE-43's first battery pointed
+bats at `"$SRC.bats"` where `$SRC` already ended in `.sh`; every arm ran against a file that does
+not exist and reported the resulting error as the mutation being caught — **five false
+"CAUGHT"s**. The baseline arm is what disclosed it, by reading `0 ok` where it should have read
+`7 ok`. Same family as AGE-35's vacuous sweep.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

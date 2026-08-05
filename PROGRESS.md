@@ -14,12 +14,12 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-43** |
-| **Next story** | **AGE-43** — `forge-contract-check` reports a valid invocation as a violation when a backtick trails the harvested token. **Not the lowest-ID ready medium, and the skip is deliberate:** AGE-39 is lower but is *logged deliberate debt whose redesign trigger is unmet* ("once `collect_markers` can tell a QUOTED marker from an APPLIED one"), so taking it means building that capability first, not fixing a defect. AGE-43 is a false positive **reachable on the shipped script today** with a known one-token fix. ⚠ **AGE-62 is `high` and outranks everything, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed) |
-| **Repo version** | **v3.7.0** — unchanged. AGE-61 touched only `CLAUDE.md`, `PROGRESS.md`, `.gitignore` and one untracked file; the shipped pathspec diff is **empty**, so no bump was owed. Verify for your own story rather than assuming. |
-| **Last updated by** | AGE-61 session, 2026-08-05 |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-48** — `_commit_and_push_index` reports `published:True` under `DEPLOYIT_SKIP_GC_PUSH` without publishing anything: a **false success signal in a deploy path**, which is why it outranks the fresher siblings below. **Two deliberate skips:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet* ("once `collect_markers` can tell a QUOTED marker from an APPLIED one"), so taking it means building that capability first, not fixing a defect — the AGE-43 session re-confirmed that reading. **AGE-69 and AGE-70 are this session's own children** and are tempting because their repros are freshly measured and their characterization pins already sit in the suite ready to flip red→green — but both have **ZERO corpus occurrences**, so they are latent where AGE-48 lies about success today. Take them next if AGE-48 turns out to be blocked. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**) |
+| **Repo version** | **v3.7.1** — AGE-43 **bumped**, because it changed shipped `plugins/forge/bin/forge-contract-check.sh`. That is the opposite of the last four stories, every one of which was test/docs-only. **Run the pathspec check yourself rather than inheriting either answer** — the command is in the Known-state block below. |
+| **Last updated by** | AGE-43 session, 2026-08-05 |
 | **Carried debt** | **None owed to you, and the broken protocol step is FIXED.** `git switch main` works again, local `main` is current (20c31d2 → 3cdbfcd), and **step 10 no longer asks you to run it** — the release path is now decoupled from any local `main` ref. ⚠ **One worktree is deliberately still there**: `.claude/worktrees/dual-host-plugin-compatibility` holds **135 uncommitted files** of dual-host (Codex) plugin work that exists **nowhere else** — unpushed, uncommitted, idle since 2026-07-20. **Do not remove it.** It is filed as **AGE-66** for Mikey's decision. If you ever need it out of the way, the remedy is `git switch --detach <path>`, **never** `git worktree remove` — measured, detach preserves modified *and* untracked files. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -62,6 +62,95 @@ three times on this session that way. `SKIP_PREPUSH_TESTS=1` is legitimate for a
 demonstrably pushes nothing — say so when you use it.
 
 ---
+
+## Known state (updated 2026-08-05 by the AGE-43 session)
+
+- **AGE-43 is DONE and shipped as v3.7.1. AGE-48 leads the queue.** It changed shipped
+  `plugins/forge/bin/forge-contract-check.sh`, so the bump was owed — the last four stories were
+  all test/docs-only, so **do not inherit "no bump" from them**. Run it yourself:
+  `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **non-empty means bump.**
+- **The story was RIGHT — its diagnosis, its one-token fix, and its two recorded cautions all
+  held.** That is unusual in this loop and worth saying plainly. What the story got *wrong* was
+  only its **Extent**, and the omission was the most useful finding of the session (below).
+- **⚠ THE DEFECT ALSO INVERTED THE GUARD'S ONLY ESCAPE HATCH, AND THE STORY NEVER MENTIONED IT.**
+  A mangled token defeats the token-bound `expect-dead` marker. Measured, both directions:
+
+  | `expect-dead` marker names | SHIPPED | FIXED |
+  |---|---|---|
+  | `init` — the correct, typeable token | `stale: token_mismatch`, **violation stands** | suppressed correctly |
+  | ``init` `` — the mangled token | **suppressed** | `stale: token_mismatch`, fails loud |
+
+  So an author who named the right token got a **false diagnosis of substitution drift**, and the
+  only marker that worked named a token carrying a stray backtick nobody would guess. Two council
+  seats found this independently; the chair confirmed it. Both directions are now pinned, because
+  the mechanism was **inverted rather than merely broken** and a one-directional arm would miss a
+  regression that flipped the other half. The 2 live corpus suppressions name `HP-N` and `<id>`,
+  neither backtick-bearing, so **nothing existing migrates**.
+- **⚠ BOUNDING `START_RE` THE SAME WAY IS WRONG, AND ITS OWN PROPOSER PROVED IT.** A seat proposed
+  it, then rebuilt the variants and refuted its own premise ("bounding START_RE cannot lose a true
+  positive"). Measured, fixture = plain column-0 fence:
+
+  | case (dead relation `precedes`) | SHIPPED | scope A (shipped fix) | scope C (bound both) |
+  |---|---|---|---|
+  | ``story relate `AGE-1` precedes AGE-2`` | red | **red** | **GREEN** |
+  | ``(story relate `AGE-1` precedes AGE-2)`` | red | GREEN | GREEN |
+  | same lines without backticks (control) | red | red | red |
+
+  A backticked entity in slot 0 pushes the relation to slot 1, and the bound truncates before it.
+  The `is_placeholder` "leading backtick is a wildcard" argument covers the **subcommand** slot
+  (token 0), **not** the relation slot (token 1). **No seat voted for scope C in either round**,
+  and **M5 of the mutation battery reds the suite if you re-introduce it** — the scope ruling is
+  executable, not merely documented.
+- **⚠ AN ALL-GREEN FIXTURE ASSERTS NOTHING, AND THE PER-ARRAY PIN IS WHY.** "No reported token
+  contains a backtick" is **trivially true of an empty array**, and under the fix every
+  false-positive fixture goes green — so the invariant fixture must also carry **dead grammar as
+  positive controls**. Stronger, measured by the winning seat: blanketing `is_placeholder` to
+  return 0 empties `subcommand_violations` and `relation_violations` **while leaving
+  `verb_violations` intact**, because the verb slot routes through `verb_slot_is_wildcard`, a
+  *different function*. So a **combined length floor is satisfiable with a whole slot dead**
+  (1 verb + 2 subcommand + 0 relation clears a floor of 3), and a **flat token set cannot see a
+  token migrating BETWEEN arrays** — which is exactly what AGE-70's fix will produce. Pin **per
+  array** or the guard is blind in the one direction this backlog will actually move.
+- **⚠ THE WINNING PROPOSAL DISCLOSED A HOLE IN ITSELF AND THE CHAIR CLOSED IT.** No proposal's
+  assertion detected an **over-fix**: widening the bound to ``[^`);|&]*`` leaves every pinned
+  array and the backtick count identical. The shipped suite adds the missing arm — a span whose
+  content legitimately carries `;` and `)`, pinning the reported *token* (`foo;bar`, `baz)qux`)
+  rather than the array shape. Mutation M3 reds it.
+- **⚠ MY OWN MUTATION BATTERY MANUFACTURED FIVE FALSE "CAUGHT"s ON ITS FIRST RUN.** It pointed
+  bats at `"$SRC.bats"` where `$SRC` already ended in `.sh`, so every arm ran against
+  `forge-contract-check.sh.bats` — a file that does not exist — and dutifully reported the
+  resulting error as the mutation being caught. **The baseline arm is what disclosed it** (it read
+  `0 ok, 1 not ok` when it should have read `7 ok, 0 not ok`). Same family as AGE-35's vacuous
+  sweep. **A battery without a baseline arm is not a battery.** Corrected: **5 run, 5 caught**,
+  baseline 7/0, tree `cmp`-verified byte-identical after every restore.
+- **⚠ THE SCRATCHPAD COLLISION FROM AGE-35 HAPPENED AGAIN, IN A SECOND SESSION.** A council seat
+  overwrote the chair's `$SCRATCHPAD/probe.sh` with its own harness mid-session. Nothing was lost
+  (the chair's measurements were already banked in the transcript), but the AGE-35 lesson stands
+  and is now **twice-observed, not anecdotal**: `mktemp -d` *inside* the scratchpad, never a fixed
+  name — your subagents share that directory with you.
+- **Council: UNANIMOUS 3-0 at the FIRST count of the runoff, after a 0-1-2 round 1 in which NO
+  seat voted for its own proposal's scope winner.** **Two of three seats ranked their OWN proposal
+  LAST.** Seat 3, which had named vacuity as the decisive axis, then built a *narrower* mutation
+  than the one put to it (disarm the relation check only → 1+2+0 = exactly 3) and showed **its own
+  floor was the only mechanism of the three that failed that axis**. It also withdrew both of its
+  grounds against the winning pin, concluding they had refuted the *flat join* and the *shared
+  fixture*, neither of which the winner still proposed. Full trail:
+  `.council/age43-midre-trailing-backtick-scope/DECISION.md`.
+  - ⚠ **Chair deviation worth copying:** proposals were labelled **P1/P2/P3**, not A/B/C, because
+    the *answer space* was already named scope A/B/C and reusing the letters would have made every
+    ballot ambiguous. If a council's options are already lettered, re-label the proposals.
+- **Filed: AGE-69** (med) — delimiter-glue: a closing delimiter glued to the harvested token
+  reports valid docs as violations; members are the ``)``-glued and ``;``-glued tokens **and the
+  START_RE trailing-tick residue**. ⚠ Note `sub="${sub%,}"` already strips exactly ONE such
+  character, a trailing comma — the class was known and handled for `,` alone, and that is the
+  precedent to generalise. **AGE-70** (med) — slot-displacement: the relation slot is validated by
+  a fixed index, so a quoted span displaces it; includes the **false negative this fix knowingly
+  bought**. Cut on **MECHANISM, not anchor**, which is what makes them separately fixable — an
+  anchor-based cut puts one mechanism in both stories. Both are pinned by characterization tests
+  naming their story IDs; **a correct fix REDS those pins by design.**
+- **AGE-23 confirmed for the SEVENTH time.** The council plugin's `references/` resolve at plugin
+  root, not skill-relative.
 
 ## Known state (updated 2026-08-05 by the AGE-61 session)
 

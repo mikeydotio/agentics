@@ -87,7 +87,8 @@ export FAKE_GH_LOG="$ROOT/gh.log"
 make_zip "Hello2.app" "$ROOT/Hello.zip"
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-release" --zip "$ROOT/Hello.zip" \
         --project-dir "$ROOT/proj" --notes-file "$ROOT/notes.md" --repo me/Hello \
-        --target deadbeefcafe --appcast-signature 'SIGA==' --dry-run)
+        --target deadbeefcafe --appcast-signature 'SIGA==' --dry-run) \
+    || { echo "FAIL: appcast dry-run exited $? — it said: $out"; exit 1; }
 echo "$out" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -104,7 +105,8 @@ assert d['appcast_enclosure_url'] == 'https://github.com/me/Hello/releases/downl
 export FAKE_GH_RELEASE_EXISTS=1
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-release" --zip "$ROOT/Hello.zip" \
         --project-dir "$ROOT/proj" --notes-file "$ROOT/notes.md" --repo me/Hello \
-        --appcast-signature 'SIGA==' --clobber)
+        --appcast-signature 'SIGA==' --clobber) \
+    || { echo "FAIL: appcast --clobber exited $? — it said: $out"; exit 1; }
 echo "$out" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -122,7 +124,8 @@ unset FAKE_GH_RELEASE_EXISTS
 make_zip "My App.app" "$ROOT/My App.zip"
 out=$(python3 "$PLUGIN_ROOT/bin/deployit-release" --zip "$ROOT/My App.zip" \
         --project-dir "$ROOT/proj" --notes-file "$ROOT/notes.md" --repo me/Hello \
-        --target deadbeefcafe --appcast-signature 'SIGA==' --dry-run)
+        --target deadbeefcafe --appcast-signature 'SIGA==' --dry-run) \
+    || { echo "FAIL: appcast spaced-name dry-run exited $? — it said: $out"; exit 1; }
 echo "$out" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)

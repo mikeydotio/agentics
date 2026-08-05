@@ -42,7 +42,8 @@ $(mk_build "old1" "2026-05-01T10:00:00-07:00")
 JSON
 
 # --keep 2: archive the 2 oldest, keep the 2 newest
-out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" gc --keep 2)
+out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" gc --keep 2) \
+    || { echo "FAIL: gc --keep 2 exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | grep -q '"archived": 2' || { echo "FAIL: expected archived 2: $out"; exit 1; }
 echo "$out" | grep -q '"removed_local": 2' || { echo "FAIL: expected removed_local 2: $out"; exit 1; }
 
@@ -63,7 +64,8 @@ print('archived flags ok')
 " || exit 1
 
 # Running gc again with --keep 10 should be a no-op
-out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" gc --keep 10)
+out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" gc --keep 10) \
+    || { echo "FAIL: gc --keep 10 exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | grep -q '"archived": 0' || { echo "FAIL: expected no-op: $out"; exit 1; }
 
 # Missing required arg — capture stdout (pipefail would fire on exit 1 from gc itself)

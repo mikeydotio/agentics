@@ -76,7 +76,8 @@ CLI=("python3" "$PLUGIN_ROOT/bin/deployit-cli" "--plugin-root" "$PLUGIN_ROOT")
 write_config false
 seed_index
 out=$(FAKE_GH_LOG="$ROOT/ghA.log" FAKE_GH_PR_URL="https://github.com/x/y/pull/3" \
-      "${CLI[@]}" rm --build app-ios-rmtarget)
+      "${CLI[@]}" rm --build app-ios-rmtarget) \
+    || { echo "FAIL A: rm --build exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | grep -q '"ok": true'          || { echo "FAIL A: expected ok true; $out"; exit 1; }
 echo "$out" | grep -q '"index_pending": true'|| { echo "FAIL A: expected index_pending; $out"; exit 1; }
 echo "$out" | grep -q '"removed_local": 0'   || { echo "FAIL A: serve dir should be kept; $out"; exit 1; }

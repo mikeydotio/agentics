@@ -24,7 +24,8 @@ export DEPLOYIT_SKIP_INDEX_CLONE=1
 # Bootstrap once against the real plugin root so config.toml exists and
 # the layout is initialized.
 python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" bootstrap \
-    > "$ROOT/bootstrap.log" 2>&1
+    > "$ROOT/bootstrap.log" 2>&1 \
+    || { echo "FAIL: bootstrap exited $? — the CLI said:"; cat "$ROOT/bootstrap.log"; exit 1; }
 
 # Sanity: bin/deployit-backend symlink installed by bootstrap
 [[ -L "$ROOT/state/bin/deployit-backend" ]] \
@@ -42,7 +43,8 @@ echo '#!/usr/bin/env bash' > "$FAKE/tests/verify-live.sh"
 chmod +x "$FAKE/tests/verify-live.sh"
 
 # --- Case 1: redeploy --source <fake> points the symlinks at the fake.
-out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" redeploy --source "$FAKE")
+out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" redeploy --source "$FAKE") \
+    || { echo "FAIL: redeploy --source exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | grep -q '"ok": true' || { echo "FAIL: redeploy not ok: $out"; exit 1; }
 
 resolve() { python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1"; }
@@ -73,7 +75,8 @@ cat > "$HOME/Library/LaunchAgents/com.mikeydotio.deployit.backend.plist" <<XML
 </dict></plist>
 XML
 
-out2=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" redeploy)
+out2=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" redeploy) \
+    || { echo "FAIL: redeploy (2nd) exited $? — the CLI said: $out2"; exit 1; }
 echo "$out2" | grep -q '"ok": true' || { echo "FAIL: redeploy (no --source) not ok: $out2"; exit 1; }
 echo "$out2" | grep -q '"plist_rewritten": true' \
     || { echo "FAIL: legacy plist should have been rewritten: $out2"; exit 1; }
@@ -94,7 +97,8 @@ grep -q "$ROOT/state/_plugin_root" "$new_plist" \
 
 # --- Case 3: redeploy idempotent — running again with the now-fixed plist
 # should NOT rewrite it.
-out3=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" redeploy)
+out3=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" redeploy) \
+    || { echo "FAIL: redeploy (3rd) exited $? — the CLI said: $out3"; exit 1; }
 echo "$out3" | grep -q '"plist_rewritten": false' \
     || { echo "FAIL: second redeploy should leave plist alone: $out3"; exit 1; }
 

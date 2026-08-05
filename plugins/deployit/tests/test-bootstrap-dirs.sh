@@ -13,7 +13,16 @@ export DEPLOYIT_SKIP_TAILSCALE_SERVE=1
 export DEPLOYIT_SKIP_INDEX_CLONE=1
 trap 'rm -rf "$ROOT"' EXIT
 
-out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" bootstrap)
+# The `|| { ... }` is load-bearing, not defensive noise. deployit-cli's fail()
+# prints its JSON diagnosis to STDOUT and exits 1, so an unguarded capture under
+# `set -e` kills the script HERE with the diagnosis sealed inside $out and never
+# printed — 0 bytes on stdout and stderr, and the runner reports a bare
+# `FAIL (exit 1)` with an empty log. That is AGE-35: the reason the 2026-08-04
+# failure was undiagnosable even from a full log. The grep below cannot cover it,
+# because it is only reached when the CLI exits 0, and ok() always prints
+# `"ok": true` when it does.
+out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" bootstrap) \
+    || { echo "FAIL: bootstrap exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | grep -q '"ok": true' || { echo "FAIL: not ok: $out"; exit 1; }
 
 [[ -d "$ROOT/serve" && -d "$ROOT/index" && -d "$ROOT/logs" && -d "$ROOT/bin" ]] \
@@ -33,7 +42,8 @@ grep -q 'base_url = "https://studio.tail-abc.ts.net/deployit"' "$ROOT/config.tom
     || { echo "FAIL: bin/deployit-backend target wrong: $(readlink "$ROOT/bin/deployit-backend")"; exit 1; }
 
 # Re-run is idempotent
-out2=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" bootstrap)
-echo "$out2" | grep -q '"ok": true' || { echo "FAIL: second run not ok"; exit 1; }
+out2=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" bootstrap) \
+    || { echo "FAIL: second bootstrap exited $? — the CLI said: $out2"; exit 1; }
+echo "$out2" | grep -q '"ok": true' || { echo "FAIL: second run not ok: $out2"; exit 1; }
 
 echo "PASS"

@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -118,6 +118,17 @@ test-semver:
 
 test-deployit:
 	bash tests/with-isolated-store.sh bash plugins/deployit/tests/run-tests.sh
+
+# A red deployit test must SAY WHY. deployit-cli/deployit-release print their
+# JSON diagnosis to STDOUT and exit 1, so a capture under `set -e` used to die
+# with the diagnosis sealed in a variable — 0 bytes on both streams, and a bare
+# `FAIL (exit 1)` above an empty block. That is why AGE-35's occurrence was
+# never diagnosable. This injects a CLI failure at each call depth and pins what
+# every covered file does about it. Behavioural, not a source census: the defect
+# has four invocation shapes and only one is visible to a regex. ~140-170s,
+# machine-load dependent.
+test-deployit-capture-diagnostics:
+	bash tests/with-isolated-store.sh bash tests/deployit-capture-diagnostics.sh
 
 # issue's plain-bash suite (plugins/issue/tests/test-*.sh) — the
 # list/dispatch/view/create/complete JSON contracts, owner/repo parsing, dry-run

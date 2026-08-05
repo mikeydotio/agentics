@@ -20,7 +20,8 @@ export DEPLOYIT_GH_BIN="$TESTS_DIR/fakes/gh"
 export FAKE_GH_PREV_TAG="v1.0.0"
 export FAKE_GH_ISSUES_JSON='[{"number":12,"title":"Crash on launch","url":"https://github.com/mikeydotio/App/issues/12","closedAt":"2026-06-01T00:00:00Z"}]'
 
-out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" release-context)
+out=$(python3 "$PLUGIN_ROOT/bin/deployit-cli" --plugin-root "$PLUGIN_ROOT" release-context) \
+    || { echo "FAIL: release-context exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)

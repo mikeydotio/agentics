@@ -144,7 +144,8 @@ echo "$out" | grep -q '"ok": false' \
 has app-ios-foreign || { echo "FAIL: foreign build wrongly removed"; exit 1; }
 
 # --- rm --build: removes only that local build (index + disk), pushes ---
-out=$("${CLI[@]}" rm --build app-ios-local1)
+out=$("${CLI[@]}" rm --build app-ios-local1) \
+    || { echo "FAIL: rm --build exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | grep -q '"removed": 1' || { echo "FAIL: expected removed 1: $out"; exit 1; }
 echo "$out" | grep -q '"removed_local": 1' || { echo "FAIL: expected removed_local 1: $out"; exit 1; }
 has app-ios-local1 && { echo "FAIL: app-ios-local1 still in index"; exit 1; } || true
@@ -155,7 +156,8 @@ origin_published 'rm build app-ios-local1' app-ios-local1 \
     || { echo "FAIL: rm not pushed to origin"; exit 1; }
 
 # --- rm --product: removes remaining LOCAL ios builds, leaves foreign + macos ---
-out=$("${CLI[@]}" rm --product io.mikeydotio.App --platform ios)
+out=$("${CLI[@]}" rm --product io.mikeydotio.App --platform ios) \
+    || { echo "FAIL: rm --product exited $? — the CLI said: $out"; exit 1; }
 echo "$out" | grep -q '"removed": 1' || { echo "FAIL: product rm expected removed 1: $out"; exit 1; }
 has app-ios-local2 && { echo "FAIL: app-ios-local2 not removed by product rm"; exit 1; } || true
 [[ ! -d "$ROOT/serve/app-ios-local2" ]] || { echo "FAIL: local2 serve dir not removed"; exit 1; }

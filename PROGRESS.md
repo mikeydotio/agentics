@@ -14,8 +14,8 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | RUNNING |
-| **Story in flight** | none |
+| **Loop status** | IN FLIGHT |
+| **Story in flight** | **AGE-36** |
 | **Next story** | **AGE-36** — pre-push test gate cannot pass: hook timeout 900s vs `make test` "~2h". Lowest-ID ready `medium`. ⚠ **Read the comment AGE-35 filed on it first — its premise is probably stale.** Measured green end-to-end at **478s (8 min)**, not ~2h; the gate is now ~10.5 min with AGE-35's new target. Re-measure and record conditions before fixing or closing. Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35 |
 | **Repo version** | **v3.7.0** — unchanged. AGE-35 touched only `plugins/deployit/tests/`, root `tests/`, `Makefile` and docs; the shipped pathspec diff is **empty**, so no bump was owed. Verify for your own story rather than assuming. |

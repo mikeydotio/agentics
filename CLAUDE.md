@@ -302,6 +302,79 @@ not exist and reported the resulting error as the mutation being caught — **fi
 "CAUGHT"s**. The baseline arm is what disclosed it, by reading `0 ok` where it should have read
 `7 ok`. Same family as AGE-35's vacuous sweep.
 
+### A value-returning env hatch must name itself — and a green gate cannot prove this one fixed
+
+`deployit-cli` has **ten** `DEPLOYIT_SKIP_*` escape hatches. Four bare-`return` and carry no value.
+Of the **six that return a value to a caller**, four already self-name — `_install_launchd:235`
+(`skipped:True`), `_sparkle_sign:1222` (the literal `TEST-ED-SIGNATURE-DO-NOT-SHIP==`),
+`_publish_github_release:1845` (`skipped:True` plus a display line surfaced at `:2222`),
+`_run_post_test:1956` (`status:"skipped"`, printed at `:2262`). Two did not.
+`_commit_and_push_index` returned **`published: True`** from the path that contacts no remote, and
+`cmd_gc`/`cmd_rm` gate an irreversible `rmtree` of `serve/<id>/` on that field (AGE-48). The other,
+`_wait_for_health:2646`'s bare `True`, is filed as **AGE-71**.
+
+**Measured harm, and it is not what the story claimed.** A published removal and a hatch removal
+produced **byte-identical stdout**, with the serve dir irreversibly deleted in both — so no caller
+could tell them apart, and `deployit-backend:_run_cli_rm` forwards that payload **verbatim over
+HTTP** to the web UI's swipe-to-delete. The story's stated Extent — that push-asserting tests "go
+vacuous" under a leaked variable — is **false**: `test-cli-rm.sh` fails with `rm not pushed to
+origin` and `test-cli-rm-pr-fallback.sh` (which has no precondition guard at all) fails with
+`expected index_pending`. AGE-21 had already closed that hole downstream.
+
+The rule: **an escape hatch may skip work, but it may never borrow the success vocabulary of the
+path it skipped.** `_commit_and_push_index` now returns `status` in
+{`published`, `pending`, `local_only`}, and `_index_change_is_effective(result)` — **total over
+`dict | None`** — authorises the deletion. Two traps in that totality: `None` is *reachable*
+(`cmd_gc`'s `mutate` returns it on a no-op, which `test-gc.sh:67` drives), and an unrecognised
+status must fail **closed**, so a fourth member added later authorises no deletion until it is
+classified. Keeping files that could have gone is recoverable; the other direction is not.
+
+⚠ **Do not spell the pending arm `not published`.** That is what made the local-only path claim a PR
+that does not exist. Each arm keys off its own status.
+
+⚠ **`skipped` was the wrong word here, and `durable` was too — both were argued for and measured
+down.** `skipped` is the file's settled hatch word, but in all three precedents it means *no work
+occurred*, whereas this hatch performs a local write; borrowing it would **understate** in a fix
+about a value that **overstated**. And a proposal to name the predicate `_index_change_is_durable()`
+was adopted by two of three council seats before its own author refuted it:
+`_reset_index_to_origin_main` is a **`git reset --hard origin/main`** and the hatch never
+`git commit`s, so the hatch's write is an *uncommitted* working-tree change that the next non-hatch
+call (`:1707`, `:1764`) destroys — durable only while the variable stays set. `effective` is precise
+at the only instant the predicate is ever evaluated. **Had the two concessions been taken at face
+value, the fix would have shipped a misleading name inside a fix about a misleading name.**
+
+**No gate-level guard, declined on soundness rather than cost.** The only decidable predicate — an
+AST walk asserting every dict-returning `DEPLOYIT_SKIP_*` early return carries a marker — covers
+**4 of the 6** and is structurally blind to `_sparkle_sign`'s bare string and `_wait_for_health`'s
+bare `True`, so it would report green over exactly the members it cannot see. That is AGE-35's
+vacuous sweep and AGE-26's green-over-the-sentence-documenting-the-bug in one. **Pre-registered
+trigger** (the council's first wording was vacuously met the day it was written, and all three seats
+accepted the correction): *a hatch whose unmarked success value escapes the process — payload,
+stdout, or HTTP — or authorises an irreversible action*; or the first `DEPLOYIT_SKIP_*` added
+outside `deployit-cli`.
+
+⚠ **A GREEN `make test` IS NOT EVIDENCE THE WEB UI'S DELETE PATH IS FIXED, AND THIS IS STRUCTURAL.**
+The live daemon runs a **copy** at `<state>/_plugin_root/bin/deployit-cli`
+(`deployit-backend:466-467`), while `test-backend-delete.sh:20` **symlinks** `_plugin_root` to the
+real plugin root. So the suite always exercises current code and **cannot detect a missed
+redeploy**. Any change under `plugins/deployit/bin/**` is **inert for the web UI** until
+`/deployit redeploy --source <repo>/plugins/deployit` runs — **post-merge from `main`**, since
+`redeploy` is a mutating deployit op hard-refused inside a linked worktree — and the signal is
+`verify-live.sh`'s "passed", never `_healthz`. Do not claim the swipe-to-delete path until then.
+
+⚠ **The regression test is five-armed because every cheaper version is walkable**, and the walk is
+named: a fix that adds `index_local_only` to the payload while `_commit_and_push_index` still
+returns `published:True` passes any membership assertion. So the suite pins the **return dict by
+equality** (reds on a re-added `published` exactly as on a removed `status`), the predicate **per
+case** rather than as one combined expression (AGE-43's per-array rule), a **structural** payload
+differential (`set(hatch) - set(pushed) == {index_local_only}`, every other shared key equal — *not*
+"the two stdouts differ", which any incidental nondeterminism satisfies), an **absence** arm on
+`index_pending` (uncovered anywhere else: that key is asserted in exactly one place suite-wide, and
+only as *present*), and a **display** arm, because the measured lie was on the channel a human
+actually reads. Both halves must still delete the serve dir as a positive control — an all-green
+fixture asserts nothing. Full trail:
+`.council/age48-published-lies-under-skip-gc-push/DECISION.md`.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

@@ -87,6 +87,35 @@ to keep the verb auto-approved — while reporting green. The transferable rule:
 decidable predicate over a formal grammar; the same verb inside a markdown skill is **prose**. Same
 shape, different kind. Full trail: `.council/age26-greenlight-story-verb-surface/DECISION.md`.
 
+**A test fixture named by a fixed path under `/tmp` is machine-global state, and this repo owns
+several.** `/tmp/forge-integrity` holds the live integrity baselines of *every* project on the box,
+keyed by a digest of each project's absolute path. `forge-integrity.bats` used to `rm -rf` that whole
+root in `teardown()` — justified in its own comment as merely keeping `/tmp` tidy, since per-test
+paths are already unique. The paths were unique; the **root** was not, so the blanket removal deleted
+every concurrent run's baselines and those of any real forge session in another repository (AGE-34).
+Measured with that removal as the *only* concurrent actor — no second suite, no working-tree churn —
+**14 of 19 tests failed**; after scoping it, the configuration that had produced 37 spurious failures
+produced **0**. The rule: a test may delete its own subtree of a shared root and nothing above it,
+and `rmdir` (non-recursive, fails harmlessly when non-empty) is the way to reclaim the root — that
+choice is load-bearing, not cosmetic, and mutation M4 pins it. Enforced behaviourally by
+`tests/forge-integrity-isolation.sh` (`make test-forge-integrity-isolation`), which is
+**bidirectional on purpose**: deleting the teardown line altogether satisfies "the foreign sentinel
+survived" while trading a clobber for an unbounded leak, so a second arm pins that the suite still
+removes its *own* subtree.
+
+⚠ Two traps there. **No source-level guard can enforce this class here** — it was considered and
+declined unanimously. An `rm`-shaped predicate fires on `greenlight.bats:295`, which hands
+`'echo $(rm -rf /tmp/foo)'` to a jq encoder as **data** that never executes, while
+`forge-integrity.bats:30` is a quoted string that **is** executed: same shell syntax, opposite kind,
+which is AGE-26's rule and not AGE-22's. And it would miss the class's other live members anyway —
+they are a fixed *port* (AGE-56) and a fixed path bound to a **variable** (AGE-57), neither of which
+appears at an `rm` call site. **Second: sweep with `git ls-files` and never an extension glob.** The
+sweep that found AGE-56 missed AGE-57 twice, first because `plugins/*/tests/fakes/*` are tracked but
+**extensionless**, then because the literal sits in a variable — the same blind spot
+`bounded-capture-guard.sh`'s header already documents. **Concurrent `make test` in one checkout is
+still not safe** (AGE-56, AGE-57 remain open); AGE-34 fixed one cause of that symptom, not the
+symptom. Full trail: `.council/age34-forge-integrity-shared-snapshot-root/DECISION.md`.
+
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
 ## When Adding a New Plugin

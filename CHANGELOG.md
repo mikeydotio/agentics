@@ -3,6 +3,54 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.7.1] - 2026-08-05
+
+### Fixed
+- stop MID_RE harvesting past the span that qualified the match (0624d8d)
+- untrack the Claude Code scheduled-task runtime lock (1945d2e)
+- make the deadline guard hermetic, and keep the bound census at three (ea311ad)
+- re-echo each failed test's diagnostic into the summary (5911731)
+- surface the CLI's own diagnosis when a capture fails (4185c96)
+- scope forge-integrity.bats's teardown to its own snapshot subtree (4ebb45b)
+
+### Changed
+- Merge pull request #162 from mikeydotio/fix/AGE-61-stale-worktrees (ea14f3c)
+- Merge pull request #161 from mikeydotio/fix/AGE-36-prepush-gate-budget (3cdbfcd)
+- Merge pull request #160 from mikeydotio/docs/AGE-35-note-stale-worktrees (64f055e)
+- Merge pull request #159 from mikeydotio/fix/AGE-35-deployit-bootstrap-dirs-flake (e104559)
+- Merge pull request #158 from mikeydotio/docs/AGE-34-clear-carried-debt (0c0b9ad)
+- Merge pull request #157 from mikeydotio/fix/AGE-34-forge-integrity-shared-snapshot-root (2e1314f)
+- Merge pull request #156 from mikeydotio/fix/AGE-26-greenlight-story-verb-surface (8df6ae6)
+
+### Documentation
+- record AGE-43's findings and hand off to AGE-48 (d79ae74)
+- claim AGE-43 as in flight (fe916d5)
+- close out AGE-61 and hand off to AGE-43 (694e47f)
+- record why the release path must not need a local main ref (f188a90)
+- mark the stale-worktree warning superseded (c4bfe4b)
+- stop the release step depending on a local main ref (56d24a6)
+- claim AGE-61 as in flight (e95b62f)
+- record the 3.5x load multiplier measured by AGE-36's own gate run (da3bccd)
+- record AGE-36's measurements and hand off to AGE-61 (01b2cb3)
+- claim AGE-36 as in flight (9672300)
+- warn that git switch main is blocked by a stale worktree (8edd337)
+- correct the guard's cost to a measured range (dd46e1a)
+- record AGE-35's rules and hand off to AGE-36 (b977801)
+- claim AGE-35 — deployit test-bootstrap-dirs flake (9eb8638)
+- clear AGE-34's carried debt — the storyhook outage resolved (6fae1e4)
+- close out AGE-34 and hand off to AGE-35 (5f35d98)
+- record AGE-34's shared-/tmp-fixture rule and its two traps (ba7bf1b)
+- claim AGE-34 (forge-integrity shared snapshot root) (6a0d4d7)
+- close out AGE-26 and hand off to AGE-34 (4b2b053)
+- record AGE-26's verb-classification rule and its three traps (551356e)
+
+### Testing
+- make `make test` refuse before the pre-push hook is cancelled (f2a4d1e)
+- pin that a failing deployit test says WHY it failed (226f79c)
+- pin that forge-integrity.bats owns exactly its own snapshot subtree (32ee0f1)
+
+_[manual]_
+
 ## [v3.7.0] - 2026-08-04
 
 ### Fixed

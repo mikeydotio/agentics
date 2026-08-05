@@ -100,6 +100,7 @@ test-cli-deploy-pr-automerge.sh
 test-cli-deploy-pr-leave-open.sh
 test-cli-deploy-release-wiring.sh
 test-cli-detect-sparkle.sh
+test-cli-index-local-only.sh
 test-cli-posttest-spawn.sh
 test-cli-preflight.sh
 test-cli-publish-preserve-on-failure.sh
@@ -145,6 +146,7 @@ LNNNNN test-metadata-single-app.sh
 LNNNNN test-metadata.sh
 LLNNNN test-release-adhoc-signing.sh
 LLNNNN test-release-existing-tag.sh
+LLNNNN test-cli-index-local-only.sh
 EOF
 
 # The two entrypoints the shim impersonates.

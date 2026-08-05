@@ -1,6 +1,6 @@
 {
   "name": "rca",
-  "version": "3.7.1",
+  "version": "3.7.2",
   "description": "Reproduction-gated root cause analysis for known defects — scientific-debugging pipeline with git forensics, hypothesis falsification in disposable worktrees, ODC classification, surgical-vs-redesign verdicts, gated fixes, and committed blameless postmortems",
   "author": {
     "name": "mikeydotio"

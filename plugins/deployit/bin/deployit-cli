@@ -1739,9 +1739,22 @@ def _commit_and_push_index(state: Path, mutate, *, attempts: int = 3,
     base; the generated commit is never discarded. Honors DEPLOYIT_SKIP_GC_PUSH
     (write + return locally, touch no git remote) for tests and offline runs.
 
-    Returns None if the mutation aborted, else a dict {"published": bool,
-    "pr_url": str|None, "branch": str|None, "msg": str}; fails terminally if the
-    commit can neither be published nor preserved.
+    Returns None if the mutation aborted, else a dict {"status": str, "pr_url":
+    str|None, "branch": str|None, "msg": str}; fails terminally if the commit can
+    neither be published nor preserved. `status` carries `_publish_index_commit`'s
+    vocabulary plus one member of its own:
+
+      "published"   the change is on origin/main
+      "pending"     the change sits on an open PR; main is unchanged
+      "local_only"  DEPLOYIT_SKIP_GC_PUSH — builds.json was rewritten on this
+                    machine and no remote was contacted
+
+    ⚠ Every value-returning DEPLOYIT_SKIP_* hatch in this file carries a marker
+    naming itself (`_install_launchd`, `_publish_github_release`, `_run_post_test`).
+    This one returned the real path's success value instead, so a caller could not
+    tell a published removal from an unpublished one while files were deleted
+    either way (AGE-48). Do not reintroduce a boolean here: `local_only` is a
+    fourth outcome, not a shade of `published`.
 
     Shared by cmd_gc and cmd_rm. The high-frequency deploy path keeps its own
     prune-in-loop variant (`_append_to_index`)."""
@@ -1754,7 +1767,7 @@ def _commit_and_push_index(state: Path, mutate, *, attempts: int = 3,
         if msg is None:
             return None
         builds_path.write_text(json.dumps(data, indent=2) + "\n")
-        return {"published": True, "pr_url": None, "branch": None, "msg": msg}
+        return {"status": "local_only", "pr_url": None, "branch": None, "msg": msg}
 
     idx = idx or _default_index_cfg()
     if slug is None:
@@ -1775,11 +1788,34 @@ def _commit_and_push_index(state: Path, mutate, *, attempts: int = 3,
                                        allow_retry=(attempt < attempts))
         if result["status"] == "retry":
             continue
-        return {"published": result["status"] == "published",
+        return {"status": result["status"],
                 "pr_url": result.get("pr_url"), "branch": result.get("branch"),
                 "msg": msg}
 
     fail("push to deployit-index failed after retries")
+
+
+def _index_change_is_effective(result) -> bool:
+    """True iff an index mutation is final — i.e. the serve/ dirs it orphaned may
+    now be deleted.
+
+    The invariant, which is why this is one named predicate rather than a
+    condition spelled out at each call site: never delete a build's files while
+    the index its consumers actually read still lists it. `published` landed on
+    origin/main. `local_only` is the documented offline hatch, where this
+    machine's own builds.json IS the index its consumers read. `pending` is NOT
+    final — the change sits on an open PR and the world still reads unchanged
+    main, so the files must survive until it merges.
+
+    Total over `_commit_and_push_index`'s whole return type (`dict | None`), so
+    callers need no outer `result and ...` guard. An aborted mutation (None) and
+    any unrecognised status fail CLOSED: a status added later authorises no
+    deletion until it is classified here, which is the safe direction — keeping
+    files that could have gone is recoverable, deleting files that should have
+    stayed is not."""
+    if not isinstance(result, dict):
+        return False
+    return result.get("status") in ("published", "local_only")
 
 
 def _refresh_local_backend(port: int):
@@ -2523,24 +2559,30 @@ def cmd_gc(args):
 
     result = _commit_and_push_index(state, mutate, idx=_index_cfg(cfg))
 
-    # Only touch local disk once the index change actually lands on main. When a
-    # ruleset left it pending on an open PR, keep the serve dirs so the archive
-    # stays consistent with the (unchanged) index until the PR merges.
-    published = bool(result and result.get("published"))
+    # Only touch local disk once the index change is final. When a ruleset left
+    # it pending on an open PR, keep the serve dirs so the archive stays
+    # consistent with the (unchanged) index until the PR merges.
+    status = result.get("status") if result else None
     removed = 0
-    if published:
+    if _index_change_is_effective(result):
         for bid in archived_ids:
             d = state / "serve" / bid
             if d.exists():
                 _shutil.rmtree(d)
                 removed += 1
             _prune_post_test_artifacts(state, bid)
-        if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+        if status != "local_only":
             _refresh_local_backend(cfg["server"]["port"])
 
     display = f"archived {len(archived_ids)} build(s); removed {removed} local dir(s)"
     payload = {"archived": len(archived_ids), "removed_local": removed}
-    if result and not published:
+    # Each arm keys off its own status. Never `not published`: that spelling made
+    # the local-only path claim a PR that does not exist (AGE-48).
+    if status == "local_only":
+        payload["index_local_only"] = True
+        display += ("\nindex change is LOCAL ONLY — DEPLOYIT_SKIP_GC_PUSH is set, "
+                    "so nothing was pushed and no remote was contacted")
+    elif status == "pending":
         payload["index_pending"] = True
         payload["index_pr_url"] = result.get("pr_url")
         display += (f"\nindex archive pending PR merge — "
@@ -2591,24 +2633,33 @@ def cmd_rm(args):
 
     result = _commit_and_push_index(state, mutate, idx=_index_cfg(cfg))
 
-    # Delete files only after the index removal lands on main. A `fail()` inside
-    # the publisher (e.g. the launchd daemon can't reach gh) exits before this,
+    # Delete files only once the index removal is final. A `fail()` inside the
+    # publisher (e.g. the launchd daemon can't reach gh) exits before this,
     # leaving the serve dirs intact; a pending PR likewise keeps them until merge.
-    published = bool(result and result.get("published"))
+    status = result.get("status") if result else None
     removed = 0
-    if published:
+    if _index_change_is_effective(result):
         for bid in removed_ids:
             d = state / "serve" / bid
             if d.exists():
                 _shutil.rmtree(d, ignore_errors=True)
                 removed += 1
             _prune_post_test_artifacts(state, bid)
-        if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+        if status != "local_only":
             _refresh_local_backend(cfg["server"]["port"])
 
     display = f"removed {len(removed_ids)} build(s); {removed} local dir(s)"
     payload = {"removed": len(removed_ids), "removed_local": removed}
-    if result and not published:
+    # Each arm keys off its own status. Never `not published`: that spelling made
+    # the local-only path claim a PR that does not exist (AGE-48). This payload
+    # reaches a real user over HTTP — deployit-backend:_run_cli_rm forwards it
+    # verbatim to the web UI's swipe-to-delete — so the disclosure is not a
+    # test-only affordance.
+    if status == "local_only":
+        payload["index_local_only"] = True
+        display += ("\nindex change is LOCAL ONLY — DEPLOYIT_SKIP_GC_PUSH is set, "
+                    "so nothing was pushed and no remote was contacted")
+    elif status == "pending":
         payload["index_pending"] = True
         payload["index_pr_url"] = result.get("pr_url")
         display += (f"\nindex removal pending PR merge — "

@@ -16,10 +16,10 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-48** — `_commit_and_push_index` reports `published:True` under `DEPLOYIT_SKIP_GC_PUSH` without publishing anything: a **false success signal in a deploy path**, which is why it outranks the fresher siblings below. **Two deliberate skips:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet* ("once `collect_markers` can tell a QUOTED marker from an APPLIED one"), so taking it means building that capability first, not fixing a defect — the AGE-43 session re-confirmed that reading. **AGE-69 and AGE-70 are this session's own children** and are tempting because their repros are freshly measured and their characterization pins already sit in the suite ready to flip red→green — but both have **ZERO corpus occurrences**, so they are latent where AGE-48 lies about success today. Take them next if AGE-48 turns out to be blocked. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**) |
-| **Repo version** | **v3.7.1** — AGE-43 **bumped**, because it changed shipped `plugins/forge/bin/forge-contract-check.sh`. That is the opposite of the last four stories, every one of which was test/docs-only. **Run the pathspec check yourself rather than inheriting either answer** — the command is in the Known-state block below. |
-| **Last updated by** | AGE-43 session, 2026-08-05 |
+| **Next story** | **AGE-69** — delimiter-glue in `forge-contract-check.sh`: a closing delimiter glued to the harvested token reports valid docs as violations. Take it with **AGE-70** in mind but **not in the same PR** — they were deliberately cut on *mechanism*, so each is separately fixable, and AGE-70's fix will migrate a token BETWEEN violation arrays, which is exactly what AGE-43's per-array pins exist to see. **Both already have characterization pins naming their story IDs sitting in the suite, and a correct fix REDS those pins by design** — that is not a regression, it is the handoff working. **Deliberate skips, re-confirmed twice now:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet*, so taking it means building a capability first, not fixing a defect. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). **AGE-71 is this session's own child** (low). Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**) |
+| **Repo version** | **v3.7.2** — AGE-48 **bumped**, because it changed shipped `plugins/deployit/bin/deployit-cli`. Two of the last three stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
+| **Last updated by** | AGE-48 session, 2026-08-05 |
 | **Carried debt** | **None owed to you, and the broken protocol step is FIXED.** `git switch main` works again, local `main` is current (20c31d2 → 3cdbfcd), and **step 10 no longer asks you to run it** — the release path is now decoupled from any local `main` ref. ⚠ **One worktree is deliberately still there**: `.claude/worktrees/dual-host-plugin-compatibility` holds **135 uncommitted files** of dual-host (Codex) plugin work that exists **nowhere else** — unpushed, uncommitted, idle since 2026-07-20. **Do not remove it.** It is filed as **AGE-66** for Mikey's decision. If you ever need it out of the way, the remedy is `git switch --detach <path>`, **never** `git worktree remove` — measured, detach preserves modified *and* untracked files. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -62,6 +62,77 @@ three times on this session that way. `SKIP_PREPUSH_TESTS=1` is legitimate for a
 demonstrably pushes nothing — say so when you use it.
 
 ---
+
+## Known state (updated 2026-08-05 by the AGE-48 session)
+
+- **AGE-48 is DONE and shipped as v3.7.2. AGE-69 leads the queue.** It changed shipped
+  `plugins/deployit/bin/deployit-cli`, so the bump was owed. Run it yourself:
+  `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **non-empty means bump.**
+  ⚠ You do not have to run it blind first: `make -k test` tells you outright.
+  `test-plugin-content-drift` names the drifted file and says "VERSION is still X".
+- **⚠ THE STORY'S EXTENT WAS REFUTED, AND THE REAL HARM WAS WORSE THAN THE ONE IT NAMED.** AGE-48
+  said a leaked `DEPLOYIT_SKIP_GC_PUSH` makes push-asserting tests "wholly vacuous — every
+  assertion goes green while nothing is pushed". Measured:
+
+  | Claim | Verdict |
+  |---|---|
+  | Push-asserting tests go vacuous under a leak | **False** — `test-cli-rm.sh` fails `rm not pushed to origin`; `test-cli-rm-pr-fallback.sh` (which has **no** precondition guard) fails `expected index_pending` |
+  | `published:True` on a path that touches no remote | **Confirmed** |
+  | Consequence | **Worse than filed** — a real removal and a hatch removal produced **BYTE-IDENTICAL stdout**, serve dir irreversibly deleted in both |
+
+  AGE-21 had already closed the vacuity hole downstream. **Take the 10 minutes to reproduce before
+  believing an Extent section** — that is now five stories running where the story was partly wrong.
+- **⚠ THE BACKEND FORWARDS THE WHOLE ENVIRONMENT, so this was never test-only.**
+  `deployit-backend:_run_cli_rm` spawns the CLI with `env={**os.environ, ...}` and forwards the
+  payload verbatim to the HTTP client. The web UI's swipe-to-delete is a live production reader of
+  the field that was lying.
+- **⚠ A GREEN GATE CANNOT PROVE THIS ONE FIXED, AND IT IS STRUCTURAL — SAY SO RATHER THAN CLAIMING
+  THE PATH.** The live daemon runs a **copy** at `<state>/_plugin_root/bin/deployit-cli`
+  (`deployit-backend:466-467`), while `test-backend-delete.sh:20` **symlinks** `_plugin_root` to the
+  real plugin root. So the suite always exercises current code and can **never** detect a missed
+  redeploy. Anything under `plugins/deployit/bin/**` is inert for the web UI until
+  `/deployit redeploy --source <repo>/plugins/deployit` runs **post-merge from `main`** (it is
+  hard-refused in a worktree). A council seat found the copy; a second seat measured the symlink
+  that makes it undetectable.
+- **⚠ TWO NAMES WERE ARGUED FOR, ADOPTED, AND THEN MEASURED DOWN — AND ONE WAS REFUTED BY ITS OWN
+  AUTHOR AFTER TWO SEATS HAD ALREADY CONCEDED TO IT.** Seat 1 proposed `_index_change_is_durable()`
+  on a measured argument the chair confirmed; Seats 2 and 3 **both conceded**; then Seat 1 refuted
+  itself: `_reset_index_to_origin_main` is a **`git reset --hard origin/main`** and the hatch never
+  `git commit`s, so the hatch's write is an **uncommitted** working-tree change that the next
+  non-hatch call destroys — durable only while the var stays set. **A concession is not a
+  measurement.** Had the chair taken the two concessions at face value this would have shipped a
+  misleading name inside a fix about a misleading name. `_index_change_is_effective()` shipped.
+- **⚠ THE PREDICATE MUST BE TOTAL OVER `dict | None`, AND NO SINGLE PROPOSAL HAD BOTH HALVES.** B
+  pinned `unrecognised → False`, C pinned `None → False`; the chair carried both. `None` is
+  **reachable, not theoretical** — `cmd_gc`'s `mutate` returns it on a no-op and `test-gc.sh:67`
+  drives exactly that path.
+- **⚠ ADDING A DEPLOYIT TEST REDS `test-deployit-capture-diagnostics`, AND THAT IS THE GUARD
+  WORKING.** AGE-35's guard derives-then-pins its membership precisely so a new file cannot join the
+  run set unclassified. It printed the diff and the instruction ("Re-derive"). The new file measures
+  **`LLNNNN`**; candidate set 35 → **36**, covered 18 → **19**. **Budget ~150s for the re-derive and
+  do not skip it** — a file that lands there unclassified is the vacuity this repo has shipped twice.
+- **⚠ AGE-63 FIRED ON A FIXTURE'S LOCAL `git push` INTO A `mktemp -d` BARE REPO** and cost a full
+  suite run before a read-only probe executed. `SKIP_PREPUSH_TESTS=1` was legitimate there and is
+  recorded as such. It happens to every session that builds a git fixture.
+- **Council: proposal B at the FIRST count of the runoff (B=2, C=1, A=0), after a 0-1-2 round 1 in
+  which — for the THIRD consecutive council — NO seat voted for its own proposal.** In the runoff
+  **A finished last on two of three ballots including its author's**, and Seat 3 ranked its own
+  proposal **last** after conceding both points that distinguished it. Every seat revised; none
+  stood. Full trail: `.council/age48-published-lies-under-skip-gc-push/DECISION.md`.
+  - ⚠ **Chair technique worth copying:** when concessions went **circular** on the token (each seat
+    conceded to a different neighbour, so nobody defended the word they wrote), the chair named the
+    circularity in the deliberation prompt and forbade a second concession. Both remaining seats
+    then *decided* rather than deferred, and reached the same answer by different arguments.
+  - ⚠ **The protocol has no amendments.** Seat 3's assertions could only reach the outcome by each
+    seat putting them in its **own** proposal. Say so in the deliberation prompt or the best test
+    design on the panel dies with a losing proposal.
+- **Filed: AGE-71** (low) — `_wait_for_health:2646` returns bare `True` under `DEPLOYIT_SKIP_VERIFY`,
+  the class's only other member. Scoped honestly as low: the value never escapes the process, gates
+  a `fail()` rather than an irreversible delete, and its caller re-reads the same var five lines
+  later. **Repro not run** — filed on inspection and recorded as unconfirmed.
+- **AGE-23 confirmed for the EIGHTH time.** The council plugin's `references/` resolve at plugin
+  root, not skill-relative.
 
 ## Known state (updated 2026-08-05 by the AGE-43 session)
 

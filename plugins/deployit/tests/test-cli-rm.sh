@@ -9,11 +9,21 @@ TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
 
 # This file asserts a REAL push to the bare origin created below. Inheriting
-# DEPLOYIT_SKIP_GC_PUSH would short-circuit _commit_and_push_index to a purely
-# local write that still reports published:True (deployit-cli:1751), so every
-# assertion here would pass while nothing was pushed. Two tests in this same
-# directory export it (test-backend-delete.sh, test-gc.sh), so the leak path is
-# real. Refuse to run rather than report a vacuous green.
+# DEPLOYIT_SKIP_GC_PUSH short-circuits _commit_and_push_index to a purely local
+# write, and two tests in this same directory export it (test-backend-delete.sh,
+# test-gc.sh), so the leak path is real. Refuse to run rather than measure
+# nothing.
+#
+# ⚠ The claim this comment used to make — that a leak would make "every
+# assertion here pass while nothing was pushed" — is MEASURED FALSE, and AGE-48
+# corrected it. With the variable set and this guard removed, the run fails
+# loudly at `origin_published` with "FAIL: rm not pushed to origin", because
+# that assertion reads the bare origin's committed builds.json rather than the
+# CLI's own report. So the guard is not what stands between this file and a
+# vacuous green — `origin_published` is. What the guard still earns is naming
+# the cause at line 1 instead of leaving a reader to infer it from a push
+# assertion that failed for an environmental reason. Keep it, but do not credit
+# it with soundness it does not supply.
 [[ -z "${DEPLOYIT_SKIP_GC_PUSH:-}" ]] \
     || { echo "FAIL: DEPLOYIT_SKIP_GC_PUSH is set; this test cannot verify a push"; exit 1; }
 

@@ -2571,7 +2571,7 @@ def cmd_gc(args):
                 _shutil.rmtree(d)
                 removed += 1
             _prune_post_test_artifacts(state, bid)
-        if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+        if status != "local_only":
             _refresh_local_backend(cfg["server"]["port"])
 
     display = f"archived {len(archived_ids)} build(s); removed {removed} local dir(s)"
@@ -2645,7 +2645,7 @@ def cmd_rm(args):
                 _shutil.rmtree(d, ignore_errors=True)
                 removed += 1
             _prune_post_test_artifacts(state, bid)
-        if not os.environ.get("DEPLOYIT_SKIP_GC_PUSH"):
+        if status != "local_only":
             _refresh_local_backend(cfg["server"]["port"])
 
     display = f"removed {len(removed_ids)} build(s); {removed} local dir(s)"

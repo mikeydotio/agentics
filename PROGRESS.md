@@ -88,13 +88,24 @@ demonstrably pushes nothing — say so when you use it.
   payload verbatim to the HTTP client. The web UI's swipe-to-delete is a live production reader of
   the field that was lying.
 - **⚠ A GREEN GATE CANNOT PROVE THIS ONE FIXED, AND IT IS STRUCTURAL — SAY SO RATHER THAN CLAIMING
-  THE PATH.** The live daemon runs a **copy** at `<state>/_plugin_root/bin/deployit-cli`
-  (`deployit-backend:466-467`), while `test-backend-delete.sh:20` **symlinks** `_plugin_root` to the
-  real plugin root. So the suite always exercises current code and can **never** detect a missed
-  redeploy. Anything under `plugins/deployit/bin/**` is inert for the web UI until
-  `/deployit redeploy --source <repo>/plugins/deployit` runs **post-merge from `main`** (it is
-  hard-refused in a worktree). A council seat found the copy; a second seat measured the symlink
-  that makes it undetectable.
+  THE PATH.** `deployit-backend:466-467` runs `<state>/_plugin_root/bin/deployit-cli`, never repo
+  code, while `test-backend-delete.sh:20` **symlinks** `_plugin_root` at the repo — so the suite
+  always exercises current code and can **never** detect a stale daemon.
+- **⚠ THE COUNCIL SAID "COPY". I MEASURED IT AFTER THE MERGE AND IT IS A SYMLINK INTO A
+  VERSION-GATED CACHE — WHICH MAKES THE GAP BIGGER, NOT SMALLER.** Filed as **AGE-72**:
+
+  | | |
+  |---|---|
+  | `_plugin_root` | symlink → `~/.claude/plugins/cache/agentics/deployit/**2.36.0**` |
+  | Repo | **v3.7.2** |
+  | Deployed CLI carries AGE-48's fix | **no** — 0 matches; and 1 match for the old lie |
+  | `~/.deployit` | **does not exist** — probing it says "never bootstrapped" while a daemon is loaded from `~/Library/Application Support/deployit` |
+
+  So **AGE-48's fix is merged and the production path it was about is still running the defect.**
+  `/deployit redeploy --source <repo>/…` would repoint that symlink and deliver **1.5 majors** of
+  accumulated deployit change to a live tailnet service at once — materially more than "apply this
+  fix", so **the loop did not run it**; AGE-72 carries the options for Mikey. **`readlink` the
+  `_plugin_root` and grep the resolved CLI before claiming any deployit fix is live.**
 - **⚠ TWO NAMES WERE ARGUED FOR, ADOPTED, AND THEN MEASURED DOWN — AND ONE WAS REFUTED BY ITS OWN
   AUTHOR AFTER TWO SEATS HAD ALREADY CONCEDED TO IT.** Seat 1 proposed `_index_change_is_durable()`
   on a measured argument the chair confirmed; Seats 2 and 3 **both conceded**; then Seat 1 refuted

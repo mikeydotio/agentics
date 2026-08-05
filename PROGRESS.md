@@ -16,7 +16,7 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-69** — delimiter-glue in `forge-contract-check.sh`: a closing delimiter glued to the harvested token reports valid docs as violations. Take it with **AGE-70** in mind but **not in the same PR** — they were deliberately cut on *mechanism*, so each is separately fixable, and AGE-70's fix will migrate a token BETWEEN violation arrays, which is exactly what AGE-43's per-array pins exist to see. **Both already have characterization pins naming their story IDs sitting in the suite, and a correct fix REDS those pins by design** — that is not a regression, it is the handoff working. **Deliberate skips, re-confirmed twice now:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet*, so taking it means building a capability first, not fixing a defect. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). **AGE-71 is this session's own child** (low). Confirm STATE with `story list --ready`. |
+| **Next story** | **AGE-69** — delimiter-glue in `forge-contract-check.sh`: a closing delimiter glued to the harvested token reports valid docs as violations. Take it with **AGE-70** in mind but **not in the same PR** — they were deliberately cut on *mechanism*, so each is separately fixable, and AGE-70's fix will migrate a token BETWEEN violation arrays, which is exactly what AGE-43's per-array pins exist to see. **Both already have characterization pins naming their story IDs sitting in the suite, and a correct fix REDS those pins by design** — that is not a regression, it is the handoff working. **Deliberate skips, re-confirmed twice now:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet*, so taking it means building a capability first, not fixing a defect. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). ⚠ **AGE-72 is `medium` and looks takeable — it is NOT.** It is this session's own child and every remedy in it changes what a **live tailnet service** runs (the honest gap is ~1.5 majors of accumulated deployit change, not one patch), so it is explicitly Mikey's decision; the loop already landed its *documentation* half in PR #165. **AGE-71** is also this session's child (low). Confirm STATE with `story list --ready`. |
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**) |
 | **Repo version** | **v3.7.2** — AGE-48 **bumped**, because it changed shipped `plugins/deployit/bin/deployit-cli`. Two of the last three stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
 | **Last updated by** | AGE-48 session, 2026-08-05 |
@@ -138,6 +138,18 @@ demonstrably pushes nothing — say so when you use it.
   - ⚠ **The protocol has no amendments.** Seat 3's assertions could only reach the outcome by each
     seat putting them in its **own** proposal. Say so in the deliberation prompt or the best test
     design on the panel dies with a losing proposal.
+- **⚠ A NEW `make test` FLAKE, AND IT COST ONE GATE RUN — `hdiutil: create failed - Resource busy`.**
+  `test-cli-stage-macos-no-sparkle-tools.sh` red on a branch whose **entire diff was one line of
+  PROGRESS.md**, a file it does not read; **3/3 PASS** on immediate retry, with two full green runs
+  the same day on far larger changes. Filed as **AGE-73**: `deployit-cli:1367` passes
+  `-volname meta_full["project"]`, and **nine** deployit tests share the literal `"Lillist"`, so they
+  contend on the machine-global `/Volumes/Lillist` — a per-test `mktemp -d` isolates the image path
+  but **not** the volume name, which is why the isolation looks complete and is not. Same family as
+  **AGE-56** (fixed ports) and **AGE-57** (fixed path in a variable), and **a third reason not to
+  parallelise the runner to shorten the gate.** ⚠ Filed with the mechanism **inferred, not
+  reproduced** — a pre-registered discriminating experiment is in the story. **If this reds on you,
+  retry the single file before believing it is yours.**
+- **Filed: AGE-72** (med) — see the topology block above; **needs Mikey, not the loop.**
 - **Filed: AGE-71** (low) — `_wait_for_health:2646` returns bare `True` under `DEPLOYIT_SKIP_VERIFY`,
   the class's only other member. Scoped honestly as low: the value never escapes the process, gates
   a `fail()` rather than an irreversible delete, and its caller re-reads the same var five lines

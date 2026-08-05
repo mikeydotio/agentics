@@ -17,13 +17,37 @@ setup() {
   ( cd "$TEST_DIR" && git add -A && git commit -q -m "init" )
 }
 
+# The shipped script keys its snapshot directory by a 16-char `git hash-object`
+# digest of the project's absolute path, then by session (forge-integrity.sh
+# :133-156). Recomputing that digest here is what lets teardown delete THIS
+# test's snapshots without touching the shared root. The duplication is
+# deliberate and is pinned: `teardown's key derivation still matches the
+# script's snapshot path` below reds the moment the two drift, which is what
+# keeps a drifted derivation from degrading teardown into a silent no-op.
+SNAPSHOT_ROOT="/tmp/forge-integrity"
+
+snapshot_dir_for_test() {
+  printf '%s/%s' "$SNAPSHOT_ROOT" \
+    "$(printf '%s' "$TEST_DIR" | git hash-object --stdin | cut -c1-16)"
+}
+
 teardown() {
   rm -rf "$TEST_DIR"
-  # Clean up this test's project-keyed snapshot dir so a stray leftover from
-  # one test run can never leak state into another (paths are content-hashed
-  # from $TEST_DIR's absolute path, which mktemp guarantees is unique already,
-  # but this keeps /tmp tidy across a full test run).
-  rm -rf "/tmp/forge-integrity"
+  # Delete ONLY this test's own project-keyed snapshot dir.
+  #
+  # This was `rm -rf "/tmp/forge-integrity"` — the whole shared root — on the
+  # grounds that per-test paths are unique anyway and it "keeps /tmp tidy".
+  # The paths are indeed unique; the ROOT is not. That root is machine-global:
+  # it holds the live baselines of every project on the box, so the blanket rm
+  # deleted the snapshots of every concurrently running copy of this suite AND
+  # of any real forge session in another repository (AGE-34). Measured, with
+  # that rm as the only concurrent actor and no second suite running: 14 of 19
+  # tests failed.
+  rm -rf "$(snapshot_dir_for_test)"
+  # Tidiness without the capability. `rmdir` is not recursive: it removes the
+  # shared root only when this run left it empty, and fails harmlessly the
+  # instant any other project's snapshots are present.
+  rmdir "$SNAPSHOT_ROOT" 2>/dev/null || true
 }
 
 run_in_repo() {
@@ -244,6 +268,21 @@ jq_field() {
   run_in_repo "check --phase p --forge-dir .forge"
   [ "$(jq_field '.ok')" = "true" ]
   [ "$(jq_field '.tampered')" = "false" ]
+}
+
+# --- AGE-34: teardown owns exactly its own subtree, and knows where that is ---
+
+@test "teardown's key derivation still matches the script's snapshot path" {
+  run_in_repo "snapshot --phase p --forge-dir .forge"
+  [ "$(jq_field '.ok')" = "true" ]
+  # Deliberately asserted against the file the script ACTUALLY wrote, not
+  # against a second copy of the same derivation — the latter would agree with
+  # itself even after both drifted away from forge-integrity.sh.
+  #
+  # If this reds, teardown has silently become a no-op: it is deleting a path
+  # the script no longer writes, so every run leaks a snapshot dir and the
+  # blanket-rm temptation that caused AGE-34 comes straight back.
+  [ -f "$(snapshot_dir_for_test)/default/p.json" ]
 }
 
 @test "a session id with unsafe path characters is sanitized, not passed through raw" {

@@ -16,16 +16,126 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-34** — `forge-integrity.bats` snapshots the real working tree, so two concurrent `make test` runs in one checkout fail each other spuriously. Lowest-ID ready `medium`; `story next` agrees. ⚠ Its cheapest fix also kills the duplicated gate this loop pays on every story, and it pairs with **AGE-36** (same economics — fix them together). Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26 |
-| **Repo version** | **v3.7.0** — bumped by AGE-26 (minor). It changed shipped `plugins/greenlight/**` runtime content, so a bump was **owed** — unlike AGE-19/21/22, which touched no shipped content. |
-| **Last updated by** | AGE-26 session, 2026-08-04 |
+| **Next story** | **AGE-35** — `deployit`'s `test-bootstrap-dirs.sh` fails under full `make test` but passes in isolation. Lowest-ID ready `medium`. ⚠ **AGE-36 does NOT pair with AGE-34**, contrary to the note this table carried for one session — see the AGE-34 block. Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34 |
+| **Repo version** | **v3.7.0** — unchanged. AGE-34 touched only `plugins/**/*.bats`, root `tests/`, `Makefile` and docs; the shipped pathspec diff is **empty** and `test_shipped_content_matches_tagged_release` PASSED unbumped. |
+| **Last updated by** | AGE-34 session, 2026-08-05 |
+| **⚠ CARRIED DEBT** | The storyhook store went to **schema 9** mid-session and the local `story` 2.0.0 binary reads only to 8, so **AGE-34's own bookkeeping could not be completed** — see the outage bullet in the AGE-34 block for the exact commands the next session must run. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
 > reads.
 
 ---
+
+## Known state (updated 2026-08-05 by the AGE-34 session)
+
+- **AGE-34 is DONE. No bump — the repo stays at v3.7.0.** It touched only `plugins/**/*.bats`
+  (excluded from the shipped pathspec), root `tests/`, `Makefile` and docs. Verify before assuming
+  it applies to you: `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **empty means no bump.**
+- **⚠ THE STORY'S ROOT CAUSE WAS REFUTED, AND ITS SYMPTOM WAS EXACTLY RIGHT.** AGE-34 says the suite
+  "takes snapshots of the **real repository working tree**". It never touches it — `run_in_repo`
+  (`:29-31`) and the one other invocation (`:60`) both `cd` into a per-test `mktemp -d`, and that is
+  the complete enumeration of the file's `run bash -c` sites.
+
+  | Story said | Measured |
+  |---|---|
+  | Snapshots the real working tree | **False** — 2 invocation sites, both `mktemp -d` fixtures |
+  | Concurrent runs fail spuriously | **True** — 37 failures over 4 concurrent runs x 3 rounds |
+  | Cause is concurrent working-tree churn | **False** |
+  | Cause is `forge-integrity.bats:26`'s `rm -rf "/tmp/forge-integrity"` | **Confirmed** |
+
+- **⚠ THE CONTROLLED EXPERIMENT IS THE WHOLE STORY, AND IT IS CHEAP — DO THIS INSTEAD OF ARGUING.**
+  One bats run whose **only** concurrent actor was a loop doing `rm -rf /tmp/forge-integrity` — no
+  second suite, no second fixture tree, no working-tree churn at all — failed **14/19** and
+  reproduced the story's reported symptom *verbatim* (`jq: parse error: Invalid numeric literal at
+  line 1, column 70`). Solo baseline 19/19. That single run refuted the filed cause and proved the
+  real one in about a minute, where two full `make test` runs would have cost ~4h and proved less.
+- **⚠ THE TOGGLE-BACK IS A MERGE GATE NOW, and it was the council's demand, not the chair's idea.**
+  Proving a cause *sufficient* does not prove it *sole*. Post-fix, the exact configuration that had
+  produced 37 spurious failures produced **0** (12 runs, 20/20 each). Without that second
+  measurement the fix ships looking green while a second hazard survives. **Run the toggle-back
+  whenever you fix a flake.**
+- **⚠ THE BLAST RADIUS IS MACHINE-GLOBAL, WHICH IS WHAT DISQUALIFIED THE STORY'S OWN PREFERRED FIX.**
+  `/tmp/forge-integrity` holds the live baselines of *every* project on the box, keyed by a digest of
+  each project's absolute path. So `make test` here deleted the baseline of a real forge session in
+  **another repository**. A repo-level `make test` lock (the story's option 1) cannot reach that.
+  - **Correction the council forced on the chair, and it matters:** that does **not** make the lock
+    "wrong". It remains valid as **AGE-36's** duplicated-gate fix. It is *not the fix for this
+    defect*. Do not cite AGE-34 as having killed it.
+- **⚠ `ok:false` HAS NO CONSUMER ARM — filed as AGE-55, and it is a live production disarm.** With
+  its snapshot gone, `check` emits `{ok:false, error:"no_snapshot_for_phase_X"}` with **no
+  `tampered` key** (`forge-integrity.sh:227`). `execution-loop.md` Steps 3a and 5a enumerate arms
+  only for `tampered` true/false, so a null matches none and the natural reading is "proceed".
+  Deliberately **not** fixed here (two hats, and the council mandated narrow closure).
+- **⚠ NO SOURCE-LEVEL GUARD — proposed, and declined unanimously, on a decidability argument.** An
+  `rm`-shaped predicate fires on `greenlight.bats:295`, which hands `'echo $(rm -rf /tmp/foo)'` to a
+  jq encoder as **data** that never executes, while `forge-integrity.bats:30` is a quoted string that
+  **is** executed. Same shell syntax, opposite kind — **AGE-26's rule, not AGE-22's.** It would also
+  miss the class's other live members, which are a fixed *port* (AGE-56) and a fixed path bound to a
+  **variable** (AGE-57). What replaces it: `tests/forge-integrity-isolation.sh`, **bidirectional on
+  purpose** — deleting the teardown line altogether satisfies "the foreign sentinel survived" while
+  trading a clobber for an unbounded leak, so a second arm pins that the suite still removes its own
+  subtree.
+- **⚠ SWEEP WITH `git ls-files`, NEVER AN EXTENSION GLOB — the chair's sweep missed AGE-57 TWICE.**
+  First by filtering on `\.(bats|sh)$` when `plugins/*/tests/fakes/*` are tracked and
+  **extensionless** (the exact blind spot `bounded-capture-guard.sh`'s header already documents);
+  then, on a re-run without that filter, because the literal is bound to a **variable**
+  (`STATE="${FAKE_TMUX_STATE:-/tmp/issue-faketmux}"`) rather than written at a call site. Miss (2) is
+  itself the evidence that killed the guard proposal.
+- **Mutation battery: 5 run, 5 caught**, every mutation asserted APPLIED and every restore asserted
+  tracked-and-clean. M1 (blanket rm — the original defect) reds the over-delete arm; **M2 (no-op
+  teardown) reds the under-delete arm, which is the whole justification for making the guard
+  bidirectional**; M3 (key derivation drift) and M5 (wrong root) red the under-delete arm *and* the
+  new bats pin. ⚠ A first attempt at M4 died on `perl` quoting and the battery **refused to report a
+  result** — assert the mutation applied, or its red proves nothing.
+  - **M4 corrected a council claim.** A seat called the `rmdir` reclaim "polish rather than safety";
+    replacing it with `rm -rf` reds the over-delete arm. The non-recursive form is load-bearing.
+- **⚠ THIS PR CLOSES AGE-34 NARROWLY — concurrent `make test` in one checkout is STILL NOT SAFE.**
+  The council was explicit: claiming full closure would make this PR the same "gate that does not
+  mean what it reports" failure the repo has already filed three times. **AGE-56** (deployit binds
+  **14** hardcoded ports, two of them the same 18733, plus a fixed `/tmp/deployit-500.body`) and
+  **AGE-57** are independent causes of the identical headline symptom and remain open.
+- **⚠ STORYHOOK STORE OUTAGE — CARRIED DEBT, PLEASE CLEAR IT FIRST.** Mid-session the shared store
+  went to **schema 9** while `~/.local/bin/story` is **2.0.0** and reads only to schema 8, so every
+  `story` command now fails with `daemon could not start … status 5`. Cause is not this repo: a
+  concurrent session working `/Volumes/Code/mikeyward/storyhook` (an `SH-63` worktree, running its
+  own `make test`) migrated the real global store. **`make test` here is unaffected** — every suite
+  runs under `tests/with-isolated-store.sh`, which builds a fresh schema-8 store; verified by running
+  `test-storyhook-contract-root` green during the outage. The chair did **not** attempt a repair:
+  `story update` replaces its own running binary and is the user's machine-global tool. **Outstanding
+  bookkeeping the next session must run once `story` works again:**
+  ```
+  story move AGE-34 verifying && story comment AGE-34 "<merge sha>" && story move AGE-34 done
+  story comment AGE-36 "AGE-34 did NOT fix this and the Relationship section is wrong — see below"
+  story new "forge-integrity.bats asserts on the machine-global /tmp/etc …" --type bug --priority low
+  ```
+  The AGE-36 correction matters: its Relationship section claims "same root economics as AGE-34 …
+  both are solved by making the gate a single, shared, cached run", which is **false** — AGE-34's
+  cause was a shared *path*, not the duplicated gate. Left uncorrected, a later session builds a
+  tree-SHA stamp cache believing it closes AGE-34.
+  - **The third pending story, in full** (found by council seat 1, verified, deliberately not folded
+    in): `forge-integrity.bats`'s sanitization test proves its claim by asserting a machine-global
+    path is **absent** — `[ ! -d "/tmp/etc" ]`. That is true for two unrelated reasons ("sanitization
+    worked" and "nothing else on this machine made `/tmp/etc`") and cannot tell them apart, so any
+    unrelated process creating that directory reds it permanently while naming the wrong cause; it
+    would also pass if the snapshot were never written at all. Repro: `mkdir -p /tmp/etc` then run
+    the suite. Same class as AGE-34, opposite direction — a false **red** from *reading* shared
+    state, where AGE-34 was a false green from *writing* it. Fix: assert containment positively
+    under the `snapshot_dir_for_test` helper AGE-34 added, optionally keeping a narrowed negative
+    arm against the real escape target `/tmp/etc/evil`. Priority low.
+- **Council: UNANIMOUS 3-0 for C at round 1, and the seat that wrote C voted AGAINST it first.**
+  Seat 3 cast A on the grounds that A alone had *measured* the key-derivation equality rather than
+  asserting it, then reversed to C unprompted, "on the merits, not for consensus", once the chair had
+  banked A's measurements across the record. Both ballots are preserved. The council also falsified
+  two chair claims and corrected a miscount (13 → **14** deployit ports). Full trail:
+  `.council/age34-forge-integrity-shared-snapshot-root/DECISION.md`.
+- **Filed: AGE-55** (med) — the `ok:false` disarm above. **AGE-56** (med) — deployit's 14 fixed ports
+  + fixed `/tmp/deployit-500.body`; latent today because the runner is strictly serial, and a trap
+  for anyone parallelising it to shorten the ~2h gate. **AGE-57** (med) — `issue` and `storywork`
+  fake tmux shims both default to one shared `/tmp/issue-faketmux`, and storywork's copy carries the
+  *issue* plugin's name; filed on inspection, **repro not run**, recorded honestly as unconfirmed.
 
 ## Known state (updated 2026-08-04 by the AGE-26 session)
 

@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -85,6 +85,17 @@ test-sigpipe-shape-guard:
 # layers, no redirect heuristic, no derived closure. Plain bash so it always runs.
 test-bounded-capture-guard:
 	bash tests/with-isolated-store.sh bash tests/bounded-capture-guard.sh
+
+# AGE-34: /tmp/forge-integrity is a MACHINE-GLOBAL snapshot root holding the
+# live integrity baselines of every project on the box. forge-integrity.bats's
+# teardown used to `rm -rf` the whole root, deleting every concurrent run's
+# baselines and any real forge session's in another repository (measured: 14/19
+# red with that rm as the only concurrent actor). Bidirectional on purpose —
+# deleting the teardown line entirely satisfies "the sentinel survived", so the
+# under-delete arm pins that the suite still removes its own subtree. Plain
+# bash so it always runs in the pre-push gate.
+test-forge-integrity-isolation:
+	bash tests/with-isolated-store.sh bash tests/forge-integrity-isolation.sh
 
 # Claude 5 prompt-realignment regression guard (#118): model/effort tiering
 # stays alias-only and never pinned up, no self-verification instructions or

@@ -20,7 +20,7 @@ via freshen, and stops.
 | **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34 |
 | **Repo version** | **v3.7.0** — unchanged. AGE-34 touched only `plugins/**/*.bats`, root `tests/`, `Makefile` and docs; the shipped pathspec diff is **empty** and `test_shipped_content_matches_tagged_release` PASSED unbumped. |
 | **Last updated by** | AGE-34 session, 2026-08-05 |
-| **⚠ CARRIED DEBT** | The storyhook store went to **schema 9** mid-session and the local `story` 2.0.0 binary reads only to 8, so **AGE-34's own bookkeeping could not be completed** — see the outage bullet in the AGE-34 block for the exact commands the next session must run. |
+| **Carried debt** | **None.** The storyhook outage below cleared before the session ended and every pending operation was completed — AGE-34 is `done`, AGE-36 is corrected, AGE-58 is filed. Nothing is owed to you. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
 > it merges (move it to Completed, set the next story). It is the first thing the next session
@@ -97,34 +97,26 @@ via freshen, and stops.
   mean what it reports" failure the repo has already filed three times. **AGE-56** (deployit binds
   **14** hardcoded ports, two of them the same 18733, plus a fixed `/tmp/deployit-500.body`) and
   **AGE-57** are independent causes of the identical headline symptom and remain open.
-- **⚠ STORYHOOK STORE OUTAGE — CARRIED DEBT, PLEASE CLEAR IT FIRST.** Mid-session the shared store
-  went to **schema 9** while `~/.local/bin/story` is **2.0.0** and reads only to schema 8, so every
-  `story` command now fails with `daemon could not start … status 5`. Cause is not this repo: a
-  concurrent session working `/Volumes/Code/mikeyward/storyhook` (an `SH-63` worktree, running its
-  own `make test`) migrated the real global store. **`make test` here is unaffected** — every suite
-  runs under `tests/with-isolated-store.sh`, which builds a fresh schema-8 store; verified by running
-  `test-storyhook-contract-root` green during the outage. The chair did **not** attempt a repair:
-  `story update` replaces its own running binary and is the user's machine-global tool. **Outstanding
-  bookkeeping the next session must run once `story` works again:**
-  ```
-  story move AGE-34 verifying && story comment AGE-34 "<merge sha>" && story move AGE-34 done
-  story comment AGE-36 "AGE-34 did NOT fix this and the Relationship section is wrong — see below"
-  story new "forge-integrity.bats asserts on the machine-global /tmp/etc …" --type bug --priority low
-  ```
-  The AGE-36 correction matters: its Relationship section claims "same root economics as AGE-34 …
-  both are solved by making the gate a single, shared, cached run", which is **false** — AGE-34's
-  cause was a shared *path*, not the duplicated gate. Left uncorrected, a later session builds a
-  tree-SHA stamp cache believing it closes AGE-34.
-  - **The third pending story, in full** (found by council seat 1, verified, deliberately not folded
-    in): `forge-integrity.bats`'s sanitization test proves its claim by asserting a machine-global
-    path is **absent** — `[ ! -d "/tmp/etc" ]`. That is true for two unrelated reasons ("sanitization
-    worked" and "nothing else on this machine made `/tmp/etc`") and cannot tell them apart, so any
-    unrelated process creating that directory reds it permanently while naming the wrong cause; it
-    would also pass if the snapshot were never written at all. Repro: `mkdir -p /tmp/etc` then run
-    the suite. Same class as AGE-34, opposite direction — a false **red** from *reading* shared
-    state, where AGE-34 was a false green from *writing* it. Fix: assert containment positively
-    under the `snapshot_dir_for_test` helper AGE-34 added, optionally keeping a narrowed negative
-    arm against the real escape target `/tmp/etc/evil`. Priority low.
+- **⚠ STORYHOOK STORE OUTAGE — RESOLVED before this session ended; nothing is owed to you.** The
+  store recovered on its own (the concurrent storyhook session presumably finished), and every
+  pending operation was then completed: **AGE-34 is `done`** with its merge SHA, **AGE-36's false
+  premise is corrected by comment**, and **AGE-58 is filed**. The record below is kept because the
+  *failure mode* is worth knowing, not because anything is outstanding. Mid-session the shared store
+  went to **schema 9** while `~/.local/bin/story` is **2.0.0** and reads only to schema 8, so for
+  roughly an hour every `story` command failed with `daemon could not start … status 5`. Cause was
+  not this repo: a concurrent session working `/Volumes/Code/mikeyward/storyhook` (an `SH-63`
+  worktree, running its own `make test`) migrated the real global store.
+  - **The reusable lesson: `make test` here was unaffected, and that is not luck.** Every suite runs
+    under `tests/with-isolated-store.sh`, which builds a fresh schema-8 store of its own — verified
+    by running `test-storyhook-contract-root` green *during* the outage. If a future session sees
+    `story` fail, **check whether the gate is actually affected before treating it as a blocker**; it
+    almost certainly is not.
+  - **Do not "repair" this.** `story update` replaces its own running binary and is the user's
+    machine-global tool. The chair declined and surfaced it to the user instead. Waiting was the
+    correct move and it worked.
+  - Flagged to the user as an incident worth a storyhook-side story: a session working that repo
+    migrated the developer's **real** store rather than an isolated one, which is the same class as
+    the 2026-07-30 event `with-isolated-store.sh` exists to prevent.
 - **Council: UNANIMOUS 3-0 for C at round 1, and the seat that wrote C voted AGAINST it first.**
   Seat 3 cast A on the grounds that A alone had *measured* the key-derivation equality rather than
   asserting it, then reversed to C unprompted, "on the merits, not for consensus", once the chair had
@@ -136,6 +128,13 @@ via freshen, and stops.
   for anyone parallelising it to shorten the ~2h gate. **AGE-57** (med) — `issue` and `storywork`
   fake tmux shims both default to one shared `/tmp/issue-faketmux`, and storywork's copy carries the
   *issue* plugin's name; filed on inspection, **repro not run**, recorded honestly as unconfirmed.
+  **AGE-58** (low) — `forge-integrity.bats` asserts `[ ! -d "/tmp/etc" ]`, a machine-global *read*:
+  any unrelated process creating that directory reds it permanently while naming the wrong cause,
+  and it would also pass if the snapshot were never written. Same class as AGE-34, opposite
+  direction — a false **red** from reading shared state where AGE-34 was a false green from writing
+  it. Fix is a positive containment assertion using the `snapshot_dir_for_test` helper AGE-34 added.
+- **AGE-23 is confirmed for the FOURTH time and still costs a tool call.** The council plugin's
+  `references/council-protocol.md` did not resolve skill-relative; it lives at the plugin root.
 
 ## Known state (updated 2026-08-04 by the AGE-26 session)
 

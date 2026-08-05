@@ -354,13 +354,24 @@ stdout, or HTTP — or authorises an irreversible action*; or the first `DEPLOYI
 outside `deployit-cli`.
 
 ⚠ **A GREEN `make test` IS NOT EVIDENCE THE WEB UI'S DELETE PATH IS FIXED, AND THIS IS STRUCTURAL.**
-The live daemon runs a **copy** at `<state>/_plugin_root/bin/deployit-cli`
-(`deployit-backend:466-467`), while `test-backend-delete.sh:20` **symlinks** `_plugin_root` to the
-real plugin root. So the suite always exercises current code and **cannot detect a missed
-redeploy**. Any change under `plugins/deployit/bin/**` is **inert for the web UI** until
-`/deployit redeploy --source <repo>/plugins/deployit` runs — **post-merge from `main`**, since
-`redeploy` is a mutating deployit op hard-refused inside a linked worktree — and the signal is
-`verify-live.sh`'s "passed", never `_healthz`. Do not claim the swipe-to-delete path until then.
+`deployit-backend:466-467` runs `<state>/_plugin_root/bin/deployit-cli`, never repo code, while
+`test-backend-delete.sh:20` **symlinks** `_plugin_root` at the repo. So the suite always exercises
+current code and **cannot detect a stale daemon** — in either direction. Any change under
+`plugins/deployit/bin/**` is **inert for the web UI** until the daemon's `_plugin_root` actually
+carries it; the signal is `verify-live.sh`'s "passed", never `_healthz`, and any redeploy must run
+**post-merge from `main`**, since `redeploy` is hard-refused inside a linked worktree.
+
+⚠ **`<state>/_plugin_root` is NOT necessarily a copy, and assuming it is understates the gap.**
+AGE-48's council reasoned it was one; measured on this machine it is a **symlink into the
+version-keyed plugin install cache**, pinned at deployit **2.36.0** while the repo shipped **3.7.2**
+— so the live daemon still runs the exact defect AGE-48 fixed. Claude Code never re-extracts a
+version it already has, so a repo-side fix reaches that cache only after a `/semver bump` **and** a
+marketplace update on the box. Note `~/.deployit` does not exist there either: a session probing the
+conventional state dir concludes deployit was never bootstrapped while a daemon is loaded and
+serving from `~/Library/Application Support/deployit`. **Verify the topology before claiming a fix
+is live** — `readlink` the `_plugin_root` and grep the resolved CLI for your change. Filed as
+**AGE-72**, whose remedy needs Mikey: every option changes what a live tailnet service runs, and the
+honest gap is 1.5 majors of accumulated deployit change rather than one patch.
 
 ⚠ **The regression test is five-armed because every cheaper version is walkable**, and the walk is
 named: a fix that adds `index_local_only` to the payload while `_commit_and_push_index` still

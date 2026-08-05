@@ -209,7 +209,13 @@ faster suite.
 every session to run the full suite locally before every push, and the hook then runs it
 again — so a push pays for the suite **twice**, and the second payment is concurrent load on
 the very box whose load is the measured cause of the breaches. That is a global-file fix
-(outside this repo) and is filed as **AGE-62**.
+(outside this repo) and is filed as **AGE-64**, which `tests/gate-deadline.sh` names as its
+**removal trigger** — the deadline exists only while that load does.
+
+Related, all needing changes outside this repo: **AGE-62** (a cancelled hook allows the
+push), **AGE-63** (the matcher fires on a push invocation anywhere in the command text, so
+heredoc bodies and prose cost a full suite run), **AGE-65** (SPEC for inverting the gate to
+a test-result attestation).
 
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 

@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.7.3] - 2026-08-06
+
+### Fixed
+- trim a harvested token to the shape a vocabulary member could have (6c06fb5)
+
+### Changed
+- Merge pull request #166 from mikeydotio/docs/AGE-72-handoff-warning (dc3c6f6)
+- Merge pull request #165 from mikeydotio/fix/AGE-72-deployit-live-topology-correction (fac3798)
+- Merge pull request #164 from mikeydotio/fix/AGE-48-published-lies-under-skip-gc-push (aa62502)
+
+### Documentation
+- warn the next session off AGE-72, and record the AGE-73 flake (350993c)
+- correct the deployit live-daemon topology, measured after the merge (e604ed6)
+- record AGE-48's findings and hand off to AGE-69 (f34a3dc)
+
+_[manual]_
+
 ## [v3.7.2] - 2026-08-05
 
 ### Fixed

@@ -141,8 +141,27 @@ demonstrably pushes nothing — say so when you use it.
   `--help`** verbatim is reported as a violation (`story hooks install|uninstall|list|test`):
   `harvest_usage_rows` splits position 2 on `|` when *deriving*, the checker never does. Unaffected
   by any trailing strip, and neither AGE-69 nor AGE-70.
+  **AGE-76** (low) — **this loop leaks immortal waiter processes, and 13 were alive on the box.**
+  `until ! pgrep -f "make -k test"` can never exit, because the loop's own argv contains the
+  pattern. PROGRESS.md already recorded the *stall*; what nobody noticed is that the stalled
+  waiters **outlive the session** — three inspected still reference `/private/tmp/age36-gate.log`.
+  Wait on a captured PID or a sentinel file, never a command-name pattern.
 - **Gate: green with no bypass, fifteen sessions running.** Pre-bump run isolated the drift guard as
-  the ONLY red (669 bats ok / 0 not ok; 328 shell PASS / 1 FAIL). `gate-deadline` did not trigger.
+  the ONLY red (669 bats ok / 0 not ok; 328 shell PASS / 1 FAIL); post-bump `MAKE_EXIT=0` with
+  **669 bats ok / 0 not ok and 329 shell PASS / 0 FAIL**.
+- **⚠ `gate-deadline` FIRED ON THE PUSH, AND THE CAUSE WAS ENTIRELY FOREIGN LOAD — the documented
+  "re-run once" worked.** First push attempt refused at **721s of a 720s budget** with
+  *"BUDGET, NOT CORRECTNESS"*, exit 3, **no test failed**. Load average was **57.6**, and none of it
+  was this session: an **iOS Simulator was booting** and **204 `diskimages-helper` processes** were
+  alive. Waiting for the 1-minute load to fall under 20 and retrying pushed cleanly first time.
+  **If this fires on you, measure the load before assuming it is your change** — and note the
+  suite had already run fully green twice on the identical tree, which is AGE-64's duplication
+  being paid for in wall-clock.
+- **GitHub releases had drifted again: v3.7.2 was tagged but never published.** v3.7.3 is published
+  with **rolled-up notes covering both**. Nothing was pruned — the drift memo suggests pruning
+  skipped tags during a large catch-up, but only one tag was involved here and `v3.7.2` is
+  referenced throughout `CLAUDE.md` and this file, so deleting it would be destructive for no gain.
+  **Check `gh release list` against `git tag` at the end of your story; the bump does not do it.**
 - **AGE-23 confirmed for the NINTH time.** The council plugin's `references/` resolve at plugin
   root, not skill-relative.
 

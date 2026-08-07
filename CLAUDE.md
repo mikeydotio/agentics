@@ -302,6 +302,64 @@ not exist and reported the resulting error as the mutation being caught — **fi
 "CAUGHT"s**. The baseline arm is what disclosed it, by reading `0 ok` where it should have read
 `7 ok`. Same family as AGE-35's vacuous sweep.
 
+### Derive the character class, never enumerate it — and make pins BRACKET a rule, not describe it
+
+AGE-69 finished a line AGE-43 had started. Inside a fence the extraction unit is the whole LINE
+(AGE-24), so the remainder harvest glued any adjacent delimiter onto the checked token and
+**reported correct documentation as a violation** — `(story project new)` → `new)`. The shipped
+guard already stripped exactly one trailing comma (`sub="${sub%,}"`): the class was known and
+handled for `,` alone.
+
+**What ships is a derived rule, not a list**: `strip_trailing_glue` trims until the token ends in
+`[A-Za-z0-9]`. Both slots are validated by **exact match** against a vocabulary harvested from the
+live `story` binary, and **no member ends in a non-alphanumeric** — measured over the real
+derivation, **97 members** (48 verbs, 8 relations, 41 subcommand members), whole charset `[a-z-]`
+with the hyphen never trailing. That makes the rule **sound**: no trailing trim can turn a
+non-member *into* a member, so it cannot manufacture a false negative, and a search for a
+constructible counter-example **failed and is recorded as failed**.
+
+⚠ **An enumerated set was proposed twice by the council and lost three times over, and the reasons
+generalise past this file.** (1) **CRLF defeats every enumeration** — a wholly correct CRLF file
+reports `new)^M`, byte-identical to no fix, because CR is not a character anyone thinks to
+enumerate; worse, it mangles the **positive controls** too (`init` → `init^M`), so every reported
+token becomes unsatisfiable by any `expect-dead` marker and **the whole suppression mechanism dies
+silently**. (2) **Bash will void an enumerated class without saying so** — a `]` moved out of first
+position inside a *variable-expanded* class does not narrow it, it disables it entirely, exit 0,
+gate green. (Literal `]`-first in `[[ ]]` is a *loud* syntax error; the variable form is the silent
+one, and it is the form an enumerated set needs.) (3) There is **no corpus evidence to pick a set
+from** — across all 150 tracked `.md` files there are zero trailing-glue occurrences.
+
+**The transferable test lesson: pins must BRACKET a rule, not describe it.** Describing it passes
+every mutant.
+
+- **CEILING** — AGE-43's mid-token arm (`baz)qux`, `foo;bar`), now extended to the **relation**
+  array, which it never covered. Reds on a strip not confined to the trailing edge.
+- **FLOOR** — a CRLF arm. Reds on any narrowing back to an enumerated set.
+- **BOUNDARY** — a digit-terminal arm. Reds on a one-character error in the class itself.
+
+⚠ **The boundary arm is the whole point, and it must assert PRESENCE.** `[!A-Za-z]` — one character
+different — is byte-identical to the correct rule on AGE-43's over-fix arm, on every per-array pin,
+on the AGE-70 pin **and on the real 29-file corpus, which stays green**. Yet `new2` and `blocks2`
+**vanish from the violation set**, because their stems are *live* vocabulary. That is a **false
+negative**, the one direction a drift guard cannot afford, so the arm pins those rows as present
+rather than pinning a token's spelling. **Mutation M9 is caught by that arm and by nothing else in
+an 83-test suite.**
+
+⚠ **Scope is the subcommand and relation slots only, and the boundary is executable.** The verb
+slot has the same symptom through a different mechanism (its capture class `[A-Za-z0-9_.-]` absorbs
+`. - _`). Extending the strip there **reds the real corpus** — `contract_ok:false`, violation
+`<id`, and **the live `<id>` suppression destroyed** — because `verb_slot_is_wildcard` tests a
+**balanced** `<...>` while `is_placeholder` is **leading-only**. It also migrates tokens *between*
+violation arrays. That is **AGE-74**; the real-corpus arm is now hardened with `contract_ok == true`
+plus the exact suppression set, because "no token carries a backtick" plus a file count were blind
+to it. Full trail: `.council/age69-delimiter-glue-scope/DECISION.md`.
+
+⚠ **Run a mutation battery against an isolated repo COPY, not the working tree.** A first attempt
+here mutated the tracked file, hit the 10-minute tool timeout, and was killed mid-run; the trap
+restored correctly, but that is luck you should not need. Also: **a prediction that one arm alone
+catches a mutant is worth checking** — two such council predictions were measured down (26 tests
+and 12 tests respectively), and only M9 was genuinely alone.
+
 ### A value-returning env hatch must name itself — and a green gate cannot prove this one fixed
 
 `deployit-cli` has **ten** `DEPLOYIT_SKIP_*` escape hatches. Four bare-`return` and carry no value.

@@ -16,10 +16,10 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-69** — delimiter-glue in `forge-contract-check.sh`: a closing delimiter glued to the harvested token reports valid docs as violations. Take it with **AGE-70** in mind but **not in the same PR** — they were deliberately cut on *mechanism*, so each is separately fixable, and AGE-70's fix will migrate a token BETWEEN violation arrays, which is exactly what AGE-43's per-array pins exist to see. **Both already have characterization pins naming their story IDs sitting in the suite, and a correct fix REDS those pins by design** — that is not a regression, it is the handoff working. **Deliberate skips, re-confirmed twice now:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet*, so taking it means building a capability first, not fixing a defect. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 also needs Mikey, not the loop** (see Carried debt). ⚠ **AGE-72 is `medium` and looks takeable — it is NOT.** It is this session's own child and every remedy in it changes what a **live tailnet service** runs (the honest gap is ~1.5 majors of accumulated deployit change, not one patch), so it is explicitly Mikey's decision; the loop already landed its *documentation* half in PR #165. **AGE-71** is also this session's child (low). Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**) |
-| **Repo version** | **v3.7.2** — AGE-48 **bumped**, because it changed shipped `plugins/deployit/bin/deployit-cli`. Two of the last three stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
-| **Last updated by** | AGE-48 session, 2026-08-05 |
+| **Next story** | **AGE-70** — slot-displacement in `forge-contract-check.sh`: the relation slot is validated by a fixed index, so a quoted span displaces it. It is AGE-69's sibling, cut on **mechanism**, and AGE-69 is now done — so the pairing note no longer applies. ⚠ **Its characterization pin (`AGE-70 pin — a quoted span still displaces the relation slot`) asserts behaviour that is still WRONG and a correct fix REDS it by design** — that is the handoff working, and the pin is what you update. It also carries a **knowingly-bought false negative** (`(story relate \`AGE-1\` precedes AGE-2)` goes green) that your fix must decide about deliberately. **Read AGE-69's council first** (`.council/age69-delimiter-glue-scope/DECISION.md`) — the ceiling/floor/boundary test framing and the per-array rule transfer directly. **Deliberate skips, re-confirmed three times now:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet*. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 needs Mikey** (see Carried debt). ⚠ **AGE-72 is `medium` and looks takeable — it is NOT**: every remedy changes what a **live tailnet service** runs (~1.5 majors of accumulated deployit change), so it is explicitly Mikey's. **AGE-74 and AGE-75 are this session's children** and are both takeable — see below. Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**), AGE-69 (+ **AGE-74 and AGE-75 filed**) |
+| **Repo version** | **v3.7.3** — AGE-69 **bumped**, because it changed shipped `plugins/forge/bin/forge-contract-check.sh`. Three of the last four stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
+| **Last updated by** | AGE-69 session, 2026-08-06 |
 | **Carried debt** | **None owed to you, and the broken protocol step is FIXED.** `git switch main` works again, local `main` is current (20c31d2 → 3cdbfcd), and **step 10 no longer asks you to run it** — the release path is now decoupled from any local `main` ref. ⚠ **One worktree is deliberately still there**: `.claude/worktrees/dual-host-plugin-compatibility` holds **135 uncommitted files** of dual-host (Codex) plugin work that exists **nowhere else** — unpushed, uncommitted, idle since 2026-07-20. **Do not remove it.** It is filed as **AGE-66** for Mikey's decision. If you ever need it out of the way, the remedy is `git switch --detach <path>`, **never** `git worktree remove` — measured, detach preserves modified *and* untracked files. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -62,6 +62,89 @@ three times on this session that way. `SKIP_PREPUSH_TESTS=1` is legitimate for a
 demonstrably pushes nothing — say so when you use it.
 
 ---
+
+## Known state (updated 2026-08-06 by the AGE-69 session)
+
+- **AGE-69 is DONE and shipped as v3.7.3. AGE-70 leads the queue.** It changed shipped
+  `plugins/forge/bin/forge-contract-check.sh`, so the bump was owed. Run the check yourself:
+  `git diff --stat origin/main HEAD -- plugins/ ':(exclude,glob)plugins/*/tests/**'
+  ':(exclude,glob)plugins/**/*.bats' ':(exclude,glob)plugins/*/README.md'` — **non-empty means bump.**
+  ⚠ You do not have to run it blind: `make -k test` names the drifted file outright.
+- **⚠⚠ AGENT NAMES ARE SESSION-GLOBAL AND LATEST-WINS. TWO OF THREE COUNCIL SEATS WERE SILENTLY
+  RENAMED AT SPAWN, AND MY FIRST PINGS WOKE STALE AGENTS FROM PREVIOUS COUNCILS.** This is the most
+  transferable thing in this session and it nearly corrupted the record. `Agent(name: "seat1-architect")`
+  returned `name: seat1-architect-2` because an earlier session had claimed the bare name; the same
+  for `seat3-skeptic`. `SendMessage` to the **bare** name then routes to the **old** agent. Both
+  replied with **well-formed, high-confidence JSON about entirely different questions** — one about
+  `.storyhook/` path bans, one about AGE-35's deployit capture flake — and **both volunteered
+  fabricated claims about votes they had "already cast in this council"**, including a specific
+  ballot letter. Nothing in the payload flags the substitution. **Always address a seat by the
+  `name` the spawn result returned, and read every delivery for QUESTION IDENTITY before tallying
+  it.** Cheapest fix: give seats story-scoped names (`age70-seat1`) so the collision cannot arise.
+- **⚠ THE STORY WAS RIGHT IN SHAPE AND TOO NARROW IN CONTENT — and the widening was the whole
+  value.** AGE-69 listed three glue characters. Measured on the shipped script, the class is:
+
+  | Slot | Members | In the story? |
+  |---|---|---|
+  | subcommand | `)` `;` `` ` `` **`.` `:` `"` `'`**, and **`);` (two at once)** | only `)` `;` `` ` `` |
+  | relation | `)` `;` `.` | **no — the story never mentions the relation slot** |
+  | verb | `.` `-` `_`, via the capture group's OWN class, not the harvest | **no — different mechanism, filed AGE-74** |
+
+- **⚠ THE COUNCIL KILLED AN ENUMERATED DELIMITER SET TWICE, AND THE REASON GENERALISES: A
+  HAND-PICKED CHARACTER LIST IS UNPROVABLE, A DERIVED RULE IS SOUND.** What shipped is
+  `[!A-Za-z0-9]` — *"a token that could equal a member must END IN AN ALPHANUMERIC, so trim until
+  it does"*. Three independent measurements killed enumeration:
+  - **CRLF.** A wholly correct CRLF document reports `new)^M` under **every** enumerated set ever
+    proposed here — byte-identical to no fix at all, because CR is not a character anyone
+    enumerates. Worse: it mangles the **positive controls** too (`init` → `init^M`), so on a CRLF
+    file every reported token is unsatisfiable by any `expect-dead` marker and **the whole
+    suppression mechanism silently dies**.
+  - **Soundness.** All **97** derived vocabulary members end alphanumeric (48 verbs, 8 relations,
+    41 subcommand members; charset exactly `[a-z-]`, hyphen never trailing). So no trailing strip
+    can turn a non-member INTO a member — a false negative is **not constructible**. A seat's
+    search for a counter-example failed and was honestly reported as failed.
+  - **Bash.** A `]` moved out of first position inside a **variable-expanded** class does not
+    narrow the class, it **VOIDS it entirely** — silently, exit 0, gate green. Every enumerated set
+    is one character-reorder from a no-op strip. (Literal `]`-first in `[[ ]]` is a *loud* syntax
+    error; the variable form is the silent one, and it is the form both enumerated proposals
+    needed.)
+- **⚠ THE ARM THAT NO PROPOSAL ORIGINALLY CARRIED IS THE ONE THAT MATTERS, AND IT IS THE
+  TRANSFERABLE TEST LESSON.** AGE-43's over-fix arm is **blind** to a one-character error in the
+  new rule. `[!A-Za-z]` (also stripping digits) is byte-identical on `baz)qux,foo;bar`, on every
+  per-array pin, on the AGE-70 pin, **and on the real 29-file corpus, which stays green** — while
+  `new2` and `blocks2` **VANISH from the violation set**, because their stems are live vocabulary.
+  That is a **false negative**. So the arm asserts those rows are **PRESENT**, making it a
+  false-negative detector rather than a token-value pin. **Mutation M9 is caught by that arm and
+  by nothing else in an 83-test suite.**
+  - **The framing worth stealing: pins should BRACKET a rule, not describe it.** **CEILING** =
+    AGE-43's mid-token arm (reds on a strip not confined to the trailing edge); **FLOOR** = the
+    CRLF arm (reds on any narrowing back to an enumerated set); **BOUNDARY** = the digit-terminal
+    arm (reds on a one-character class error). Describing the rule would have passed all three
+    mutants.
+- **Mutation battery: 11 arms, 10 mutants, ALL CAUGHT; baseline 83 ok / 0 not ok; restore
+  `cmp`-verified byte-identical.** Run in an **isolated repo mirror** rather than the real tree —
+  worth copying, because a first attempt against the real tree hit the 10-minute tool timeout and
+  was killed mid-run (the trap did restore correctly, but that was luck you should not need).
+  ⚠ **Two council predictions were measured DOWN by the battery**: seat 1 predicted the quoted-`!`
+  mutant would be caught by the digit arm *alone* (measured: **26** tests), and seat 2 predicted
+  verb-slot creep would be caught by the verb pin *alone* (measured: **12**, because the corpus arm
+  had been hardened). **Only M9 is genuinely alone.** A prediction of uniqueness is worth checking.
+- **⚠ THE HARDENED CORPUS ARM IS A REAL FIX, NOT DECORATION.** The pre-existing real-corpus test
+  asserted only "no token carries a backtick" and `files_scanned >= 25`. Both are **blind** to the
+  one over-reach this fix makes reachable: extending the strip to the verb slot yields
+  `contract_ok:false` with violation `<id` **and destroys the live `<id>` suppression** (dropping
+  `suppressions` to `["HP-N"]`). It now asserts `contract_ok == true` and the exact suppression set.
+- **Filed: AGE-74** (med) — the verb capture group absorbs trailing `. - _`. ⚠ **The obvious fix
+  reds the real corpus**, per above, because `verb_slot_is_wildcard` tests a **balanced** `<...>`
+  while `is_placeholder` is **leading-only**. It also **migrates tokens between violation arrays**
+  (`relate.`→`blockz` moves verb→relation). **AGE-75** (med) — a doc copying storyhook's **own
+  `--help`** verbatim is reported as a violation (`story hooks install|uninstall|list|test`):
+  `harvest_usage_rows` splits position 2 on `|` when *deriving*, the checker never does. Unaffected
+  by any trailing strip, and neither AGE-69 nor AGE-70.
+- **Gate: green with no bypass, fifteen sessions running.** Pre-bump run isolated the drift guard as
+  the ONLY red (669 bats ok / 0 not ok; 328 shell PASS / 1 FAIL). `gate-deadline` did not trigger.
+- **AGE-23 confirmed for the NINTH time.** The council plugin's `references/` resolve at plugin
+  root, not skill-relative.
 
 ## Known state (updated 2026-08-05 by the AGE-48 session)
 

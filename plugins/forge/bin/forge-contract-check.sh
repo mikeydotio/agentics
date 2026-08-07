@@ -413,6 +413,66 @@ is_placeholder() {
   esac
 }
 
+# Remove closing punctuation the harvest glued onto a checked token (AGE-69).
+#
+# Inside a fence the extraction unit is the whole LINE (AGE-24), so prose and
+# shell punctuation reach the checker. The remainder has no terminator set, so
+# any delimiter adjacent to the last checked token is absorbed into it and a
+# VALID invocation is reported as a violation:
+#
+#   (story project new)            -> subcommand `new)`
+#   story project new; echo done   -> subcommand `new;`
+#   story project new.             -> subcommand `new.`
+#   (story relate AGE-1 blocks)    -> relation   `blocks)`
+#
+# `sub="${sub%,}"` used to strip exactly one trailing comma. That was this same
+# rule applied to a one-member set; this generalises it.
+#
+# THE CLASS IS DERIVED, NOT ENUMERATED, and that is the whole point. Both slots
+# are validated by EXACT MATCH against a vocabulary harvested from the live
+# `story` binary, in which no member ends in a non-alphanumeric — measured
+# 2026-08-06 over the real derivation: 97 members (48 verbs, 8 relations, 41
+# subcommand members), whole character set `[a-z-]`, with the hyphen never
+# trailing. So the rule is not "strip these characters" but "a token that could
+# equal a member must END IN AN ALPHANUMERIC — trim until it does". That is
+# total: it needs no maintenance, and no future punctuation escapes it.
+#
+# It is also SOUND. Because every member ends alphanumeric, no trailing strip
+# can turn a non-member INTO a member, so this cannot manufacture a false
+# negative. A search for a constructible counter-example failed and is recorded
+# as failed: `story scaffold agents-md-old.` still reports `agents-md-old`.
+#
+# ⚠ An ENUMERATED set was proposed twice and lost on measurement, not taste.
+# Two independent failures killed it:
+#   - CRLF. A wholly correct CRLF file reports `new)^M` under every enumerated
+#     set ever proposed here, identical to no fix at all, because CR is not a
+#     delimiter anyone thinks to enumerate. Worse, it mangles the POSITIVE
+#     controls too (`init` -> `init^M`), so on a CRLF file every reported token
+#     is unsatisfiable by any `expect-dead` marker and the whole suppression
+#     mechanism silently dies.
+#   - Bracket ordering. A `]` moved out of first position inside a
+#     variable-expanded class narrows the class to NOTHING, silently, exit 0 —
+#     measured. `[!A-Za-z0-9]` has no members to order and needs no escaping.
+#
+# ⚠ DO NOT "SIMPLIFY" THIS TO `[!A-Za-z]`. Stripping trailing DIGITS too is a
+# one-character edit that is byte-identical on every other pinned fixture and
+# produces FALSE NEGATIVES: `new2` and `blocks2` vanish from the violation set
+# entirely, because their stems are LIVE vocabulary. Pinned by the
+# digit-terminal arm in forge-contract-check.bats, which asserts the live-stem
+# rows are PRESENT rather than merely checking a token's value.
+#
+# ⚠ SCOPE: the subcommand and relation slots only. The VERB slot's glue is a
+# different mechanism — its capture group's own class `[A-Za-z0-9_.-]` absorbs
+# `. - _` — and applying this strip there REDS THE REAL CORPUS, because
+# `verb_slot_is_wildcard` tests a BALANCED `<...>` placeholder and stripping the
+# `>` destroys the live `<id>` suppression. `is_placeholder`, used by these two
+# slots, is leading-only and therefore immune. That is AGE-74, not this.
+strip_trailing_glue() {
+  local t="${1:-}"
+  while [[ -n "$t" && "$t" == *[!A-Za-z0-9] ]]; do t="${t%?}"; done
+  printf '%s' "$t"
+}
+
 # A placeholder in the VERB slot is a violation, not a wildcard — unless it
 # names the verb slot itself (AGE-31).
 #
@@ -856,7 +916,7 @@ while IFS= read -r f; do
     if verb_is_enforced "$verb"; then
       read -ra subtoks <<< "$rest"
       sub="${subtoks[0]:-}"
-      sub="${sub%,}"
+      sub="$(strip_trailing_glue "$sub")"
       if ! is_placeholder "$sub" && ! is_valid_subcommand "$verb" "$sub"; then
         try_suppress "$rel_f" "$lineno" "$sub" "$trimmed" && continue
         VIOLATED_LINES="${VIOLATED_LINES}${VIOLATED_LINES:+$'\n'}${lineno}"
@@ -869,7 +929,7 @@ while IFS= read -r f; do
       relate|unrelate|link|unlink)
         read -ra resttoks <<< "$rest"
         relation="${resttoks[1]:-}"
-        relation="${relation%,}"
+        relation="$(strip_trailing_glue "$relation")"
         if ! is_placeholder "$relation" && ! is_valid_relation "$relation"; then
           if ! try_suppress "$rel_f" "$lineno" "$relation" "$trimmed"; then
             VIOLATED_LINES="${VIOLATED_LINES}${VIOLATED_LINES:+$'\n'}${lineno}"

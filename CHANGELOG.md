@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.7.4] - 2026-08-07
+
+### Fixed
+- apply the span-aware split to the subcommand slot (e253c58)
+- resolve the relation slot by span-aware split, not whitespace index (fe44e14)
+
+### Changed
+- Merge pull request #169 from mikeydotio/docs/AGE-69-claude-md (812c0f3)
+- Merge pull request #168 from mikeydotio/docs/AGE-69-note-AGE-76 (370ad89)
+- Merge pull request #167 from mikeydotio/fix/AGE-69-delimiter-glue-harvest (bdb3bf0)
+
+### Documentation
+- record AGE-70 — where a rule lives, and the pin that certified its own bug (785e832)
+- claim AGE-70 (relation slot displacement) (1232ddb)
+- record AGE-69 — derive the class, and make pins bracket the rule (71d615a)
+- record AGE-76, the foreign-load gate refusal, and the release drift (4c478cd)
+- record AGE-69's findings and hand off to AGE-70 (45caa81)
+
+_[manual]_
+
 ## [v3.7.3] - 2026-08-06
 
 ### Fixed

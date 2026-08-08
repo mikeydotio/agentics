@@ -1769,6 +1769,46 @@ EOF
   [ "$(jq_field '.ok')" = "true" ]
 }
 
+# The subcommand slot takes the same split, and this arm is the ONLY thing that
+# detects reverting it. The council's mutation battery ruled that call site
+# "structurally unverifiable" — `is_placeholder` is leading-only and the slot is
+# always index 0, so no LATER-index displacement is reachable there — and
+# measured a revert at 82/1, byte-identical to baseline. That reasoning is
+# sound about DISPLACEMENT and wrong about the reported TOKEN: a span opening
+# mid-word is not leading, so `is_placeholder` never sees it, and the two
+# splitters disagree about where the token ENDS.
+#
+# The token is what matters, because it is what an `expect-dead` marker must
+# name (AGE-43's inversion class): an author looking at `story project ne"w x"`
+# can type the span and cannot be expected to type `ne"w`. Row 6 is the
+# wildcard control and row 7 the live-vocabulary control, so this cannot pass
+# by blanket silence.
+#
+# Note the two mechanisms COMPOSE, and the expected values pin that composition:
+# the split decides where the token ends, then AGE-69's `strip_trailing_glue`
+# trims to the shape a vocabulary member could have. So `ne"w x"` is reported as
+# `ne"w x` — the closing quote is trailing glue — while `a"b c"d` keeps its
+# whole span because it already ends alphanumeric. Pinning both shapes is what
+# stops a future change to either mechanism sliding past this arm.
+@test "contract-check: a span in the subcommand slot is one token, not a prefix" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+story project ne"w x"
+story project a"b c"d
+story project "my thing"
+story project init
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Pre-fix: `a"b`, `init`, `ne"w` — the first two truncated mid-span at the
+  # whitespace the split should never have seen.
+  [ "$(jq_field '[.subcommand_violations[].subcommand] | sort | join(",")')" = "a\"b c\"d,init,ne\"w x" ]
+  [ "$(jq_field '.relation_violations | length')" -eq 0 ]
+}
+
 @test "contract-check: AGE-79 pin — a non-backtick opener still truncates before the relation slot (characterization)" {
   cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
 # Fixture

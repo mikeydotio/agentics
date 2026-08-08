@@ -1043,8 +1043,7 @@ while IFS= read -r f; do
     # checked here; everything else accepts free-form arguments in that
     # position (see the ENFORCED/OPEN note above the derivation).
     if verb_is_enforced "$verb"; then
-      read -ra subtoks <<< "$rest"
-      sub="${subtoks[0]:-}"
+      sub="$(arg_at 0 "$rest")"
       sub="$(strip_trailing_glue "$sub")"
       if ! is_placeholder "$sub" && ! is_valid_subcommand "$verb" "$sub"; then
         try_suppress "$rel_f" "$lineno" "$sub" "$trimmed" && continue

@@ -360,6 +360,80 @@ restored correctly, but that is luck you should not need. Also: **a prediction t
 catches a mutant is worth checking** — two such council predictions were measured down (26 tests
 and 12 tests respectively), and only M9 was genuinely alone.
 
+### A grammar earns its permission by POSITION, and a pin can certify the bug it names
+
+AGE-70 finished the line AGE-43 and AGE-69 had been walking. `read -ra` splits the harvested
+remainder on whitespace while the checked slots are **fixed indexes**, so a multi-word span
+contributes its own words and displaces every later index — ``story relate `story next --id`
+blocks AGE-2`` reported `next`, a word from *inside* the span, and `story relate "AGE 1" …`
+reported `1`. Correct documentation reported as a violation, and worse: the quoted form carries a
+real dead relation that the shipped guard **never names**. What ships is a closer-stack splitter
+behind a one-in-one-out accessor, with `MID_RE` and its bound **untouched**.
+
+**The scope ruling is the transferable part, and it is not "which characters".** The chair built
+the obvious fix — one lexical scanner owning both the argument split *and* a span-level remainder
+bound — and it passed the real corpus, the whole 83-test suite, 21 hand-built rows and a cost
+probe. A council seat tasked with attacking it killed it in one round with **five
+counter-examples**: three outright **regressions against shipped**, one leaving the AGE-70 false
+positive *itself* unfixed on a nested `$( … )`, and one needing nothing more exotic than the
+apostrophes in **`it's`** and **`AGE-1's`**. The rule that survived, 3-0, with two of three seats
+voting against their own proposal:
+
+> **The same span grammar is SAFE in the splitter and UNSAFE in the bound.**
+
+Inside a fence the extraction unit is the whole LINE (AGE-24), so the input is **prose with shell
+embedded in it**, and every grammar strong enough to parse the shell also misparses the English —
+`don't` is not an open quote. What differs is the *consequence*: in the splitter a misparse
+**merges two tokens**, the slot lands on a wildcard or a real token, and the guard still reports —
+loud and local. In the bound it **truncates** before the slot, `is_placeholder("")` returns 0, and
+the guard reports **GREEN**. So enumeration is permissible in the splitter (shell's own fixed
+syntax, no live authority to derive from, same footing as the `expect-dead` marker syntax) and
+impermissible in the bound — **the same list, in the other position, is a silent-false-negative
+generator.** That is four derived rules refuted by construction here now (AGE-69's enumerated
+class, AGE-43's bound, backtick parity, this one). Not carelessness: each was a sound statement
+about *shell*, evaluated over text that is not shell. The deferred half is **AGE-79**, which
+carries all five counter-examples as pre-registered acceptance criteria and a measured ladder of
+three candidates — including one that is correct on every row anyone has tried and was
+**deliberately not shipped because no adversary has attacked it**.
+
+⚠ **A CHARACTERIZATION PIN THAT ASSERTS EQUALITY TO A WRONG VALUE IS A MUTANT'S ALIBI**, and this
+indicts a convention these notes have been recommending. AGE-70's own pin asserted the relation
+array equalled the token *the bug produces*. So reverting the fix scored **82 ok / 1 not ok,
+byte-identical to a correct fix** — the pin did not merely fail to detect the regression, it
+**certified** it. A characterization pin must be written so a *correct* fix reds it: pin
+**absence/presence**, or the story ID, not a defect's output. Audit any pin whose asserted value
+equals what the defect emits.
+
+⚠ **"Structurally unverifiable" deserves one more measurement.** The council's mutation battery
+ruled the subcommand call site unpinnable — index 0, `is_placeholder` is leading-only, so no
+later-index displacement is reachable — and measured a revert at byte-identical 82/1. Right about
+*displacement*, wrong about the reported **token**: a span opening **mid-word** is not leading, so
+a `project` subcommand written `ne"w x"` reports `ne"w` shipped and `ne"w x` fixed. The arm now
+kills that mutant. Note the two mechanisms **compose** — the split decides where the token ends,
+then AGE-69's `strip_trailing_glue` trims it — so the pin must fix both shapes.
+
+⚠ **That sentence is reworded rather than marked, and the reason is a defect this fix introduced.**
+Written as a complete invocation it reds the gate, and **the sanctioned escape hatch cannot
+suppress it**: the marker's token capture is `([^[:space:]]+)`, while the splitter can now report a
+token containing a **space**. Before AGE-70 `read -ra` made that unrepresentable, so the two
+grammars agreed by accident. The only marker that would work is one no author can type — AGE-43's
+inversion class, one layer on. Filed as **AGE-80**; found on the **first document written after the
+fix**, which is the whole evidence that it is reachable.
+
+⚠ **A per-character scan in bash is quadratic and the fix is free.** `${s:i:1}` is O(i): measured
+on a 21 KB unit, 3.10s → **21.30s**, and **34.60s** through a prefix walk. The proposed remedy was
+a *length budget degrading to the old bound*; that was measured **unnecessary** — passing the
+wanted index into the scan and stopping there restores it to at-or-below shipped. **A budget that
+silently degrades to a different bound is a second code path with no arm pinning which one ran.**
+Longest real corpus unit: **488 chars**, so the cost is latent, not live.
+
+⚠ Two process notes. **If a council seat's job is to falsify, it must be able to execute** — the
+first sitting seated `skeptic` (no Bash) as challenger; swapping in `hypothesis-challenger` is the
+only reason the five counter-examples exist. And **a mutation battery must run against an isolated
+repo COPY with a baseline arm first**: the 10-minute tool timeout killed this one mid-run (again),
+and only the copy kept the working tree safe. Use `bats --filter` — a full-suite run per mutant
+does not fit. Full trail: `.council/age70-slot-displacement-scope/DECISION.md`.
+
 ### A value-returning env hatch must name itself — and a green gate cannot prove this one fixed
 
 `deployit-cli` has **ten** `DEPLOYIT_SKIP_*` escape hatches. Four bare-`return` and carry no value.

@@ -225,8 +225,10 @@ esac
 # naming the bypass in a message that fires on ordinary machine load is how a bypass
 # becomes habitual, and a habit does not stay scoped to timeouts — it erodes the gate
 # for genuine test failures too. The hook already advertises the variable itself on
-# every run (pre-push-tests.sh:62), so repeating it here buys nothing and costs the
-# distinction between a load bypass and a deliberate docs-only one.
+# every run (hooks/pre-push-tests.sh:411), so repeating it here buys nothing and costs
+# the distinction between a load bypass and a deliberate docs-only one. AGE-62's budget
+# banner makes the identical call, pinned by tests/prepush-gate.sh — and pinned over the
+# BANNER rather than all of stderr, because that `running …` line shares the stream.
 
 case "$OUT" in
     *SKIP_PREPUSH_TESTS*)

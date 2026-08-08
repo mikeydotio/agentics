@@ -16,10 +16,10 @@ via freshen, and stops.
 |---|---|
 | **Loop status** | RUNNING |
 | **Story in flight** | none |
-| **Next story** | **AGE-79** — *this session's child.* AGE-43's remainder bound is over-applied to non-backtick openers, so a dead relation goes silent. ⚠ **It is the half AGE-70's council deliberately DEFERRED 3-0, and the story carries five pre-registered counter-examples any candidate must clear FIRST** — three of them killed the candidate AGE-70's chair had already measured clean. It also carries a measured ladder of three candidates (one rejected, one partial, one leading-but-UNFALSIFIED), so do not re-derive it. Its characterization pin `AGE-79 pin` reds by design on a correct fix. **Deliberate skips, re-confirmed four times now:** AGE-39 is logged deliberate debt whose redesign trigger is unmet. ⚠ **AGE-62/63/64/65 need edits to `~/.claude/`, outside any repo — the loop CANNOT do them** (and a user session `age-62-18` was seen working AGE-62 directly). **AGE-66 needs Mikey.** ⚠ **AGE-72 is Mikey's** — every remedy changes what a live tailnet service runs. **AGE-74, AGE-75, AGE-77, AGE-79 and AGE-80 are takeable.** Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**), AGE-69 (+ **AGE-74 and AGE-75 filed**), AGE-70 (+ **AGE-79 and AGE-80 filed**; AGE-77 filed by its first, panicked sitting) |
-| **Repo version** | **v3.7.4** — AGE-70 **bumped**, because it changed shipped `plugins/forge/bin/forge-contract-check.sh`. Four of the last five stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
-| **Last updated by** | AGE-70 session, 2026-08-07 (restarted after a host kernel panic killed its first sitting) |
+| **Next story** | **AGE-79** — *this session's child.* AGE-43's remainder bound is over-applied to non-backtick openers, so a dead relation goes silent. ⚠ **It is the half AGE-70's council deliberately DEFERRED 3-0, and the story carries five pre-registered counter-examples any candidate must clear FIRST** — three of them killed the candidate AGE-70's chair had already measured clean. It also carries a measured ladder of three candidates (one rejected, one partial, one leading-but-UNFALSIFIED), so do not re-derive it. Its characterization pin `AGE-79 pin` reds by design on a correct fix. **Deliberate skips, re-confirmed four times now:** AGE-39 is logged deliberate debt whose redesign trigger is unmet. ⚠ **AGE-62 is DONE** (2026-08-07, directed session, not the loop) — the fix ships the gate **from this repo** (`hooks/pre-push-tests.sh`) and installs a copy via `make install-hooks`; **AGE-63/AGE-64/AGE-65 genuinely still need `~/.claude/` edits and remain the user's.** **AGE-66 needs Mikey.** ⚠ **AGE-72 is Mikey's** — every remedy changes what a live tailnet service runs. **AGE-74, AGE-75, AGE-77, AGE-79 and AGE-80 are takeable.** Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**), AGE-69 (+ **AGE-74 and AGE-75 filed**), AGE-70 (+ **AGE-79 and AGE-80 filed**; AGE-77 filed by its first, panicked sitting), **AGE-62** (directed session, out of loop order; + **AGE-78 filed**) |
+| **Repo version** | **v3.7.4** — AGE-70 **bumped**, because it changed shipped `plugins/forge/bin/forge-contract-check.sh`. AGE-62 did **not** bump — nothing under `plugins/**` changed. Four of the last five stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
+| **Last updated by** | AGE-70 session, 2026-08-07 (restarted after a host kernel panic killed its first sitting); reconciled with the AGE-62 session's directed, out-of-loop update, same day |
 | **Carried debt** | **None owed to you, and the broken protocol step is FIXED.** `git switch main` works again, local `main` is current (20c31d2 → 3cdbfcd), and **step 10 no longer asks you to run it** — the release path is now decoupled from any local `main` ref. ⚠ **One worktree is deliberately still there**: `.claude/worktrees/dual-host-plugin-compatibility` holds **135 uncommitted files** of dual-host (Codex) plugin work that exists **nowhere else** — unpushed, uncommitted, idle since 2026-07-20. **Do not remove it.** It is filed as **AGE-66** for Mikey's decision. If you ever need it out of the way, the remedy is `git switch --detach <path>`, **never** `git worktree remove` — measured, detach preserves modified *and* untracked files. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -43,17 +43,28 @@ the 45 runs before it never exceeded 609s).
 Two facts that change how you work:
 
 - **A cancelled hook ALLOWS the push** — measured 12/12, including tag pushes `v3.0.0` and
-  `v2.39.1` and a PR. If your push is slow, it may be going out **ungated**.
+  `v2.39.1` and a PR, and **reproduced live on Claude Code 2.1.224 by AGE-62** with controls.
+  ⚠ **AGE-62 closed this, but only once the fix is INSTALLED.** The gate now bounds its own
+  run and exits 2 on breach at 840s, before the 900s cancellation point — but what Claude Code
+  executes is the copy at `~/.claude/hooks/pre-push-tests.sh`. Run `make check-hooks`; if it
+  reports drift, your pushes are still on the old unbounded gate and a slow push may still be
+  going out **ungated**.
 - **You cannot see the gate from inside your session.** A PreToolUse hook that exits 0 has its
   stderr discarded. AGE-32 inferred from a missing `pre-push-tests: running …` line that the
   hook was not firing; it was firing. **Do not repeat that inference.** `make -k test` yourself
-  and read your own result — which is what this loop has always actually done.
+  and read your own result — which is what this loop has always actually done. ⚠ Since AGE-62
+  there is one more place to look: the gate appends one line per matched invocation to
+  `~/.claude/pre-push-verdicts.log`, so `tail` it rather than mining transcripts.
 
-`tests/gate-deadline.sh` now makes the suite refuse before the cancellation point. If it stops
-you, it prints **"BUDGET, NOT CORRECTNESS"** and exits **3** (never 1 or 2). That is not a test
-failure: re-run once on a quiet box, and if it fires again add the timing to **AGE-64** rather
-than working around it. The budget cannot be raised — it is derived from a value this repo does
-not own.
+Two layers can now stop you, and they are **different events with different exits**:
+
+| what stops you | exit | banner | remedy |
+|---|---|---|---|
+| `tests/gate-deadline.sh`, between make targets (720s) | **3** | `BUDGET, NOT CORRECTNESS` | re-run on a quiet box; if it repeats, add the timing to **AGE-64** |
+| the gate's own bound, inside the hook (840s) | **2** | `PRE-PUSH BUDGET EXCEEDED` | same — and it names the elapsed time, the bound and the settings file the budget came from |
+
+Neither is a test failure. The budget cannot be raised from either place: it is derived from
+the declared timeout in `~/.claude/settings.json`, which no repository owns.
 
 ⚠ **The hook also over-fires on inert text (AGE-63), and it will happen to you.** It greps the
 whole command string, so a commit message, story description or heredoc body that quotes a push
@@ -62,6 +73,73 @@ three times on this session that way. `SKIP_PREPUSH_TESTS=1` is legitimate for a
 demonstrably pushes nothing — say so when you use it.
 
 ---
+
+## Known state (updated 2026-08-07 by the AGE-62 session)
+
+**AGE-62 is done, and the one step left needs Mikey.** The fix ships the gate from this
+repository; the copy Claude Code actually executes is installed by `make install-hooks`,
+which **writes to `$HOME` and was deliberately NOT run by this session**. Until it is run,
+every measurement below describes the repo's gate and not the live one. `make check-hooks`
+answers which you are on.
+
+**What it turned out to be.** Not "the suite is too big". The gate **delegated its own
+liveness to a platform whose cancellation semantics fail open**, and it did so as an orphan
+global file with no owner, no version and no test — which is why it stayed broken for months.
+Reproduced live this session on **2.1.224**, three arms, command auto-permitted so the hook
+is the only possible blocker: no hook → sentinel PRESENT; `exit 2` immediately → ABSENT;
+`sleep 10` under `timeout: 3` → **PRESENT**. Cancel means allow.
+
+⚠ **The first probe attempt produced an absent sentinel in all three arms and proved
+nothing.** `--permission-mode dontAsk` is not an allow, and the workspace-trust check then
+voided a fixture `permissions.allow`. A negative result from an uncontrolled probe is not
+evidence; the controls are what made the third arm mean anything.
+
+**Shipped**
+
+| file | what |
+|---|---|
+| `hooks/pre-push-tests.sh` | the gate, source of record. Strictly additive over the old global file: budget resolution, the bound, the breach banner, the verdict log |
+| `hooks/install-pre-push-hook.sh` | `install` (backup + digest) / `check` (drift). `PREPUSH_HOOK_DEST` makes both testable without touching `$HOME` |
+| `tests/prepush-gate.sh` | 63 behavioural arms, **~14s**, fixture git repos under `/private/tmp` |
+| `Makefile` | `test-prepush-gate` in `test`; `install-hooks` / `check-hooks` **not** in `test` |
+| `tests/bounded-capture-guard.sh` | census 3 → 5, same commit as the call sites |
+| `tests/gate-deadline.sh` | header: three claims AGE-62 made false or half-false, corrected |
+
+**Verification, with numbers**
+
+- `tests/prepush-gate.sh` — 63 passed, 0 failed, three consecutive runs, ~14s each.
+- Mutation battery M1–M7 **plus two baseline arms**, against an isolated repo copy: all seven
+  CAUGHT, baselines green at 63/0 and 25/0. M4 (the bounded command captured through `$(…)`)
+  is caught by `bounded-capture-guard`'s L1 and by nothing in the gate suite; M7 (the suite
+  run one line before the refusal) is caught only by the sentinel-absence arms.
+- End-to-end through `claude -p` against a **local bare origin**, margin driven to 899 so the
+  bound is 1s: control push **landed**, breach push **blocked**, origin never got the ref,
+  verdict `refused-budget elapsed=1s bound=1s timeout=900s`.
+- ⚠ The breach arm took **62s** for a 30s fixture suite, because the still-installed old gate
+  ran it unbounded as well. That is AGE-64's double-run and the old fail-open, both visible in
+  one number.
+- `make -k test` — see the session's own report; nothing under `plugins/**` changed, so
+  **no bump is owed** and `plugin-content-drift` stays green.
+
+**Traps worth carrying forward** (all three are in CLAUDE.md with their evidence)
+
+1. `local a="$1" b="$WORK/$a"` — all words of `local` are expanded before any is assigned, so
+   `$a` reads unset. Under `set -u`, inside `$( )`, that returned an **empty fixture path** to
+   every arm and the gate resolved *this repository*. It then recurred, unprompted, in the
+   reproduction probe an hour later.
+2. The convenient spelling of a bound (`"$tool" "$secs" …`) is exactly the one
+   `bounded-capture-guard.sh` deliberately cannot see. Two literal branches instead.
+3. `rc == 124` alone is not a breach, and `timeout 0` is not a timeout.
+
+**Filed by this session: AGE-78** (medium, bug) — the carried-across input parse is a second
+fail-open: no `jq` on PATH means an empty command and `exit 0`, so every push goes ungated and
+silently. Latent (jq is installed here), deliberately not bundled — an empty parse is
+ambiguous between "not a Bash call" (allow) and "jq is broken" (refuse), and
+`tests/prepush-gate.sh` already has the fixture harness and a matching arm to copy.
+
+**Still open, unchanged:** AGE-63 (over-firing matcher — the new verdict log now collects
+evidence for it for free), AGE-64 (the suite runs twice per push), AGE-65 (attestation
+inversion). All three need edits outside every repository.
 
 ## Known state (updated 2026-08-07 by the AGE-70 session)
 
@@ -126,6 +204,7 @@ demonstrably pushes nothing — say so when you use it.
   Because the battery ran against an isolated **copy**, the working tree was never at risk — that
   is the whole reason for the rule. Use `bats --filter` to run only the discriminating arms; a
   full-suite run per mutant does not fit.
+
 
 ## Known state (updated 2026-08-06 by the AGE-69 session)
 

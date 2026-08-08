@@ -13,34 +13,50 @@
 #
 # That is this repo's recurring class — a mechanism that reports success having verified
 # nothing (AGE-18, AGE-21, AGE-27, AGE-33) — except the silence is the platform's, not
-# ours. We cannot change the platform's cancel-means-allow semantics, and the hook is
-# not ours to edit. What we CAN do is refuse first: if the suite is going to blow the
-# budget, it stops itself and exits non-zero while the hook is still alive to see it,
-# which the hook turns into a real block.
+# ours. We cannot change the platform's cancel-means-allow semantics. What we CAN do is
+# refuse first: if the suite is going to blow the budget, it stops itself and exits
+# non-zero while the hook is still alive to see it, which the hook turns into a real
+# block.
+#
+# ⚠ AGE-62 CHANGED WHAT THIS FILE MAY CLAIM, in one direction only. The hook script is
+# now this repository's — `hooks/pre-push-tests.sh`, installed by `make install-hooks` —
+# and it bounds its OWN run with `timeout`, so a breach becomes an exit 2 at 840s rather
+# than a cancellation at 900s. This file did not become redundant: it refuses at 720s,
+# BEFORE the hook's own bound, and it is the only layer that can name the target it
+# stopped in front of. The two are ordered deliberately (720 -> 840 -> 900), and the
+# outer two are now both ours.
 #
 # THE CLAIM, SPLIT IN TWO (council: .council/age36-prepush-gate-scope/DECISION.md)
 #
 #   OWNED, and pinned by tests/gate-deadline-guard.sh:
 #     "This repo declares a budget for its own suite and refuses past it."
 #
-#   NOT VERIFIABLE FROM INSIDE THIS REPO — disclosed, not claimed:
-#     "This also closes the platform's fail-open."  True only while the hook's declared
-#     timeout exceeds our budget. Observed 900s on 2026-08-05. **Lowering that value in
-#     ~/.claude/settings.json makes this guard inert**, and nothing here can detect that
-#     it has become so beyond the breadcrumb below. Disclosure rather than a guard has
-#     unanimous precedent here (bounded-capture-guard.sh's "Deliberately not covered"
-#     header; the source-level guard AGE-34 proposed and declined).
+#   HALF VERIFIABLE FROM INSIDE THIS REPO — the split moved with AGE-62, so read it
+#   precisely rather than by memory:
+#     "This also closes the platform's fail-open."  True only while the declared timeout
+#     exceeds our budget. Observed 900s on 2026-08-05. The SCRIPT that reads that value
+#     is now ours and is pinned twice — here, and differentially against the gate's own
+#     resolver in tests/prepush-gate.sh. The REGISTRATION that declares it still is not:
+#     `~/.claude/settings.json` is outside every repository, and **lowering the value
+#     there makes this guard inert with nothing here able to detect it**. That residue is
+#     disclosed, not guarded — the same call bounded-capture-guard.sh makes in its
+#     "Deliberately not covered" header, and the one AGE-34 made when it declined a
+#     source-level guard.
 #
 # WHY ACTIVATION IS BY PROCESS ANCESTRY
 #
 # The hook invokes literally `make test` with no distinguishing environment
-# (pre-push-tests.sh:49-50), so there is nothing in the child's env to key on. Two
-# alternatives were considered and rejected with reasons:
+# (hooks/pre-push-tests.sh:342, :435-437), so there is nothing in the child's env to key
+# on. Two alternatives were considered and rejected with reasons:
 #
-#   - An environment variable the hook would set: the hook sets none, and this repo
-#     cannot make it. A mechanism we cannot arm ships inert and cannot report that it
-#     never armed.
-#   - `[ -t 1 ]`: the hook redirects to a log (`:63`) — but so does this loop's own
+#   - An environment variable the hook would set. ⚠ AGE-62 made this POSSIBLE — the hook
+#     is ours now — and it is still not taken, for a reason that survived the change:
+#     what Claude Code runs is the INSTALLED COPY under ~/.claude/hooks/, and
+#     `make check-hooks` reports drift between it and this repo without preventing it.
+#     A mechanism armed by a variable the installed copy may not set ships inert and
+#     cannot report that it never armed, which is this file's own thesis. Ancestry reads
+#     the caller that is actually there.
+#   - `[ -t 1 ]`: the hook redirects to a log (`:435-437`) — but so does this loop's own
 #     `make -k test`. A tty test cannot separate the gate's run from a hand-run, so it
 #     would bind an unrelated caller.
 #
@@ -62,14 +78,18 @@
 #
 # WHY THE BOUND IS ARITHMETIC AND NOT `timeout`
 #
-# No `timeout`/`gtimeout` call site is introduced, deliberately. A bounded command whose
-# output reaches a caller's substitution pipe is AGE-22's defect (measured 30.08s against
-# a 5s bound, because a descendant that setsid()s out of the process group survives), and
-# a watchdog here would be signalling a process group that contains the hook and the
-# runner themselves. Instead the wrapper compares elapsed time against the budget BETWEEN
-# make targets. That satisfies "never capture a bounded command through $(…)"
-# structurally rather than by discipline, and needs no bounded-capture-guard REGISTRY
-# entry.
+# No `timeout`/`gtimeout` call site is introduced HERE, deliberately — the gate itself
+# does bound with one (hooks/pre-push-tests.sh:435-437, redirected to a file and pinned
+# in bounded-capture-guard.sh's census), but that is a different process at a different
+# layer.
+#
+# A bounded command whose output reaches a caller's substitution pipe is AGE-22's defect
+# (measured 30.08s against a 5s bound, because a descendant that setsid()s out of the
+# process group survives), and a watchdog here would be signalling a process group that
+# contains the hook and the runner themselves. Instead the wrapper compares elapsed time
+# against the budget BETWEEN make targets. That satisfies "never capture a bounded command
+# through $(…)" structurally rather than by discipline, and needs no
+# bounded-capture-guard REGISTRY entry.
 #
 # Because the check happens between targets, the margin must cover the longest single
 # target's overshoot: test-deployit-capture-diagnostics measures ~140-170s, so the floor

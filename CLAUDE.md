@@ -181,6 +181,7 @@ hook run's `durationMs` (**107** agentics gate runs), plus one direct end-to-end
 | 2026-08-04 → 08-05 (this backlog loop, high concurrency) | 62 | — | 900s (censored) | **12 (19.4%)** |
 | Direct probe, 2026-08-05, post-AGE-35, load 2.49→13.33 | 1 | — | **630s** | — |
 | Same suite, same day, with **two foreign suites running concurrently** (storyhook, scad-caliper) | 1 | — | **2 229s (37m09s)** | would have breached by 2.5x |
+| Direct probe, 2026-08-07, post-AGE-62, **load avg 57.4**, nine concurrent test runners on the box | 1 | — | **1 937s (32m17s)** | would have breached by 2.2x |
 
 Three things that distribution is load-bearing for:
 
@@ -191,9 +192,13 @@ Three things that distribution is load-bearing for:
   run took **2 229s** with two foreign suites running, against **630s** solo the same day on
   the same commit — a **3.5x** multiplier from load alone, and 2.5x over the whole budget.
   If you are timing this suite, record what else was running or the number means nothing.
+  **AGE-62's own verification is the third data point**: green in 1 937s at load 57.4 with
+  nine concurrent test runners, against ~630s solo two days earlier — and that run alone
+  would have blown the 900s budget twice over on a suite whose content grew by 14s.
 - **Pre-AGE-35 figures understate the current suite by ~140–170s** —
   `test-deployit-capture-diagnostics` landed 2026-08-05T03:25Z, *after* every censored run
-  was recorded. The median moved ~467s → ~630s.
+  was recorded. The median moved ~467s → ~630s. **AGE-62 added a further ~14s**
+  (`test-prepush-gate`, 2026-08-07), so quote ~645s, not ~630s.
 - **A cancelled hook ALLOWS the push.** Measured 12/12: tag pushes `v3.0.0` and `v2.39.1`,
   a branch push and a PR creation all went out with no verdict. A PreToolUse hook that
   exits 0 has its stderr discarded and a cancelled one never returns the exit 2 that
@@ -216,10 +221,91 @@ the very box whose load is the measured cause of the breaches. That is a global-
 (outside this repo) and is filed as **AGE-64**, which `tests/gate-deadline.sh` names as its
 **removal trigger** — the deadline exists only while that load does.
 
-Related, all needing changes outside this repo: **AGE-62** (a cancelled hook allows the
-push), **AGE-63** (the matcher fires on a push invocation anywhere in the command text, so
-heredoc bodies and prose cost a full suite run), **AGE-65** (SPEC for inverting the gate to
-a test-result attestation).
+Related: **AGE-62** (a cancelled hook allows the push) is **fixed below** — the gate now
+bounds itself, so the 900s cancellation point is no longer reachable. Still needing changes
+outside this repo: **AGE-63** (the matcher fires on a push invocation anywhere in the
+command text, so heredoc bodies and prose cost a full suite run — the gate's verdict log
+now collects free evidence for it), **AGE-65** (SPEC for inverting the gate to a
+test-result attestation).
+
+### The gate now owns its bound — and the convenient spelling is the one that evades review
+
+**A cancelled PreToolUse hook ALLOWS the tool call, and that is now reproduced live rather
+than inferred.** Claude Code **2.1.224**, three arms with the command auto-permitted so the
+hook is the only thing that can stop it: no hook → sentinel **PRESENT**; a hook that exits 2
+immediately → **ABSENT**; a hook that sleeps 10s under a declared `timeout: 3` →
+**PRESENT**. The controls are what make the third arm mean anything — an absent sentinel
+proves nothing on its own, and the first attempt produced exactly that, for an unrelated
+reason (`--permission-mode dontAsk` is not an allow; the workspace-trust check then voided
+a fixture `permissions.allow`). That matches the transcript mining: 18 cancellations at
+`timeoutMs: 900000`, seventeen followed by the gated command executing, including tag pushes
+`v3.0.0` and `v2.39.1` and a PR.
+
+The origin was never the suite's size. **The gate delegated its own liveness to a platform
+whose cancellation semantics fail open** — it ran an unbounded command under a bound it
+neither knew nor enforced — and it did so as an **orphan global file with no owner, no
+version and no test**, which is why it could fail open for months undetected. So
+`hooks/pre-push-tests.sh` is now this repository's, installed by `make install-hooks`
+(backup first, digest printed) and drift-reported by `make check-hooks`. **Neither is in
+`make test`**: a suite that mutates `$HOME` as a side effect of running would be worse than
+the fail-open it fixes, and `make test` runs *inside* the gate. The layering is 720s
+(`gate-deadline.sh`, between targets) → 840s (the hook's own bound, every repo) → 900s
+(platform, never reached).
+
+**Two literal call sites, not one variable, and that is the transferable part.**
+`"$bound_tool" "$bound" …` would work and read better. It is also a bound reached through a
+**variable**, which `bounded-capture-guard.sh`'s own header records as *deliberately not
+covered* — so the convenient spelling is precisely the one that puts a new bound outside the
+census that exists to see bounds. `timeout` and `gtimeout` are therefore invoked by literal
+name in two branches, the census moved 3 → 5, and the guard **red first, by design**. Same
+reasoning AGE-36 used to reject the background-pid watchdog. Output is redirected to a file
+and read back with `tail`, never captured through `$(…)` — AGE-22's hazard has no pipe here.
+
+⚠ **`124` alone is not a breach, and `timeout 0` is not a timeout.** A suite is free to exit
+124 in a second, so a breach requires `rc == 124` **and** `elapsed >= bound`; reporting the
+first alone would be AGE-48's vocabulary theft pointed the other way. And a margin that
+swallows the whole budget yields a non-positive duration, which GNU coreutils reads as **no
+limit at all** — a silent return to the fail-open, so it refuses instead. Both pinned.
+
+⚠ **"Fail closed" is not "run, then refuse".** An underivable budget, an absent bounding
+tool and a non-positive bound each exit 2 *before the suite starts*, and the arms assert a
+sentinel the fixture suite would have written is **ABSENT** — not merely that the status was
+2, which a gate that verified everything and then refused also satisfies. Mutation M7
+(running the suite one line earlier) is caught by nothing else.
+
+⚠ **The breach banner must not advertise the bypass; the configuration refusals must.** The
+split is principled: a breach fires on ordinary machine load (3.5x measured), and naming a
+bypass in a message that fires on load is how a bypass becomes habitual —
+`gate-deadline-guard.sh` already pins that for the sibling. A broken registration is never
+cleared by re-running, so that operator does need the escape named. ⚠ **Pin the BANNER, not
+all of stderr**: the carried-across `running …` line advertises the variable on every single
+run, so an assertion over the whole stream silently tests that line instead. First draft did.
+
+⚠ **`local a="$1" b="$WORK/$a"` DOES NOT WORK, and it cost this suite its isolation.** All
+words of a `local` command are expanded *before* the builtin assigns any of them, so `$a`
+reads unset — fatal under `set -u`, inside a command substitution, which returned an **empty
+fixture path** to every arm. `cd ""` then left the cwd at the agentics checkout and the gate
+resolved **this repository**; only an unresolvable budget stopped it running the real
+`make test` recursively inside the pre-push gate. `run_hook` now refuses any fixture not
+under `$WORK`, independently of `make_fixture`'s own guard, because a guard inside a function
+that never returns cannot fire. The identical fault then recurred in the reproduction probe.
+
+*Scope kept, deliberately:* the matcher, the GIT_* scrub, the test-command detection and the
+bypasses are carried across unchanged, **including their known defects** — AGE-63, AGE-64 and
+AGE-65 stay filed and untouched, so the bound remains attributable. The carry-across also
+preserved a second fail-open found while writing this: a missing `jq` makes the parsed command
+empty and the hook exits 0, allowing every push silently. Latent here (jq is installed) and
+filed as **AGE-78** rather than bundled, because the empty parse is genuinely ambiguous between
+"not a Bash call" (allow) and "jq is broken" (refuse) and that decision deserves its own change.
+
+*Honest limits.* A real 840s breach was **not** manufactured: the bound is proven at fixture
+scale (`tests/prepush-gate.sh`, 63 arms, ~14s) and end-to-end through `claude -p` against a
+local bare origin with the margin driven to 899 (control push landed; breach push blocked and
+never reached the origin; verdict `refused-budget`). And the residue is real — **the
+registration is still outside every repository**, so lowering its declared timeout still makes
+both layers inert with nothing able to detect it, and `check-hooks` **reports** installed-copy
+drift without preventing it. Which is why `gate-deadline.sh` keys activation on process
+ancestry rather than an env var the hook could now set: what runs is the installed copy.
 
 ### The release path must never require a local `main` ref — and a guard here would be the wrong shape
 

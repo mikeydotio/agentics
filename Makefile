@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test test-store-isolation test-gate-integrity test-gate-deadline-guard test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test install-hooks check-hooks test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-gate-deadline-guard test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -27,6 +27,16 @@ test-gate-integrity:
 # takes about a second.
 test-gate-deadline-guard:
 	bash tests/with-isolated-store.sh bash tests/gate-deadline-guard.sh
+
+# And the gate itself must own its bound. gate-deadline.sh above refuses BETWEEN
+# make targets, which is repo-local and blind to a single target that overruns;
+# hooks/pre-push-tests.sh refuses from inside the hook, in every repo, and is the
+# backstop for both. A meta-gate about the gate, so it runs beside its sibling.
+# Behavioural: fixture git repos under /private/tmp, a 10s declared timeout and a
+# 7s margin, driven through the real hook with synthetic PreToolUse stdin.
+# Measured ~14s on an unloaded box.
+test-prepush-gate:
+	bash tests/with-isolated-store.sh bash tests/prepush-gate.sh
 
 # storyhook is an out-of-repo CLI resolved from PATH, so upgrading it changes
 # this repo's test outcome with no commit here — which is why git bisect cannot
@@ -193,3 +203,25 @@ test-greenlight:
 # auto-resume cycle (F045/F041/F056/F047 regression coverage).
 test-freshen:
 	bash tests/with-isolated-store.sh bash plugins/freshen/tests/run-tests.sh
+
+# ---------------------------------------------------------------------------
+# The pre-push gate's own installation — DELIBERATELY NOT PART OF `test`
+# ---------------------------------------------------------------------------
+#
+# Claude Code loads the gate from an absolute path under $HOME, so the installed
+# file is necessarily a COPY of hooks/pre-push-tests.sh. `install-hooks` writes
+# it (backing up whatever is there first) and `check-hooks` reports drift.
+#
+# Neither belongs in `make test`: a suite that mutates $HOME as a side effect of
+# running would be a worse defect than the fail-open it exists to fix, and
+# `make test` runs inside the gate itself. The installer's behaviour is pinned by
+# tests/prepush-gate.sh against a fixture destination instead.
+#
+# Neither touches ~/.claude/settings.json. The registration — same path, same
+# declared timeout — stays exactly as it is, so both budget resolvers keep
+# resolving what they resolved before.
+install-hooks:
+	bash hooks/install-pre-push-hook.sh install
+
+check-hooks:
+	bash hooks/install-pre-push-hook.sh check

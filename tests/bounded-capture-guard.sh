@@ -256,12 +256,29 @@ census_repo() {  # <regex> -> census over the real scan set, repo-relative paths
 # (0 hits, rc 1) and running outside a git repo (fatal, empty output) -- which is
 # why the totals and the positive control below exist.
 
+# hooks/pre-push-tests.sh — TWO sites, and both halves of that are deliberate.
+#
+# The question this layer asks is "can the bounded command's output reach a
+# caller's substitution pipe?", and the answer here is recorded rather than
+# assumed: it cannot. Output goes to a temp file (`>"$log" 2>&1`) and is read back
+# with `tail`, never through `$(…)`, so AGE-22's escaped-descendant hazard has no
+# pipe to hold open. The gate is the outermost process of its own run — nothing
+# captures IT either; it speaks to Claude Code through stderr and an exit status.
+#
+# TWO sites rather than one because the tool name is `timeout` on some machines
+# and `gtimeout` on others (stock macOS ships neither; coreutils installs the
+# latter). The single-site spelling is `"$bound_tool" "$bound" …`, which is a
+# bound reached through a VARIABLE — the shape this guard's own header records as
+# DELIBERATELY NOT COVERED. Writing it that way would have made the gate's bound
+# invisible to the census that exists to see bounds, so the duplication buys
+# review and is worth one repeated line. AGE-62.
 BOUND_PINS=$(cat <<'PINS'
+hooks/pre-push-tests.sh	2
 plugins/forge/hooks/session-stop.sh	2
 plugins/greenlight/bin/greenlight-explore.sh	1
 PINS
 )
-BOUND_TOTAL=3
+BOUND_TOTAL=5
 
 REG_PINS=$(cat <<'PINS'
 plugins/forge/hooks/session-stop.sh	2

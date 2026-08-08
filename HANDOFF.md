@@ -1,4 +1,33 @@
-# Handoff — forge × storyhook hardening effort
+# Handoff
+
+## OPEN — AGE-62 needs one command from Mikey, and until it runs nothing changed
+
+**Run `make install-hooks` from a checkout of `main` (not a worktree), then
+`make check-hooks`.** That is the whole outstanding step, and it is the user's because it
+writes to `$HOME`: `~/.claude/hooks/pre-push-tests.sh` is what Claude Code actually executes,
+and the fix is inert until that copy carries it. The verb backs the current file up to
+`<dest>.bak.<UTC stamp>` first and prints the digest; `check-hooks` then reports
+installed == repo. **Nothing touches `~/.claude/settings.json`** — the registration keeps its
+path and its `timeout: 900`, which is what lets both budget resolvers keep resolving.
+
+⚠ **Do not infer from a green `make test` that the live gate is fixed.** The suite exercises
+`hooks/pre-push-tests.sh` in this repository. The installed copy is a *copy*, and
+`check-hooks` reports drift without preventing it. Same structural gap AGE-72 has with
+deployit's `_plugin_root`, and the same rule: verify the topology, don't assume it.
+
+After installing, the first slow push should print **`PRE-PUSH BUDGET EXCEEDED`** and exit 2
+rather than going out silently, and `~/.claude/pre-push-verdicts.log` should gain one line per
+matched invocation. If the log stays empty across several pushes, the installed copy is not
+the one being run — check the registration's path.
+
+**Not in scope and still open:** AGE-63 (the matcher greps the whole command string, so prose
+quoting a push costs a full suite run), AGE-64 (the suite runs twice per push), AGE-65
+(inverting the gate to a test-result attestation). All three need edits outside every
+repository. The new verdict log is the cheapest evidence source for AGE-63.
+
+---
+
+## Handoff — forge × storyhook hardening effort
 
 ## Status: core effort complete
 

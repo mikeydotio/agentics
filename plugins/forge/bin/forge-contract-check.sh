@@ -473,6 +473,135 @@ strip_trailing_glue() {
   printf '%s' "$t"
 }
 
+# Split a remainder into arguments, collapsing a complete span to ONE argument
+# (AGE-70). Sets ARGS; `$2`, if given, stops the scan once that index is
+# complete.
+#
+# `read -ra` splits on whitespace and the checked slots are FIXED INDEXES, so a
+# multi-word span embedded in the argument list contributes its own words and
+# displaces every later index:
+#
+#   story relate `story next --id` blocks AGE-2   -> relation `next`
+#   story relate "AGE 1" blocks AGE-2             -> relation `1`
+#   story relate $(story next --id) blocks AGE-2  -> relation `next`
+#
+# All three are CORRECT documentation reported as violations, and the middle one
+# shows the sharper half: `story relate "AGE 1" precedes AGE-2` carries a REAL
+# dead relation that the shipped script never names, because the slot lands on a
+# word from inside the span.
+#
+# A backtick, `"` or `'` opens a LITERAL span in which no other rule applies;
+# `$(` pushes `)`; a `(` pushes another `)` only inside an already-open
+# construct (a bare top-level `(` is a subshell, and treating it as a group
+# would collapse a `(…)`-wrapped invocation into one argument). Whitespace
+# splits only at depth zero. The stack holds pending closers, innermost last.
+#
+# ⚠ A DELIMITER OPENS A SPAN ONLY IF ITS CLOSER APPEARS LATER, and that rule is
+# load-bearing rather than defensive. Without it an unbalanced opener swallows
+# the rest of the line into one argument — which is AGE-69's defect returning
+# through a different door, measured red on AGE-69's own arm:
+#   `story project new` to start a project.` -> subcommand `new` to start a project`
+# With it, an unbalanced delimiter is an ordinary word character and both slots
+# report exactly what the shipped script reported. The failure direction is
+# toward whitespace splitting, never toward silence.
+#
+# ⚠ THE GRAMMAR IS ENUMERATED, AND THAT IS ONLY SAFE HERE BECAUSE THIS IS THE
+# SPLITTER. AGE-69 ruled a *delimiter* class must be derived rather than
+# enumerated; this is shell's own fixed syntax, with no live authority to derive
+# from, on the same footing as the `expect-dead` marker syntax this script also
+# owns. But the permission is positional, not general: a wrong member HERE
+# merges two tokens, so the slot lands on a wildcard or a real token and the
+# guard still reports — loud and local. The same grammar driving a remainder
+# BOUND truncates before slot 1, the slot reads empty, `is_placeholder("")`
+# returns 0, and the guard reports GREEN. Inside a fence the unit is the whole
+# LINE (AGE-24), so the input is prose with shell embedded in it and every
+# grammar strong enough to parse the shell also misparses the English: `don't`
+# is not an open quote. That asymmetry is why `MID_RE`'s bound is deliberately
+# untouched here — see AGE-79 and
+# `.council/age70-slot-displacement-scope/DECISION.md`.
+#
+# ⚠ The explicit `return 0` is not a nicety. Under `set -euo pipefail` a helper
+# whose last statement is a test returns 1, which kills the script AT THE CALL
+# SITE with exit 1 and zero bytes of output — the guard emitting no JSON at all.
+# Both council chairs hit exactly that while building this fix.
+_scan_args() {
+  local s="${1:-}" want="${2:-}" n i ch top cur="" started=0 stack="" closer
+  ARGS=()
+  # No span can open without one of these four characters, so the machine
+  # provably degenerates to whitespace splitting. An identity, not a heuristic —
+  # `(` opens only inside an already-open construct and `$` only before `(` —
+  # and it keeps an ordinary long prose line off the per-character path.
+  if [[ "$s" != *[\`\"\'$]* ]]; then
+    read -ra ARGS <<< "$s"
+    return 0
+  fi
+  n=${#s}
+  i=0
+  while (( i < n )); do
+    ch="${s:i:1}"
+    top="${stack: -1}"
+    case "$top" in
+      '`'|'"'|"'")
+        cur="${cur}${ch}"; started=1
+        if [[ "$ch" == "$top" ]]; then stack="${stack%?}"; fi
+        i=$((i+1))
+        continue
+        ;;
+    esac
+    closer=""
+    case "$ch" in
+      '`'|'"'|"'") closer="$ch" ;;
+      '$') if [[ "${s:$((i+1)):1}" == '(' ]]; then closer=')'; fi ;;
+      '(') if [[ -n "$stack" ]]; then closer=')'; fi ;;
+    esac
+    if [[ -n "$closer" && "${s:$((i+1))}" != *"$closer"* ]]; then closer=""; fi
+    if [[ -n "$closer" ]]; then
+      stack="${stack}${closer}"
+      if [[ "$ch" == '$' ]]; then
+        cur="${cur}\$("; started=1; i=$((i+2)); continue
+      fi
+      cur="${cur}${ch}"; started=1
+      i=$((i+1))
+      continue
+    fi
+    case "$ch" in
+      ')')
+        if [[ "${stack: -1}" == ')' ]]; then stack="${stack%?}"; fi
+        cur="${cur}${ch}"; started=1
+        ;;
+      ' '|$'\t')
+        if [[ -n "$stack" ]]; then
+          cur="${cur}${ch}"; started=1
+        elif (( started )); then
+          ARGS+=("$cur"); cur=""; started=0
+          if [[ -n "$want" ]] && (( ${#ARGS[@]} > want )); then return 0; fi
+        fi
+        ;;
+      *)
+        cur="${cur}${ch}"; started=1
+        ;;
+    esac
+    i=$((i+1))
+  done
+  if (( started )); then ARGS+=("$cur"); fi
+  return 0
+}
+
+# One argument in, one argument out. The scan runs in the caller's subshell, so
+# no later line can read a stale `ARGS` from an earlier one — AGE-69 axis 4
+# ruled against the out-var idiom for exactly that reason, and a lexer setting
+# an array is not the impossibility case that ruling exempted.
+#
+# Passing the wanted index down also bounds the scan: a per-character loop in
+# bash is quadratic (`${s:i:1}` is O(i)), and stopping at the requested index
+# keeps the cost proportional to the first arguments rather than to the line.
+# Measured on a 21 KB unit: 21.3s unbounded against 3.5s bounded, versus 3.1s
+# for the whitespace split it replaces.
+arg_at() {
+  _scan_args "$2" "$1"
+  printf '%s' "${ARGS[$1]:-}"
+}
+
 # A placeholder in the VERB slot is a violation, not a wildcard — unless it
 # names the verb slot itself (AGE-31).
 #
@@ -927,8 +1056,7 @@ while IFS= read -r f; do
 
     case "$verb" in
       relate|unrelate|link|unlink)
-        read -ra resttoks <<< "$rest"
-        relation="${resttoks[1]:-}"
+        relation="$(arg_at 1 "$rest")"
         relation="$(strip_trailing_glue "$relation")"
         if ! is_placeholder "$relation" && ! is_valid_relation "$relation"; then
           if ! try_suppress "$rel_f" "$lineno" "$relation" "$trimmed"; then

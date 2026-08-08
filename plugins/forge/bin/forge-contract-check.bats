@@ -1602,22 +1602,192 @@ EOF
   [ "$(jq_field '.relation_violations | length')" -eq 0 ]
 }
 
-@test "contract-check: AGE-70 pin — a quoted span still displaces the relation slot (characterization)" {
+# --- AGE-70: the relation slot is resolved by a span-aware split ---
+#
+# `read -ra` splits the remainder on whitespace and the slot is a FIXED INDEX,
+# so a multi-word span embedded in the argument list contributes its own words
+# and displaces every later index. `story relate `story next --id` blocks AGE-2`
+# reported `next` — a word from inside the span — instead of `blocks`.
+#
+# The five arms below BRACKET the rule (AGE-69's framing). Scope was ruled
+# UNANIMOUSLY 3-0 by council: the SPLITTER ships, `MID_RE`'s bound does NOT
+# change. Full trail `.council/age70-slot-displacement-scope/DECISION.md`.
+#
+# ⚠ THE REASON THE BOUND IS OUT OF SCOPE, because it is not obvious and the
+# chair's own candidate died on it. The same span grammar is SAFE in the
+# splitter and UNSAFE in the bound. Inside a fence the unit is the whole LINE
+# (AGE-24), so the input is prose with shell embedded in it, and every grammar
+# strong enough to parse the shell also misparses the English — `don't` is not
+# an open quote. What differs is the CONSEQUENCE: in the splitter a misparse
+# merges two tokens and the guard still reports (loud, local); in the bound it
+# TRUNCATES before slot 1, the slot reads empty, `is_placeholder("")` returns 0,
+# and the guard reports GREEN. A silent false negative in a drift guard is the
+# one direction it cannot afford. The deferred half is AGE-79, which carries
+# five counter-examples as pre-registered acceptance criteria.
+
+# THE REQUIREMENT, and it replaces a characterization pin that was actively
+# harmful. The old `AGE-70 pin` asserted the relation array equalled `next` —
+# the value THE BUG PRODUCES. Measured: reverting this fix scores a
+# byte-identical 82 ok / 1 not ok against a correct fix, because that pin agreed
+# with the revert. A characterization pin asserting equality to a wrong value is
+# a MUTANT'S ALIBI: it does not merely fail to detect a regression, it certifies
+# it. Rows 4-7 are the four span shapes; rows 8-9 are the positive controls that
+# stop this passing vacuously, and row 9 is a token the shipped script could
+# never name at all (it reported `1`).
+@test "contract-check: a span in the argument list no longer displaces the relation slot" {
   cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
 # Fixture
 
 ```
 story relate `story next --id` blocks AGE-2
-(story relate `AGE-1` precedes AGE-2)
+story relate "AGE 1" blocks AGE-2
+story relate 'AGE 1' blocks AGE-2
+story relate $(story next --id) blocks AGE-2
+story relate `AGE-1` precedes AGE-2
+story relate "AGE 1" precedes AGE-2
 ```
 EOF
   run bash "$SCRIPT" "$FIXTURE_DIR"
   echo "$output" >&2
-  # Line 4 is a FALSE POSITIVE unchanged by AGE-43: the slot index lands on
-  # `next`, a word from the embedded span, instead of `blocks`.
-  # Line 5 is the FALSE NEGATIVE AGE-43 knowingly bought: the pre-fix script
-  # reports the dead relation `precedes` here and this one does not, because the
-  # bound truncates the remainder before slot 1. That trade was accepted 3-0 —
-  # bounding START_RE too would have cost TWO further real detections.
-  [ "$(jq_field '[.relation_violations[].relation] | sort | join(",")')" = "next" ]
+  # Pre-fix this array was `1,1,1,next,next,precedes` — four correct documents
+  # reported, and the one real violation named with the WRONG token.
+  [ "$(jq_field '[.relation_violations[].relation] | sort | join(",")')" = "precedes,precedes" ]
+  # PER ARRAY (AGE-43): this fix migrates tokens, and a flat join cannot see a
+  # token moving between arrays.
+  [ "$(jq_field '.verb_violations | length')" -eq 0 ]
+  [ "$(jq_field '.subcommand_violations | length')" -eq 0 ]
+}
+
+# THE CEILING. A `$( … )` nested inside another `$( … )` is where a
+# span-aware-opener/first-occurrence-closer mismatch shows up: cutting the
+# remainder at the FIRST `)` lands on the INNER construct's closer, leaves the
+# fragment unbalanced, and reproduces this story's own headline false positive.
+# Reds on any future bound that cuts at a first occurrence rather than a
+# matching closer. Row 5 is the positive control.
+@test "contract-check: a nested command substitution does not displace the relation slot" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+echo $(story relate $(story next --id) blocks AGE-2)
+echo $(story relate $(story next --id) precedes AGE-2)
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Both reported `next` pre-fix — including line 5, where the real dead
+  # relation `precedes` was never named.
+  [ "$(jq_field '[.relation_violations[].relation] | join(",")')" = "precedes" ]
+}
+
+# THE FLOOR, and the arm that pins the scope ruling itself. Ordinary English
+# apostrophes — a contraction and a possessive — are the reachable input that
+# killed the rejected candidate: a bound derived from a span grammar pairs
+# `it's` with a later `'` and truncates before slot 1, silently. Reds on any
+# reintroduction of an apostrophe-sensitive bound. Both rows are dead grammar,
+# so this arm is all positive control.
+@test "contract-check: an apostrophe in prose does not silence the relation slot" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+it's odd; story relate 'AGE 1' precedes AGE-2
+don't run (story relate AGE-1's parent precedes AGE-2)
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Line 4 reported `1` pre-fix — a word from inside the quoted span. Line 5
+  # reported `parent` pre-fix and must CONTINUE to: the fix may not silence it.
+  [ "$(jq_field '[.relation_violations[].relation] | sort | join(",")')" = "parent,precedes" ]
+}
+
+# THE BOUNDARY. AGE-43's truncation is load-bearing and NOTHING ELSE IN THIS
+# FILE SEES IT — measured three times independently across two council
+# sittings: deleting it scores 82/1, byte-identical to a correct fix. Line 4 is
+# PROSE after a closed span; without the bound the word `precedes` is read as an
+# argument and a correct document is reported. Line 5 is the positive control in
+# the same array.
+@test "contract-check: prose after a closed span is not read as an argument" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+`story relate AGE-1` precedes AGE-2 in the plan.
+story relate `AGE-1` precedes AGE-2
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$(jq_field '[.relation_violations[].relation] | join(",")')" = "precedes" ]
+}
+
+# THE OTHER FLOOR — the splitter must degrade toward the shipped behaviour, not
+# toward silence. A delimiter opens a span ONLY if its closer appears later;
+# without that rule an unbalanced opener swallows the rest of the line into one
+# argument, the slot reads empty, and a real violation vanishes. Measured: a
+# candidate lacking it reds AGE-69's own arm above (81/2), because
+# `story project new` to start a project.` is exactly this shape one slot over.
+@test "contract-check: an unbalanced delimiter is literal, not an open span" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+story relate "AGE 1
+story relate `AGE-1 precedes AGE-2
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # Both tokens are exactly what the shipped script reported. The fix is not
+  # allowed to buy its false-positive removal with a new silence.
+  [ "$(jq_field '[.relation_violations[].relation] | sort | join(",")')" = "1,precedes" ]
+}
+
+# The `set -euo pipefail` class arm, and it asserts PRESENCE rather than
+# content. A helper whose last statement is a test returns 1, which kills the
+# whole script AT THE CALL SITE with exit 1 and ZERO BYTES of output — no JSON
+# at all. Both chairs hit that trap while building this fix. Every other
+# assertion in this file reads a field and is therefore blind to it: an empty
+# output cannot fail a comparison it never reaches.
+@test "contract-check: a degenerate remainder still emits parseable JSON" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+story relate
+story relate
+story project
+(story relate )
+story relate ''
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  echo "$output" | jq -e . >/dev/null
+  [ "$(jq_field '.ok')" = "true" ]
+}
+
+@test "contract-check: AGE-79 pin — a non-backtick opener still truncates before the relation slot (characterization)" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'EOF'
+# Fixture
+
+```
+(story relate `AGE-1` precedes AGE-2)
+(story relate `story next --id` precedes AGE-2)
+```
+EOF
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  # NOT A REQUIREMENT. Both lines carry the dead relation `precedes` and both go
+  # silent, because `MID_RE` truncates the remainder at the next backtick for
+  # EVERY qualifying opener while only a backtick opener actually introduces a
+  # span. AGE-43 bought this knowingly; AGE-70's council re-affirmed it 3-0
+  # rather than ship a bound that regressed five other inputs.
+  #
+  # A correct AGE-79 fix REDS this pin by design — read that story, it carries
+  # the five counter-examples any candidate must clear first, and a measured
+  # ladder of three candidates so you need not re-derive it.
+  [ "$(jq_field '.relation_violations | length')" -eq 0 ]
 }

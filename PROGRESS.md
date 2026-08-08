@@ -14,12 +14,12 @@ via freshen, and stops.
 
 | | |
 |---|---|
-| **Loop status** | IN FLIGHT |
-| **Story in flight** | **AGE-70** |
-| **Next story** | **AGE-70** — slot-displacement in `forge-contract-check.sh`: the relation slot is validated by a fixed index, so a quoted span displaces it. It is AGE-69's sibling, cut on **mechanism**, and AGE-69 is now done — so the pairing note no longer applies. ⚠ **Its characterization pin (`AGE-70 pin — a quoted span still displaces the relation slot`) asserts behaviour that is still WRONG and a correct fix REDS it by design** — that is the handoff working, and the pin is what you update. It also carries a **knowingly-bought false negative** (`(story relate \`AGE-1\` precedes AGE-2)` goes green) that your fix must decide about deliberately. **Read AGE-69's council first** (`.council/age69-delimiter-glue-scope/DECISION.md`) — the ceiling/floor/boundary test framing and the per-array rule transfer directly. **Deliberate skips, re-confirmed three times now:** AGE-39 is a lower-ID medium but is *logged deliberate debt whose redesign trigger is unmet*. ⚠ **AGE-62 is `high` and `story next` will recommend it, but the loop cannot do it** — it and AGE-63/AGE-64/AGE-65 need edits to `~/.claude/`, outside any repo, and the safety classifier blocks them. They are the user's. **AGE-66 needs Mikey** (see Carried debt). ⚠ **AGE-72 is `medium` and looks takeable — it is NOT**: every remedy changes what a **live tailnet service** runs (~1.5 majors of accumulated deployit change), so it is explicitly Mikey's. **AGE-74 and AGE-75 are this session's children** and are both takeable — see below. Confirm STATE with `story list --ready`. |
-| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**), AGE-69 (+ **AGE-74 and AGE-75 filed**) |
-| **Repo version** | **v3.7.3** — AGE-69 **bumped**, because it changed shipped `plugins/forge/bin/forge-contract-check.sh`. Three of the last four stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
-| **Last updated by** | AGE-69 session, 2026-08-06 |
+| **Loop status** | RUNNING |
+| **Story in flight** | none |
+| **Next story** | **AGE-79** — *this session's child.* AGE-43's remainder bound is over-applied to non-backtick openers, so a dead relation goes silent. ⚠ **It is the half AGE-70's council deliberately DEFERRED 3-0, and the story carries five pre-registered counter-examples any candidate must clear FIRST** — three of them killed the candidate AGE-70's chair had already measured clean. It also carries a measured ladder of three candidates (one rejected, one partial, one leading-but-UNFALSIFIED), so do not re-derive it. Its characterization pin `AGE-79 pin` reds by design on a correct fix. **Deliberate skips, re-confirmed four times now:** AGE-39 is logged deliberate debt whose redesign trigger is unmet. ⚠ **AGE-62/63/64/65 need edits to `~/.claude/`, outside any repo — the loop CANNOT do them** (and a user session `age-62-18` was seen working AGE-62 directly). **AGE-66 needs Mikey.** ⚠ **AGE-72 is Mikey's** — every remedy changes what a live tailnet service runs. **AGE-74, AGE-75, AGE-77 and AGE-79 are takeable.** Confirm STATE with `story list --ready`. |
+| **Completed this loop** | AGE-14, AGE-15 (one PR), AGE-16, AGE-18, AGE-17, AGE-11, AGE-27, AGE-33, AGE-28, AGE-32, AGE-24, AGE-31, AGE-29 (+ AGE-41, closed for free), AGE-30, AGE-12, AGE-21 (+ AGE-47), AGE-19, AGE-22, AGE-26, AGE-34, AGE-35, AGE-36 (+ AGE-62/63/64/65 filed), AGE-61 (+ **AGE-67 closed in the same PR**; AGE-66 and AGE-68 filed), AGE-43 (+ **AGE-69 and AGE-70 filed**), AGE-48 (+ **AGE-71 filed**), AGE-69 (+ **AGE-74 and AGE-75 filed**), AGE-70 (+ **AGE-79 filed**; AGE-77 filed by its first, panicked sitting) |
+| **Repo version** | **v3.7.4** — AGE-70 **bumped**, because it changed shipped `plugins/forge/bin/forge-contract-check.sh`. Four of the last five stories bumped, so **inherit nothing** — run the pathspec check yourself; the command is in the Known-state block below. |
+| **Last updated by** | AGE-70 session, 2026-08-07 (restarted after a host kernel panic killed its first sitting) |
 | **Carried debt** | **None owed to you, and the broken protocol step is FIXED.** `git switch main` works again, local `main` is current (20c31d2 → 3cdbfcd), and **step 10 no longer asks you to run it** — the release path is now decoupled from any local `main` ref. ⚠ **One worktree is deliberately still there**: `.claude/worktrees/dual-host-plugin-compatibility` holds **135 uncommitted files** of dual-host (Codex) plugin work that exists **nowhere else** — unpushed, uncommitted, idle since 2026-07-20. **Do not remove it.** It is filed as **AGE-66** for Mikey's decision. If you ever need it out of the way, the remedy is `git switch --detach <path>`, **never** `git worktree remove` — measured, detach preserves modified *and* untracked files. |
 
 > Update this table **twice** per story: once when you claim it (status → IN FLIGHT), once when
@@ -62,6 +62,70 @@ three times on this session that way. `SKIP_PREPUSH_TESTS=1` is legitimate for a
 demonstrably pushes nothing — say so when you use it.
 
 ---
+
+## Known state (updated 2026-08-07 by the AGE-70 session)
+
+- **AGE-70 is DONE and shipped as v3.7.4. AGE-79 — its own child — leads the queue.** It changed
+  shipped `plugins/forge/bin/forge-contract-check.sh`, so the bump was owed.
+- **⚠ THIS SESSION WAS A RESTART. A HOST KERNEL PANIC KILLED THE FIRST SITTING MID-COUNCIL, AND
+  THE RECOVERY RULE IS WORTH KEEPING.** The crash landed between "measured the problem" and
+  "decided what to do": one commit (a PROGRESS.md claim), a clean tree, and a council with
+  `QUESTION.md` + measurements but **no proposals, no votes, no DECISION**. Nothing needed
+  reverting. What the second chair did instead — and would do again — was **re-measure every
+  claim from scratch before reusing any of it**. All 12 fixture rows reproduced exactly, which
+  earned the prior evidence its place; but the prior ladder table was **wrong in one cell**
+  (82/1 recorded for variants that actually score 81/2). **Inherit a crashed session's
+  conclusions only after re-deriving them.**
+- **⚠⚠ THE BIGGEST LESSON, AND IT IS ABOUT WHERE A RULE LIVES, NOT WHETHER IT IS RIGHT.** The
+  chair built a candidate that passed the real corpus, the whole 83-test suite, 21 hand-built
+  rows and a cost probe. A seat tasked with attacking it killed it in one round with **five
+  counter-examples**, three of them **outright regressions against shipped**, one leaving the
+  defect *itself* unfixed, and one needing only two ordinary English apostrophes
+  (`it's` … `'AGE 1'`). The rule that survived:
+
+  > **The same span grammar is SAFE in the splitter and UNSAFE in the bound.**
+
+  Inside a fence the unit is the whole LINE (AGE-24), so the input is **prose with shell embedded
+  in it**, and every grammar strong enough to parse the shell also misparses the English —
+  `don't` is not an open quote. What differs is the *consequence*: in the splitter a misparse
+  **merges two tokens** and the guard still reports (loud, local); in the bound it **truncates**
+  before the slot, `is_placeholder("")` returns 0, and the guard reports **GREEN**. That is four
+  derived rules refuted by construction in this repo now (AGE-69's enumerated class, AGE-43's
+  bound, backtick parity, and this one). **Not carelessness — each was a sound statement about
+  shell, evaluated over text that is not shell.**
+- **⚠ A CHARACTERIZATION PIN THAT ASSERTS EQUALITY TO A WRONG VALUE IS A MUTANT'S ALIBI.** This is
+  the single most transferable test finding here, and it indicts a convention this file has been
+  recommending. AGE-70's own pin asserted `relation == "next"` — *the value the bug produces*. So
+  reverting the fix scored **82 ok / 1 not ok, byte-identical to a correct fix**: the pin did not
+  merely fail to detect the regression, it **certified** it. A characterization pin must assert
+  the wrong behaviour in a way a *correct* fix reds — prefer pinning **absence/presence** or
+  naming the story so the red is self-explaining, and re-check any pin whose value equals a
+  defect's output.
+- **⚠ "STRUCTURALLY UNVERIFIABLE" DESERVES ONE MORE MEASUREMENT.** The council's own mutation
+  battery ruled the subcommand call site unpinnable (index 0, `is_placeholder` leading-only) and
+  measured a revert at byte-identical 82/1. That was right about *displacement* and wrong about
+  the reported **token**: `story project ne"w x"` reports `ne"w` shipped and `ne"w x` fixed,
+  because a span opening **mid-word** is not leading. The arm now kills that mutant.
+- **The mutation battery that shipped** (isolated repo copy, filtered runs, **baseline arm first**
+  — 9/9, without which every verdict is vacuous): remove the closes-later guard → CAUGHT by 3
+  arms incl. AGE-69's own; revert the relation slot → CAUGHT by 3; revert the subcommand slot →
+  CAUGHT by 1; off-by-one index → CAUGHT by 6; delete the fast path → **MISSED, and correctly so**
+  (it is behaviour-neutral by design); one-character error in the fast-path class → CAUGHT by 2.
+- **⚠ A PER-CHARACTER BASH SCAN IS QUADRATIC, AND THE FIX IS FREE.** `${s:i:1}` is O(i). Measured
+  on a 21 KB unit: 3.10s shipped → **21.30s** unbounded, and **34.60s** through a prefix walk. The
+  council's first remedy was a *length budget with a degradation path*; the chair measured that
+  **unnecessary** — passing the wanted index down and stopping there restores it to at-or-below
+  shipped (3.49s). A budget that silently degrades to a different bound is a second code path with
+  **no arm pinning which one ran**. Longest real corpus unit: **488 chars**, so this is latent.
+- **⚠ COUNCIL SEATS NEED THE RIGHT TOOLS, NOT JUST THE RIGHT ROLE.** The first sitting seated
+  `skeptic` (Read/Grep/Glob only) as the challenger. The second swapped in
+  `hypothesis-challenger`, which carries **Bash** — and that seat's counter-examples are the whole
+  reason this story shipped the scope it did. **If a seat's job is to falsify, it must be able to
+  execute.**
+- **A 10-MINUTE TOOL TIMEOUT WILL KILL A MUTATION BATTERY MID-RUN.** It happened here (again).
+  Because the battery ran against an isolated **copy**, the working tree was never at risk — that
+  is the whole reason for the rule. Use `bats --filter` to run only the discriminating arms; a
+  full-suite run per mutant does not fit.
 
 ## Known state (updated 2026-08-06 by the AGE-69 session)
 
@@ -2362,6 +2426,13 @@ on why it was held out of AGE-31's PR.
 | Story | Pri | What |
 |---|---|---|
 | **AGE-37** | low | `forge-contract-check.sh`'s `classify_stale_markers` reports kind `form_is_valid` for a marker on a line the extractor read but which yielded **no invocation at all** — claiming "storyhook made the form real, so the doc's denial is now FALSE", which sends a fixer to rewrite a **correct** sentence. Cause: `SCANNED_LINES` is appended *before* the marker strip and the `START_RE`/`MID_RE` match, so it conflates "handed to the checker" with "an invocation was found". The verdict is right (it still fails the gate); only the `kind` — the field whose whole job is picking which of four corrections to make — lies. Pre-dates this change (AGE-32, v3.1.0); AGE-24 enlarged its reachable surface from fenced lines to unfenced ones. |
+
+### Stories filed by the AGE-70 session
+
+| Story | Pri | What |
+|---|---|---|
+| **AGE-79** | med | **The half AGE-70 deliberately deferred, 3-0.** AGE-43's remainder bound truncates at the next backtick for EVERY qualifying opener, but only a backtick opener introduces a span — so for `(`, `;`, `&`, `\|` the cut lands before slot 1 and a dead relation goes silent. ⚠ **Do not treat this as a small follow-up.** The story carries **five pre-registered counter-examples any candidate must clear before it ships**, three of which killed a candidate that had already passed the real corpus, the full 83-test suite and 21 hand-built rows. It also carries a measured ladder so nobody re-derives it: a **rejected** span-level derivation (fails all five), a **partial** matching-closer cut (`vY`, clears 3 of 5), and a **leading** opener-keyed form (`vOK` — correct on all five, recovers both false negatives, corpus-identical, measurably free) that is **UNFALSIFIED and was deliberately not promoted**. Zero corpus occurrences; exactly ONE `MID_RE` match exists corpus-wide out of 161. |
+| **AGE-77** | med | Filed by AGE-70's **first, panicked sitting**. The council protocol tells every member it is read-only in four places and **verifies it in none**; a seat silently rewrote a tracked corpus file mid-measurement and voided two measurements. The symptom was a corpus result flipping green→red with a violation the chair could not explain, while `git diff <sha> HEAD` showed **no change** — because the change was in the working tree, not a commit. **Verify `git status --porcelain` is empty immediately before every corpus measurement.** |
 
 ### Stories filed by the AGE-61 session
 

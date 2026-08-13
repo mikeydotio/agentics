@@ -154,11 +154,10 @@ assert_contains "$(jqf "$out" '.commands | join("\n")')" "claude --permission-mo
 
 # --- doctor: real run reports the matched tier --------------------------------
 # marker capture → "marker" tier; structural capture → "structural" tier. The
-# stand-in binary is now named `claude` on PATH (AGE-83): since the readiness
-# gate ports storyhook's SH-226, wait_ready also requires the occupant's NAME
-# to match READY_PROCESS_PATTERN, and a bare `true` occupant would refuse here
-# — this suite doesn't yet port SH-239's identity rule (AGE-83's next commit),
-# which is what lets a differently-named stand-in through.
+# stand-in binary is named `claude` on PATH (AGE-83, SH-226): wait_ready
+# requires the occupant's foreground command to match READY_PROCESS_PATTERN
+# (or be recognised by identity — SH-239, below), and a bare `true` occupant
+# would match neither.
 doctor_stub=$(mktemp -d /tmp/issue-doctor-tier-stub.XXXXXX)
 ln -s "$(command -v true)" "$doctor_stub/claude"
 repo=$(mk_repo)
@@ -168,6 +167,8 @@ out=$(cd "$repo" && PATH="$doctor_stub:$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PAN
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "doctor marker: readiness confirmed"
 assert_eq "$(jqf "$out" .matched_tier)" "marker" "doctor marker: reports the marker tier"
+assert_eq "$(jqf "$out" .occupant.match_rule)" "pattern" "doctor marker: a plainly-named claude matches by NAME"
+assert_eq "$(jqf "$out" .occupant.matches_name_pattern)" "true" "doctor marker: ...and says the name pattern covers it"
 # issue #87: the multi-line paste probe landed as one block — the FIRST line sits
 # on the ❯ input row and all three marker lines are present (bracketed paste kept
 # the newlines as text; had it split, only the last line would remain in the box).
@@ -181,6 +182,34 @@ out=$(cd "$repo" && PATH="$doctor_stub:$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PAN
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .matched_tier)" "structural" "doctor structural: reports the structural tier"
 rm -rf "$doctor_stub"
+
+# --- doctor: SH-239 — it REPORTS a build the name pattern alone would refuse --
+# doctor's own display advertises that it checks "whether this Claude build's
+# readiness/paste path is still recognised" (AGE-83), and this is precisely
+# the drift a name-only gate misses: a native-installer install whose binary
+# is version-named. Dispatch still works (pane_runs matches it by identity),
+# but an operator must be told the NAME check no longer covers their build —
+# and told NOT to pin the pattern to a version that changes on every update.
+d_root=$(mk_versioned_claude 2.1.228)
+repo=$(mk_repo)
+out=$(cd "$repo" && PATH="$d_root/bin:$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
+      FAKE_TMUX_CAPTURE=marker FAKE_TMUX_PANE_COMMAND=2.1.228 \
+      ISSUE_DOCTOR_LAUNCH_CMD="claude --permission-mode plan" \
+      ISSUE_READY_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
+      bash "$SCRIPT" doctor 2>&1)
+assert_eq "$(jqf "$out" .ok)" "true" "doctor(SH-239): a version-named build is still ok"
+assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "doctor(SH-239): readiness IS confirmed"
+assert_eq "$(jqf "$out" .occupant.match_rule)" "launch-binary" \
+  "doctor(SH-239): recognised by identity, not by name"
+assert_eq "$(jqf "$out" .occupant.matches_name_pattern)" "false" \
+  "doctor(SH-239): and it says the name pattern does NOT cover this build"
+assert_eq "$(jqf "$out" .occupant.name)" "2.1.228" "doctor(SH-239): reports the observed occupant"
+assert_contains "$(jqf "$out" .occupant.launch_binary_resolved)" "versions/2.1.228" \
+  "doctor(SH-239): reports what the launcher resolves THROUGH the symlink to"
+assert_contains "$(jqf "$out" .display)" "does NOT match ISSUE_READY_PROCESS_PATTERN" \
+  "doctor(SH-239): the display carries the warning, not just the JSON"
+assert_contains "$(jqf "$out" .display)" "changes on every update" \
+  "doctor(SH-239): and warns against pinning the pattern to a version"
 
 # --- doctor: missing launch binary → ok:false (hard precondition) -------------
 repo=$(mk_repo)

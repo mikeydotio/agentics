@@ -195,7 +195,22 @@ READY_PROMPT_GLYPH="${ISSUE_READY_PROMPT_GLYPH:-❯}"
 # Heuristic, and deliberately overridable: setting this to `.` matches
 # anything and restores the pre-fix behaviour with no code change — the
 # escape hatch for an environment where Claude reports an unexpected name.
+# `doctor` prints the name it actually observed, so an operator can see what
+# to put here.
+#
+# It is no longer the ONLY way to match (AGE-83, porting storyhook's SH-239)
+# — pane_runs also accepts the launch binary by identity, which is what a
+# version-named install needs and what no fixed pattern can keep up with
+# (Claude Code's native installer points its launcher at a version-named
+# target, and tmux reports the RESOLVED executable's basename). The hatch
+# stays for genuinely unrecognised names (a wrapper script, a renamed build).
 READY_PROCESS_PATTERN="${ISSUE_READY_PROCESS_PATTERN:-^(claude|node)$}"
+# The launch command's FIRST WORD, whose resolved binary pane_runs recognises
+# by identity (AGE-83, porting storyhook's SH-239). Derived from LAUNCH_TPL
+# rather than configured separately: the process worth recognising is, by
+# definition, the one we launched. cmd_doctor reassigns it around its own
+# probe, which uses a different template.
+READY_LAUNCH_BIN="${LAUNCH_TPL%% *}"
 # Pane tail attached to a warning result as diagnostic evidence (issue #67): the
 # last N non-blank lines of the pane, so the caller can triage without switching
 # windows. Only ever emitted on the warning path — the success payload stays clean.
@@ -866,11 +881,25 @@ cmd_doctor() {
   paste_text "$pane" "$DOCTOR_LAUNCH_TPL" || true
   tmux send-keys -t "$pane" Enter 2>/dev/null || true
 
+  # This probe launches DOCTOR_LAUNCH_TPL, which need not be LAUNCH_TPL — so
+  # the binary pane_runs recognises by identity has to follow it, or doctor
+  # would self-test the dispatch launcher's install while running a different
+  # one (AGE-83, porting storyhook's SH-239).
+  READY_LAUNCH_BIN="$doctor_bin"
+
   local readiness_confirmed=false tier="none" tail_evidence
   if wait_ready "$pane" "$DOCTOR_LAUNCH_TPL"; then
     readiness_confirmed=true
   fi
   tier="$WAIT_READY_TIER"
+  # AGE-83 (SH-239): which of pane_runs' rules answered, and the identity
+  # behind it. `pattern` means the occupant's NAME was recognised; anything
+  # else means a name-only gate would have refused this build, which is the
+  # drift doctor exists to surface BEFORE a dispatch discovers it.
+  local occupant occupant_rule launch_resolved
+  occupant="$WAIT_READY_COMMAND"
+  occupant_rule="$PANE_RUNS_RULE"
+  launch_resolved="$(resolve_exe "$doctor_bin" || printf '')"
   tail_evidence=$(pane_tail "$pane")
 
   # Live multi-line paste probe (issue #87): paste a 3-line marker into the REAL
@@ -906,8 +935,14 @@ cmd_doctor() {
   local display
   if [ "$readiness_confirmed" = true ]; then
     display="[issue] doctor: readiness OK via the '$tier' tier — the installed Claude build is recognised."
+    if [ "$occupant_rule" != "pattern" ]; then
+      display="$display Occupant name \`$occupant\` does NOT match ISSUE_READY_PROCESS_PATTERN (\`$READY_PROCESS_PATTERN\`); it was recognised as the launch binary itself ($occupant_rule), which resolves to \`$launch_resolved\`. Dispatch works — but a name-only gate would refuse this build, so leave ISSUE_READY_PROCESS_PATTERN alone rather than pinning it to \`$occupant\`, which changes on every update."
+    fi
   else
     display="[issue] doctor: readiness NOT confirmed within the poll budget — the readiness marker may have drifted. See pane_tail."
+    if [ -n "$occupant" ]; then
+      display="$display The pane's occupant was \`$occupant\` and the launch binary resolves to \`${launch_resolved:-<unresolved>}\`."
+    fi
   fi
   if [ "$probe_ran" = true ]; then
     if [ "$probe_first_held" = true ] && [ "$probe_seen" -eq "$probe_total" ]; then
@@ -921,11 +956,22 @@ cmd_doctor() {
     --argjson ready "$readiness_confirmed" --arg tier "$tier" \
     --arg tail "$tail_evidence" --arg display "$display" \
     --argjson probe_ran "$probe_ran" --argjson probe_first "$probe_first_held" \
-    --argjson probe_seen "$probe_seen" --argjson probe_total "$probe_total" '
+    --argjson probe_seen "$probe_seen" --argjson probe_total "$probe_total" \
+    --arg occupant "$occupant" --arg rule "$occupant_rule" \
+    --arg launch_bin "$doctor_bin" --arg launch_resolved "$launch_resolved" \
+    --arg pattern "$READY_PROCESS_PATTERN" '
     {
       ok: true,
       readiness_confirmed: $ready,
-      matched_tier: $tier
+      matched_tier: $tier,
+      occupant: {
+        name: $occupant,
+        match_rule: $rule,
+        name_pattern: $pattern,
+        matches_name_pattern: ($rule == "pattern"),
+        launch_binary: $launch_bin,
+        launch_binary_resolved: $launch_resolved
+      }
     }
     + (if $probe_ran then {multiline_probe: {first_line_held: $probe_first, lines_seen: $probe_seen, lines_total: $probe_total}} else {} end)
     + (if $tail == "" then {} else {pane_tail: $tail} end)

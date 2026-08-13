@@ -38,6 +38,12 @@
 #                            storyhook's SH-226: the pane's foreground
 #                            command must match this before ANY text is
 #                            delivered to it. See wait_ready's own doc for why.
+#   READY_LAUNCH_BIN         pane_runs — added AGE-83, porting storyhook's
+#                            SH-239: the launch command's FIRST WORD (not the
+#                            whole command line), whose resolved binary
+#                            pane_runs also recognises by identity. May be
+#                            empty, which simply disables that half of
+#                            pane_runs.
 #   READY_TAIL_LINES         pane_tail
 #   READY_ACCEPT_PATTERN     prompt_accepted
 #   CONFIRM_ATTEMPTS         poll_input
@@ -245,22 +251,121 @@ pane_command() {
   tmux display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null || printf ''
 }
 
-# pane_runs <pane> — 0 iff the pane's occupant NAME matches READY_PROCESS_PATTERN.
+# resolve_exe <command-word> — READ-ONLY. Echo the real path <command-word>
+# runs: PATH lookup, then every symlink followed to the file itself. Empty (and
+# non-zero) when it does not resolve to one. Added AGE-83, porting storyhook's
+# SH-239.
+#
+# `readlink -f` is deliberately not used. It is a GNU extension that BSD only
+# grew recently, and this file targets the bash 3.2 / BSD userland macOS ships;
+# a hand-rolled chase costs six lines and works everywhere. The hop bound is
+# what makes a symlink CYCLE terminate — a readiness gate that hangs is a
+# readiness gate that has failed.
+resolve_exe() {
+  local target="$1" link dir hops=0
+  [ -n "$target" ] || return 1
+  target=$(command -v "$target" 2>/dev/null) || return 1
+  # A builtin, function or alias answers `command -v` with something that is
+  # not a path. Only a real file has an identity to compare against.
+  case "$target" in /*) ;; *) return 1 ;; esac
+  while [ -L "$target" ] && [ "$hops" -lt 32 ]; do
+    link=$(readlink "$target" 2>/dev/null) || break
+    [ -n "$link" ] || break
+    case "$link" in
+      /*) target="$link" ;;
+      *)  dir="${target%/*}"; target="$dir/$link" ;;
+    esac
+    hops=$((hops + 1))
+  done
+  # A dangling link, or a chase that hit the hop bound mid-cycle, resolves to
+  # nothing real. Fail rather than hand back a path to a file that isn't there:
+  # every caller here is asking "is the occupant THIS binary", and a binary that
+  # does not exist is not one anything can be running.
+  [ -e "$target" ] || return 1
+  printf '%s' "$target"
+}
+
+# launch_binary_path — resolve_exe over READY_LAUNCH_BIN, memoised for the poll
+# loop (pane_runs is called once per READY_ATTEMPTS). Keyed on the input so a
+# caller that changes READY_LAUNCH_BIN mid-process — cmd_doctor does, to probe
+# its own launch template — is never answered from the previous one's cache.
+# Added AGE-83, porting storyhook's SH-239.
+_LAUNCH_BIN_KEY=""
+_LAUNCH_BIN_PATH=""
+launch_binary_path() {
+  [ -n "$READY_LAUNCH_BIN" ] || return 1
+  if [ "$_LAUNCH_BIN_KEY" != "$READY_LAUNCH_BIN" ]; then
+    _LAUNCH_BIN_KEY="$READY_LAUNCH_BIN"
+    _LAUNCH_BIN_PATH="$(resolve_exe "$READY_LAUNCH_BIN" || printf '')"
+  fi
+  [ -n "$_LAUNCH_BIN_PATH" ] || return 1
+  printf '%s' "$_LAUNCH_BIN_PATH"
+}
+
+# pane_runs <pane> — 0 iff the pane's occupant is the launch binary.
 # FAILS CLOSED: an occupant that cannot be observed is not a match, following
 # branch_is_merged's precedent in this file — an un-establishable fact is never
-# read as the permissive answer. Added AGE-83, porting storyhook's SH-226; the
-# name check here is the ONLY rule so far (storyhook also recognises the launch
-# binary by identity — SH-239 — which this file does not yet port).
+# read as the permissive answer. Added AGE-83, porting storyhook's SH-226 (the
+# name-pattern rule) and SH-239 (the identity rules below).
 #
-# What this will NOT do is admit a shell, which is the whole point of SH-226.
-# `zsh` matches no pattern.
+# Three independent ways to say yes, in cost order. PANE_RUNS_RULE records which
+# one answered:
+#
+#   pattern         the occupant NAME matches READY_PROCESS_PATTERN. The
+#                   original check, unchanged, and still the common case.
+#   launch-binary   the name IS the basename of the launch command's own
+#                   resolved binary. Claude Code's native installer points
+#                   ~/.local/bin/claude at ~/.local/share/claude/versions/
+#                   <version>, and tmux's `#{pane_current_command}` reports the
+#                   basename of the RESOLVED executable — so the occupant is
+#                   called "2.1.228" and no fixed pattern can ever anticipate
+#                   it. Asking whether it is the binary we launched is a
+#                   question about identity, which survives every version bump;
+#                   asking what it is called is a question about spelling,
+#                   which does not.
+#   sibling-version the name is version-shaped AND names a real executable in
+#                   that same resolved directory. Covers update skew: the pane
+#                   still executes the version it was launched from after the
+#                   symlink has moved on.
+#
+# What none of them will do is admit a shell, which is the whole point of
+# SH-226. `zsh` matches no pattern, is not the resolved binary, and is not
+# version-shaped; the sibling rule additionally requires an existing executable
+# in the install directory, so "looks like a version" cannot become a hole of
+# its own.
+PANE_RUNS_RULE="none"
 pane_runs() {
-  local cmd
+  local cmd resolved base dir
   cmd="$(pane_command "$1")"
   cmd="${cmd##*/}"
   WAIT_READY_COMMAND="$cmd"
+  PANE_RUNS_RULE="none"
   [ -n "$cmd" ] || return 1
-  printf '%s' "$cmd" | grep -Eq -- "$READY_PROCESS_PATTERN"
+
+  if printf '%s' "$cmd" | grep -Eq -- "$READY_PROCESS_PATTERN"; then
+    PANE_RUNS_RULE="pattern"
+    return 0
+  fi
+
+  resolved="$(launch_binary_path)" || return 1
+  base="${resolved##*/}"
+  if [ "$cmd" = "$base" ]; then
+    PANE_RUNS_RULE="launch-binary"
+    return 0
+  fi
+
+  # The skew rule applies ONLY to an install that names its binaries by version
+  # in the first place. If the launcher resolved to a plainly-named file, a
+  # version-shaped occupant sitting beside it says nothing about this install,
+  # and admitting it would widen the gate for no reason.
+  printf '%s' "$base" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || return 1
+  printf '%s' "$cmd" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || return 1
+  dir="${resolved%/*}"
+  if [ -f "$dir/$cmd" ] && [ -x "$dir/$cmd" ]; then
+    PANE_RUNS_RULE="sibling-version"
+    return 0
+  fi
+  return 1
 }
 
 # wait_ready <pane> <launch-cmd> — poll until Claude is ready IN THE PANE,

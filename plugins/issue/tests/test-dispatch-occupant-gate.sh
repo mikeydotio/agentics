@@ -65,4 +65,17 @@ dispatch_run 51 FAKE_TMUX_LAUNCH_MANGLE=1 FAKE_TMUX_CAPTURE=structural \
 assert_eq "$(jqf "$out" .ok)" "true" "escape hatch: '.' lets a shell-occupied pane through"
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "escape hatch: readiness reads confirmed"
 
+# --- SH-239: a real dispatch recognises a version-named install by identity -
+# Claude Code's native installer points its launcher at a version-named
+# target; tmux reports the RESOLVED executable's basename, so the pane's
+# occupant is "2.1.228", which no fixed READY_PROCESS_PATTERN can anticipate.
+# pane_runs must still admit it — by IDENTITY (the launch binary's own
+# resolved path), never by widening the name pattern.
+d_root=$(mk_versioned_claude 2.1.228)
+dispatch_run 52 FAKE_TMUX_CAPTURE=marker FAKE_TMUX_PANE_COMMAND=2.1.228 \
+  ISSUE_LAUNCH_CMD="$d_root/bin/claude --permission-mode plan --model opusplan"
+assert_eq "$(jqf "$out" .ok)" "true" "SH-239: a version-named install dispatches cleanly"
+assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "SH-239: readiness confirmed via identity, not name"
+assert_eq "$(jqf "$out" 'has("warning")')" "false" "SH-239: no warning — this is a fully successful dispatch"
+
 finish

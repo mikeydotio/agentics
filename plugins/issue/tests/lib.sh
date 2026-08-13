@@ -219,6 +219,28 @@ mk_stale_base_repo() {
   printf '%s' "$repo"
 }
 
+# mk_versioned_claude <version> [extra-version...] — build a fake install whose
+# `bin/claude` is a SYMLINK to `versions/<version>`, mirroring the layout
+# Claude Code's native installer produces. Extra versions are created
+# alongside but not linked, so a test can model an update landing mid-poll.
+# Echoes the root. Ported from storyhook's own copy (AGE-83, SH-239).
+#
+# The symlink is the whole point: tmux reports `#{pane_current_command}` as
+# the basename of the RESOLVED executable, so a pane running this install is
+# called `2.1.228`, not `claude`.
+mk_versioned_claude() {
+  local root version
+  root="$(mktemp -d /tmp/issue-test-claude.XXXXXX)"
+  _TMP_REPOS+=("$root")
+  mkdir -p "$root/bin" "$root/versions"
+  for version in "$@"; do
+    printf '#!/bin/sh\nexit 0\n' >"$root/versions/$version"
+    chmod +x "$root/versions/$version"
+  done
+  ln -s "$root/versions/$1" "$root/bin/claude"
+  printf '%s' "$root"
+}
+
 _FAILED=0
 fail_test() { printf 'FAIL: %s\n' "$1" >&2; _FAILED=1; }
 

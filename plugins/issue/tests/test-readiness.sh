@@ -27,12 +27,18 @@ dispatch_ready() {
          TMUX="fake,0,0" TMUX_PANE="%0" \
          ISSUE_LABEL="" \
          FAKE_TMUX_CAPTURE="$mode" \
-         ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
+         ISSUE_READY_DELAY=0 \
          ISSUE_CONFIRM_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 \
          ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
          env "$@" \
          bash "$SCRIPT" dispatch "$n" 2>&1 )
 }
+
+# submits <state-dir> — the prompt-submit counter the fake tracks, 0 if never
+# written. Used by the AGE-83 (SH-226) refusal cases below to prove nothing
+# was typed into an unconfirmed pane — the launch command itself always types
+# (Step 9, before the gate), but a PROMPT submit must never happen.
+submits() { cat "$1/prompt_submits" 2>/dev/null || echo 0; }
 
 # --- T1: broadened footer marker (no "for shortcuts") → ready, no warning ------
 # The `marker` fake renders a plan-mode idle pane whose footer says
@@ -54,37 +60,41 @@ out=$(dispatch_ready "$repo" 43 structural)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "T2 structural: readiness confirmed with no known footer marker"
 assert_eq "$(jqf "$out" 'has("warning")')" "false" "T2 structural: NO warning"
 
-# --- T2-guard: framed static MODAL (frame but no idle glyph) → NOT ready -------
+# --- T2-guard: framed static MODAL (frame but no idle glyph) → REFUSED (AGE-83) -
 # The `modal` fake draws '─' rules (a trust dialog) but has NO '❯' idle glyph.
-# The structural tier must refuse to confirm — else the handoff prompt would be
-# typed into a modal.
+# The structural tier must refuse to confirm — and since AGE-83 (porting
+# storyhook's SH-226), an unconfirmed pane now gets NO text at all: the
+# handoff prompt is never typed into a modal, and the gate refuses outright
+# rather than warning-and-proceeding.
 repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 44 modal)
-assert_eq "$(jqf "$out" .readiness_confirmed)" "false" "T2-guard modal: framed static modal does NOT confirm readiness"
-assert_eq "$(jqf "$out" 'has("warning")')" "true" "T2-guard modal: unconfirmed readiness raises a warning"
+assert_eq "$(jqf "$out" .ok)" "false" "T2-guard modal: framed static modal is refused, not warned"
+assert_eq "$(jqf "$out" .reason)" "pane-not-ready" "T2-guard modal: refusal names the pane"
+assert_eq "$(submits "$FAKE_TMUX_STATE")" "0" "T2-guard modal: NOTHING was typed into that pane"
 
 # --- T5: busy marker ("esc to interrupt") must NOT fast-path confirm -----------
 # "esc to interrupt" is a BUSY marker (Claude generating), not idle-ready. It is
 # deliberately absent from READY_PATTERN, and the busy fake has no frame/glyph, so
-# neither tier should confirm.
+# neither tier should confirm — and AGE-83 refuses rather than warns.
 repo=$(mk_dispatch_repo)
 out=$(dispatch_ready "$repo" 45 busy)
-assert_eq "$(jqf "$out" .readiness_confirmed)" "false" "T5 busy: 'esc to interrupt' is not treated as idle-ready"
+assert_eq "$(jqf "$out" .ok)" "false" "T5 busy: 'esc to interrupt' is not treated as idle-ready, and is refused"
+assert_eq "$(submits "$FAKE_TMUX_STATE")" "0" "T5 busy: NOTHING was typed into that pane"
 
-# --- T3: never-ready churn → readiness:false, prompt:true, warning + pane_tail --
+# --- T3: never-ready churn → refused, nothing typed, evidence attached (AGE-83) -
 # The `churn` fake changes content every capture (a counter), with no marker and
-# no frame → readiness never confirms, but the prompt still leaves the input line
-# (prompt_confirmed:true), and the warning path attaches diagnostic evidence.
+# no frame → readiness never confirms. Before AGE-83 this degraded to ok:true
+# with a warning and the prompt typed anyway; now it refuses like every other
+# unconfirmed case, and the pane_tail evidence rides the refusal's own JSON.
 repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-churn.XXXXXX)
 out=$(dispatch_ready "$repo" 46 churn FAKE_TMUX_STATE="$state")
-rm -rf "$state"
-assert_eq "$(jqf "$out" .ok)" "true" "T3 churn: ok:true (window opened)"
-assert_eq "$(jqf "$out" .readiness_confirmed)" "false" "T3 churn: readiness NOT confirmed"
-assert_eq "$(jqf "$out" .prompt_confirmed)" "true" "T3 churn: prompt still confirmed (left the input line)"
-assert_eq "$(jqf "$out" 'has("warning")')" "true" "T3 churn: warning present"
+assert_eq "$(jqf "$out" .ok)" "false" "T3 churn: refused, not warned"
+assert_eq "$(jqf "$out" .reason)" "pane-not-ready" "T3 churn: refusal names the pane"
+assert_eq "$(submits "$state")" "0" "T3 churn: NOTHING was typed into that pane"
 assert_eq "$(jqf "$out" 'has("pane_tail")')" "true" "T3 churn: pane_tail evidence present"
 assert_contains "$(jqf "$out" .pane_tail)" "building worktree" "T3 churn: pane_tail carries the captured pane content"
+rm -rf "$state"
 
 # --- T4: legacy '? for shortcuts' still confirms (back-compat) -----------------
 # The fake's DEFAULT (no FAKE_TMUX_CAPTURE) is the legacy "  ? for shortcuts"
@@ -143,14 +153,22 @@ assert_contains "$(jqf "$out" '.commands | join("\n")')" "claude --permission-mo
   "doctor default: launch keeps parity with dispatch — plan mode + opusplan model"
 
 # --- doctor: real run reports the matched tier --------------------------------
-# marker capture → "marker" tier; structural capture → "structural" tier.
+# marker capture → "marker" tier; structural capture → "structural" tier. The
+# stand-in binary is named `claude` on PATH (AGE-83, SH-226): wait_ready
+# requires the occupant's foreground command to match READY_PROCESS_PATTERN
+# (or be recognised by identity — SH-239, below), and a bare `true` occupant
+# would match neither.
+doctor_stub=$(mktemp -d /tmp/issue-doctor-tier-stub.XXXXXX)
+ln -s "$(command -v true)" "$doctor_stub/claude"
 repo=$(mk_repo)
-out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
-      ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=marker \
+out=$(cd "$repo" && PATH="$doctor_stub:$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
+      ISSUE_DOCTOR_LAUNCH_CMD='claude --permission-mode plan' FAKE_TMUX_CAPTURE=marker \
       ISSUE_READY_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "doctor marker: readiness confirmed"
 assert_eq "$(jqf "$out" .matched_tier)" "marker" "doctor marker: reports the marker tier"
+assert_eq "$(jqf "$out" .occupant.match_rule)" "pattern" "doctor marker: a plainly-named claude matches by NAME"
+assert_eq "$(jqf "$out" .occupant.matches_name_pattern)" "true" "doctor marker: ...and says the name pattern covers it"
 # issue #87: the multi-line paste probe landed as one block — the FIRST line sits
 # on the ❯ input row and all three marker lines are present (bracketed paste kept
 # the newlines as text; had it split, only the last line would remain in the box).
@@ -158,11 +176,40 @@ assert_eq "$(jqf "$out" .multiline_probe.first_line_held)" "true" "doctor marker
 assert_eq "$(jqf "$out" .multiline_probe.lines_seen)" "3" "doctor marker: all 3 probe lines received as one block"
 assert_eq "$(jqf "$out" .multiline_probe.lines_total)" "3" "doctor marker: probe reports its line total"
 
-out=$(cd "$repo" && PATH="$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
-      ISSUE_DOCTOR_LAUNCH_CMD='true --permission-mode plan' FAKE_TMUX_CAPTURE=structural \
+out=$(cd "$repo" && PATH="$doctor_stub:$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
+      ISSUE_DOCTOR_LAUNCH_CMD='claude --permission-mode plan' FAKE_TMUX_CAPTURE=structural \
       ISSUE_READY_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
       bash "$SCRIPT" doctor 2>&1)
 assert_eq "$(jqf "$out" .matched_tier)" "structural" "doctor structural: reports the structural tier"
+rm -rf "$doctor_stub"
+
+# --- doctor: SH-239 — it REPORTS a build the name pattern alone would refuse --
+# doctor's own display advertises that it checks "whether this Claude build's
+# readiness/paste path is still recognised" (AGE-83), and this is precisely
+# the drift a name-only gate misses: a native-installer install whose binary
+# is version-named. Dispatch still works (pane_runs matches it by identity),
+# but an operator must be told the NAME check no longer covers their build —
+# and told NOT to pin the pattern to a version that changes on every update.
+d_root=$(mk_versioned_claude 2.1.228)
+repo=$(mk_repo)
+out=$(cd "$repo" && PATH="$d_root/bin:$FAKE_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
+      FAKE_TMUX_CAPTURE=marker FAKE_TMUX_PANE_COMMAND=2.1.228 \
+      ISSUE_DOCTOR_LAUNCH_CMD="claude --permission-mode plan" \
+      ISSUE_READY_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
+      bash "$SCRIPT" doctor 2>&1)
+assert_eq "$(jqf "$out" .ok)" "true" "doctor(SH-239): a version-named build is still ok"
+assert_eq "$(jqf "$out" .readiness_confirmed)" "true" "doctor(SH-239): readiness IS confirmed"
+assert_eq "$(jqf "$out" .occupant.match_rule)" "launch-binary" \
+  "doctor(SH-239): recognised by identity, not by name"
+assert_eq "$(jqf "$out" .occupant.matches_name_pattern)" "false" \
+  "doctor(SH-239): and it says the name pattern does NOT cover this build"
+assert_eq "$(jqf "$out" .occupant.name)" "2.1.228" "doctor(SH-239): reports the observed occupant"
+assert_contains "$(jqf "$out" .occupant.launch_binary_resolved)" "versions/2.1.228" \
+  "doctor(SH-239): reports what the launcher resolves THROUGH the symlink to"
+assert_contains "$(jqf "$out" .display)" "does NOT match ISSUE_READY_PROCESS_PATTERN" \
+  "doctor(SH-239): the display carries the warning, not just the JSON"
+assert_contains "$(jqf "$out" .display)" "changes on every update" \
+  "doctor(SH-239): and warns against pinning the pattern to a version"
 
 # --- doctor: missing launch binary → ok:false (hard precondition) -------------
 repo=$(mk_repo)

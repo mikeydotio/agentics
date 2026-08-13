@@ -15,6 +15,19 @@
 # the regression guard — it must pass identically before and after this
 # move.
 #
+# storyhook's own plugin/claude-code/lib/session.sh is a DELIBERATE FORK of
+# this file (its own header explains why: that plugin must stay installable
+# without agentics' `issue` plugin present too), not a shared/sourced copy —
+# so a fix landing on one side does not reach the other by construction.
+# SH-226 (a readiness gate that inferred "Claude is ready" from rendered
+# characters alone, which a bare shell prompt can satisfy), SH-239 (the
+# gate's name-only rule refusing a version-named install), and SH-263 (the
+# test fake's shared default state directory) were found and fixed there
+# first, then ported here as AGE-83 — see wait_ready, pane_runs, and
+# send_prompt_confirmed below for what changed and why. Since this is two
+# forks, not two views of one file, they can drift again; a future fix to
+# either side's readiness/handoff mechanics should consider the other.
+#
 # Sourced, not executed: this file sets no shell options of its own (no
 # `set -euo pipefail`) — it inherits whatever the sourcing caller already
 # set. issue.sh sources this file immediately after its own `set -euo
@@ -34,6 +47,16 @@
 #   READY_STABLE_POLLS       wait_ready
 #   READY_FRAME_GLYPH        wait_ready
 #   READY_PROMPT_GLYPH       wait_ready, input_box_text, prompt_accepted
+#   READY_PROCESS_PATTERN    wait_ready, pane_runs — added AGE-83, porting
+#                            storyhook's SH-226: the pane's foreground
+#                            command must match this before ANY text is
+#                            delivered to it. See wait_ready's own doc for why.
+#   READY_LAUNCH_BIN         pane_runs — added AGE-83, porting storyhook's
+#                            SH-239: the launch command's FIRST WORD (not the
+#                            whole command line), whose resolved binary
+#                            pane_runs also recognises by identity. May be
+#                            empty, which simply disables that half of
+#                            pane_runs.
 #   READY_TAIL_LINES         pane_tail
 #   READY_ACCEPT_PATTERN     prompt_accepted
 #   CONFIRM_ATTEMPTS         poll_input
@@ -55,11 +78,6 @@
 #                            decision deliberately left open here, not
 #                            resolved by this extraction.
 #
-# NOTE: ISSUE_READY_FALLBACK_DELAY / READY_FALLBACK_DELAY is NOT part of
-# this contract — despite living in the same config block and readiness
-# section, it is read only by issue.sh's own cmd_dispatch (the sleep after
-# a wait_ready timeout), never by wait_ready or any function in this file.
-#
 # None of the variables above are declared in this file — declaring them
 # here would just shadow whatever the caller set, which is exactly the
 # hidden coupling this extraction is trying to keep visible rather than bury.
@@ -77,6 +95,18 @@ fail() {
 # protected branch) from an ordinary error. Modelled on reconcile-pr.sh.
 refuse() {
   jq -n --arg r "$1" --arg d "$2" '{ok:false, reason:$r, display:$d}'
+  exit 1
+}
+
+# refuse_with <reason> <message> <json-object> — refuse(), plus diagnostic fields
+# merged in from <json-object>. A dispatch that gets far enough to open a window
+# has evidence worth carrying (which pane, what was running in it, what the pane
+# said), and refuse()'s fixed three-field shape has nowhere to put it. Separate
+# from refuse() rather than a widened refuse() so no existing caller changes.
+# Added AGE-83, porting storyhook's fork of this file.
+refuse_with() {
+  jq -n --arg r "$1" --arg d "$2" --argjson extra "$3" \
+    '{ok:false, reason:$r, display:$d} + $extra'
   exit 1
 }
 
@@ -226,23 +256,173 @@ poll_input() {
   return 1
 }
 
-# wait_ready <pane> <launch-cmd> — poll until Claude's TUI is ready, bounded by
-# READY_ATTEMPTS. Two tiers (see the config block for the full rationale):
-#   FAST:       launch_gone AND content matches the READY_PATTERN footer marker.
-#   STRUCTURAL: launch_gone AND content has BOTH the frame rule and the idle
-#               prompt glyph AND has stabilised (byte-identical for
-#               READY_STABLE_POLLS consecutive comparisons).
-# Either tier satisfied → success. On success, WAIT_READY_TIER is set to the tier
-# that matched ("marker" | "structural") for callers (doctor) that want it; a
-# timeout leaves it "none".
+# pane_command <pane> — READ-ONLY. Echo the pane's FOREGROUND command as tmux
+# reports it (`#{pane_current_command}`), or empty when it cannot be observed.
+# This is the only fact on this path that comes from the process table rather
+# than from rendered characters. Added AGE-83, porting storyhook's SH-226.
+pane_command() {
+  tmux display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null || printf ''
+}
+
+# resolve_exe <command-word> — READ-ONLY. Echo the real path <command-word>
+# runs: PATH lookup, then every symlink followed to the file itself. Empty (and
+# non-zero) when it does not resolve to one. Added AGE-83, porting storyhook's
+# SH-239.
+#
+# `readlink -f` is deliberately not used. It is a GNU extension that BSD only
+# grew recently, and this file targets the bash 3.2 / BSD userland macOS ships;
+# a hand-rolled chase costs six lines and works everywhere. The hop bound is
+# what makes a symlink CYCLE terminate — a readiness gate that hangs is a
+# readiness gate that has failed.
+resolve_exe() {
+  local target="$1" link dir hops=0
+  [ -n "$target" ] || return 1
+  target=$(command -v "$target" 2>/dev/null) || return 1
+  # A builtin, function or alias answers `command -v` with something that is
+  # not a path. Only a real file has an identity to compare against.
+  case "$target" in /*) ;; *) return 1 ;; esac
+  while [ -L "$target" ] && [ "$hops" -lt 32 ]; do
+    link=$(readlink "$target" 2>/dev/null) || break
+    [ -n "$link" ] || break
+    case "$link" in
+      /*) target="$link" ;;
+      *)  dir="${target%/*}"; target="$dir/$link" ;;
+    esac
+    hops=$((hops + 1))
+  done
+  # A dangling link, or a chase that hit the hop bound mid-cycle, resolves to
+  # nothing real. Fail rather than hand back a path to a file that isn't there:
+  # every caller here is asking "is the occupant THIS binary", and a binary that
+  # does not exist is not one anything can be running.
+  [ -e "$target" ] || return 1
+  printf '%s' "$target"
+}
+
+# launch_binary_path — resolve_exe over READY_LAUNCH_BIN, memoised for the poll
+# loop (pane_runs is called once per READY_ATTEMPTS). Keyed on the input so a
+# caller that changes READY_LAUNCH_BIN mid-process — cmd_doctor does, to probe
+# its own launch template — is never answered from the previous one's cache.
+# Added AGE-83, porting storyhook's SH-239.
+_LAUNCH_BIN_KEY=""
+_LAUNCH_BIN_PATH=""
+launch_binary_path() {
+  [ -n "$READY_LAUNCH_BIN" ] || return 1
+  if [ "$_LAUNCH_BIN_KEY" != "$READY_LAUNCH_BIN" ]; then
+    _LAUNCH_BIN_KEY="$READY_LAUNCH_BIN"
+    _LAUNCH_BIN_PATH="$(resolve_exe "$READY_LAUNCH_BIN" || printf '')"
+  fi
+  [ -n "$_LAUNCH_BIN_PATH" ] || return 1
+  printf '%s' "$_LAUNCH_BIN_PATH"
+}
+
+# pane_runs <pane> — 0 iff the pane's occupant is the launch binary.
+# FAILS CLOSED: an occupant that cannot be observed is not a match, following
+# branch_is_merged's precedent in this file — an un-establishable fact is never
+# read as the permissive answer. Added AGE-83, porting storyhook's SH-226 (the
+# name-pattern rule) and SH-239 (the identity rules below).
+#
+# Three independent ways to say yes, in cost order. PANE_RUNS_RULE records which
+# one answered:
+#
+#   pattern         the occupant NAME matches READY_PROCESS_PATTERN. The
+#                   original check, unchanged, and still the common case.
+#   launch-binary   the name IS the basename of the launch command's own
+#                   resolved binary. Claude Code's native installer points
+#                   ~/.local/bin/claude at ~/.local/share/claude/versions/
+#                   <version>, and tmux's `#{pane_current_command}` reports the
+#                   basename of the RESOLVED executable — so the occupant is
+#                   called "2.1.228" and no fixed pattern can ever anticipate
+#                   it. Asking whether it is the binary we launched is a
+#                   question about identity, which survives every version bump;
+#                   asking what it is called is a question about spelling,
+#                   which does not.
+#   sibling-version the name is version-shaped AND names a real executable in
+#                   that same resolved directory. Covers update skew: the pane
+#                   still executes the version it was launched from after the
+#                   symlink has moved on.
+#
+# What none of them will do is admit a shell, which is the whole point of
+# SH-226. `zsh` matches no pattern, is not the resolved binary, and is not
+# version-shaped; the sibling rule additionally requires an existing executable
+# in the install directory, so "looks like a version" cannot become a hole of
+# its own.
+PANE_RUNS_RULE="none"
+pane_runs() {
+  local cmd resolved base dir
+  cmd="$(pane_command "$1")"
+  cmd="${cmd##*/}"
+  WAIT_READY_COMMAND="$cmd"
+  PANE_RUNS_RULE="none"
+  [ -n "$cmd" ] || return 1
+
+  if printf '%s' "$cmd" | grep -Eq -- "$READY_PROCESS_PATTERN"; then
+    PANE_RUNS_RULE="pattern"
+    return 0
+  fi
+
+  resolved="$(launch_binary_path)" || return 1
+  base="${resolved##*/}"
+  if [ "$cmd" = "$base" ]; then
+    PANE_RUNS_RULE="launch-binary"
+    return 0
+  fi
+
+  # The skew rule applies ONLY to an install that names its binaries by version
+  # in the first place. If the launcher resolved to a plainly-named file, a
+  # version-shaped occupant sitting beside it says nothing about this install,
+  # and admitting it would widen the gate for no reason.
+  printf '%s' "$base" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || return 1
+  printf '%s' "$cmd" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || return 1
+  dir="${resolved%/*}"
+  if [ -f "$dir/$cmd" ] && [ -x "$dir/$cmd" ]; then
+    PANE_RUNS_RULE="sibling-version"
+    return 0
+  fi
+  return 1
+}
+
+# wait_ready <pane> <launch-cmd> — poll until Claude is ready IN THE PANE,
+# bounded by READY_ATTEMPTS. Every success requires BOTH:
+#
+#   1. The pane's foreground command matches READY_PROCESS_PATTERN — a fact from
+#      the process table, which a shell prompt cannot fake; AND (AGE-83, porting
+#      storyhook's SH-226)
+#   2. one of two rendering tiers:
+#      FAST:       launch_gone AND content matches the READY_PATTERN footer marker.
+#      STRUCTURAL: launch_gone AND content has BOTH the frame rule and the idle
+#                  prompt glyph AND has stabilised (byte-identical for
+#                  READY_STABLE_POLLS consecutive comparisons).
+#
+# Both tiers used to rest on rendered characters alone, and a shell prompt can
+# supply a frame rule and an idle glyph for free — so a launch that never became
+# Claude could still read as ready, and the caller would type its prompt into a
+# bare shell. The check belongs HERE, in the predicate whose own contract claims
+# to establish that Claude is ready, rather than in a caller: a caller-side check
+# would leave this function still asserting something it does not test.
+#
+# The process check is queried only once a tier's other conditions already hold,
+# so the common case costs one extra tmux round trip rather than READY_ATTEMPTS.
+#
+# On return: WAIT_READY_TIER is the tier that matched ("marker" | "structural",
+# else "none"); WAIT_READY_COMMAND is the last occupant observed; and
+# WAIT_READY_REASON is "ok", "wrong-process" (a tier matched but the occupant did
+# not) or "timeout". Errors travel with context: "not ready" and "a shell is
+# sitting in that pane" are different sentences and lead to different actions.
 #
 # launch_gone = "the pane's last non-blank line no longer ends with the launch
-# command", i.e. the typed launch command has left the input line (claude started).
+# command", i.e. the typed launch command has left the input line. Note this
+# says nothing about WHY it left: a shell that answered `command not found`
+# satisfies it exactly as a started Claude does, which is why it is not, and
+# never was, evidence that claude started.
 WAIT_READY_TIER="none"
+WAIT_READY_COMMAND=""
+WAIT_READY_REASON="timeout"
 wait_ready() {
   local pane="$1" launch="$2" attempt=0 content last_line
   local prev='' stable=0 launch_gone
   WAIT_READY_TIER="none"
+  WAIT_READY_COMMAND=""
+  WAIT_READY_REASON="timeout"
   while [ "$attempt" -lt "$READY_ATTEMPTS" ]; do
     if content=$(tmux capture-pane -p -t "$pane" 2>/dev/null); then
       last_line=$(printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -1 || true)
@@ -252,8 +432,12 @@ wait_ready() {
       # Tier 1 — broadened footer marker (returns immediately; no stabilise wait).
       if [ "$launch_gone" = true ] \
          && printf '%s' "$content" | grep -Eq -- "$READY_PATTERN"; then
-        WAIT_READY_TIER="marker"
-        return 0
+        if pane_runs "$pane"; then
+          WAIT_READY_TIER="marker"
+          WAIT_READY_REASON="ok"
+          return 0
+        fi
+        WAIT_READY_REASON="wrong-process"
       fi
 
       # Tier 2 — structural frame + idle glyph + stabilisation. Increment the
@@ -267,8 +451,15 @@ wait_ready() {
          && [ -n "$content" ] && [ "$content" = "$prev" ]; then
         stable=$((stable + 1))
         if [ "$stable" -ge "$READY_STABLE_POLLS" ]; then
-          WAIT_READY_TIER="structural"
-          return 0
+          if pane_runs "$pane"; then
+            WAIT_READY_TIER="structural"
+            WAIT_READY_REASON="ok"
+            return 0
+          fi
+          # The glyphs are there and stable, but a shell is what is rendering
+          # them. Keep polling: claude may still be starting behind this pane.
+          WAIT_READY_REASON="wrong-process"
+          stable=0
         fi
       else
         stable=0
@@ -372,12 +563,29 @@ capture_pane_transcript() {
 #            Enter re-send ENTER ALONE (bounded) — never re-paste, which would
 #            duplicate the prompt.
 # A positive result REQUIRES having first observed the box hold the prompt, so an
-# empty box from a never-arrived paste can't masquerade as submitted. If receipt
-# is never confirmed, Enter is still pressed once best-effort (never regress below
-# the old "always Enter"), but the result is reported unconfirmed. Returns 0 only
-# once submission is confirmed.
+# empty box from a never-arrived paste can't masquerade as submitted. Returns 0
+# only once submission is confirmed.
+#
+# AGE-83 (porting storyhook's SH-226) reversed a rule that used to live here:
+# "if receipt is never confirmed, Enter is still pressed once best-effort
+# (never regress below the old 'always Enter')". Enter was pressed BEFORE
+# `received` was consulted, so a return of 1 could not distinguish "never
+# sent" from "sent blind" — and against a pane that is not Claude, that stray
+# Enter IS the submission. The old rule was written when the pane was assumed
+# to be a ready TUI and a spare Enter was harmless. It is not harmless, so
+# Phase B is now wholly conditional on receipt.
+#
+# On return, SEND_PROMPT_PHASE names WHICH phase was reached, so a caller can
+# tell an undelivered handoff (nothing was typed — safe to roll back a claim)
+# from an unconfirmed one (it may already be in front of a live agent —
+# rolling back would hand the same story to a second session):
+#   submitted            receipt AND submission confirmed (the 0 return)
+#   received-unsubmitted the box held the text; submission never confirmed
+#   undelivered          the text never reached the box; NO Enter was sent
+SEND_PROMPT_PHASE="undelivered"
 send_prompt_confirmed() {
   local pane="$1" text="$2" buf="$3" received=false try=0
+  SEND_PROMPT_PHASE="undelivered"
   # Phase A — deliver + confirm receipt.
   while [ "$try" -le "$SEND_RETRIES" ]; do
     if paste_prompt "$pane" "$text" "$buf" && poll_input "$pane" text; then
@@ -386,14 +594,16 @@ send_prompt_confirmed() {
     fi
     try=$((try + 1))
   done
+  # Nothing landed in the box, so nothing is submitted: no Enter is sent at all.
+  [ "$received" = true ] || return 1
+  SEND_PROMPT_PHASE="received-unsubmitted"
   # Phase B — submit + confirm. Re-send Enter alone (never re-paste).
   try=0
   while [ "$try" -le "$SEND_RETRIES" ]; do
     if tmux send-keys -t "$pane" Enter 2>/dev/null; then
-      if [ "$received" = true ]; then
-        poll_input "$pane" empty && return 0
-      else
-        break
+      if poll_input "$pane" empty; then
+        SEND_PROMPT_PHASE="submitted"
+        return 0
       fi
     fi
     try=$((try + 1))

@@ -4,7 +4,8 @@
 # run to completion headlessly without a live tmux server:
 #
 #   new-window        -> reset the virtual input-box state, print a pane id (%1)
-#   display-message   -> print a window id (@1), exit 0
+#   display-message   -> answer the requested #{format} -- window id (@1) or
+#                        the pane's occupant (see THE PANE'S OCCUPANT below)
 #   set-window-option -> no-op, exit 0
 #   send-keys         -> mutate the virtual input box (see STATEFUL MODEL below)
 #   kill-window       -> no-op, exit 0  (doctor tears its scratch window down)
@@ -22,8 +23,8 @@
 # EXACTLY the same base fixture as before, so every readiness/gitignore test is
 # byte-for-byte unaffected.
 #
-#   * A virtual input buffer lives in $STATE/input (STATE = $FAKE_TMUX_STATE, or a
-#     fixed /tmp dir otherwise). `send-keys -l <text>` APPENDS <text> to it (a
+#   * A virtual input buffer lives in $STATE/input (STATE = $FAKE_TMUX_STATE,
+#     which is mandatory — see the refusal below). `send-keys -l <text>` APPENDS <text> to it (a
 #     literal paste); `send-keys ... Enter` SUBMITS (clears it) — with two twists:
 #       - The FIRST Enter after launch always clears (it submits the launch
 #         command line); it also flips $STATE/launched so later Enters are treated
@@ -78,13 +79,63 @@
 #                     marker — never stabilises, never matches → readiness stays
 #                     unconfirmed (drives the warning + pane_tail evidence path).
 #
+# THE PANE'S OCCUPANT (AGE-83, porting storyhook's SH-226 gate — mechanism
+# unchanged from storyhook's own pre-SH-230 fake, since issue.sh still TYPES
+# its launch rather than execing it). `display-message -p
+# '#{pane_current_command}'` is answered from $STATE/pane_command, derived in
+# _submit_box the moment the TYPED launch line submits: the basename of that
+# line's first word becomes the foreground command, the way a real shell
+# would report it. Derivation rather than a knob is deliberate — every test
+# that uses the default ISSUE_LAUNCH_CMD gets `claude` for free and needs no
+# edit.
+#
+#   $FAKE_TMUX_LAUNCH_MANGLE=1   The launch failed to produce a live
+#                                claude/node process (the SH-226 field cause:
+#                                something ate the launch keystroke, so the
+#                                shell never became Claude). Models the
+#                                CAUSE, not the symptom — the occupant stays
+#                                a SHELL, and capture-pane carries a
+#                                `command not found` line.
+#   $FAKE_TMUX_PANE_COMMAND      Overrides the occupant absolutely, for cases
+#                                with no launch to derive from.
+#   $FAKE_TMUX_SHELL             The shell name a mangled launch leaves
+#                                (zsh).
+#   $FAKE_TMUX_FAIL_SEND_KEYS    literal|enter|all — make send-keys EXIT 1,
+#                                so paste_text's own `|| return 1`
+#                                (lib/session.sh) is reachable under test.
+#
 # The fake is re-exec'd per tmux call and holds no in-process state, so ALL of the
 # above (the input buffer, the launched flag, the absorb counter, the churn
-# counter) live in files under $STATE. `churn` still advances $STATE/count and
-# falls back to $RANDOM when $FAKE_TMUX_STATE is unset.
+# counter, the pane's occupant) live in files under $STATE — which is why $STATE
+# being private to one test is load-bearing rather than housekeeping (AGE-83,
+# below).
 
-STATE="${FAKE_TMUX_STATE:-/tmp/issue-faketmux}"
-mkdir -p "$STATE" 2>/dev/null || true
+# THE STATE DIRECTORY is NAMED BY THE CALLER, always (AGE-83, porting
+# storyhook's SH-263 fix for the identical defect in its own fork of this
+# file). It used to fall back to a fixed path (/tmp/issue-faketmux) whenever
+# $FAKE_TMUX_STATE was unset, and five of this suite's own test files left it
+# unset — so they shared one directory with each other, with every
+# concurrent run of this suite, and with storyhook's fork of this same fake.
+# Sharing it is not a tidiness problem: one user's `new-window` clears
+# another's `launched` and `input`, whose next Enter is then read as a launch
+# line of nothing and writes the fallback shell name over the first user's
+# occupant — which is how a dispatch can come to refuse a pane it had itself
+# launched `claude` into, saying it held `zsh`.
+#
+# Refuse rather than default, and refuse rather than create: this fake STORES
+# state, it does not own it. A caller that has not minted a directory has not
+# decided where its state lives, and inventing a shared path on its behalf is
+# the silent failure this whole harness exists to avoid. lib.sh mints one for
+# every test in this suite, so no test file has to remember to.
+if [ -z "${FAKE_TMUX_STATE:-}" ]; then
+  printf 'fake tmux: $FAKE_TMUX_STATE is unset — refusing to invent a shared state directory (AGE-83). Source tests/lib.sh, which mints one per test.\n' >&2
+  exit 64
+fi
+if [ ! -d "$FAKE_TMUX_STATE" ]; then
+  printf 'fake tmux: $FAKE_TMUX_STATE [%s] is not a directory — the caller mints it (`mktemp -d`), this fake never does.\n' "$FAKE_TMUX_STATE" >&2
+  exit 64
+fi
+STATE="$FAKE_TMUX_STATE"
 NL='
 '   # a single literal newline, for splitting -l keystroke text on line breaks
 
@@ -96,9 +147,25 @@ NL='
 # prompt-submit counter. Those two records are what let a test prove a multi-line
 # prompt submitted as ONE block (issue #87) rather than being split at a newline.
 _submit_box() {
-  local launched absorb box n
+  local launched absorb box n launch_line launch_bin
   launched="$(cat "$STATE/launched" 2>/dev/null || printf 'false')"
   if [ "$launched" != true ]; then
+    # The launch line just submitted. DERIVE the pane's occupant from it, the
+    # way a real shell would: the basename of the line's first word becomes
+    # the foreground command `#{pane_current_command}` reports (AGE-83).
+    launch_line="$(cat "$STATE/input" 2>/dev/null || printf '')"
+    launch_bin="${launch_line%% *}"
+    launch_bin="${launch_bin##*/}"
+    if [ "${FAKE_TMUX_LAUNCH_MANGLE:-}" = 1 ]; then
+      # The field failure (SH-226): something ate the launch keystroke, so
+      # the shell never became Claude and reported the mangled word as not
+      # found. Models the CAUSE, not the symptom — the occupant stays a
+      # shell.
+      printf 'true' > "$STATE/launch_mangled" 2>/dev/null || true
+      launch_bin="${FAKE_TMUX_SHELL:-zsh}"
+    fi
+    [ -n "$launch_bin" ] || launch_bin="${FAKE_TMUX_SHELL:-zsh}"
+    printf '%s' "$launch_bin" > "$STATE/pane_command" 2>/dev/null || true
     : > "$STATE/input" 2>/dev/null || true          # launch line submitted
     printf 'true' > "$STATE/launched" 2>/dev/null || true
     return
@@ -141,17 +208,41 @@ case "${1:-}" in
   new-window)
     # First side effect of a dispatch: reset the virtual input box so every run
     # starts clean, and seed the prompt-Enter absorb counter from the knob. Also
-    # clears the buffer store + submit bookkeeping (issue #87) so a reused $STATE
-    # dir (e.g. the shared /tmp/issue-faketmux the readiness cases use) can't read
-    # stale state.
+    # clears the buffer store + submit bookkeeping (issue #87) and the derived
+    # occupant (AGE-83) so a reused $STATE dir (this suite's own dispatch calls
+    # against one test file's state) can't read stale state.
     rm -f "$STATE/input" "$STATE/launched" "$STATE/absorb" "$STATE/pastes.log" \
-          "$STATE/submitted" "$STATE/prompt_submits" 2>/dev/null || true
+          "$STATE/submitted" "$STATE/prompt_submits" "$STATE/pane_command" \
+          "$STATE/launch_mangled" 2>/dev/null || true
     rm -f "$STATE"/buf-* 2>/dev/null || true
     printf '%s' "${FAKE_TMUX_ENTER_ABSORB:-0}" > "$STATE/absorb" 2>/dev/null || true
     printf '0' > "$STATE/prompt_submits" 2>/dev/null || true
     printf '%%1\n'
     ;;
-  display-message)   printf '@1\n' ;;
+  display-message)
+    # Honour the FORMAT argument instead of always answering '@1'. issue.sh
+    # asks for '#{window_id}' (unchanged) and, since AGE-83, the readiness
+    # gate asks for '#{pane_current_command}' — which must answer the
+    # modelled occupant, or a process check would have a test that cannot
+    # fail. Empty (not a fallback literal) when nothing was ever launched, so
+    # a mismatch is observable rather than silently matching by coincidence.
+    dm_fmt=""
+    shift || true
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -p|-t) [ "$1" = -t ] && shift ;;
+        *) dm_fmt="$1" ;;
+      esac
+      shift || true
+    done
+    case "$dm_fmt" in
+      *'#{pane_current_command}'*)
+        printf '%s\n' "${FAKE_TMUX_PANE_COMMAND:-$(cat "$STATE/pane_command" 2>/dev/null || printf '')}"
+        ;;
+      ''|*'#{window_id}'*) printf '@1\n' ;;
+      *) printf '\n' ;;
+    esac
+    ;;
   set-window-option) : ;;
   send-keys)
     # Parse the two shapes issue.sh emits: `-t <pane> -l <text>` (literal paste)
@@ -166,6 +257,14 @@ case "${1:-}" in
       esac
       shift || true
     done
+    # $FAKE_TMUX_FAIL_SEND_KEYS makes `send-keys` FAIL, so paste_text's own
+    # `|| return 1` (lib/session.sh) becomes reachable under test (AGE-83) —
+    # it was not, because every path here used to reach the trailing `exit 0`.
+    case "${FAKE_TMUX_FAIL_SEND_KEYS:-}" in
+      literal) [ "$has_l" = true ] && exit 1 ;;
+      enter)   [ "$is_enter" = true ] && exit 1 ;;
+      all)     exit 1 ;;
+    esac
     if [ "$has_l" = true ]; then
       printf '%s\n' "$ltext" >> "$STATE/pastes.log" 2>/dev/null || true
       launched="$(cat "$STATE/launched" 2>/dev/null || printf 'false')"
@@ -241,6 +340,12 @@ case "${1:-}" in
         exit 0
       fi
     done
+    # A mangled launch leaves its own evidence on the pane, above whatever
+    # fixture the test selected — the `command not found` line the field
+    # pane carried (AGE-83).
+    if [ -f "$STATE/launch_mangled" ]; then
+      printf '%s\n' "${FAKE_TMUX_MANGLE_LINE:-zsh: command not found: laude}"
+    fi
     case "${FAKE_TMUX_CAPTURE:-legacy}" in
       marker)
         cat <<'EOF'
@@ -269,13 +374,8 @@ EOF
       busy)
         printf '  \342\234\273 Working... (esc to interrupt)\n' ;;
       churn)
-        c=0
-        if [ -n "${FAKE_TMUX_STATE:-}" ]; then
-          c=$(cat "$FAKE_TMUX_STATE/count" 2>/dev/null || echo 0)
-          c=$((c + 1)); echo "$c" > "$FAKE_TMUX_STATE/count"
-        else
-          c=$RANDOM
-        fi
+        c=$(cat "$STATE/count" 2>/dev/null || echo 0)
+        c=$((c + 1)); echo "$c" > "$STATE/count"
         printf '  building worktree... step %s\n' "$c" ;;
       legacy|*)
         printf '  ? for shortcuts\n' ;;

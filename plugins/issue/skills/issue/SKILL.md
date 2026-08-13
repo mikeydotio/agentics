@@ -68,19 +68,25 @@ Parse `ARGUMENTS` (everything after `/issue`) — the first token is the verb:
 1. Run `bash ${CLAUDE_PLUGIN_ROOT}/bin/issue.sh dispatch <number>`.
 2. Render:
    - `ok:false` → show `display`, stop. (Common causes: not in tmux, `gh` unauthenticated, not a git
-     repo, issue not found, issue closed — the `display` says which.)
-   - `ok:true` → show `display`. If a `warning` field is present, surface it too — the tmux window
-     opened but the handoff (claude readiness and/or prompt submission) couldn't be fully confirmed,
-     so the user should glance at the new window. When a `pane_tail` accompanies the warning, include
-     it (fenced) as diagnostic evidence.
+     repo, issue not found, issue closed — the `display` says which. Three more, past the tmux window
+     opening: `pane-not-ready` — the pane couldn't be proved to be running claude, so **nothing was
+     typed into it**; `handoff-undelivered` — claude started but the prompt never reached its input
+     box, so nothing was submitted; `handoff-unconfirmed` — the prompt reached the box but submission
+     was never confirmed, so the worktree is **deliberately left in place** rather than torn down, in
+     case an agent is already working. All three leave the window open and — except
+     `handoff-unconfirmed` — roll the worktree/branch back, so re-running `do` is safe. When a
+     `pane_tail` accompanies the refusal, include it (fenced) as diagnostic evidence.)
+   - `ok:true` → show `display`. If a `warning` field is present, surface it too — the base wasn't
+     confirmed fresh (offline, or `origin/<default>` never resolved) or the GitHub label couldn't be
+     applied; readiness and prompt submission are always fully confirmed by the time `ok:true` is
+     returned.
 
 On success the helper has already fetched `origin/<default>` and created a fresh git worktree
 (`.claude/worktrees/age-42` on branch `worktree-age-42`) based on that tip — never a possibly-stale
 local branch (issue #107) — then opened a new window (`<repo-prefix>-<number>`, e.g. `age-42`)
 rooted **in** that worktree, running `claude --permission-mode plan --model opusplan` in plan mode
-on the opusplan model (Opus plans, Sonnet executes), prompt already submitted. If the fetch couldn't
-confirm a fresh tip (offline, or `origin/<default>` never resolved), `ok:true` still carries a
-`warning` naming how stale the base might be. The helper also
+on the opusplan model (Opus plans, Sonnet executes), gated on claude actually being ready before any
+text was typed, prompt confirmed submitted. The helper also
 **marks the issue `in-progress`** on GitHub (best-effort; a failure adds a `warning`, never
 `ok:false`). Nothing further is needed from you.
 
@@ -107,4 +113,12 @@ confirm a fresh tip (offline, or `origin/<default>` never resolved), `ok:true` s
   `gitignore` field; never affects `ok`).
 - `ISSUE_DRY_RUN=1` previews `dispatch`, `create`, and `complete execute` without side effects (used
   by the tests); you generally won't need it interactively.
+- **`do` refuses a pane it cannot prove is running claude.** Before typing anything, it checks the
+  pane's actual foreground process against `ISSUE_READY_PROCESS_PATTERN` (default `^(claude|node)$`)
+  — a shell prompt cannot fake this, unlike the rendered footer/frame checks alone. It also recognises
+  the launch binary by identity (a version-named install, e.g. Claude Code's native installer), so the
+  pattern rarely needs touching. If your build's occupant genuinely reports an unexpected name, run
+  `bin/issue.sh doctor` first — it names the observed occupant and which rule would admit it — before
+  resorting to `ISSUE_READY_PROCESS_PATTERN='.'`, which matches anything and restores the old,
+  unchecked behavior.
 </content>

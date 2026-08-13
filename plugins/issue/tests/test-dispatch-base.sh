@@ -22,7 +22,7 @@ dispatch_real() {
       && PATH="$FAKE_TMUX_DIR:$PATH" \
          TMUX="fake,0,0" TMUX_PANE="%0" \
          ISSUE_LABEL="" \
-         ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
+         ISSUE_READY_DELAY=0 \
          ISSUE_CONFIRM_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 \
          FAKE_TMUX_CAPTURE=marker \
          bash "$SCRIPT" dispatch "$n" 2>&1 )
@@ -109,7 +109,7 @@ assert_eq "$(cd "$dead" && git rev-parse worktree-rep-42)" "$head_oid" \
 out=$( cd "$dead" \
     && PATH="$FAKE_TMUX_DIR:$PATH" TMUX="fake,0,0" TMUX_PANE="%0" \
        ISSUE_LABEL="" ISSUE_REQUIRE_FRESH_BASE=1 \
-       ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
+       ISSUE_READY_DELAY=0 \
        ISSUE_CONFIRM_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 \
        FAKE_TMUX_CAPTURE=marker \
        bash "$SCRIPT" dispatch 43 2>&1 )

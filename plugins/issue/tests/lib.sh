@@ -24,6 +24,29 @@ _TMP_REPOS=()
 _cleanup() { local d; for d in "${_TMP_REPOS[@]:-}"; do [ -n "$d" ] && rm -rf "$d"; done; }
 trap _cleanup EXIT
 
+# --- fake-tmux state isolation (AGE-83, porting storyhook's SH-263) --------
+#
+# tests/fakes/tmux keeps every byte of its virtual model (the input buffer,
+# the launched flag, the derived pane occupant) in files under
+# $FAKE_TMUX_STATE, because it is re-exec'd per call and can hold nothing in
+# process memory. It used to default to a FIXED path (/tmp/issue-faketmux)
+# whenever this was unset, and five of this suite's own test files relied on
+# that default — sharing one directory with each other, with every
+# concurrent run of this suite, and with storyhook's own fork of this same
+# fake. Two users of one directory corrupt each other: one's `new-window`
+# clears another's `launched`/`input`, so a dispatch can come to refuse a
+# pane it had itself launched `claude` into, reporting `zsh`.
+#
+# The fake now refuses to run without $FAKE_TMUX_STATE naming an existing
+# directory (see its own header), so every test in this suite gets a private
+# one here, minted once per sourcing of this file — not per test-file
+# convention to remember, which is exactly what let five files skip it.
+if [ -z "${FAKE_TMUX_STATE:-}" ]; then
+  FAKE_TMUX_STATE="$(mktemp -d /tmp/issue-test-tmux.XXXXXX)"
+  export FAKE_TMUX_STATE
+  _TMP_REPOS+=("$FAKE_TMUX_STATE")
+fi
+
 # mk_repo [origin-url] — create a temp git repo (default origin
 # https://github.com/fake/repo.git) and echo its path.
 mk_repo() {
@@ -194,6 +217,28 @@ mk_stale_base_repo() {
     git -C "$remote" push -q origin main
   ) >/dev/null 2>&1
   printf '%s' "$repo"
+}
+
+# mk_versioned_claude <version> [extra-version...] — build a fake install whose
+# `bin/claude` is a SYMLINK to `versions/<version>`, mirroring the layout
+# Claude Code's native installer produces. Extra versions are created
+# alongside but not linked, so a test can model an update landing mid-poll.
+# Echoes the root. Ported from storyhook's own copy (AGE-83, SH-239).
+#
+# The symlink is the whole point: tmux reports `#{pane_current_command}` as
+# the basename of the RESOLVED executable, so a pane running this install is
+# called `2.1.228`, not `claude`.
+mk_versioned_claude() {
+  local root version
+  root="$(mktemp -d /tmp/issue-test-claude.XXXXXX)"
+  _TMP_REPOS+=("$root")
+  mkdir -p "$root/bin" "$root/versions"
+  for version in "$@"; do
+    printf '#!/bin/sh\nexit 0\n' >"$root/versions/$version"
+    chmod +x "$root/versions/$version"
+  done
+  ln -s "$root/versions/$1" "$root/bin/claude"
+  printf '%s' "$root"
 }
 
 _FAILED=0

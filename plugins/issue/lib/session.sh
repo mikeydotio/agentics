@@ -15,6 +15,19 @@
 # the regression guard — it must pass identically before and after this
 # move.
 #
+# storyhook's own plugin/claude-code/lib/session.sh is a DELIBERATE FORK of
+# this file (its own header explains why: that plugin must stay installable
+# without agentics' `issue` plugin present too), not a shared/sourced copy —
+# so a fix landing on one side does not reach the other by construction.
+# SH-226 (a readiness gate that inferred "Claude is ready" from rendered
+# characters alone, which a bare shell prompt can satisfy), SH-239 (the
+# gate's name-only rule refusing a version-named install), and SH-263 (the
+# test fake's shared default state directory) were found and fixed there
+# first, then ported here as AGE-83 — see wait_ready, pane_runs, and
+# send_prompt_confirmed below for what changed and why. Since this is two
+# forks, not two views of one file, they can drift again; a future fix to
+# either side's readiness/handoff mechanics should consider the other.
+#
 # Sourced, not executed: this file sets no shell options of its own (no
 # `set -euo pipefail`) — it inherits whatever the sourcing caller already
 # set. issue.sh sources this file immediately after its own `set -euo

@@ -89,33 +89,43 @@ assert_eq "$(count_pastes "$state" 'autosubmit-probe-43')" "1" "absorb1: prompt 
 assert_eq "$(box_content "$state")" "" "absorb1: input box cleared (submitted)"
 rm -rf "$state"
 
-# --- Case 3: dead input → honest give-up, receipt pasted once ------------------
-# absorb=99 exhausts every retry: the prompt is received but never submits. The
-# fix must report prompt_confirmed:false + a warning, and — since receipt WAS
-# confirmed — must NOT re-paste (only re-send Enter). The old code re-pastes on
-# each retry (3 pastes with SEND_RETRIES=2): assert one paste (RED until fixed).
+# --- Case 3: dead input → refused, but DELIBERATELY not rolled back (AGE-83) ---
+# absorb=99 exhausts every retry: the prompt is received but never submits.
+# Since receipt WAS confirmed, the box may already be in front of a live
+# agent — send_prompt_confirmed must NOT re-paste (only re-send Enter), and
+# the caller must NOT tear the worktree down (a second dispatch would then
+# hand the same issue to a second session). Reports ok:false,
+# reason:handoff-unconfirmed, delivery_phase:received-unsubmitted.
 repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
 out=$(dispatch_autosubmit "$repo" 44 "$state" FAKE_TMUX_ENTER_ABSORB=99 ISSUE_SEND_RETRIES=2)
-assert_eq "$(jqf "$out" .prompt_confirmed)" "false" "dead: prompt_confirmed:false (never submitted)"
-assert_eq "$(jqf "$out" 'has("warning")')" "true" "dead: warning present"
+assert_eq "$(jqf "$out" .ok)" "false" "dead: refused, not warned"
+assert_eq "$(jqf "$out" .reason)" "handoff-unconfirmed" "dead: reason names the unconfirmed handoff"
+assert_eq "$(jqf "$out" .delivery_phase)" "received-unsubmitted" "dead: delivery_phase distinguishes it from undelivered"
 assert_eq "$(jqf "$out" 'has("pane_tail")')" "true" "dead: pane_tail evidence present"
 assert_eq "$(count_pastes "$state" 'autosubmit-probe-44')" "1" "dead: receipt confirmed → prompt pasted ONCE (only Enter retried)"
 assert_contains "$(box_content "$state")" "autosubmit-probe-44" "dead: prompt still sits unsubmitted in the box"
+wt_leaf=$(jqf "$out" .window_name)
+assert_eq "$([ -d "$repo/.claude/worktrees/$wt_leaf" ] && echo yes || echo no)" "yes" \
+  "dead: the worktree is DELIBERATELY left in place — the agent may already be working"
 rm -rf "$state"
 
-# --- Case 4: dropped paste → receipt never confirms, bounded re-paste ----------
-# The paste never reaches the box (a wedged/dropped send). Receipt confirmation
-# must fail and the prompt must be RE-PASTED (bounded by SEND_RETRIES), reporting
-# prompt_confirmed:false. The old code has no receipt phase and its vacuous
-# last-line check reads the footer, so it FALSELY reports prompt_confirmed:true
-# after a single (dropped) paste — this case proves that vacuous-confirm hole.
+# --- Case 4: dropped paste → refused AND rolled back (AGE-83) ------------------
+# The paste never reaches the box (a wedged/dropped send). Receipt
+# confirmation must fail and the prompt must be RE-PASTED (bounded by
+# SEND_RETRIES). Since nothing ever reached the box, nothing was submitted,
+# so — unlike Case 3 — this IS safe to roll back: reports ok:false,
+# reason:handoff-undelivered, delivery_phase:undelivered, worktree removed.
 repo=$(mk_dispatch_repo)
 state=$(mktemp -d /tmp/issue-autosub.XXXXXX)
 out=$(dispatch_autosubmit "$repo" 45 "$state" FAKE_TMUX_DROP_PASTE=1 ISSUE_SEND_RETRIES=2)
-assert_eq "$(jqf "$out" .prompt_confirmed)" "false" "drop: prompt_confirmed:false (paste never landed)"
-assert_eq "$(jqf "$out" 'has("warning")')" "true" "drop: warning present"
+assert_eq "$(jqf "$out" .ok)" "false" "drop: refused, not warned"
+assert_eq "$(jqf "$out" .reason)" "handoff-undelivered" "drop: reason names the undelivered handoff"
+assert_eq "$(jqf "$out" .delivery_phase)" "undelivered" "drop: delivery_phase confirms nothing was submitted"
 assert_eq "$(count_pastes "$state" 'autosubmit-probe-45')" "3" "drop: prompt re-pasted SEND_RETRIES+1 = 3 times"
+wt_leaf=$(jqf "$out" .window_name)
+assert_eq "$([ -d "$repo/.claude/worktrees/$wt_leaf" ] && echo yes || echo no)" "no" \
+  "drop: the worktree WAS rolled back — nothing was ever submitted"
 rm -rf "$state"
 
 # --- Case 5: a MULTI-LINE prompt must land as ONE submission (issue #87) --------

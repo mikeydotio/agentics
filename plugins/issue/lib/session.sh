@@ -550,12 +550,29 @@ capture_pane_transcript() {
 #            Enter re-send ENTER ALONE (bounded) — never re-paste, which would
 #            duplicate the prompt.
 # A positive result REQUIRES having first observed the box hold the prompt, so an
-# empty box from a never-arrived paste can't masquerade as submitted. If receipt
-# is never confirmed, Enter is still pressed once best-effort (never regress below
-# the old "always Enter"), but the result is reported unconfirmed. Returns 0 only
-# once submission is confirmed.
+# empty box from a never-arrived paste can't masquerade as submitted. Returns 0
+# only once submission is confirmed.
+#
+# AGE-83 (porting storyhook's SH-226) reversed a rule that used to live here:
+# "if receipt is never confirmed, Enter is still pressed once best-effort
+# (never regress below the old 'always Enter')". Enter was pressed BEFORE
+# `received` was consulted, so a return of 1 could not distinguish "never
+# sent" from "sent blind" — and against a pane that is not Claude, that stray
+# Enter IS the submission. The old rule was written when the pane was assumed
+# to be a ready TUI and a spare Enter was harmless. It is not harmless, so
+# Phase B is now wholly conditional on receipt.
+#
+# On return, SEND_PROMPT_PHASE names WHICH phase was reached, so a caller can
+# tell an undelivered handoff (nothing was typed — safe to roll back a claim)
+# from an unconfirmed one (it may already be in front of a live agent —
+# rolling back would hand the same story to a second session):
+#   submitted            receipt AND submission confirmed (the 0 return)
+#   received-unsubmitted the box held the text; submission never confirmed
+#   undelivered          the text never reached the box; NO Enter was sent
+SEND_PROMPT_PHASE="undelivered"
 send_prompt_confirmed() {
   local pane="$1" text="$2" buf="$3" received=false try=0
+  SEND_PROMPT_PHASE="undelivered"
   # Phase A — deliver + confirm receipt.
   while [ "$try" -le "$SEND_RETRIES" ]; do
     if paste_prompt "$pane" "$text" "$buf" && poll_input "$pane" text; then
@@ -564,14 +581,16 @@ send_prompt_confirmed() {
     fi
     try=$((try + 1))
   done
+  # Nothing landed in the box, so nothing is submitted: no Enter is sent at all.
+  [ "$received" = true ] || return 1
+  SEND_PROMPT_PHASE="received-unsubmitted"
   # Phase B — submit + confirm. Re-send Enter alone (never re-paste).
   try=0
   while [ "$try" -le "$SEND_RETRIES" ]; do
     if tmux send-keys -t "$pane" Enter 2>/dev/null; then
-      if [ "$received" = true ]; then
-        poll_input "$pane" empty && return 0
-      else
-        break
+      if poll_input "$pane" empty; then
+        SEND_PROMPT_PHASE="submitted"
+        return 0
       fi
     fi
     try=$((try + 1))

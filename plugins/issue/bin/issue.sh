@@ -747,16 +747,49 @@ cmd_dispatch() {
   fi
   local readiness_confirmed=true
 
-  # Step 11: type + submit the prompt, confirmed (structural: the text left the
-  # input line). Then a NON-GATING acceptance observation — did a ready TUI
-  # actually consume it (working indicator / cleared input row)? This only informs
-  # `prompt_accepted`; it never changes prompt_confirmed or re-sends (issue #67).
+  # Step 11: type + submit the prompt, confirmed. SEND_PROMPT_PHASE
+  # distinguishes a handoff that never left the keyboard from one that may
+  # already be in front of a live agent — see the rollback asymmetry below.
+  # (AGE-83, porting storyhook's SH-226.) Then a NON-GATING acceptance
+  # observation — did a ready TUI actually consume it (working indicator /
+  # cleared input row)? This only informs `prompt_accepted`; it never changes
+  # prompt_confirmed or re-sends (issue #67).
   local prompt_confirmed=false prompt_accepted=false
   if send_prompt_confirmed "$pane" "$prompt" "issue-$n"; then
     prompt_confirmed=true
     if prompt_accepted "$pane"; then
       prompt_accepted=true
     fi
+  else
+    local send_tail
+    send_tail=$(pane_tail "$pane")
+    if [ "$SEND_PROMPT_PHASE" = undelivered ]; then
+      # Nothing reached the input box, so nothing was submitted (guaranteed
+      # by send_prompt_confirmed: no Enter is sent before receipt is
+      # observed). Safe to roll everything back, exactly as a failed
+      # readiness gate does.
+      git worktree remove --force "$worktree_path" >/dev/null 2>&1 || true
+      git worktree prune >/dev/null 2>&1 || true
+      git branch -D "$worktree_branch" >/dev/null 2>&1 || true
+      refuse_with handoff-undelivered \
+        "[issue] #$n → claude is running in window \`$wname\`, but the prompt never reached its input box, so nothing was submitted. The window is left open; the worktree and branch were rolled back." \
+        "$(jq -n --arg issue "$n" --arg window "$window" --arg wname "$wname" \
+              --arg pane "$pane" --arg tail "$send_tail" \
+              '{issue:($issue|tonumber), window:$window, window_name:$wname, pane:$pane,
+                readiness_confirmed:true, delivery_phase:"undelivered",
+                pane_tail:$tail}')"
+    fi
+    # received-unsubmitted: the box HELD the prompt and submission was never
+    # confirmed. It may already be in front of a live agent, so the worktree
+    # STAYS — rolling back here would leave a second dispatch free to open a
+    # second window on the same issue while the first may still be working.
+    refuse_with handoff-unconfirmed \
+      "[issue] #$n → claude is running in window \`$wname\` and the prompt reached its input box, but the submission was never confirmed. The worktree is DELIBERATELY left in place: the agent may already be working. Look with \`issue.sh capture $n\`, then either re-submit in that window or clean up manually." \
+      "$(jq -n --arg issue "$n" --arg window "$window" --arg wname "$wname" \
+            --arg pane "$pane" --arg tail "$send_tail" \
+            '{issue:($issue|tonumber), window:$window, window_name:$wname, pane:$pane,
+              readiness_confirmed:true, delivery_phase:"received-unsubmitted",
+              pane_tail:$tail}')"
   fi
 
   # Step 12: mark the issue in-progress on GitHub (issue #50). Done last so the
@@ -773,16 +806,11 @@ cmd_dispatch() {
     fi
   fi
 
-  # Result. ok:true from here on — readiness is always confirmed by this point
-  # (Step 10 refuses otherwise); warn only on an unconfirmed prompt submission
-  # (or a base that isn't fresh, issue #107).
+  # Result. ok:true from here on — readiness AND prompt submission are always
+  # confirmed by this point (Steps 10 and 11 refuse otherwise, AGE-83); warn
+  # only on a base that isn't fresh (issue #107) or a label failure.
   local warning="" display base
-  if [ "$prompt_confirmed" = true ]; then
-    base="[issue] #$n ($title) → opened tmux window \`$wname\` on a worktree based on \`origin/$default\` @ \`${base_oid:0:8}\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
-  else
-    warning="claude started, but couldn't confirm the prompt submitted — check window \`$wname\`."
-    base="[issue] #$n ($title) → window \`$wname\` opened on a worktree based on \`origin/$default\` @ \`${base_oid:0:8}\`, but I couldn't fully confirm the handoff."
-  fi
+  base="[issue] #$n ($title) → opened tmux window \`$wname\` on a worktree based on \`origin/$default\` @ \`${base_oid:0:8}\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
 
   # Fold a non-fresh base (issue #107) and a label failure into the warning
   # (both best-effort — never ok:false).

@@ -166,8 +166,14 @@ WORKTREE_IGNORE_COMMENT="# issue per-issue git worktrees (ephemeral — never co
 #      from being mistaken for the idle input box. Both glyphs are matched with
 #      `grep -F` (literal bytes) so they're locale-independent and never touch the ERE.
 #
-# The blind READY_FALLBACK_DELAY remains ONLY as a last resort after both tiers
-# exhaust the poll budget.
+# Both tiers above are gated by a THIRD, independent check before either can
+# succeed (AGE-83, porting storyhook's SH-226): the pane's foreground command
+# — a fact from the process table, not from rendered characters — must match
+# READY_PROCESS_PATTERN. A shell prompt can supply a frame rule and an idle
+# glyph for free; it cannot supply a process table entry named `claude`. On a
+# miss, dispatch now REFUSES outright rather than typing the prompt anyway —
+# see cmd_dispatch's own Step 10 comment for why "warn and proceed" stopped
+# being a safe default.
 READY_PATTERN="${ISSUE_READY_PATTERN:-for shortcuts|for agents|mode on|to cycle}"
 # ~15s ceiling (60 × 0.25s). The fast path short-circuits success immediately, so
 # a larger ceiling only costs time in the genuine-failure case (better tolerating a
@@ -175,13 +181,21 @@ READY_PATTERN="${ISSUE_READY_PATTERN:-for shortcuts|for agents|mode on|to cycle}
 # would push worst-case FAILURE latency toward a ~20s silent hang.
 READY_ATTEMPTS="${ISSUE_READY_ATTEMPTS:-60}"
 READY_DELAY="${ISSUE_READY_DELAY:-0.25}"
-READY_FALLBACK_DELAY="${ISSUE_READY_FALLBACK_DELAY:-3}"
 # Structural-path knobs. READY_STABLE_POLLS is a count of consecutive EQUAL
 # comparisons, so 3 == four identical captures in a row (N comparisons need N+1
 # samples). READY_FRAME_GLYPH / READY_PROMPT_GLYPH are matched literally (grep -F).
 READY_STABLE_POLLS="${ISSUE_READY_STABLE_POLLS:-3}"
 READY_FRAME_GLYPH="${ISSUE_READY_FRAME_GLYPH:-─}"
 READY_PROMPT_GLYPH="${ISSUE_READY_PROMPT_GLYPH:-❯}"
+# The pane's foreground command must be the launch binary before ANY text is
+# delivered to it (AGE-83, porting storyhook's SH-226). `node` is here because
+# Claude Code installs as a Node wrapper on some paths and tmux reports the
+# foreground process; excluding it would refuse real sessions. It still
+# excludes every shell, which is the discrimination the failure needs.
+# Heuristic, and deliberately overridable: setting this to `.` matches
+# anything and restores the pre-fix behaviour with no code change — the
+# escape hatch for an environment where Claude reports an unexpected name.
+READY_PROCESS_PATTERN="${ISSUE_READY_PROCESS_PATTERN:-^(claude|node)$}"
 # Pane tail attached to a warning result as diagnostic evidence (issue #67): the
 # last N non-blank lines of the pane, so the caller can triage without switching
 # windows. Only ever emitted on the warning path — the success payload stays clean.
@@ -466,6 +480,26 @@ cmd_create() {
      display:("[issue] Filed #" + $num + " — " + $title + "\n" + $url)}'
 }
 
+# dispatch_ready_note — one clause naming WHY the readiness check gave up, from
+# the globals wait_ready sets. A timeout and "a shell is sitting in that pane"
+# are different situations with different remedies, and the operator needs to
+# be told which. Added AGE-83, porting storyhook's SH-226.
+dispatch_ready_note() {
+  case "$WAIT_READY_REASON" in
+    wrong-process)
+      printf 'that pane is running `%s`, not a process matching `%s` — the launch never started. Set ISSUE_READY_PROCESS_PATTERN if your claude reports a different name; `.` matches anything' \
+        "${WAIT_READY_COMMAND:-?}" "$READY_PROCESS_PATTERN"
+      ;;
+    *)
+      if [ -n "$WAIT_READY_COMMAND" ]; then
+        printf 'timed out waiting for it to render; the pane is running `%s`' "$WAIT_READY_COMMAND"
+      else
+        printf 'timed out waiting for it to render, and the pane occupant could not be observed'
+      fi
+      ;;
+  esac
+}
+
 # ---- subcommand: dispatch ---------------------------------------------------
 cmd_dispatch() {
   local n="${1:-}"
@@ -670,16 +704,33 @@ cmd_dispatch() {
   paste_text "$pane" "$launch_cmd" || true
   tmux send-keys -t "$pane" Enter 2>/dev/null || true
 
-  # Step 10: readiness gate before typing the prompt. Two-tier (marker or
-  # structural — see wait_ready); on total miss we settle a fixed amount and
-  # proceed best-effort. Plan mode itself needs no gate: it's set by the
-  # --permission-mode plan launch flag.
-  local readiness_confirmed=false
-  if wait_ready "$pane" "$launch_cmd"; then
-    readiness_confirmed=true
-  else
-    sleep "$READY_FALLBACK_DELAY"
+  # Step 10: readiness GATE before typing the prompt (AGE-83, porting
+  # storyhook's SH-226). This GATES — it used to only warn-and-proceed on a
+  # miss. An unconfirmed pane gets no text at all: even this plugin's
+  # ATTENDED prompt is a substantial block of instructions, and typing it
+  # into whatever a mis-detected pane actually holds is not a safe default.
+  # The window is deliberately left standing — it is the only place the
+  # launch failure's own words survive — while the worktree and branch are
+  # rolled back so an immediate retry is not answered with "already
+  # dispatched?" (the worktree/branch collision check keys on this same path).
+  if ! wait_ready "$pane" "$launch_cmd"; then
+    local ready_tail
+    ready_tail=$(pane_tail "$pane")
+    git worktree remove --force "$worktree_path" >/dev/null 2>&1 || true
+    git worktree prune >/dev/null 2>&1 || true
+    git branch -D "$worktree_branch" >/dev/null 2>&1 || true
+    refuse_with pane-not-ready \
+      "[issue] #$n → could not confirm claude is running in window \`$wname\` ($(dispatch_ready_note)). Nothing was typed into that pane. The window is left open so you can look at it; the worktree and branch were rolled back." \
+      "$(jq -n --arg issue "$n" --arg window "$window" --arg wname "$wname" \
+            --arg pane "$pane" --arg cmd "$WAIT_READY_COMMAND" \
+            --arg wreason "$WAIT_READY_REASON" --arg tail "$ready_tail" \
+            --arg pattern "$READY_PROCESS_PATTERN" \
+            '{issue:($issue|tonumber), window:$window, window_name:$wname, pane:$pane,
+              readiness_confirmed:false, pane_command:$cmd,
+              wait_ready_reason:$wreason, ready_process_pattern:$pattern,
+              pane_tail:$tail}')"
   fi
+  local readiness_confirmed=true
 
   # Step 11: type + submit the prompt, confirmed (structural: the text left the
   # input line). Then a NON-GATING acceptance observation — did a ready TUI
@@ -707,19 +758,14 @@ cmd_dispatch() {
     fi
   fi
 
-  # Result. ok:true from here on; warn on any unconfirmed step (or a base that
-  # isn't fresh, issue #107).
+  # Result. ok:true from here on — readiness is always confirmed by this point
+  # (Step 10 refuses otherwise); warn only on an unconfirmed prompt submission
+  # (or a base that isn't fresh, issue #107).
   local warning="" display base
-  if [ "$readiness_confirmed" = true ] && [ "$prompt_confirmed" = true ]; then
+  if [ "$prompt_confirmed" = true ]; then
     base="[issue] #$n ($title) → opened tmux window \`$wname\` on a worktree based on \`origin/$default\` @ \`${base_oid:0:8}\`, launched \`$launch_cmd\` (plan mode), submitted the prompt${label_ok_note}."
   else
-    if [ "$readiness_confirmed" = false ] && [ "$prompt_confirmed" = false ]; then
-      warning="Couldn't confirm claude finished starting, nor that the prompt submitted — check window \`$wname\`."
-    elif [ "$readiness_confirmed" = false ]; then
-      warning="Couldn't confirm claude finished starting before the prompt was sent, but the prompt did submit — glance at window \`$wname\`."
-    else
-      warning="claude started, but couldn't confirm the prompt submitted — check window \`$wname\`."
-    fi
+    warning="claude started, but couldn't confirm the prompt submitted — check window \`$wname\`."
     base="[issue] #$n ($title) → window \`$wname\` opened on a worktree based on \`origin/$default\` @ \`${base_oid:0:8}\`, but I couldn't fully confirm the handoff."
   fi
 

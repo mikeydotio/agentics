@@ -34,7 +34,7 @@ dispatch_autosubmit() {
          FAKE_TMUX_CAPTURE="marker" \
          FAKE_TMUX_STATE="$state" \
          ISSUE_PROMPT='autosubmit-probe-<n>' \
-         ISSUE_READY_DELAY=0 ISSUE_READY_FALLBACK_DELAY=0 \
+         ISSUE_READY_DELAY=0 \
          ISSUE_CONFIRM_DELAY=0 ISSUE_PASTE_SETTLE_DELAY=0 \
          ISSUE_READY_ATTEMPTS=8 ISSUE_READY_STABLE_POLLS=2 \
          env "$@" \

@@ -34,6 +34,10 @@
 #   READY_STABLE_POLLS       wait_ready
 #   READY_FRAME_GLYPH        wait_ready
 #   READY_PROMPT_GLYPH       wait_ready, input_box_text, prompt_accepted
+#   READY_PROCESS_PATTERN    wait_ready, pane_runs — added AGE-83, porting
+#                            storyhook's SH-226: the pane's foreground
+#                            command must match this before ANY text is
+#                            delivered to it. See wait_ready's own doc for why.
 #   READY_TAIL_LINES         pane_tail
 #   READY_ACCEPT_PATTERN     prompt_accepted
 #   CONFIRM_ATTEMPTS         poll_input
@@ -55,11 +59,6 @@
 #                            decision deliberately left open here, not
 #                            resolved by this extraction.
 #
-# NOTE: ISSUE_READY_FALLBACK_DELAY / READY_FALLBACK_DELAY is NOT part of
-# this contract — despite living in the same config block and readiness
-# section, it is read only by issue.sh's own cmd_dispatch (the sleep after
-# a wait_ready timeout), never by wait_ready or any function in this file.
-#
 # None of the variables above are declared in this file — declaring them
 # here would just shadow whatever the caller set, which is exactly the
 # hidden coupling this extraction is trying to keep visible rather than bury.
@@ -77,6 +76,18 @@ fail() {
 # protected branch) from an ordinary error. Modelled on reconcile-pr.sh.
 refuse() {
   jq -n --arg r "$1" --arg d "$2" '{ok:false, reason:$r, display:$d}'
+  exit 1
+}
+
+# refuse_with <reason> <message> <json-object> — refuse(), plus diagnostic fields
+# merged in from <json-object>. A dispatch that gets far enough to open a window
+# has evidence worth carrying (which pane, what was running in it, what the pane
+# said), and refuse()'s fixed three-field shape has nowhere to put it. Separate
+# from refuse() rather than a widened refuse() so no existing caller changes.
+# Added AGE-83, porting storyhook's fork of this file.
+refuse_with() {
+  jq -n --arg r "$1" --arg d "$2" --argjson extra "$3" \
+    '{ok:false, reason:$r, display:$d} + $extra'
   exit 1
 }
 
@@ -226,23 +237,74 @@ poll_input() {
   return 1
 }
 
-# wait_ready <pane> <launch-cmd> — poll until Claude's TUI is ready, bounded by
-# READY_ATTEMPTS. Two tiers (see the config block for the full rationale):
-#   FAST:       launch_gone AND content matches the READY_PATTERN footer marker.
-#   STRUCTURAL: launch_gone AND content has BOTH the frame rule and the idle
-#               prompt glyph AND has stabilised (byte-identical for
-#               READY_STABLE_POLLS consecutive comparisons).
-# Either tier satisfied → success. On success, WAIT_READY_TIER is set to the tier
-# that matched ("marker" | "structural") for callers (doctor) that want it; a
-# timeout leaves it "none".
+# pane_command <pane> — READ-ONLY. Echo the pane's FOREGROUND command as tmux
+# reports it (`#{pane_current_command}`), or empty when it cannot be observed.
+# This is the only fact on this path that comes from the process table rather
+# than from rendered characters. Added AGE-83, porting storyhook's SH-226.
+pane_command() {
+  tmux display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null || printf ''
+}
+
+# pane_runs <pane> — 0 iff the pane's occupant NAME matches READY_PROCESS_PATTERN.
+# FAILS CLOSED: an occupant that cannot be observed is not a match, following
+# branch_is_merged's precedent in this file — an un-establishable fact is never
+# read as the permissive answer. Added AGE-83, porting storyhook's SH-226; the
+# name check here is the ONLY rule so far (storyhook also recognises the launch
+# binary by identity — SH-239 — which this file does not yet port).
+#
+# What this will NOT do is admit a shell, which is the whole point of SH-226.
+# `zsh` matches no pattern.
+pane_runs() {
+  local cmd
+  cmd="$(pane_command "$1")"
+  cmd="${cmd##*/}"
+  WAIT_READY_COMMAND="$cmd"
+  [ -n "$cmd" ] || return 1
+  printf '%s' "$cmd" | grep -Eq -- "$READY_PROCESS_PATTERN"
+}
+
+# wait_ready <pane> <launch-cmd> — poll until Claude is ready IN THE PANE,
+# bounded by READY_ATTEMPTS. Every success requires BOTH:
+#
+#   1. The pane's foreground command matches READY_PROCESS_PATTERN — a fact from
+#      the process table, which a shell prompt cannot fake; AND (AGE-83, porting
+#      storyhook's SH-226)
+#   2. one of two rendering tiers:
+#      FAST:       launch_gone AND content matches the READY_PATTERN footer marker.
+#      STRUCTURAL: launch_gone AND content has BOTH the frame rule and the idle
+#                  prompt glyph AND has stabilised (byte-identical for
+#                  READY_STABLE_POLLS consecutive comparisons).
+#
+# Both tiers used to rest on rendered characters alone, and a shell prompt can
+# supply a frame rule and an idle glyph for free — so a launch that never became
+# Claude could still read as ready, and the caller would type its prompt into a
+# bare shell. The check belongs HERE, in the predicate whose own contract claims
+# to establish that Claude is ready, rather than in a caller: a caller-side check
+# would leave this function still asserting something it does not test.
+#
+# The process check is queried only once a tier's other conditions already hold,
+# so the common case costs one extra tmux round trip rather than READY_ATTEMPTS.
+#
+# On return: WAIT_READY_TIER is the tier that matched ("marker" | "structural",
+# else "none"); WAIT_READY_COMMAND is the last occupant observed; and
+# WAIT_READY_REASON is "ok", "wrong-process" (a tier matched but the occupant did
+# not) or "timeout". Errors travel with context: "not ready" and "a shell is
+# sitting in that pane" are different sentences and lead to different actions.
 #
 # launch_gone = "the pane's last non-blank line no longer ends with the launch
-# command", i.e. the typed launch command has left the input line (claude started).
+# command", i.e. the typed launch command has left the input line. Note this
+# says nothing about WHY it left: a shell that answered `command not found`
+# satisfies it exactly as a started Claude does, which is why it is not, and
+# never was, evidence that claude started.
 WAIT_READY_TIER="none"
+WAIT_READY_COMMAND=""
+WAIT_READY_REASON="timeout"
 wait_ready() {
   local pane="$1" launch="$2" attempt=0 content last_line
   local prev='' stable=0 launch_gone
   WAIT_READY_TIER="none"
+  WAIT_READY_COMMAND=""
+  WAIT_READY_REASON="timeout"
   while [ "$attempt" -lt "$READY_ATTEMPTS" ]; do
     if content=$(tmux capture-pane -p -t "$pane" 2>/dev/null); then
       last_line=$(printf '%s\n' "$content" | grep -v '^[[:space:]]*$' | tail -1 || true)
@@ -252,8 +314,12 @@ wait_ready() {
       # Tier 1 — broadened footer marker (returns immediately; no stabilise wait).
       if [ "$launch_gone" = true ] \
          && printf '%s' "$content" | grep -Eq -- "$READY_PATTERN"; then
-        WAIT_READY_TIER="marker"
-        return 0
+        if pane_runs "$pane"; then
+          WAIT_READY_TIER="marker"
+          WAIT_READY_REASON="ok"
+          return 0
+        fi
+        WAIT_READY_REASON="wrong-process"
       fi
 
       # Tier 2 — structural frame + idle glyph + stabilisation. Increment the
@@ -267,8 +333,15 @@ wait_ready() {
          && [ -n "$content" ] && [ "$content" = "$prev" ]; then
         stable=$((stable + 1))
         if [ "$stable" -ge "$READY_STABLE_POLLS" ]; then
-          WAIT_READY_TIER="structural"
-          return 0
+          if pane_runs "$pane"; then
+            WAIT_READY_TIER="structural"
+            WAIT_READY_REASON="ok"
+            return 0
+          fi
+          # The glyphs are there and stable, but a shell is what is rendering
+          # them. Keep polling: claude may still be starting behind this pane.
+          WAIT_READY_REASON="wrong-process"
+          stable=0
         fi
       else
         stable=0

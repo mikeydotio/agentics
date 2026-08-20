@@ -82,9 +82,13 @@ assert json.loads(status_path("bid3").read_text())["status"] == "not_configured"
 
 # 4) source guard: the spawn call runs after index append + backend refresh
 src = (plugin_root / "bin" / "deployit-cli").read_text()
+# Matched on the call PREFIX, not the whole argument list: pinning the exact
+# spelling made this guard break the moment _refresh_local_backend grew the
+# arguments it needs to heal a stale backend symlink (AGE-85), reporting an
+# ordering violation that had not happened.
 call = src.index("_spawn_post_deploy_test(state, args.plugin_root, cwd, build_id, install_url)")
 assert src.index("_append_to_index(state, entry") < call, "spawn must follow index append"
-assert src.index('_refresh_local_backend(cfg["server"]["port"])') < call, "spawn must follow refresh"
+assert src.index('_refresh_local_backend(cfg["server"]["port"]') < call, "spawn must follow refresh"
 
 print("ok")
 PY

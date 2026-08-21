@@ -25,6 +25,7 @@ from urllib.parse import urlparse, quote
 import os
 import shutil
 import subprocess
+import traceback
 import time
 from textwrap import dedent
 
@@ -2935,7 +2936,22 @@ def main(argv):
         return
     if not args.cmd:
         fail("no subcommand given")
-    args.func(args)
+
+    # The JSON contract is the CLI's only interface: the orchestrator reads
+    # `ok`/`display` and has nothing to show a user when a bare traceback comes
+    # out instead. Individual commands still catch what they can explain — this
+    # is the backstop for what they cannot, and it keeps the traceback on stderr
+    # so the context is never lost, only reframed. (AGE-85 shipped a subprocess
+    # call that escaped the contract; a dozen more `check=True` calls in this
+    # file could do the same. This closes the class rather than one instance.)
+    try:
+        args.func(args)
+    except Exception:                       # not BaseException: fail() exits via SystemExit
+        traceback.print_exc()
+        exc = sys.exc_info()[1]
+        fail(f"deployit {args.cmd} failed unexpectedly: "
+             f"{type(exc).__name__}: {exc}",
+             unexpected=True, command=args.cmd)
 
 
 if __name__ == "__main__":

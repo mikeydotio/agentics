@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Fake launchctl that refuses the request, as launchctl does when the service
+# is not loaded in the target domain (`Could not find service`).
+echo "Could not find service \"com.mikeydotio.deployit.backend\" in domain" >&2
+exit 113

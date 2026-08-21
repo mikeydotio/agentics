@@ -173,6 +173,44 @@ def _sync_plugin_root(state: Path, plugin_root: Path):
     _atomic_symlink(backend, state / "bin" / "deployit-backend")
 
 
+def _backend_link_health(state: Path):
+    """Classify the daemon's stable indirection symlink as
+    ("ok" | "missing" | "dangling", target-or-None).
+
+    The launchd plist pins <state>/bin/deployit-backend forever, so when the
+    plugin-cache version it points into is pruned, launchd respawns the job into
+    the same ENOENT indefinitely — a failure otherwise visible only in
+    backend.err.log (AGE-85 found 34,007 such respawns in the field)."""
+    link = state / "bin" / "deployit-backend"
+    if not link.is_symlink():
+        return ("ok", str(link)) if link.is_file() else ("missing", None)
+    target = os.readlink(link)
+    return ("ok" if link.exists() else "dangling", target)
+
+
+def _heal_backend_link(state: Path, plugin_root: Path):
+    """Repair the stable backend symlink when — and only when — it is broken.
+    Returns a one-line note describing the repair, or None if none was needed.
+
+    A broken link means the daemon is already dead, so re-pointing it cannot
+    displace a working configuration. A link that RESOLVES is left alone even
+    when it names some other root: that is what `redeploy --source <checkout>`
+    installs, and silently dragging a deliberate pin back to the cache copy
+    would be its own defect."""
+    status, target = _backend_link_health(state)
+    if status == "ok":
+        return None
+    backend = plugin_root.resolve() / "bin" / "deployit-backend"
+    if not backend.is_file():
+        return None
+    _sync_plugin_root(state, plugin_root)
+    was = f"{status} ({target})" if target else status
+    note = f"repaired the backend symlink — was {was}, now {backend}"
+    sys.stderr.write(f"deployit: {note}\n")
+    _kickstart_daemon()
+    return note
+
+
 def _clone_index(state: Path):
     """Clone the shared index repo. Skipped in tests via DEPLOYIT_SKIP_INDEX_CLONE."""
     if os.environ.get("DEPLOYIT_SKIP_INDEX_CLONE"):
@@ -1818,13 +1856,37 @@ def _index_change_is_effective(result) -> bool:
     return result.get("status") in ("published", "local_only")
 
 
-def _refresh_local_backend(port: int):
-    try:
+def _refresh_local_backend(port: int, state: Path = None, plugin_root: Path = None):
+    """Tell the running backend to re-read the index. Returns a one-line note
+    when a broken indirection symlink had to be repaired first, else None.
+
+    A refused connection is the visible face of a dead daemon, and the one cause
+    reachable from here is a stale symlink left by a pruned plugin-cache version
+    (AGE-85). Repair it, restart, retry — otherwise the build lands in the index
+    and its install page 502s while the deploy calls itself a success."""
+    def _post():
         req = urllib.request.Request(
             f"http://127.0.0.1:{port}/deployit/_internal/refresh", method="POST")
         urllib.request.urlopen(req, timeout=3).read()
+
+    try:
+        _post()
+        return None
     except Exception as exc:
-        sys.stderr.write(f"warning: local backend refresh failed: {exc}\n")
+        first_error = exc
+
+    note = _heal_backend_link(state, plugin_root) if state and plugin_root else None
+    if note is None:
+        sys.stderr.write(f"warning: local backend refresh failed: {first_error}\n")
+        return None
+
+    _wait_for_health(port)
+    try:
+        _post()
+    except Exception as exc:
+        sys.stderr.write(
+            f"warning: local backend refresh still failing after repair: {exc}\n")
+    return note
 
 
 def _release_notes_path(args, meta_full: dict, builds_dir: Path) -> Path:
@@ -2192,7 +2254,7 @@ def cmd_deploy(args):
     entry.pop("sparkle_required", None)  # internal publish-gate marker (issue #117); not shared
 
     publish = _append_to_index(state, entry, idx=_index_cfg(cfg))
-    _refresh_local_backend(cfg["server"]["port"])
+    _refresh_local_backend(cfg["server"]["port"], state, args.plugin_root)
 
     # GitHub release — the final, recoverable step. It runs only after the
     # tailnet build is fully published (index + backend), so a publish failure
@@ -2497,8 +2559,16 @@ def cmd_status(args):
     except FileNotFoundError:
         local_builds = []
 
-    lines = [
-        f"backend:  {'up' if backend_ok else 'DOWN'} (port {port})",
+    link_status, link_target = _backend_link_health(state)
+
+    lines = [f"backend:  {'up' if backend_ok else 'DOWN'} (port {port})"]
+    if not backend_ok and link_status != "ok":
+        lines.append(
+            f"          reason: {link_status} backend symlink"
+            + (f" -> {link_target}" if link_target else "")
+            + " (its plugin-cache version was pruned);"
+              " repair with /deployit redeploy")
+    lines += [
         f"base_url: {base_url}/",
         f"recent local deploys:",
     ]
@@ -2507,7 +2577,8 @@ def cmd_status(args):
                      f"{b['marketing_version']} ({b['timestamp']})")
     if not local_builds:
         lines.append("  (none)")
-    ok({"display": "\n".join(lines), "backend_ok": backend_ok})
+    ok({"display": "\n".join(lines), "backend_ok": backend_ok,
+        "backend_link": link_status})
 
 
 def cmd_list(args):
@@ -2572,7 +2643,7 @@ def cmd_gc(args):
                 removed += 1
             _prune_post_test_artifacts(state, bid)
         if status != "local_only":
-            _refresh_local_backend(cfg["server"]["port"])
+            _refresh_local_backend(cfg["server"]["port"], state, args.plugin_root)
 
     display = f"archived {len(archived_ids)} build(s); removed {removed} local dir(s)"
     payload = {"archived": len(archived_ids), "removed_local": removed}
@@ -2646,7 +2717,7 @@ def cmd_rm(args):
                 removed += 1
             _prune_post_test_artifacts(state, bid)
         if status != "local_only":
-            _refresh_local_backend(cfg["server"]["port"])
+            _refresh_local_backend(cfg["server"]["port"], state, args.plugin_root)
 
     display = f"removed {len(removed_ids)} build(s); {removed} local dir(s)"
     payload = {"removed": len(removed_ids), "removed_local": removed}
@@ -2682,14 +2753,37 @@ def _plist_is_legacy(state: Path) -> bool:
 
 
 def _kickstart_daemon():
-    """Restart the launchd-managed backend. Skipped via DEPLOYIT_SKIP_KICKSTART."""
+    """Ask launchd to restart the backend. Skipped via DEPLOYIT_SKIP_KICKSTART.
+    Returns None when the request was accepted, else a one-line reason.
+
+    This never raises. `kickstart -k` waits for the old instance to die and a new
+    one to spawn, which a job in a respawn storm routinely outlasts, and launchd
+    refuses outright when the job is not loaded in the domain. But the restart
+    *request* is not evidence about the daemon — `_wait_for_health` is — so a
+    failed request is context to carry forward, not a fatal error. (AGE-85:
+    raising here exited `redeploy` with a traceback instead of the CLI's JSON
+    contract, and did so after the symlink repair had already succeeded, so the
+    repair that landed went unreported.)"""
     if os.environ.get("DEPLOYIT_SKIP_KICKSTART"):
-        return
+        return None
     launchctl = os.environ.get("DEPLOYIT_LAUNCHCTL_BIN", "launchctl")
-    subprocess.run(
-        [launchctl, "kickstart", "-k", f"gui/{os.getuid()}/com.mikeydotio.deployit.backend"],
-        check=True, timeout=10,
-    )
+    timeout_s = float(os.environ.get("DEPLOYIT_KICKSTART_TIMEOUT", "60"))
+    label = f"gui/{os.getuid()}/com.mikeydotio.deployit.backend"
+    try:
+        subprocess.run([launchctl, "kickstart", "-k", label], check=True,
+                       timeout=timeout_s, capture_output=True, text=True)
+        return None
+    except subprocess.TimeoutExpired:
+        reason = (f"launchctl kickstart timed out after {timeout_s:g}s — the job may "
+                  f"be in a respawn storm; checking health anyway")
+    except subprocess.CalledProcessError as exc:
+        tail = (exc.stderr or "").strip().splitlines()
+        reason = (f"launchctl kickstart exited {exc.returncode}"
+                  + (f": {tail[-1]}" if tail else ""))
+    except OSError as exc:
+        reason = f"could not run launchctl ({launchctl}): {exc.strerror or exc}"
+    sys.stderr.write(f"deployit: {reason}\n")
+    return reason
 
 
 def _wait_for_health(port: int, timeout_s: float = 5.0) -> bool:
@@ -2738,11 +2832,11 @@ def cmd_redeploy(args):
         _install_launchd(state, port)
         plist_rewritten = True
 
-    _kickstart_daemon()
+    kickstart_warning = _kickstart_daemon()
 
     if not _wait_for_health(port):
         fail(f"daemon did not become healthy on port {port} after kickstart",
-             port=port)
+             port=port, kickstart_warning=kickstart_warning)
 
     # Live verification: run verify-live.sh against the running daemon.
     if not os.environ.get("DEPLOYIT_SKIP_VERIFY"):
@@ -2761,12 +2855,15 @@ def cmd_redeploy(args):
     parts = [f"redeployed daemon: target={target}"]
     if plist_rewritten:
         parts.append("plist rewritten to stable paths")
+    if kickstart_warning:
+        parts.append(kickstart_warning)
     parts.append("health + live checks passed")
     ok({
         "display": "\n  ".join(parts),
         "target": str(target),
         "port": port,
         "plist_rewritten": plist_rewritten,
+        "kickstart_warning": kickstart_warning,
     })
 
 

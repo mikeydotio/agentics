@@ -91,6 +91,7 @@ test-appcast-module.sh
 test-bootstrap-dirs.sh
 test-cli-archive-build-number.sh
 test-cli-archive-configuration.sh
+test-cli-backend-link-rot.sh
 test-cli-bump.sh
 test-cli-classify-push-failure.sh
 test-cli-config-sparkle.sh
@@ -101,6 +102,8 @@ test-cli-deploy-pr-leave-open.sh
 test-cli-deploy-release-wiring.sh
 test-cli-detect-sparkle.sh
 test-cli-index-local-only.sh
+test-cli-json-contract-guard.sh
+test-cli-kickstart-resilience.sh
 test-cli-posttest-spawn.sh
 test-cli-preflight.sh
 test-cli-publish-preserve-on-failure.sh
@@ -129,24 +132,27 @@ EOF
 # measurement, then committed.
 read -r -d '' PINNED_VERDICTS <<'EOF' || true
 LLNNNN test-bootstrap-dirs.sh
+LLNNNN test-cli-backend-link-rot.sh
 LHNNNN test-cli-bump.sh
+LLLNNN test-cli-deploy-release-wiring.sh
+LLNNNN test-cli-index-local-only.sh
+LLLNNN test-cli-json-contract-guard.sh
+LLLLLL test-cli-kickstart-resilience.sh
 LLLLNN test-cli-preflight.sh
 LLLLLN test-cli-redeploy.sh
 LHNNNN test-cli-rm-pr-fallback.sh
 HHHHHL test-cli-rm.sh
 LNNNNN test-cli-version.sh
-LLHNNN test-gc.sh
-LLLLNN test-release-appcast-asset.sh
-LNNNNN test-release-context.sh
-LLNNNN test-release-gh-invocation.sh
-LLNNNN test-release-tag-exists-omits-target.sh
-LLLNNN test-cli-deploy-release-wiring.sh
 LLHHNN test-cli-worktree-guard.sh
+LLHNNN test-gc.sh
 LNNNNN test-metadata-single-app.sh
 LNNNNN test-metadata.sh
 LLNNNN test-release-adhoc-signing.sh
+LLLLNN test-release-appcast-asset.sh
+LNNNNN test-release-context.sh
 LLNNNN test-release-existing-tag.sh
-LLNNNN test-cli-index-local-only.sh
+LLNNNN test-release-gh-invocation.sh
+LLNNNN test-release-tag-exists-omits-target.sh
 EOF
 
 # The two entrypoints the shim impersonates.

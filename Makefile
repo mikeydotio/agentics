@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test install-hooks check-hooks test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test install-hooks check-hooks test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
-test: test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -134,6 +134,12 @@ test-agents:
 	bash tests/with-isolated-store.sh bash plugins/agents/bin/validate-agents.sh
 	bash tests/with-isolated-store.sh bash plugins/agents/tests/codex-compat.sh
 	bash tests/with-isolated-store.sh bash plugins/agents/tests/smoke-codex-install.sh
+
+# Dual-host Council contract: Claude bytes stay pinned while Codex gets native
+# parallel orchestration, portable Agents discovery, and an isolated install.
+test-council:
+	bash tests/with-isolated-store.sh bash plugins/council/tests/codex-compat.sh
+	bash tests/with-isolated-store.sh bash plugins/council/tests/smoke-codex-install.sh
 
 test-semver:
 	bash tests/with-isolated-store.sh bash plugins/semver/tests/run-tests.sh

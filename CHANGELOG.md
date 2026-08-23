@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.9.0] - 2026-08-23
+
+### Added
+- make Council Vote installable in Codex with native parallel panels and stable member identities across voting rounds (AGE-89)
+
+### Changed
+- isolate Council's unchanged Claude skill and protocol behind a host dispatcher while resolving its Agents dependency from Codex installs
+
+### Testing
+- pin Claude Council behavior byte-for-byte and cover Codex packaging, dependency resolution, orchestration bounds, and isolated dual-plugin installation
+
+_[manual]_
+
 ## [v3.8.0] - 2026-08-23
 
 ### Added

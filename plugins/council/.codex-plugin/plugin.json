@@ -1,0 +1,28 @@
+{
+  "name": "council",
+  "version": "3.9.0",
+  "description": "Convene a three-member specialist council for delegated decisions in Codex.",
+  "author": {
+    "name": "mikeydotio",
+    "url": "https://github.com/mikeydotio"
+  },
+  "repository": "https://github.com/mikeydotio/agentics",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Council Vote",
+    "shortDescription": "Let three specialists decide",
+    "longDescription": "Convene three independent specialist subagents, collect proposals, deliberate through a bounded voting protocol, and persist an auditable decision.",
+    "developerName": "mikeydotio",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Use the council to decide between these options.",
+      "Convene a council for this architecture decision.",
+      "Have three specialists make this delegated call."
+    ]
+  }
+}

@@ -7,7 +7,7 @@ chair tiebreaker.
 
 ## When to use
 
-`/council-vote` is intended to be invoked by **other agents** mid-task — when an agent
+Council Vote is intended to be invoked by **other agents** mid-task — when an agent
 hits a judgment call, the user is unavailable, and the agent doesn't want to either
 guess silently or block on `AskUserQuestion`.
 
@@ -19,13 +19,21 @@ asking is low.
 
 ## Usage
 
-```
+Claude Code:
+
+```text
 /council-vote <question> [-- <context summary>]
+```
+
+Codex (with the Agents plugin installed and enabled from the same marketplace):
+
+```text
+$council:council-vote <question> [-- <context summary>]
 ```
 
 Examples:
 
-```
+```text
 /council-vote "Should the iOS onboarding CTA be a sheet or a full-screen push?" \
   -- "SwiftUI app, iOS 17+, primary CTA for new-user flow"
 

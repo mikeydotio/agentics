@@ -19,8 +19,10 @@ FRESHEN_DIR=".freshen"
 die() { echo "Error: $*" >&2; exit 1; }
 
 require_tmux() {
-  [ -n "${TMUX:-}" ] || die "freshen requires tmux. Claude must be running inside a tmux session."
-  [ -n "${TMUX_PANE:-}" ] || die "freshen requires \$TMUX_PANE. Claude must be running inside a tmux pane."
+  local host_name="Claude"
+  [ "${FRESHEN_HOST:-claude}" = "codex" ] && host_name="Codex"
+  [ -n "${TMUX:-}" ] || die "freshen requires tmux. ${host_name} must be running inside a tmux session."
+  [ -n "${TMUX_PANE:-}" ] || die "freshen requires \$TMUX_PANE. ${host_name} must be running inside a tmux pane."
 }
 
 is_disabled() {
@@ -29,7 +31,11 @@ is_disabled() {
 
 require_enabled() {
   if is_disabled; then
-    echo "freshen: disabled — run '/freshen enable' to re-enable" >&2
+    if [ "${FRESHEN_HOST:-claude}" = "codex" ]; then
+      echo "freshen: disabled — run '\$freshen:freshen enable' to re-enable" >&2
+    else
+      echo "freshen: disabled — run '/freshen enable' to re-enable" >&2
+    fi
     exit 1
   fi
 }

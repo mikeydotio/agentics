@@ -9,7 +9,7 @@
 #
 # Covers two concerns:
 #   1. Drift invariant on the REAL repo — the top-level marketplace.json and every
-#      plugins/*/.claude-plugin/plugin.json carry a `version` equal to the bare
+#      Claude/Codex plugin.json carry a `version` equal to the bare
 #      VERSION. This is the enforceable half of the "a bump can never miss a
 #      manifest" promise; it fails the pre-push gate the moment a manifest drifts.
 #   2. Behaviour of .semver/hooks/post-bump/01-sync-plugin-versions.sh in both its
@@ -26,11 +26,14 @@ fail() { echo "$1" >&2; return 1; }
 
 bare_version() { tr -d '[:space:]' < "$REPO_ROOT/VERSION" | sed 's/^v//'; }
 
-# Every version-bearing manifest in the real repo: marketplace.json + each plugin.json.
+# Every version-bearing manifest in the real repo: marketplace.json + each Claude/Codex plugin.json.
 all_manifests() {
     [ -f "$REPO_ROOT/.claude-plugin/marketplace.json" ] && echo "$REPO_ROOT/.claude-plugin/marketplace.json"
     local f
     for f in "$REPO_ROOT"/plugins/*/.claude-plugin/plugin.json; do
+        [ -f "$f" ] && echo "$f"
+    done
+    for f in "$REPO_ROOT"/plugins/*/.codex-plugin/plugin.json; do
         [ -f "$f" ] && echo "$f"
     done
 }
@@ -48,11 +51,14 @@ make_fixture() {
     printf 'v9.9.9\n' > "$fix/VERSION"
     printf '{\n  "$schema": "https://example/marketplace.schema.json",\n  "name": "fixturemarket",\n  "description": "fixture marketplace",\n  "owner": { "name": "x" },\n  "plugins": [ { "name": "alpha", "source": "./plugins/alpha" } ]\n}\n' \
         > "$fix/.claude-plugin/marketplace.json"
-    mkdir -p "$fix/plugins/alpha/.claude-plugin" "$fix/plugins/beta/.claude-plugin"
+    mkdir -p "$fix/plugins/alpha/.claude-plugin" "$fix/plugins/beta/.claude-plugin" \
+        "$fix/plugins/alpha/.codex-plugin" "$fix/plugins/beta/.codex-plugin"
     printf '{\n  "name": "alpha",\n  "description": "A plugin",\n  "author": { "name": "x" }\n}\n' \
         > "$fix/plugins/alpha/.claude-plugin/plugin.json"
     printf '{\n  "name": "beta",\n  "description": "B plugin"\n}\n' \
         > "$fix/plugins/beta/.claude-plugin/plugin.json"
+    cp "$fix/plugins/alpha/.claude-plugin/plugin.json" "$fix/plugins/alpha/.codex-plugin/plugin.json"
+    cp "$fix/plugins/beta/.claude-plugin/plugin.json" "$fix/plugins/beta/.codex-plugin/plugin.json"
     echo "$fix"
 }
 
@@ -106,6 +112,8 @@ test_standalone_stamps_bare_version_into_all_manifests() {
     [ "$(jq -r .version "$fix/.claude-plugin/marketplace.json")" = "9.9.9" ] || fail "marketplace not synced"
     [ "$(jq -r .version "$fix/plugins/alpha/.claude-plugin/plugin.json")" = "9.9.9" ] || fail "alpha not synced"
     [ "$(jq -r .version "$fix/plugins/beta/.claude-plugin/plugin.json")" = "9.9.9" ] || fail "beta not synced"
+    [ "$(jq -r .version "$fix/plugins/alpha/.codex-plugin/plugin.json")" = "9.9.9" ] || fail "Codex alpha not synced"
+    [ "$(jq -r .version "$fix/plugins/beta/.codex-plugin/plugin.json")" = "9.9.9" ] || fail "Codex beta not synced"
 }
 
 test_standalone_syncs_marketplace_and_preserves_structure() {
@@ -170,6 +178,8 @@ test_postbump_folds_manifests_into_release_commit_and_moves_tag() {
         || fail "synced plugin manifest is not committed into the release commit"
     [ "$(git -C "$fix" show "HEAD:.claude-plugin/marketplace.json" | jq -r .version)" = "9.9.9" ] \
         || fail "synced marketplace manifest is not committed into the release commit"
+    [ "$(git -C "$fix" show "HEAD:plugins/alpha/.codex-plugin/plugin.json" | jq -r .version)" = "9.9.9" ] \
+        || fail "synced Codex plugin manifest is not committed into the release commit"
 }
 
 test_postbump_does_not_stage_unrelated_working_tree_changes() {

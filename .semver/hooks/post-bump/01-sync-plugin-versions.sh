@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 01-sync-plugin-versions.sh — One-way propagate the marketplace VERSION into the
-# `version` field of the top-level .claude-plugin/marketplace.json and of every
-# plugin's .claude-plugin/plugin.json.
+# `version` field of the top-level marketplace and every Claude/Codex plugin
+# manifest.
 #
 # WHY: the agentics marketplace versions everything together. A change to any
 # plugin bumps the single repo VERSION, and every manifest is stamped with it
@@ -55,12 +55,13 @@ fi
 command -v jq >/dev/null 2>&1 || { echo "sync-plugin-versions: jq is required" >&2; exit 1; }
 
 # --- Discover manifests ------------------------------------------------------
-# The top-level marketplace.json plus every plugin.json. Both are JSON objects
+# The top-level marketplace.json plus every Claude/Codex plugin.json. All are JSON objects
 # with a "name" key, which is all the jq filter below assumes.
 shopt -s nullglob
 manifests=()
 [ -f "$REPO_ROOT/.claude-plugin/marketplace.json" ] && manifests+=("$REPO_ROOT/.claude-plugin/marketplace.json")
 manifests+=("$REPO_ROOT"/plugins/*/.claude-plugin/plugin.json)
+manifests+=("$REPO_ROOT"/plugins/*/.codex-plugin/plugin.json)
 shopt -u nullglob
 if [ ${#manifests[@]} -eq 0 ]; then
     echo "sync-plugin-versions: no manifests found under $REPO_ROOT" >&2

@@ -30,6 +30,7 @@ _GUARD_LIB="${PLUGIN_ROOT}/../hook-guard/lib/stop-guard.sh"
 . "${PLUGIN_ROOT}/lib/transition-log.sh"
 
 FRESHEN_DIR=".freshen"
+CLEAR_COMMAND="${FRESHEN_CLEAR_COMMAND:-/clear}"
 
 # Directory must exist
 [ -d "$FRESHEN_DIR" ] || exit 0
@@ -71,11 +72,11 @@ SIGNAL_SOURCE="$(basename "$SIGNAL" .signal)"
 # only change in behavior is that a send which is never confirmed no longer
 # marks .clear-pending at all, leaving the signal for the next Stop event to
 # retry from scratch instead of silently considering the clear "done".
-freshen_log_transition "on-stop: found pending signal from '${SIGNAL_SOURCE}' -- sending /clear"
-if pane_send_and_confirm "$TMUX_PANE" keys "/clear"; then
+freshen_log_transition "on-stop: found pending signal from '${SIGNAL_SOURCE}' -- sending ${CLEAR_COMMAND}"
+if pane_send_and_confirm "$TMUX_PANE" keys "$CLEAR_COMMAND"; then
   touch "$FRESHEN_DIR/.clear-pending"
-  freshen_log_transition "on-stop: /clear confirmed accepted"
+  freshen_log_transition "on-stop: ${CLEAR_COMMAND} confirmed accepted"
 else
-  echo "freshen: WARNING /clear send unconfirmed after retries -- leaving signal '${SIGNAL_SOURCE}.signal' for the next Stop event to retry" >&2
-  freshen_log_transition "on-stop: /clear unconfirmed after retries -- NOT marking clear-pending, signal remains for retry"
+  echo "freshen: WARNING ${CLEAR_COMMAND} send unconfirmed after retries -- leaving signal '${SIGNAL_SOURCE}.signal' for the next Stop event to retry" >&2
+  freshen_log_transition "on-stop: ${CLEAR_COMMAND} unconfirmed after retries -- NOT marking clear-pending, signal remains for retry"
 fi

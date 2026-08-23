@@ -1,0 +1,25 @@
+{
+  "name": "freshen",
+  "version": "3.8.0",
+  "description": "Clear context and continue long workflows safely through tmux.",
+  "author": {
+    "name": "mikeydotio",
+    "url": "https://github.com/mikeydotio"
+  },
+  "repository": "https://github.com/mikeydotio/agentics",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Freshen",
+    "shortDescription": "Continue workflows after context resets",
+    "longDescription": "Queue a safe context reset and re-invocation in Codex CLI, with an explicit manual handoff on surfaces that do not provide tmux.",
+    "developerName": "mikeydotio",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Freshen this session and continue the workflow.",
+      "Check whether Freshen can use tmux here."
+    ]
+  }
+}

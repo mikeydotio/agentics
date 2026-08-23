@@ -1,0 +1,27 @@
+{
+  "name": "agents",
+  "version": "3.8.0",
+  "description": "Browse, validate, and run research-backed specialist roles in Codex.",
+  "author": {
+    "name": "mikeydotio",
+    "url": "https://github.com/mikeydotio"
+  },
+  "repository": "https://github.com/mikeydotio/agentics",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agents",
+    "shortDescription": "Run specialist roles in Codex",
+    "longDescription": "Browse and validate the shared agentics role catalog, or run one of its specialist roles through native Codex subagent orchestration.",
+    "developerName": "mikeydotio",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "List the available specialist roles.",
+      "Run the reviewer role on my current changes.",
+      "Validate the shared agent catalog."
+    ]
+  }
+}

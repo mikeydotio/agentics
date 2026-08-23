@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 - make Freshen installable and usable in Codex with native `/new`, hook JSON, and tmux continuation adapters (AGE-87)
+- make Agents installable in Codex with safe catalog resolution and native specialist-role execution (AGE-88)
 
 ### Changed
 - isolate Freshen's Claude and Codex skill instructions behind one host dispatcher while keeping the shared queue and confirmation engine
@@ -14,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Testing
 - cover both hosts with 50 Freshen tests, strict manifest validation, an isolated Codex install, and a real Codex/tmux reset-and-resume smoke
+- preserve all 28 Claude agent definitions byte-for-byte while covering Codex routing, role execution contracts, and isolated installation
 
 _[manual]_
 

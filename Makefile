@@ -132,6 +132,8 @@ test-prompt-hygiene:
 # checks went unenforced. Plain bash so it always runs.
 test-agents:
 	bash tests/with-isolated-store.sh bash plugins/agents/bin/validate-agents.sh
+	bash tests/with-isolated-store.sh bash plugins/agents/tests/codex-compat.sh
+	bash tests/with-isolated-store.sh bash plugins/agents/tests/smoke-codex-install.sh
 
 test-semver:
 	bash tests/with-isolated-store.sh bash plugins/semver/tests/run-tests.sh

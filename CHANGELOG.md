@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.8.0] - 2026-08-23
+
+### Added
+- make Freshen installable and usable in Codex with native `/new`, hook JSON, and tmux continuation adapters (AGE-87)
+
+### Changed
+- isolate Freshen's Claude and Codex skill instructions behind one host dispatcher while keeping the shared queue and confirmation engine
+- teach plugin version synchronization to include Codex manifests
+
+### Testing
+- cover both hosts with 50 Freshen tests, strict manifest validation, an isolated Codex install, and a real Codex/tmux reset-and-resume smoke
+
+_[manual]_
+
 ## [v3.7.5] - 2026-08-20
 
 ### Fixed

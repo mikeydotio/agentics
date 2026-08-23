@@ -3,11 +3,11 @@
   "hooks": {
     "Stop": [
       {
-        "matcher": "*",
+        "matcher": ".*",
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/on-stop.sh",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/host-dispatch.sh on-stop.sh",
             "timeout": 5
           }
         ]
@@ -19,17 +19,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/on-clear.sh",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/host-dispatch.sh on-clear.sh",
             "timeout": 5
           }
         ]
       },
       {
-        "matcher": "startup,resume,compact",
+        "matcher": "startup|resume|compact",
         "hooks": [
           {
             "type": "command",
-            "command": "rm -f .freshen/*.signal .freshen/.clear-pending .freshen/.clear-consumed 2>/dev/null; exit 0",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/host-dispatch.sh cleanup-session-start.sh",
             "timeout": 3
           }
         ]

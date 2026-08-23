@@ -18,3 +18,7 @@ if ! command -v bats &>/dev/null; then
 fi
 
 bats "$PLUGIN_DIR/lib" "$PLUGIN_DIR/hooks" "$@"
+
+# Packaging smoke uses an isolated CODEX_HOME and marketplace copy. It performs
+# no model call and skips cleanly when Codex is unavailable.
+bash "$SCRIPT_DIR/smoke-codex-install.sh"

@@ -53,6 +53,19 @@ INSTALLED_ROOT="$(cd "$(dirname "$INSTALLED_MANIFEST")/.." && pwd)"
 [ -f "$INSTALLED_ROOT/hooks/codex/on-stop.sh" ]
 [ -f "$INSTALLED_ROOT/hooks/codex/on-clear.sh" ]
 
+# Exercise the installed SessionStart commands with Codex's native plugin-root
+# variable only. This catches manifests that never reach host-dispatch.sh
+# because they expand the Claude-only CLAUDE_PLUGIN_ROOT in the command shell.
+CLEAR_COMMAND="$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$INSTALLED_ROOT/hooks/hooks.json")"
+STARTUP_COMMAND="$(jq -r '.hooks.SessionStart[1].hooks[0].command' "$INSTALLED_ROOT/hooks/hooks.json")"
+(
+  cd "$SMOKE_ROOT"
+  env -u CLAUDE_PLUGIN_ROOT PLUGIN_ROOT="$INSTALLED_ROOT" \
+    bash -c "$CLEAR_COMMAND" < /dev/null > /dev/null
+  env -u CLAUDE_PLUGIN_ROOT PLUGIN_ROOT="$INSTALLED_ROOT" \
+    bash -c "$STARTUP_COMMAND" < /dev/null > /dev/null
+)
+
 RESOLVED="$(PLUGIN_ROOT="$INSTALLED_ROOT" bash "$INSTALLED_ROOT/hooks/host-dispatch.sh" --resolve on-stop.sh)"
 [[ "$RESOLVED" == codex:*'/hooks/codex/on-stop.sh' ]]
 

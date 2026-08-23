@@ -606,6 +606,46 @@ fixture asserts nothing. Full trail:
 
 **Hook ordering**: Claude Code does **not** guarantee execution order between different plugins' hooks registered on the same event (e.g. forge's and freshen's `Stop` hooks both fire on every Stop event, in unspecified order). tmux buffering (keystrokes sent by a Stop hook aren't acted on until all of that turn's hooks finish) only governs *when* an already-sent command is processed — it does not make cross-plugin ordering safe for hooks that depend on *each other's side effects* (e.g. one hook writing a signal file another hook reads). Where that matters, the dependent hook must be self-sufficient rather than assuming a write from another plugin's hook already happened — see forge's `hooks/session-stop.sh` and `references/auto-resume.md`'s **Cross-Plugin Hook Ordering** section for a worked example (and its `.freshen/.clear-pending` idempotency guard for avoiding a double action when both hooks *do* end up doing the same thing in one batch).
 
+### A failed request is not evidence about the state it was meant to change
+
+`_kickstart_daemon` ran `launchctl kickstart -k` under `check=True, timeout=10` and let both
+`TimeoutExpired` and `CalledProcessError` escape. Two things were wrong, and only one of them was
+the timeout. `kickstart -k` waits for the old instance to die *and* a new one to spawn, so 10s is
+too tight for a job in a respawn storm — but the deeper error was treating the **request** as a
+verdict on the **daemon**. `_wait_for_health` runs immediately after and is the only thing that
+knows. A restart request that failed is context to carry; the health probe rules. `redeploy` now
+carries the reason into both outcomes (`kickstart_warning`), and the timeout defaults to 60s
+(`DEPLOYIT_KICKSTART_TIMEOUT`).
+
+The raising also landed **after** `_sync_plugin_root` had already repaired the symlinks, so the
+command destroyed the report of a repair it had successfully made. A partial success that reports
+nothing is worse than a failure that reports the part that landed.
+
+⚠ **A pinned indirection outlives its target, and rots in silence.** AGE-72's note above records
+that `<state>/_plugin_root` is a symlink into the version-keyed plugin install cache. AGE-85 is
+what happens at the other end of that arrangement: prune the cache version and both stable links
+dangle, while the plist goes on naming them forever. launchd then respawns the job into the same
+ENOENT for as long as nobody looks — **34,007 times** on the machine this was found on, every one
+of them logged to `backend.err.log` and nowhere else. `status` reported a bare `backend: DOWN`;
+`deploy` printed one `Connection refused` warning, published to the index, and returned `ok`. The
+install page 502'd. **Any pinned path that outlives what it points at needs a liveness check at the
+point of use, not just a writer that got it right once.**
+
+The repair rule is narrow on purpose: `_heal_backend_link` fixes a link that is **broken**, and
+leaves one that **resolves** alone even when it names a different root. A dangling link means the
+daemon is already dead, so re-pointing it can displace nothing; a resolving link may be a
+deliberate `redeploy --source <checkout>` pin, and silently dragging it back to the cache copy
+would be its own defect. `status` stays read-only — it names the stale link and the remedy, and
+repairs nothing.
+
+**The class, not the instance.** `main()` now converts any unexpected exception into the JSON
+contract (`ok:false`, `unexpected:true`, the command named, traceback still on stderr). The
+orchestrator skill's entire interface is `ok`/`display`; it has nothing to show a user when a
+traceback arrives instead. Ten other `check=True` subprocess calls in `deployit-cli` could have
+escaped the same way, and `cmd_status` catches only `FileNotFoundError` around a `json.loads` — the
+guard's regression test drives that real corrupt-index path rather than a synthetic raise. The
+backstop is not a licence to stop catching what a command can actually explain.
+
 ## When Adding a New Plugin
 
 1. Create `plugins/<name>/.claude-plugin/plugin.json` with `name` and `description` (the `version` field is auto-managed — see below)

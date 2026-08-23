@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fake launchctl that never answers in time: stands in for `kickstart -k` on a
+# job stuck in a respawn storm, where the restart request outlives its timeout.
+sleep 30

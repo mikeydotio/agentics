@@ -3,6 +3,33 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.7.5] - 2026-08-20
+
+### Fixed
+- answer in JSON however a command fails (c5e92f1)
+- stop a dead daemon hiding behind a stale symlink (AGE-85) (e1c4fd3)
+- press Enter only after receipt is confirmed (d6ad2de)
+- recognise the launch binary by identity, not by name (76bfdb2)
+- refuse a pane that cannot be proved to be Claude (6f1ec3c)
+- bound the pre-push gate inside its own budget and block on breach (1584cd3)
+
+### Changed
+- Merge pull request #172 from mikeydotio/fix/AGE-83-dispatch-readiness-process-gate (bc83dcd)
+- Merge pull request #170 from mikeydotio/fix/AGE-62-prepush-gate-self-bound (de0267a)
+- Merge pull request #171 from mikeydotio/fix/AGE-70-relation-slot-displacement (2eaeb05)
+
+### Documentation
+- the new refusal reasons, the escape hatch, and the fork note (c0824ac)
+- record AGE-62 — the gate now owns its own bound (7bc1d29)
+- record AGE-70 — a grammar earns its permission by position (19d6076)
+
+### Testing
+- match the refresh order guards on the call prefix (f7ec969)
+- model the pane occupant in the fake tmux (e5ed549)
+- mint a private fake-tmux state dir per test (963f876)
+
+_[manual]_
+
 ## [v3.7.4] - 2026-08-07
 
 ### Fixed

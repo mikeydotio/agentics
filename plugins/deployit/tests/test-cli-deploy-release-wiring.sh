@@ -87,9 +87,13 @@ assert not rel.get("ok") and "no release zip" in rel.get("display", ""), rel
 
 # 5) source guard: publish call comes AFTER index append + backend refresh
 src = (plugin_root / "bin" / "deployit-cli").read_text()
+# Matched on the call PREFIX, not the whole argument list: pinning the exact
+# spelling made this guard break the moment _refresh_local_backend grew the
+# arguments it needs to heal a stale backend symlink (AGE-85), reporting an
+# ordering violation that had not happened.
 call = src.index("rel = _publish_github_release(")
 assert src.index("_append_to_index(state, entry") < call, "publish must follow index append"
-assert src.index('_refresh_local_backend(cfg["server"]["port"])') < call, "publish must follow refresh"
+assert src.index('_refresh_local_backend(cfg["server"]["port"]') < call, "publish must follow refresh"
 
 # 6) Sparkle-signed build: --appcast-signature flows through to deployit-release,
 #    which uploads appcast.xml alongside the zip and returns appcast_url.

@@ -1,34 +1,20 @@
 ---
 name: agents
 description: Browse and validate the shared agent library
-argument-hint: "list | describe <name> | validate"
-model: sonnet
-effort: low
 ---
 
-# Shared Agent Library
+<!-- HOST_DISPATCH_VERSION: 1 -->
+# Host dispatcher
 
-You manage the shared agent catalog at `plugins/agents/agents/`.
+Select exactly one host implementation before doing any task work.
 
-## Command Router
-
-### `/agents list`
-
-Read `plugins/agents/references/agent-catalog.md` and display the full roster grouped by tier (general-purpose, platform-variant, pipeline-specific). Include name, tools, read-only status, and tags.
-
-### `/agents describe <name>`
-
-Read `plugins/agents/agents/<name>.md` and display the full agent definition — frontmatter metadata and role instructions.
-
-If the file doesn't exist, list available agents and suggest the closest match.
-
-### `/agents validate`
-
-Run `bash plugins/agents/bin/validate-agents.sh` and report results. The script checks:
-- YAML frontmatter parses and has required fields
-- Read-only agents don't list Write/Edit tools
-- Agent names match filenames
-- `<role>` tag exists in body
-- Guardrails section exists
-
-Report pass/fail per agent with details on any failures.
+1. Determine the host from the authoritative runtime identity and native tool surface:
+   - Codex: the system identifies Codex, or native tools such as `spawn_agent` and `wait_agent` are available.
+   - Claude Code: the system identifies Claude Code, or Claude tools such as `AskUserQuestion` and `Agent` are available.
+   - Environment compatibility aliases are not authoritative host signals.
+2. Resolve `<plugin-root>` as three directories above this file.
+3. Load exactly one implementation completely:
+   - Codex: `<plugin-root>/codex/skills/agents/SKILL.md`
+   - Claude Code: `<plugin-root>/claude/skills/agents/SKILL.md`
+4. If both signals or neither signal are present, stop with: `Ambiguous plugin host for agents:agents; refusing to combine host instruction trees.`
+5. Follow only the selected implementation. Never merge or fall back across host trees.

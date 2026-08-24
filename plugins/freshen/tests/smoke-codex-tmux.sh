@@ -4,8 +4,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PLUGIN_DIR="$(cd "${FRESHEN_SMOKE_PLUGIN_ROOT:-$SCRIPT_DIR/..}" && pwd)"
 AUTH_SOURCE="${CODEX_SMOKE_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}"
+SMOKE_COMMAND="${FRESHEN_SMOKE_COMMAND:-/help}"
+PRIME_COMMAND="${FRESHEN_SMOKE_PRIME_COMMAND:-}"
 
 for command_name in codex tmux jq; do
   command -v "$command_name" >/dev/null 2>&1 || {
@@ -86,11 +88,47 @@ if ! PATH="$SMOKE_BIN:$PATH" FRESHEN_CODEX_READY_ATTEMPTS=80 FRESHEN_CODEX_READY
   exit 1
 fi
 
+if [ -n "$PRIME_COMMAND" ]; then
+  PATH="$SMOKE_BIN:$PATH" tmux send-keys -t "$PANE" -l "$PRIME_COMMAND"
+  sleep 0.3
+  PATH="$SMOKE_BIN:$PATH" tmux send-keys -t "$PANE" Enter
+
+  primed=false
+  for _ in $(seq 1 240); do
+    while IFS= read -r rollout; do
+      if jq -s -e --arg expected "$PRIME_COMMAND" '
+        any(.[];
+          (.type == "response_item"
+           and .payload.type == "message"
+           and .payload.role == "user"
+           and any(.payload.content[]?;
+             .type == "input_text" and .text == $expected))
+          or (.type == "event_msg"
+              and .payload.type == "user_message"
+              and (.payload.message // .payload.text // "") == $expected)
+        )
+        and any(.[]; .type == "event_msg" and .payload.type == "task_complete")
+      ' "$rollout" >/dev/null 2>&1; then
+        primed=true
+        break 2
+      fi
+    done < <(find "$SMOKE_CODEX_HOME/sessions" -type f -name 'rollout-*.jsonl' \
+      -print 2>/dev/null || true)
+    sleep 0.25
+  done
+
+  if [ "$primed" != true ]; then
+    PATH="$SMOKE_BIN:$PATH" tmux capture-pane -p -t "$PANE" >&2 || true
+    printf 'Freshen smoke: Codex did not complete the priming turn\n' >&2
+    exit 1
+  fi
+fi
+
 (
   cd "$WORKSPACE"
   PATH="$SMOKE_BIN:$PATH" TMUX="$SOCKET_PATH" TMUX_PANE="$PANE" \
     bash "$INSTALLED_ROOT/codex/bin/freshen.sh" \
-    queue '/help' --source smoke --summary 'real Codex tmux transition' >/dev/null
+    queue "$SMOKE_COMMAND" --source smoke --summary 'real Codex tmux transition' >/dev/null
   printf '{"hook_event_name":"Stop"}\n' \
     | PATH="$SMOKE_BIN:$PATH" PLUGIN_ROOT="$INSTALLED_ROOT" \
       TMUX="$SOCKET_PATH" TMUX_PANE="$PANE" \
@@ -99,11 +137,12 @@ fi
 )
 
 consumed=false
-for _ in $(seq 1 120); do
+for _ in $(seq 1 480); do
   if [ ! -f "$WORKSPACE/.freshen/smoke.signal" ] \
-    && [ -f "$WORKSPACE/.freshen/.clear-consumed" ] \
-    && grep -q 'on-stop: /new confirmed accepted' "$WORKSPACE/.freshen/transitions.log" 2>/dev/null \
-    && grep -q 'on-clear: re-invoke confirmed accepted' "$WORKSPACE/.freshen/transitions.log" 2>/dev/null; then
+    && find "$WORKSPACE/.freshen/.codex-reset" -maxdepth 1 -type d \
+      -name 'completed-*' -print -quit 2>/dev/null | grep -q . \
+    && grep -q 'phase session-start-ack' "$WORKSPACE/.freshen/transitions.log" 2>/dev/null \
+    && grep -q 'phase continuation-stop' "$WORKSPACE/.freshen/transitions.log" 2>/dev/null; then
     consumed=true
     break
   fi
@@ -123,8 +162,9 @@ if [ "$consumed" != true ]; then
   exit 1
 fi
 
-[ -f "$WORKSPACE/.freshen/.clear-consumed" ]
-grep -q 'on-stop: /new confirmed accepted' "$WORKSPACE/.freshen/transitions.log"
-grep -q 'on-clear: re-invoke confirmed accepted' "$WORKSPACE/.freshen/transitions.log"
+find "$WORKSPACE/.freshen/.codex-reset" -maxdepth 1 -type d \
+  -name 'completed-*' -print -quit | grep -q .
+grep -q 'phase session-start-ack' "$WORKSPACE/.freshen/transitions.log"
+grep -q 'phase continuation-stop' "$WORKSPACE/.freshen/transitions.log"
 
-printf 'PASS: real Codex CLI completed Freshen /new and resumed /help\n'
+printf 'PASS: real Codex CLI completed Freshen /new and resumed queued command\n'

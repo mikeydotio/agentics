@@ -12,6 +12,32 @@
 # same coverage for `set execute`, `init run`/`init execute`, and the
 # `tracking start` sibling defect (which never threaded --plugin-root at all).
 
+# --- Provider hook manifest ---
+
+test_provider_hooks_resolve_codex_plugin_root() {
+    local hooks_json="$PLUGIN_ROOT/hooks/hooks.json"
+    local post_command session_command post_ec session_ec
+
+    post_command=$(jq -r '.hooks.PostToolUse[0].hooks[0].command' "$hooks_json")
+    session_command=$(jq -r '.hooks.SessionStart[0].hooks[0].command' "$hooks_json")
+
+    set +e
+    printf '{}\n' | env -u CLAUDE_PLUGIN_ROOT PLUGIN_ROOT="$PLUGIN_ROOT" \
+        bash -c "$post_command" >/dev/null 2>&1
+    post_ec=$?
+    printf '{}\n' | env -u CLAUDE_PLUGIN_ROOT PLUGIN_ROOT="$PLUGIN_ROOT" \
+        bash -c "$session_command" >/dev/null 2>&1
+    session_ec=$?
+    set -e
+
+    assert_eq 'bash "${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/hooks/post-push-check.sh"' \
+        "$post_command" "PostToolUse should support Codex PLUGIN_ROOT" &&
+    assert_eq 'bash "${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"' \
+        "$session_command" "SessionStart should support Codex PLUGIN_ROOT" &&
+    assert_exit_code "0" "$post_ec" "PostToolUse should launch with PLUGIN_ROOT only" &&
+    assert_exit_code "0" "$session_ec" "SessionStart should launch with PLUGIN_ROOT only"
+}
+
 # --- Fixtures ---
 
 # A tracking-active repo at v1.0.0 with git_tagging on — mirrors _set_repo in

@@ -3,10 +3,21 @@
 # Reads .semver/config.yaml and VERSION from the project directory.
 # Outputs nothing (no-op) if semver is not active in this project.
 #
-# Input:  JSON on stdin from Claude Code SessionStart event
-# Output: JSON on stdout with systemMessage (or nothing for no-op)
+# Input:  JSON on stdin from a SessionStart event
+# Output: Host-specific JSON context on stdout (or nothing for no-op)
 
 set -uo pipefail
+
+emit_session_start_context() {
+  local msg="$1"
+
+  if [[ -n "${PLUGIN_ROOT+x}" ]]; then
+    jq -n --arg msg "$msg" \
+      '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$msg}}'
+  else
+    jq -n --arg msg "$msg" '{additionalContext:$msg}'
+  fi
+}
 
 # Locate project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
@@ -66,6 +77,6 @@ if [[ "$GIT_TAGGING" == "true" ]]; then
 fi
 
 # Output via jq for safe JSON encoding
-jq -n --arg msg "$MSG" '{"additionalContext":$msg}'
+emit_session_start_context "$MSG"
 
 exit 0

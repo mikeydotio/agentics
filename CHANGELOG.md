@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.9.1] - 2026-08-23
+
+### Fixed
+- resolve Codex SessionStart hook root (AGE-90) (d1af5d2)
+
+### Changed
+- Merge pull request #177 from mikeydotio/fix/AGE-90-freshen-session-start (18f9b8c)
+- Merge pull request #176 from mikeydotio/feat/AGE-89-council-vote-codex (56ab987)
+
+_[manual]_
+
 ## [v3.9.0] - 2026-08-23
 
 ### Added

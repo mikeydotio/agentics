@@ -23,6 +23,7 @@ sleep "$GRACE"
 
 submit_once() {
   local label="$1" expected="$2" next="$3" text="$4" marker
+  freshen_codex_validate_context || return 1
   marker="$FRESHEN_CODEX_ACTIVE/$label-paste-attempted"
   [ ! -e "$marker" ] || { freshen_codex_fail "$label-duplicate-paste-blocked"; return 1; }
   : > "$marker" || return 1

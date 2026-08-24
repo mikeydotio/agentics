@@ -59,16 +59,24 @@ freshen_codex_find_signal() {
 }
 
 freshen_codex_claim() {
-  local signal basename checksum nonce cwd
+  local signal claimed basename checksum nonce cwd
   [ ! -f "$FRESHEN_CODEX_DIR/.disabled" ] || return 1
   [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] || return 1
   signal="$(freshen_codex_find_signal)" || return 1
   basename="$(basename "$signal")"
-  checksum="$(freshen_codex_checksum "$signal")" || return 1
   cwd="$(pwd -P)"
   nonce="$(date -u +%Y%m%dT%H%M%SZ)-$$-${RANDOM:-0}"
   mkdir -p "$FRESHEN_CODEX_RESET_ROOT" || return 1
   mkdir "$FRESHEN_CODEX_ACTIVE" 2>/dev/null || return 1
+  claimed="$FRESHEN_CODEX_ACTIVE/claimed.signal"
+  if ! mv "$signal" "$claimed"; then
+    rmdir "$FRESHEN_CODEX_ACTIVE" 2>/dev/null || true
+    return 1
+  fi
+  checksum="$(freshen_codex_checksum "$claimed")" || {
+    freshen_codex_fail claimed-signal-checksum
+    return 1
+  }
   freshen_codex_write_field nonce "$nonce" \
     && freshen_codex_write_field signal_basename "$basename" \
     && freshen_codex_write_field signal_checksum "$checksum" \
@@ -83,6 +91,10 @@ freshen_codex_claim() {
   freshen_codex_audit "phase claimed; signal=$basename checksum=$checksum pane=$TMUX_PANE"
 }
 
+freshen_codex_claimed_signal() {
+  printf '%s/claimed.signal\n' "$FRESHEN_CODEX_ACTIVE"
+}
+
 freshen_codex_bound_signal() {
   local basename
   basename="$(freshen_codex_field signal_basename)" || return 1
@@ -93,6 +105,7 @@ freshen_codex_bound_signal() {
 freshen_codex_validate_context() {
   local expected_tmux expected_pane expected_cwd
   freshen_codex_active || return 1
+  [ ! -f "$FRESHEN_CODEX_ACTIVE/cancelled" ] || { freshen_codex_fail cancelled; return 1; }
   [ ! -f "$FRESHEN_CODEX_DIR/.disabled" ] || { freshen_codex_fail disabled; return 1; }
   expected_tmux="$(freshen_codex_field tmux_socket)" || return 1
   expected_pane="$(freshen_codex_field pane)" || return 1
@@ -106,8 +119,8 @@ freshen_codex_validate_context() {
 freshen_codex_validate() {
   local signal expected actual
   freshen_codex_validate_context || return 1
-  signal="$(freshen_codex_bound_signal)" || { freshen_codex_fail invalid-signal-binding; return 1; }
-  [ -f "$signal" ] || { freshen_codex_fail signal-missing; return 1; }
+  signal="$(freshen_codex_claimed_signal)"
+  [ -f "$signal" ] || { freshen_codex_fail claimed-signal-missing; return 1; }
   expected="$(freshen_codex_field signal_checksum)" || return 1
   actual="$(freshen_codex_checksum "$signal")" || return 1
   [ "$actual" = "$expected" ] || { freshen_codex_fail signal-changed; return 1; }
@@ -128,16 +141,16 @@ freshen_codex_detach_worker() {
 }
 
 freshen_codex_claim_continuation_signal() {
-  local signal inflight expected actual
+  local claimed inflight expected actual
   freshen_codex_validate || return 1
-  signal="$(freshen_codex_bound_signal)" || return 1
+  claimed="$(freshen_codex_claimed_signal)"
   inflight="$FRESHEN_CODEX_ACTIVE/continuation.signal"
   [ ! -e "$inflight" ] || { freshen_codex_fail continuation-already-claimed; return 1; }
-  mv "$signal" "$inflight" || { freshen_codex_fail continuation-claim-move; return 1; }
+  mv "$claimed" "$inflight" || { freshen_codex_fail continuation-claim-move; return 1; }
   expected="$(freshen_codex_field signal_checksum)" || return 1
   actual="$(freshen_codex_checksum "$inflight" 2>/dev/null || true)"
   if [ "$actual" != "$expected" ]; then
-    [ -e "$signal" ] || mv "$inflight" "$signal" 2>/dev/null || true
+    [ -e "$claimed" ] || mv "$inflight" "$claimed" 2>/dev/null || true
     freshen_codex_fail signal-changed-during-claim
     return 1
   fi
@@ -146,15 +159,15 @@ freshen_codex_claim_continuation_signal() {
 }
 
 freshen_codex_restore_continuation_signal() {
-  local signal inflight
-  signal="$(freshen_codex_bound_signal 2>/dev/null || true)"
+  local claimed inflight
+  claimed="$(freshen_codex_claimed_signal)"
   inflight="$FRESHEN_CODEX_ACTIVE/continuation.signal"
   [ -f "$inflight" ] || return 0
-  if [ -n "$signal" ] && [ ! -e "$signal" ]; then
-    mv "$inflight" "$signal" 2>/dev/null || true
-    freshen_codex_audit "failed continuation signal restored to queue"
+  if [ ! -e "$claimed" ]; then
+    mv "$inflight" "$claimed" 2>/dev/null || true
+    freshen_codex_audit "failed continuation signal restored inside journal"
   else
-    freshen_codex_audit "failed continuation signal retained in journal; queue path is occupied"
+    freshen_codex_audit "failed continuation signal retained in journal; claim path is occupied"
   fi
 }
 

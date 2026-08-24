@@ -203,7 +203,7 @@ teardown() {
   [ "$status" -eq 0 ]
   run jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' <<< "$output"
   [ "$status" -eq 0 ]
-  [ -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
 }
 
 @test "shared Stop engine accepts Codex /new without changing Claude's default /clear" {
@@ -222,7 +222,7 @@ teardown() {
   run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
   wait_for_phase bootstrap-submit-armed
-  [ -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
   run grep -c -F -- '-l /new' "$TMUX_CALL_LOG"
   [ "$output" = "1" ]
   run grep -c -F -- '-l Sending input only to fire session start hooks.' "$TMUX_CALL_LOG"
@@ -232,7 +232,7 @@ teardown() {
   [ "$status" -eq 0 ]
   run jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' <<< "$output"
   [ "$status" -eq 0 ]
-  [ -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
 
   run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
@@ -262,17 +262,55 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "same-source requeue is separate from the claimed continuation and is preserved" {
+@test "same-source requeue is isolated from the initial claim through continuation" {
   printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
-  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim; freshen_codex_transition claimed bootstrap-stop; freshen_codex_claim_continuation_signal >/dev/null; freshen_codex_transition bootstrap-stop continuation-submit-armed'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
   [ "$status" -eq 0 ]
+  [ "$(head -1 "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal")" = '$forge:forge resume' ]
   printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_transition claimed bootstrap-stop; freshen_codex_claim_continuation_signal >/dev/null; freshen_codex_transition bootstrap-stop continuation-submit-armed'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
   run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_consume_and_retire'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
   [ "$status" -eq 0 ]
   [ -f "$TEST_DIR/.freshen/forge.signal" ]
   [ "$(head -1 "$TEST_DIR/.freshen/forge.signal")" = '$forge:forge resume' ]
   [ ! -d "$TEST_DIR/.freshen/.codex-reset/active" ]
   find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'completed-*' | grep -q .
+}
+
+@test "Codex status and cancellation include the atomically claimed journal signal" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" status' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'forge (in-flight claimed): $forge:forge resume'* ]]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" cancel --source forge' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cancelled signal from 'forge'"* ]]
+  [ ! -d "$TEST_DIR/.freshen/.codex-reset/active" ]
+  run find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'cancelled-*' -print -quit
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  [ ! -e "$output/claimed.signal" ]
+  [ ! -e "$output/continuation.signal" ]
+}
+
+@test "Codex queue permits same-source next cycle but rejects another source while active" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" queue next --source forge' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 0 ]
+  [ "$(head -1 "$TEST_DIR/.freshen/forge.signal")" = next ]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" queue other --source issue' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"signal already in flight from 'forge'"* ]]
+  [ ! -f "$TEST_DIR/.freshen/issue.signal" ]
 }
 
 @test "journal binds the tmux socket and pane while allowing tmux metadata changes" {
@@ -298,7 +336,7 @@ teardown() {
   [ "$status" -eq 0 ]
   run bash -c 'cd "$1" && printf "%s\n" "{\"source\":\"resume\"}" | PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" cleanup-session-start.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
-  [ -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
   [ "$(cat "$TEST_DIR/.freshen/.codex-reset/active/phase")" = failed-unexpected-session-start-resume ]
   grep -q 'signal preserved' "$TEST_DIR/.freshen/.codex-reset/active/audit.log"
 }
@@ -309,7 +347,7 @@ teardown() {
   run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 FRESHEN_CODEX_DEFERRED_ATTEMPTS=1 bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
   wait_for_phase failed-reset-prompt-timeout
-  [ -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
   run grep -c '^send-keys' "$TMUX_CALL_LOG"
   [ "$output" = "0" ]
 }

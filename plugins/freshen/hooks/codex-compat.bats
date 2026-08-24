@@ -16,6 +16,10 @@ setup() {
   TMUX_CALL_LOG="$TEST_DIR/tmux-calls.log"
   export TMUX_CALL_LOG
   : > "$TMUX_CALL_LOG"
+  TMUX_SUBMISSION_LOG="$TEST_DIR/tmux-submissions.log"
+  export TMUX_SUBMISSION_LOG
+  : > "$TMUX_SUBMISSION_LOG"
+  : > "$TEST_DIR/pane-input"
 
   cat > "$TEST_DIR/shim/tmux" <<'SHIM'
 #!/usr/bin/env bash
@@ -23,9 +27,31 @@ echo "$*" >> "$TMUX_CALL_LOG"
 case "$1" in
   capture-pane)
     if [ -f "$TEST_DIR/pane-busy" ]; then
-      printf '%s\n' 'Thinking... (esc to interrupt)'
+      printf '%s\n' 'Thinking... (esc to interrupt)' '›' '100% context left'
+    elif [ -f "$TEST_DIR/pane-trust" ]; then
+      printf '%s\n' 'OpenAI Codex' 'Do you trust the contents?' '› 1. Yes, continue' 'Press enter to continue'
     else
-      printf '%s\n' 'OpenAI Codex' '›'
+      input="$(cat "$TEST_DIR/pane-input")"
+      printf '%s\n' 'OpenAI Codex' "› $input" '100% context left' '? for shortcuts'
+    fi
+    ;;
+  send-keys)
+    shift
+    literal=false
+    value=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        -t) shift 2 ;;
+        -l) literal=true; shift ;;
+        *) value="$1"; shift ;;
+      esac
+    done
+    if [ "$value" = Enter ]; then
+      cat "$TEST_DIR/pane-input" >> "$TMUX_SUBMISSION_LOG"
+      printf '\n' >> "$TMUX_SUBMISSION_LOG"
+      : > "$TEST_DIR/pane-input"
+    else
+      printf '%s' "$value" > "$TEST_DIR/pane-input"
     fi
     ;;
 esac
@@ -40,6 +66,22 @@ SHIM
   export PANE_PASTE_SETTLE_DELAY=0
   export FRESHEN_CODEX_READY_DELAY=0
   export FRESHEN_CODEX_DEFERRED_DELAY=0
+  export FRESHEN_CODEX_STABLE_OBSERVATIONS=1
+  export FRESHEN_CODEX_RESET_SETTLE=0
+  export FRESHEN_CODEX_TEST_ALLOW_SHORT_SETTLE=1
+  export FRESHEN_CODEX_PASTE_SETTLE=0
+}
+
+wait_for_phase() {
+  local expected="$1" i=0 phase=""
+  while [ "$i" -lt 100 ]; do
+    phase="$(cat "$TEST_DIR/.freshen/.codex-reset/active/phase" 2>/dev/null || true)"
+    [ "$phase" = "$expected" ] && return 0
+    sleep 0.02
+    i=$((i + 1))
+  done
+  printf 'expected phase %s, observed %s\n' "$expected" "$phase" >&2
+  return 1
 }
 
 teardown() {
@@ -106,6 +148,36 @@ teardown() {
   [ "$status" -eq 1 ]
 }
 
+@test "Codex readiness ignores footer text and requires an empty input row" {
+  printf '/new' > "$TEST_DIR/pane-input"
+  run bash -c '. "$1"; codex_pane_wait_ready %%1' _ "$CODEX_HOOKS/pane-ready.sh"
+  [ "$status" -eq 1 ]
+  : > "$TEST_DIR/pane-input"
+  run bash -c '. "$1"; codex_pane_wait_ready %%1' _ "$CODEX_HOOKS/pane-ready.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "Codex readiness treats the new-session placeholder as an empty input row" {
+  printf 'Ask Codex to do anything' > "$TEST_DIR/pane-input"
+  run bash -c '. "$1"; codex_pane_wait_ready %%1' _ "$CODEX_HOOKS/pane-ready.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "Codex input comparison ignores prompt UI padding around literal text" {
+  run bash -c '. "$1"; codex_input_row_from_content "$2"' _ \
+    "$CODEX_HOOKS/pane-ready.sh" $'OpenAI Codex\n›   /new   \n100% context left'
+  [ "$status" -eq 0 ]
+  [ "$output" = "/new" ]
+}
+
+@test "Codex input comparison joins hard-wrapped prompt rows before the footer" {
+  run bash -c '. "$1"; codex_input_row_from_content "$2"' _ \
+    "$CODEX_HOOKS/pane-ready.sh" \
+    $'OpenAI Codex\n› Freshen bootstrap nonce. Run startup hooks, then end\n  this turn.\n\n  gpt-5.6-sol default · /workspace'
+  [ "$status" -eq 0 ]
+  [ "$output" = "Freshen bootstrap nonce. Run startup hooks, then end this turn." ]
+}
+
 @test "Codex Stop no-op emits valid JSON" {
   run bash -c 'cd "$1" && printf "%s\n" "{\"hook_event_name\":\"Stop\"}" | PLUGIN_ROOT="$2" bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
@@ -123,18 +195,15 @@ teardown() {
   [ ! -f "$TEST_DIR/.freshen/.clear-pending" ]
 }
 
-@test "Codex SessionStart(clear) consumes a confirmed continuation and serializes its summary" {
-  touch "$TEST_DIR/.freshen/.clear-pending"
+@test "Codex SessionStart(clear) acknowledges the journal and preserves the signal" {
   printf '%s\n%s\n' '$forge:forge resume' 'planning complete' > "$TEST_DIR/.freshen/forge.signal"
-  run bash -c 'cd "$1" && printf "%s\n" "{\"source\":\"clear\"}" | PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" on-clear.sh 2>"$1/codex-clear.err"' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim; freshen_codex_transition claimed reset-submit-armed'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
   [ "$status" -eq 0 ]
-  run jq -e '.hookSpecificOutput.hookEventName == "SessionStart" and (.hookSpecificOutput.additionalContext | contains("planning complete"))' <<< "$output"
+  run bash -c 'cd "$1" && printf "%s\n" "{\"source\":\"clear\"}" | PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" on-clear.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_DIR/.freshen/forge.signal" ]
-  [ ! -f "$TEST_DIR/.freshen/.clear-pending" ]
-  [ -f "$TEST_DIR/.freshen/.clear-consumed" ]
-  run grep -c -F -- '-l $forge:forge resume' "$TMUX_CALL_LOG"
-  [ "$output" = "1" ]
+  run jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' <<< "$output"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
 }
 
 @test "shared Stop engine accepts Codex /new without changing Claude's default /clear" {
@@ -148,30 +217,137 @@ teardown() {
   [ "$output" = "0" ]
 }
 
-@test "deferred Codex worker completes /new and continuation through the shared engine" {
+@test "Codex journal submits reset bootstrap and continuation once, then consumes on continuation Stop" {
   printf '%s\n%s\n' '$forge:forge resume' 'ready for execution' > "$TEST_DIR/.freshen/forge.signal"
-  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 FRESHEN_CODEX_DEFERRED_ATTEMPTS=1 bash "$3/deferred-stop.sh"' _ "$TEST_DIR" "$FRESHEN_ROOT" "$CODEX_HOOKS"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_DIR/.freshen/forge.signal" ]
-  [ -f "$TEST_DIR/.freshen/.clear-consumed" ]
-  run grep -c -F -- '%1 /new' "$TMUX_CALL_LOG"
+  wait_for_phase bootstrap-submit-armed
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
+  run grep -c -F -- '-l /new' "$TMUX_CALL_LOG"
   [ "$output" = "1" ]
+  run grep -c -F -- '-l Sending input only to fire session start hooks.' "$TMUX_CALL_LOG"
+  [ "$output" = "1" ]
+
+  run bash -c 'cd "$1" && printf "%s\n" "{\"source\":\"startup\"}" | PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" cleanup-session-start.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
+  [ "$status" -eq 0 ]
+  run jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' <<< "$output"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
+
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
+  [ "$status" -eq 0 ]
+  wait_for_phase continuation-submit-armed
   run grep -c -F -- '-l $forge:forge resume' "$TMUX_CALL_LOG"
   [ "$output" = "1" ]
-  run grep -c 'on-stop: /new confirmed accepted' "$TEST_DIR/.freshen/transitions.log"
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/continuation.signal" ]
+
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
+  [ "$status" -eq 0 ]
+  [ ! -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ ! -d "$TEST_DIR/.freshen/.codex-reset/active" ]
+  run grep -c 'phase session-start-ack' "$TEST_DIR/.freshen/transitions.log"
   [ "$output" = "1" ]
-  run grep -c 'on-clear: re-invoke confirmed accepted' "$TEST_DIR/.freshen/transitions.log"
+  run grep -c 'phase continuation-stop' "$TEST_DIR/.freshen/transitions.log"
   [ "$output" = "1" ]
+  run awk '
+    /phase claimed/ { claimed=NR }
+    /phase reset-submit-armed/ { reset=NR }
+    /phase bootstrap-submit-armed/ { bootstrap=NR }
+    /phase session-start-ack/ { ack=NR }
+    /phase bootstrap-stop/ { stop=NR }
+    /phase continuation-submit-armed/ { continuation=NR }
+    /phase continuation-stop/ { done=NR }
+    END { exit !(claimed < reset && reset < bootstrap && bootstrap < ack && ack < stop && stop < continuation && continuation < done) }
+  ' "$TEST_DIR/.freshen/transitions.log"
+  [ "$status" -eq 0 ]
+}
+
+@test "same-source requeue is isolated from the initial claim through continuation" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(head -1 "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal")" = '$forge:forge resume' ]
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_transition claimed bootstrap-stop; freshen_codex_claim_continuation_signal >/dev/null; freshen_codex_transition bootstrap-stop continuation-submit-armed'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_consume_and_retire'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ "$(head -1 "$TEST_DIR/.freshen/forge.signal")" = '$forge:forge resume' ]
+  [ ! -d "$TEST_DIR/.freshen/.codex-reset/active" ]
+  find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'completed-*' | grep -q .
+}
+
+@test "Codex status and cancellation include the atomically claimed journal signal" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" status' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'forge (in-flight claimed): $forge:forge resume'* ]]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" cancel --source forge' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cancelled signal from 'forge'"* ]]
+  [ ! -d "$TEST_DIR/.freshen/.codex-reset/active" ]
+  run find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'cancelled-*' -print -quit
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  [ ! -e "$output/claimed.signal" ]
+  [ ! -e "$output/continuation.signal" ]
+}
+
+@test "Codex queue permits same-source next cycle but rejects another source while active" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" queue next --source forge' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 0 ]
+  [ "$(head -1 "$TEST_DIR/.freshen/forge.signal")" = next ]
+
+  run bash -c 'cd "$1" && TMUX=1 TMUX_PANE=%%1 bash "$2" queue other --source issue' _ "$TEST_DIR" "$CODEX_CLI"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"signal already in flight from 'forge'"* ]]
+  [ ! -f "$TEST_DIR/.freshen/issue.signal" ]
+}
+
+@test "journal binds the tmux socket and pane while allowing tmux metadata changes" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX="/tmp/freshen.sock,111,0" TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim; TMUX="/tmp/freshen.sock,222,7" freshen_codex_validate'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_DIR/.freshen/.codex-reset/active/tmux_socket")" = "/tmp/freshen.sock" ]
+}
+
+@test "ordinary Codex startup preserves a queued signal" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  touch "$TEST_DIR/.freshen/.clear-pending" "$TEST_DIR/.freshen/.clear-consumed"
+  run bash -c 'cd "$1" && printf "%s\n" "{\"source\":\"startup\"}" | PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" cleanup-session-start.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/forge.signal" ]
+  [ ! -f "$TEST_DIR/.freshen/.clear-pending" ]
+  [ ! -f "$TEST_DIR/.freshen/.clear-consumed" ]
+}
+
+@test "wrong SessionStart source fails closed with signal and audit intact" {
+  printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim; freshen_codex_transition claimed bootstrap-submit-armed'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
+  [ "$status" -eq 0 ]
+  run bash -c 'cd "$1" && printf "%s\n" "{\"source\":\"resume\"}" | PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 bash "$3" cleanup-session-start.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
+  [ "$(cat "$TEST_DIR/.freshen/.codex-reset/active/phase")" = failed-unexpected-session-start-resume ]
+  grep -q 'signal preserved' "$TEST_DIR/.freshen/.codex-reset/active/audit.log"
 }
 
 @test "deferred Codex worker is bounded and preserves the signal when the pane stays busy" {
   echo '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
   touch "$TEST_DIR/pane-busy"
-  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 FRESHEN_CODEX_DEFERRED_ATTEMPTS=1 bash "$3/deferred-stop.sh"' _ "$TEST_DIR" "$FRESHEN_ROOT" "$CODEX_HOOKS"
+  run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 FRESHEN_CODEX_DEFERRED_ATTEMPTS=1 bash "$3" on-stop.sh' _ "$TEST_DIR" "$FRESHEN_ROOT" "$DISPATCH"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"was not accepted"* ]]
-  [ -f "$TEST_DIR/.freshen/forge.signal" ]
-  [ ! -f "$TEST_DIR/.freshen/.clear-pending" ]
+  wait_for_phase failed-reset-prompt-timeout
+  [ -f "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal" ]
   run grep -c '^send-keys' "$TMUX_CALL_LOG"
   [ "$output" = "0" ]
 }

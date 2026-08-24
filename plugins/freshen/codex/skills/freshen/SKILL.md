@@ -39,10 +39,10 @@ bash <plugin-root>/codex/bin/freshen.sh <subcommand> [args]
 
 Automatic continuation requires Codex CLI inside tmux with both `TMUX` and `TMUX_PANE` set. A queued transition works as follows:
 
-1. The Codex `Stop` hook schedules a bounded worker and returns valid hook JSON before the worker submits anything. Codex rejects `/new` while the `Stop` hook is still active.
-2. The worker waits for an idle Codex pane, sends `/new`, and confirms it was accepted with bounded `tmux capture-pane` read-back.
-3. The `SessionStart(clear)` hook consumes the oldest signal and submits the queued continuation. The worker provides the same bounded recovery path for Codex builds that do not emit that event.
-4. The signal is deleted only after the continuation is confirmed. Failed or unconfirmed sends leave it available for a later retry.
+1. The Codex `Stop` hook atomically claims the oldest signal into a journal, schedules a bounded worker, and returns valid hook JSON before the worker submits anything. Codex rejects `/new` while the `Stop` hook is still active.
+2. The worker waits for a stable empty Codex input row, submits `/new` at most once, waits at least five seconds for the reset to settle, then submits a harmless nonce-bearing bootstrap prompt at most once.
+3. Codex lazily emits `SessionStart(startup)` for the new thread when it accepts the bootstrap. That hook acknowledges the reset without consuming the signal; the bootstrap turn's `Stop` then schedules the claimed continuation.
+4. The continuation is submitted at most once and remains recoverable in the journal until its own `Stop` event retires it. Failed or unconfirmed sends preserve the journal, and a same-source requeue remains a separate pending signal.
 
 Transition decisions are recorded in `.freshen/transitions.log`.
 

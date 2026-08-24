@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 set -uo pipefail
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/adapter-lib.sh"
-. "$CODEX_HOOK_DIR/pane-ready.sh"
+. "$CODEX_HOOK_DIR/lifecycle-state.sh"
 
 INPUT="$(cat 2>/dev/null || true)"
-if [[ -f .freshen/.clear-pending ]] \
-  && compgen -G '.freshen/*.signal' >/dev/null \
-  && [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" ]] \
-  && ! codex_pane_wait_ready "$TMUX_PANE"; then
-  echo "freshen: Codex pane readiness was not confirmed before continuation; continuing with bounded send/read-back" >&2
+if freshen_codex_active \
+  && [ "$(freshen_codex_phase 2>/dev/null || true)" = reset-submit-armed ] \
+  && freshen_codex_validate \
+  && freshen_codex_transition reset-submit-armed direct-session-start-ack; then
+  freshen_codex_detach_worker continuation "$$"
+  freshen_codex_emit_ack
 fi
-OUTPUT="$(codex_run_shared_hook on-clear.sh "$INPUT")"
-codex_emit_session_start "$OUTPUT"

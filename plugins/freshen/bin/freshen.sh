@@ -29,6 +29,45 @@ is_disabled() {
   [ -f "$FRESHEN_DIR/.disabled" ]
 }
 
+codex_active_dir() {
+  [ "${FRESHEN_HOST:-claude}" = codex ] || return 1
+  [ -d "$FRESHEN_DIR/.codex-reset/active" ] || return 1
+  printf '%s\n' "$FRESHEN_DIR/.codex-reset/active"
+}
+
+codex_active_source() {
+  local active basename
+  active="$(codex_active_dir)" || return 1
+  [ -f "$active/signal_basename" ] || return 1
+  basename="$(cat "$active/signal_basename")"
+  case "$basename" in *.signal) printf '%s\n' "${basename%.signal}" ;; *) return 1 ;; esac
+}
+
+codex_active_signal() {
+  local active
+  active="$(codex_active_dir)" || return 1
+  if [ -f "$active/claimed.signal" ]; then
+    printf '%s\n' "$active/claimed.signal"
+  elif [ -f "$active/continuation.signal" ]; then
+    printf '%s\n' "$active/continuation.signal"
+  else
+    return 1
+  fi
+}
+
+codex_cancel_active() {
+  local requested="${1:-}" active source nonce destination
+  active="$(codex_active_dir)" || return 1
+  source="$(codex_active_source)" || return 1
+  [ -z "$requested" ] || [ "$requested" = "$source" ] || return 1
+  : > "$active/cancelled"
+  printf 'cancelled-user\n' > "$active/phase"
+  rm -f "$active/claimed.signal" "$active/continuation.signal"
+  nonce="$(cat "$active/nonce" 2>/dev/null || printf '%s' "$$")"
+  destination="$FRESHEN_DIR/.codex-reset/cancelled-$nonce"
+  mv "$active" "$destination" || return 1
+}
+
 require_enabled() {
   if is_disabled; then
     if [ "${FRESHEN_HOST:-claude}" = "codex" ]; then
@@ -67,6 +106,14 @@ cmd_queue() {
 
   local signal_file="$FRESHEN_DIR/${source}.signal"
 
+  # A Codex transition owns its claimed source until continuation Stop.  The
+  # same source may queue the next cycle, but a different workflow must wait.
+  local active_source=""
+  active_source="$(codex_active_source 2>/dev/null || true)"
+  if [ -n "$active_source" ] && [ "$active_source" != "$source" ]; then
+    die "signal already in flight from '$active_source'. Cancel it first with: freshen.sh cancel --source $active_source"
+  fi
+
   # Cross-source conflict is a hard error — only one source may be pending at a time.
   # Same-source overwrite is fine (idempotent re-queue).
   for existing in "$FRESHEN_DIR"/*.signal; do
@@ -88,7 +135,18 @@ cmd_queue() {
 
 cmd_status() {
   require_enabled
-  local found=0
+  local found=0 active source phase signal
+  if active="$(codex_active_dir 2>/dev/null)"; then
+    source="$(codex_active_source 2>/dev/null || printf unknown)"
+    phase="$(cat "$active/phase" 2>/dev/null || printf unknown)"
+    signal="$(codex_active_signal 2>/dev/null || true)"
+    if [ -n "$signal" ]; then
+      echo "  ${source} (in-flight ${phase}): $(head -1 "$signal")"
+    else
+      echo "  ${source} (in-flight ${phase})"
+    fi
+    found=1
+  fi
   for signal in "$FRESHEN_DIR"/*.signal; do
     [ -f "$signal" ] || continue
     local src
@@ -101,7 +159,7 @@ cmd_status() {
 
 cmd_cancel() {
   require_enabled
-  local source="" all=0
+  local source="" all=0 cancelled=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -113,12 +171,17 @@ cmd_cancel() {
   done
 
   if [ "$all" -eq 1 ]; then
+    codex_cancel_active "" 2>/dev/null && cancelled=1 || true
     rm -f "$FRESHEN_DIR"/*.signal 2>/dev/null
     echo "freshen: all signals cancelled"
   elif [ -n "$source" ]; then
     local signal_file="$FRESHEN_DIR/${source}.signal"
+    codex_cancel_active "$source" 2>/dev/null && cancelled=1 || true
     if [ -f "$signal_file" ]; then
       rm "$signal_file"
+      cancelled=1
+    fi
+    if [ "$cancelled" -eq 1 ]; then
       echo "freshen: cancelled signal from '$source'"
     else
       echo "freshen: no signal from '$source'"
@@ -134,6 +197,7 @@ cmd_disable() {
     return
   fi
   mkdir -p "$FRESHEN_DIR"
+  codex_cancel_active "" 2>/dev/null || true
   rm -f "$FRESHEN_DIR"/*.signal "$FRESHEN_DIR/.clear-pending" "$FRESHEN_DIR/.clear-consumed" 2>/dev/null
   touch "$FRESHEN_DIR/.disabled"
   echo "freshen: disabled — all pending signals cancelled"

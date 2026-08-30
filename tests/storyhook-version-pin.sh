@@ -9,8 +9,9 @@
 # outcome with NO commit in this repository's history — which is also why
 # `git bisect` cannot attribute the resulting failures.
 #
-# Measured, not inferred (AGE-19). The real upstream storyhook v1.0.0 binary,
-# placed first on PATH and run under tests/with-isolated-store.sh:
+# Measured, not inferred (AGE-19), before storywork was retired. The real
+# upstream storyhook v1.0.0 binary, placed first on PATH and run under
+# tests/with-isolated-store.sh:
 #
 #     forge                    exit 1    72 `not ok`
 #     storywork                exit 1    14 assertions (test-real-story-cas.sh)
@@ -177,7 +178,7 @@ check_live_cli() {
             printf 'storyhook not verifiable: `%s --version` exited 0 but printed "%s", which is not a `story <major>.<minor>.<patch>` banner, so the required storyhook major %s cannot be confirmed.\n' \
                 "$bin" "${out%%$'\n'*}" "$STORYHOOK_MAJOR"; return 1 ;;
         major_mismatch:*)
-            printf 'storyhook major mismatch: `%s --version` reports %s, but this repository'"'"'s suites are written against storyhook major %s (>=%s.0.0,<%s.0.0) — test-forge, test-storywork and test-storyhook-contract-root will now fail with dozens of errors that never name a version, and that is a consequence of this line, not an independent defect. Install a %s.x story, or port the suites and re-pin STORYHOOK_MAJOR in tests/storyhook-version-pin.sh together with the matching CLAUDE.md sentence.\n' \
+            printf 'storyhook major mismatch: `%s --version` reports %s, but this repository'"'"'s suites are written against storyhook major %s (>=%s.0.0,<%s.0.0) — test-forge and test-storyhook-contract-root will now fail with errors that never name a version, and that is a consequence of this line, not an independent defect. Install a %s.x story, or port the suites and re-pin STORYHOOK_MAJOR in tests/storyhook-version-pin.sh together with the matching CLAUDE.md sentence.\n' \
                 "$bin" "${v#major_mismatch:}" "$STORYHOOK_MAJOR" "$STORYHOOK_MAJOR" \
                 "$((STORYHOOK_MAJOR + 1))" "$STORYHOOK_MAJOR"; return 1 ;;
     esac
@@ -365,12 +366,13 @@ test_guard_is_a_member_of_make_test() {
     esac
 }
 
-# The storyhook-driving set, MEASURED rather than assumed: under real storyhook
-# 1.0.0 these three suites failed and greenlight/root-bats passed. Note that
-# storyhook-path-guard.sh (pure git-grep, `command -v git` only) and greenlight
-# (never execs story) are deliberately ABSENT — naming them would send readers
-# to suites that a storyhook mismatch never affects.
-STORYHOOK_DRIVING_TARGETS=(test-storyhook-contract-root test-forge test-storywork)
+# The surviving storyhook-driving set, MEASURED rather than assumed: under real
+# storyhook 1.0.0 these two suites failed and greenlight/root-bats passed. The
+# third measured suite, storywork, has been retired and is deliberately absent.
+# Note that storyhook-path-guard.sh (pure git-grep, `command -v git` only) and
+# greenlight (never execs story) are also deliberately ABSENT — naming them
+# would send readers to suites that a storyhook mismatch never affects.
+STORYHOOK_DRIVING_TARGETS=(test-storyhook-contract-root test-forge)
 
 test_guard_precedes_every_storyhook_driving_target() {
     local list idx=0 pin=-1 t; local -a order=()

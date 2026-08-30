@@ -61,11 +61,6 @@
       "name": "reconcile-pr",
       "description": "Rebase a GitHub PR's branch onto the latest tip of its base branch, resolve conflicts while preserving both the base's and the PR's behavior, verify with tests, then force-push under a leased safety guard and comment the resolution — never force-pushes a protected branch",
       "source": "./plugins/reconcile-pr"
-    },
-    {
-      "name": "storywork",
-      "description": "storyhook-based dispatch actuator: story.sh dispatch <id> claims a story via storyhook's --if-state CAS primitive and hands it off to a fresh plan-mode Claude session in a new tmux window + per-story worktree; story.sh complete <id> cleans up its merged worktree/branch. Hard dependency on the `issue` plugin (sources its lib/session.sh) — install both together.",
-      "source": "./plugins/storywork"
     }
   ]
 }

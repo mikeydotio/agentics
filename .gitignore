@@ -41,3 +41,6 @@ Thumbs.db
 # where a scheduler sweep deletes it and `complete` then reads that worktree as
 # permanently dirty and refuses to reclaim it -- AGE-61/AGE-67)
 .claude/scheduled_tasks.lock
+
+# Session handoff notes (working state, not repo history)
+HANDOFF.md

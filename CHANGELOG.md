@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Removed
+- Retire the `storywork` plugin now that Storyhook's maintained `story` plugin owns its dispatch and cleanup workflows; remove Storywork from the Agentics marketplace and test gate.
+
 ## [v3.9.1] - 2026-08-23
 
 ### Fixed

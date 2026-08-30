@@ -2,9 +2,9 @@
 # The global pre-push hook runs `make test` before any push — keep this target
 # covering every plugin suite that can run headlessly on a dev machine.
 
-.PHONY: test install-hooks check-hooks test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+.PHONY: test install-hooks check-hooks test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
 
-test: test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-storywork
+test: test-store-isolation test-gate-integrity test-gate-deadline-guard test-prepush-gate test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -41,7 +41,8 @@ test-prepush-gate:
 # storyhook is an out-of-repo CLI resolved from PATH, so upgrading it changes
 # this repo's test outcome with no commit here — which is why git bisect cannot
 # attribute the result. Measured (AGE-19): the real v1.0.0 binary produces 87
-# failing assertions across forge, storywork and storyhook-contract-root, and
+# failing assertions across forge, the now-retired storywork, and
+# storyhook-contract-root, and
 # not one of 2,693 log lines names a version; 59 of them say "unknown command
 # `project`", which blames the caller. This declares the supported major once
 # and fails first with one sentence. Runs after gate-integrity so the meta-gate
@@ -171,16 +172,6 @@ test-issue:
 # and a local bare-origin repo; no live network. Always runs (no bats).
 test-reconcile-pr:
 	bash tests/with-isolated-store.sh bash plugins/reconcile-pr/tests/run-tests.sh
-
-# storywork's plain-bash suite (plugins/storywork/tests/test-*.sh) — the
-# storyhook claim-then-dispatch contract (skip-the-redundant-move when a
-# caller already CAS'd the story to in-progress; refuse-before-any-side-
-# effect on a lost claim race; the closed-superstate guard) and the
-# complete verb's worktree/branch-only cleanup scan. Driven by a fake story
-# CLI + fake tmux on PATH + throwaway git repos; no live tmux/claude/story.
-# Always runs (no bats).
-test-storywork:
-	bash tests/with-isolated-store.sh bash plugins/storywork/tests/run-tests.sh
 
 # rca's plain-bash suite (plugins/rca/tests/test-*.sh) — the investigation state
 # ladder, scaffold/gitignore idempotency, stack detection, the repro harness

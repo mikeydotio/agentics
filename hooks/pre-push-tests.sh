@@ -276,6 +276,45 @@ prepush_verdict() {
 }
 
 # ---------------------------------------------------------------------------
+# Root resolution (AGE-101)
+# ---------------------------------------------------------------------------
+
+# Echoes the directory named by a leading `cd <path>` in $1, or nothing.
+#
+# This hook's own process cwd is whatever the platform invoked it with — NOT
+# necessarily where the gated command will actually run `git push` from. A
+# Bash tool call whose command text itself begins `cd /some/other/worktree
+# && ... && git push ...` changes directory only when THAT command executes,
+# which is after this hook has already returned its verdict; the `cd` inside
+# it is invisible to a resolver that trusts its own $PWD. A worktree session
+# whose tracked cwd sits in one checkout while a single command targets a
+# sibling worktree therefore has this hook silently test the WRONG tree —
+# and the dangerous direction is not "a stale failure blocks a fine push" (an
+# annoyance): it is a stale PASS letting genuinely red code out with an
+# apparent "tests passed" verdict, the same false-green shape AGE-62 exists
+# to close for the cancellation case.
+#
+# Text matching, not shell parsing — the identical philosophy the push
+# matcher above already commits to, and the identical accepted gap AGE-63
+# already names for it: only a `cd` that is literally the command's own
+# FIRST word (its first line, allowing leading whitespace), immediately
+# followed by `&&`, `;`, or end of line, is honoured. A `cd` anywhere else in
+# the chain, inside a quoted string, or in a heredoc body is not this
+# function's problem to solve. Relative paths are left relative on purpose:
+# the caller `cd`s into them from ITS OWN cwd, which reproduces exactly what
+# a real shell does — the only reason the two cwds can ever diverge is a
+# `cd` this function is built to find.
+prepush_leading_cd_target() {
+    local first_line
+    first_line="$(printf '%s\n' "$1" | head -1)"
+    if [[ "$first_line" =~ ^[[:space:]]*cd[[:space:]]+\"([^\"]*)\"([[:space:]]*(\&\&|\;)|[[:space:]]*$) ]] \
+        || [[ "$first_line" =~ ^[[:space:]]*cd[[:space:]]+\'([^\']*)\'([[:space:]]*(\&\&|\;)|[[:space:]]*$) ]] \
+        || [[ "$first_line" =~ ^[[:space:]]*cd[[:space:]]+([^[:space:]\&\;]+)([[:space:]]*(\&\&|\;)|[[:space:]]*$) ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Diagnostic entry point
 # ---------------------------------------------------------------------------
 #
@@ -326,8 +365,19 @@ esac
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
       GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE GIT_PREFIX
 
-# Resolve the repo root from the hook's cwd.
-root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+# Resolve the repo root the gated command will actually push from — its own
+# leading `cd` (AGE-101) if it names one, this hook's own cwd otherwise. A
+# named target that does not exist or does not resolve to a repository falls
+# back to today's cwd-based resolution unchanged, rather than turning an
+# unresolvable `cd` into a new way for the gate to refuse.
+cd_target="$(prepush_leading_cd_target "$cmd")"
+root=""
+if [ -n "$cd_target" ]; then
+    root="$(cd "$cd_target" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || true)"
+fi
+if [ -z "$root" ]; then
+    root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+fi
 if [ -z "$root" ]; then
     # Matched a push but there is no repository here. Logged rather than exited
     # silently: this is the shape AGE-63 predicts — prose or a heredoc body

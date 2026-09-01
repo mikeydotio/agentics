@@ -508,6 +508,96 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# ROOT — the gate tests the command's own target, not its own cwd (AGE-101)
+# ---------------------------------------------------------------------------
+#
+# This hook's own process cwd is not necessarily where the gated command will
+# actually run `git push` from: a Bash tool call whose command text itself
+# begins `cd /some/other/checkout && ... && git push` changes directory only
+# when THAT command executes — after this hook has already returned its
+# verdict, from whatever cwd it was invoked with. Before AGE-101 the resolver
+# trusted its own $PWD unconditionally, so a session whose tracked cwd sits in
+# one worktree while a single command targets a sibling silently had the gate
+# test the WRONG tree. The dangerous direction is not "a stale failure blocks
+# a fine push" (an annoyance): it is a stale PASS on an unrelated repo letting
+# genuinely red code out with an apparent green verdict — the same
+# false-verdict shape AGE-62 closed for the cancellation case.
+#
+# Every arm below is scoped to `log_repo`, the field the gate itself records
+# — never an assumption about which tree's `make test` happened to run,
+# because that is exactly what made this defect invisible to review in the
+# first place.
+
+root_target="$(make_fixture root-target 'true')"
+
+# The command's own leading cd names root_target; the hook is invoked from a
+# SEPARATE fixture, mirroring a session whose tracked cwd sits in one
+# worktree while a single command targets a sibling. The verdict must name
+# root_target, never wherever the hook itself happened to be invoked from.
+root_home_a="$(make_fixture root-home-leading-cd 'true')"
+run_hook "$root_home_a" "cd $root_target && $PUSH_CMD"
+if [ "$(log_repo "$root_home_a")" = "$root_target" ]; then
+    ok "ROOT: a leading 'cd <path> &&' makes the gate test THAT tree, not its own cwd"
+else
+    bad "ROOT: leading cd is honoured" "recorded repo='$(log_repo "$root_home_a")', expected '$root_target'"
+fi
+
+# A quoted target with a space survives identically. Built by hand rather
+# than through make_fixture, whose own isolation guard does not need to run
+# again here — this fixture is never the tree the hook is INVOKED from.
+#
+# Proved by sentinel existence rather than log_repo: the verdict log is
+# space-delimited and unquotes nothing, so a `repo=` value that itself
+# contains a space is not this field's to carry — a real, separate,
+# pre-existing limitation of the log format, out of scope for THIS defect.
+# Sentinel presence sidesteps it while still proving the right tree ran.
+root_spaced="$WORK/root target with spaces"
+mkdir -p "$root_spaced"
+git -C "$root_spaced" init -q >/dev/null 2>&1
+printf 'test:\n\t@pwd > sentinel\n\t@true\n' >"$root_spaced/Makefile"
+root_home_b="$(make_fixture root-home-quoted-cd 'true')"
+run_hook "$root_home_b" "cd \"$root_spaced\" && $PUSH_CMD"
+if [ -f "$root_spaced/sentinel" ] && [ ! -f "$root_home_b/sentinel" ]; then
+    ok "ROOT: a quoted, space-bearing leading cd target is honoured"
+else
+    bad "ROOT: quoted cd target" \
+        "target sentinel present=$([ -f "$root_spaced/sentinel" ] && echo yes || echo no), home sentinel present=$([ -f "$root_home_b/sentinel" ] && echo yes || echo no)"
+fi
+
+# A leading cd naming a path that does not resolve falls back to today's
+# cwd-based resolution, rather than becoming a NEW way for the gate to refuse
+# a push it would otherwise have tested correctly.
+root_home_c="$(make_fixture root-home-bad-cd 'true')"
+run_hook "$root_home_c" "cd $WORK/does-not-exist && $PUSH_CMD"
+if [ "$(log_repo "$root_home_c")" = "$root_home_c" ]; then
+    ok "ROOT: an unresolvable leading cd target falls back to the hook's own cwd"
+else
+    bad "ROOT: unresolvable cd fallback" "recorded repo='$(log_repo "$root_home_c")', expected '$root_home_c'"
+fi
+
+# A cd that is not the command's own first word is not honoured — mid-chain
+# directory changes are a deliberately unscoped case, matching AGE-63's own
+# accepted gap for the push matcher itself.
+root_home_d="$(make_fixture root-home-midchain-cd 'true')"
+run_hook "$root_home_d" "echo hi && cd $root_target && $PUSH_CMD"
+if [ "$(log_repo "$root_home_d")" = "$root_home_d" ]; then
+    ok "ROOT: a mid-chain cd (not the command's first word) is not honoured"
+else
+    bad "ROOT: mid-chain cd ignored" "recorded repo='$(log_repo "$root_home_d")', expected '$root_home_d'"
+fi
+
+# No leading cd at all resolves EXACTLY as before — the regression guard for
+# the overwhelming common case, which every other arm in this file already
+# exercises implicitly; this one states it explicitly, scoped to log_repo.
+root_home_e="$(make_fixture root-home-no-cd 'true')"
+run_hook "$root_home_e" "$PUSH_CMD"
+if [ "$(log_repo "$root_home_e")" = "$root_home_e" ]; then
+    ok "ROOT: a command with no leading cd still resolves the hook's own cwd"
+else
+    bad "ROOT: unchanged default resolution" "recorded repo='$(log_repo "$root_home_e")', expected '$root_home_e'"
+fi
+
+# ---------------------------------------------------------------------------
 # DIFFERENTIAL — this resolver and tests/gate-deadline.sh's must agree
 # ---------------------------------------------------------------------------
 #

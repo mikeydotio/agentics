@@ -335,18 +335,10 @@ input="$(cat)"
 cmd="$(printf '%s' "$input" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
 [ -z "$cmd" ] && exit 0
 
-# Is this a `git push`? Match a git invocation whose subcommand is `push`,
-# allowing leading `-c k=v` / `-C dir` globals (covers the HTTPS-override form
-# `git -c url."https://...".insteadOf="git@github.com:" push origin <branch>`).
-#
-# ⚠ Ordered BEFORE the bypass check, where the pre-AGE-62 file had it after. The
-# outcome is identical either way — both paths exit 0 — but it keeps the verdict
-# log to matched invocations only, which is what makes the log small enough to
-# read and useful as AGE-63 evidence.
-if ! printf '%s' "$cmd" \
-    | grep -Eq '(^|[^[:alnum:]_])git( +-[cC] +[^ ]+)* +push([^[:alnum:]_]|$)'; then
-    exit 0
-fi
+# Cheap prefilter only. The probe can resolve quoted -C paths that the legacy
+# matcher cannot. A declined probe still reaches that UNCHANGED matcher, so
+# this broader prefilter never broadens which commands start the global suite.
+case "$cmd" in *git*push*) ;; *) exit 0 ;; esac
 
 # Explicit bypasses.
 case "$cmd" in
@@ -364,6 +356,27 @@ esac
 # project, not just those whose own suite scrubs.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
       GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE GIT_PREFIX
+
+# SH-681: ask the bounded probe before resolving the legacy fallback root or
+# even discovering its test command. Git itself still runs the repository gate
+# on the actual push. A missing companion retains enforcement, never a bypass.
+delegation_probe="$(dirname "${BASH_SOURCE[0]}")/pre-push-delegation.py"
+if [ -f "$delegation_probe" ]; then
+    if root="$(python3 "$delegation_probe" <<<"$cmd")"; then
+        echo "pre-push-tests: $root owns its configured push gate — delegating; no suite runs here." >&2
+        prepush_verdict delegated 0 - -
+        exit 0
+    fi
+else
+    echo "pre-push-tests: delegation probe missing at $delegation_probe; retaining global gate." >&2
+fi
+
+# General command-position recognition remains AGE-63. Preserve the fallback
+# matcher, including its known prose overfiring, when delegation is unproven.
+if ! printf '%s' "$cmd" \
+    | grep -Eq '(^|[^[:alnum:]_])git( +-[cC] +[^ ]+)* +push([^[:alnum:]_]|$)'; then
+    exit 0
+fi
 
 # Resolve the repo root the gated command will actually push from — its own
 # leading `cd` (AGE-101) if it names one, this hook's own cwd otherwise. A

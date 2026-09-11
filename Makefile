@@ -37,6 +37,7 @@ test-gate-deadline-guard:
 # Measured ~14s on an unloaded box.
 test-prepush-gate:
 	bash tests/with-isolated-store.sh bash tests/prepush-gate.sh
+	python3 -B tests/prepush_delegation.py
 
 # storyhook is an out-of-repo CLI resolved from PATH, so upgrading it changes
 # this repo's test outcome with no commit here — which is why git bisect cannot

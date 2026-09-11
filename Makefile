@@ -38,6 +38,7 @@ test-gate-deadline-guard:
 test-prepush-gate:
 	bash tests/with-isolated-store.sh bash tests/prepush-gate.sh
 	python3 -B tests/prepush_delegation.py
+	python3 -B tests/prepush_install.py
 
 # storyhook is an out-of-repo CLI resolved from PATH, so upgrading it changes
 # this repo's test outcome with no commit here — which is why git bisect cannot
@@ -208,20 +209,20 @@ test-freshen:
 # The pre-push gate's own installation — DELIBERATELY NOT PART OF `test`
 # ---------------------------------------------------------------------------
 #
-# Claude Code loads the gate from an absolute path under $HOME, so the installed
-# file is necessarily a COPY of hooks/pre-push-tests.sh. `install-hooks` writes
-# it (backing up whatever is there first) and `check-hooks` reports drift.
+# Each provider loads the gate bundle from its own hooks directory. Select
+# HOOK_PROVIDER=claude (legacy default), codex, or all explicitly. Installation
+# preserves backups; checking verifies both files, mode, and registration.
 #
 # Neither belongs in `make test`: a suite that mutates $HOME as a side effect of
 # running would be a worse defect than the fail-open it exists to fix, and
 # `make test` runs inside the gate itself. The installer's behaviour is pinned by
 # tests/prepush-gate.sh against a fixture destination instead.
 #
-# Neither touches ~/.claude/settings.json. The registration — same path, same
-# declared timeout — stays exactly as it is, so both budget resolvers keep
-# resolving what they resolved before.
+# Neither changes either provider's registration. Codex derives its deadline
+# from ~/.codex/hooks.json; Claude retains its settings precedence chain.
+HOOK_PROVIDER ?=
 install-hooks:
-	bash hooks/install-pre-push-hook.sh install
+	bash hooks/install-pre-push-hook.sh install $(if $(HOOK_PROVIDER),--provider $(HOOK_PROVIDER))
 
 check-hooks:
-	bash hooks/install-pre-push-hook.sh check
+	bash hooks/install-pre-push-hook.sh check $(if $(HOOK_PROVIDER),--provider $(HOOK_PROVIDER))

@@ -184,6 +184,20 @@ class DelegationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertNotIn("delegating", result.stderr)
 
+    def test_inherited_targeting_cannot_delegate_using_a_different_repository(self):
+        self.install_gate()
+        other = self.make_repo("foreign environment")
+        for variable, value in (("GIT_DIR", str(other / ".git")),
+                                ("GIT_WORK_TREE", str(other)),
+                                ("CDPATH", str(other))):
+            with self.subTest(variable=variable):
+                self.env[variable] = value
+                command = "cd . && git push origin fixture" if variable == "CDPATH" else "git push origin fixture"
+                result = self.pretool(command)
+                del self.env[variable]
+                self.assertNotIn("delegating", result.stderr)
+                self.assertEqual(result.returncode, 2, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

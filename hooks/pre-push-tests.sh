@@ -2,9 +2,10 @@
 # PreToolUse(Bash) hook — enforce "tests pass locally before pushing".
 #
 # Policy (global, all projects): tests do NOT run in GitHub Actions; they run
-# locally and must pass before any push. This hook gates Claude's `git push`
-# calls: it detects the project's test command, runs it, and BLOCKS the push
-# (exit 2) if the tests fail. Non-push Bash commands pass through untouched.
+# locally. This hook delegates to a proven repository-owned push gate, or
+# detects the project's test command and blocks (exit 2) if it fails. The
+# fallback matcher still overfires on prose (AGE-63); SH-681 removes duplicate
+# suites in delegated repositories without claiming to parse arbitrary shell.
 #
 # Deliberate bypass (e.g. a docs-only push): include `SKIP_PREPUSH_TESTS=1` or
 # `--no-verify` anywhere in the command.
@@ -17,9 +18,9 @@
 #
 # This is safety-critical code that spent months as an ORPHAN GLOBAL FILE with no
 # owner, no version and no test. That is why it could fail open undetected. The
-# installed copy at `~/.claude/hooks/pre-push-tests.sh` is now a COPY of this
-# file: `make install-hooks` writes it, `make check-hooks` reports drift, and
-# `tests/prepush-gate.sh` is what makes any claim here checkable.
+# installed copies under ~/.claude/hooks and ~/.codex/hooks come from this
+# file and its pre-push-delegation.py companion. make install-hooks/check-hooks
+# accept HOOK_PROVIDER=all to install/verify both. See hooks/README.md.
 #
 # ---------------------------------------------------------------------------
 # WHY THE GATE BOUNDS ITSELF
@@ -172,9 +173,20 @@ PREPUSH_VERDICT_LOG="${PREPUSH_VERDICT_LOG:-$HOME/.claude/pre-push-verdicts.log}
 # unresolvable branch could never be exercised and every run would silently read
 # live machine config. tests/gate-deadline.sh made the identical call.
 prepush_settings_candidates() {
+    local installed_dir codex_dir
     if [ -n "${CLAUDE_SETTINGS_OVERRIDE:-}" ]; then
         printf '%s\n' "$CLAUDE_SETTINGS_OVERRIDE"
         return 0
+    fi
+    # A Codex install owns a different registration/deadline. Never borrow a
+    # healthy Claude configuration when Codex's registration is absent or bad.
+    installed_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)" || return 1
+    if [ -d "$HOME/.codex/hooks" ]; then
+        codex_dir="$(cd "$HOME/.codex/hooks" && pwd -P)" || return 1
+        if [ "$installed_dir" = "$codex_dir" ]; then
+            printf '%s\n' "$HOME/.codex/hooks.json"
+            return 0
+        fi
     fi
     printf '%s\n' \
         "$PWD/.claude/settings.local.json" \
@@ -186,11 +198,8 @@ prepush_settings_candidates() {
 # Resolve this hook's own declared timeout (seconds) from the precedence chain.
 # Echoes "<seconds> <path>" on success; returns 1 when nothing declares it.
 #
-# Kept deliberately identical in behaviour to gate_resolve_timeout() in
-# tests/gate-deadline.sh. The duplication is FORCED — this file is installed
-# standalone under ~/.claude/hooks/ and cannot source a repo file — so the
-# honest answer is the differential arm in tests/prepush-gate.sh, which feeds
-# both resolvers the same fixtures and asserts identical output.
+# The Claude resolver remains differential-tested against gate-deadline.sh.
+# Codex's provider chain is tested separately against its own registration.
 prepush_resolve_timeout() {
     local candidate seconds
     while IFS= read -r candidate; do
@@ -354,6 +363,12 @@ esac
 # conductor 2026-07-16 corruption (core.bare=true + a stray committer identity,
 # 17 misattributed commits). Unsetting at the gate closes the vector for every
 # project, not just those whose own suite scrubs.
+# The tool command still inherits these variables. Scrubbing them protects the
+# fallback suite, but cannot prove that command uses the scrubbed repository.
+delegation_environment_known=true
+if [ -n "${GIT_DIR:-}${GIT_WORK_TREE:-}${GIT_COMMON_DIR:-}${GIT_NAMESPACE:-}" ]; then
+    delegation_environment_known=false
+fi
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
       GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE GIT_PREFIX
 
@@ -361,7 +376,9 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
 # even discovering its test command. Git itself still runs the repository gate
 # on the actual push. A missing companion retains enforcement, never a bypass.
 delegation_probe="$(dirname "${BASH_SOURCE[0]}")/pre-push-delegation.py"
-if [ -f "$delegation_probe" ]; then
+if [ "$delegation_environment_known" = false ]; then
+    echo "pre-push-tests: inherited Git targeting is ambiguous; retaining global gate." >&2
+elif [ -f "$delegation_probe" ]; then
     if root="$(python3 "$delegation_probe" <<<"$cmd")"; then
         echo "pre-push-tests: $root owns its configured push gate — delegating; no suite runs here." >&2
         prepush_verdict delegated 0 - -

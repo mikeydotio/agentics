@@ -23,6 +23,8 @@ def target(command):
     words = list(lexer)
     cwd = Path.cwd()
     if words[:1] == ["cd"]:
+        if os.environ.get("CDPATH"):
+            raise ValueError("CDPATH makes the leading cd target ambiguous")
         end = 3 if words[1:2] == ["--"] else 2
         if len(words) <= end or words[end] != "&&":
             raise ValueError("only a single leading cd followed by && is supported")

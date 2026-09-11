@@ -1,5 +1,9 @@
 # PROGRESS.md — autonomous backlog loop
 
+> AGE-102 / SH-682: the global pre-push test hook and installer are retired.
+> Hook installation and deadline instructions below are historical, not current policy.
+> See docs/global-hook-retirement.md for backup-preserving removal.
+
 **If you are a fresh session that was just handed "continue the autonomous backlog loop": this
 file is your only memory. Read it start to finish before doing anything.**
 

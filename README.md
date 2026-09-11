@@ -74,3 +74,10 @@ Then install any plugin:
 3. Add the plugin entry to `.claude-plugin/marketplace.json`
 4. Run `/semver bump` — Claude Code caches plugins by version string, so shipped
    content changes are invisible to installs without one
+
+## Testing and the retired global hook
+
+Each repository owns its testing requirements. Agentics does not install a global
+push-test hook. Existing Claude and Codex installations can be inspected with
+`python3 hooks/retire-pre-push-hook.py`; add `--apply` to back up and remove them.
+See [Global hook retirement](docs/global-hook-retirement.md).

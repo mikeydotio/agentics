@@ -29,8 +29,8 @@
 # Self-contained plain-bash harness (NO bats) so it runs under `make test` on
 # every machine — mirrors tests/plugin-versions.sh: define test_* functions, run
 # each in an isolated subshell, print "  PASS|FAIL  fn", exit with the failure
-# count. The pre-push hook (~/.claude/hooks/pre-push-tests.sh) runs `make test`
-# and blocks the push on any non-zero exit — no CI involvement (per CLAUDE.md).
+# count. This remains part of the repository-owned test suite after retirement
+# of the global push-test hook (AGE-102).
 
 set -uo pipefail
 

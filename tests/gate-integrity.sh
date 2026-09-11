@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # tests/gate-integrity.sh — the gate must mean what it reports.
 #
-# WHY: `make test` is the SOLE pre-push gate (~/.claude/hooks/pre-push-tests.sh
-# runs it and blocks the push on a non-zero exit; there is no CI, per CLAUDE.md).
+# WHY: the repository-owned `make test` must report missing prerequisites as
+# failures. Its result is meaningful independently of who invokes it.
 # Until AGE-18 the five bats targets were written as
 #
 #     @if command -v bats >/dev/null 2>&1; then <run the suite>; \
@@ -35,15 +35,7 @@
 # It never recurses into a real suite: in (1) bats is absent by construction so
 # every target dies at its runner's check, and in (2) the `bats` on PATH is a
 # stub that records its invocation and exits 0 immediately. A full `make test`
-# costs minutes (see the distribution in CLAUDE.md's "Gate cost" section — median
-# ~630s as of 2026-08-05, tail censored at the hook's 900s timeout); this runs in
-# about a second.
-#
-# ⚠ This line used to read "takes ~15 minutes", which is 900s — numerically equal to
-# the pre-push hook's entire budget, and stated as a bare scalar. Two consecutive
-# stories read past it to OPPOSITE wrong conclusions (AGE-32 "the hook is not
-# firing", AGE-35 "comfortably inside budget"). Quote the distribution, never a
-# scalar: every scalar this repo has written about this suite has been misread.
+# costs minutes; this fixture-based integrity check runs in about a second.
 #
 # Deliberately NOT here: `make test` itself is never invoked (that would recurse
 # into this very suite), and the ~10 deployit skips predicated on

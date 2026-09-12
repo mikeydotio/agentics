@@ -1533,14 +1533,21 @@ PROMPT_END
     return 1
   fi
 
-  local answer rationale
-  answer="$(printf '%s' "$ai_text" | jq -r '.answer // empty' 2>/dev/null)"
-  rationale="$(printf '%s' "$ai_text" | jq -r '.rationale // empty' 2>/dev/null)"
-
-  if [[ -z "$answer" || -z "$rationale" ]]; then
-    log_decision "AI_FAIL" "could not parse response"
+  # Validate the structured object before shell conversion: jq's // discards
+  # boolean false, while raw conversion erases the distinction from "false".
+  if ! printf '%s' "$ai_text" | jq -es '
+    length == 1 and (.[0] |
+      type == "object" and
+      (.answer | type == "boolean") and
+      (.rationale | type == "string" and length > 0))
+  ' >/dev/null 2>&1; then
+    log_decision "AI_FAIL" "invalid structured response: expected one object with boolean answer and nonempty string rationale"
     return 1
   fi
+
+  local answer rationale
+  answer="$(printf '%s' "$ai_text" | jq -r '.answer')"
+  rationale="$(printf '%s' "$ai_text" | jq -r '.rationale')"
 
   log_decision "AI_RESULT" "answer=${answer} rationale=${rationale}"
 

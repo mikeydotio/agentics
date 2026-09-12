@@ -28,7 +28,7 @@ TOOL_NAME="$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)" ||
 
 CONFIG_DIR="${HOME}/.config/greenlight"
 CONFIG_FILE="${CONFIG_DIR}/config.yaml"
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+PLUGIN_ROOT="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}}"
 DEFAULT_CONFIG="${PLUGIN_ROOT}/references/default-config.yaml"
 
 # Auto-initialize config from bundled default on first run

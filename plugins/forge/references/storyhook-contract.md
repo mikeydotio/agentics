@@ -209,17 +209,16 @@ story comment <id> '{"blocked_reason":"decision","description":"..."}'
 
 ## Custom States
 
-`story project new` seeds `todo` / `in-progress` (role: active) / `blocked` / `done` by default.
-Only states beyond that set must be created explicitly — for forge, that is `verifying` alone:
+`story project new` seeds required OPEN states `todo`, `in-progress` (role:
+active), `verifying` and `blocked`, and CLOSED states `done` and `dropped`.
+Forge needs no additional state. These defaults are part of the current
+`story help state` contract; `story doctor --fix` adds missing required states
+to older projects through the supported migration.
 
-```bash
-story state add verifying --super OPEN
-```
-
-**Do not add `blocked` here.** The project template ships it, and `story state add` is not
-idempotent, so re-adding it exits 2 and takes the whole `&&` chain down with it. This is the same
-reason the block omits `in-progress`. Anything this list adds that the template already provides
-is a bug — see AGE-14.
+Do not re-add any required state. `story state add` is not idempotent: a duplicate
+exits 2 and aborts an `&&` setup chain. Register only genuinely additional states.
+The real-CLI setup contract tests pin the default vocabulary and execute the
+remaining documented setup commands, so a future default change fails visibly.
 
 **The `active` role.** At most one state may carry `--role active`. It has one meaning and one
 consumer: it is the state `story commit-sync` moves a story into when a commit referencing it

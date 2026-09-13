@@ -21,13 +21,11 @@ Before creating stories, check if `.forge/plan-mapping.json` exists:
 
 ### 2. State and Type Setup
 
-`story project new` already seeds `todo` / `in-progress` / `blocked` / `done`. Create the one
-additional state forge's execution loop needs (see `storyhook-contract.md`'s **Custom States** for
-the not-idempotent/exit-2 caveat and what the `active` role means):
-
-```bash
-story state add verifying --super OPEN
-```
+`story project new` already provides `todo`, `in-progress`, `verifying`, `blocked`,
+`done` and `dropped`. Do not add those states again: duplicate additions fail.
+For an older project missing required states, use `story doctor --fix`, the
+supported migration. See `storyhook-contract.md`'s **Custom States** for the
+single-active-role constraint.
 
 Also register the `escalate` custom `story_type` triage and the blocked-stories-pause flow use to
 flag a story needing a human decision (`forge-state.sh` detects this via the structured field, not

@@ -98,7 +98,7 @@ def execute(directory, command, data, clock=None):
     root = Path(directory).absolute()
     if root.is_symlink() or root.parent.is_symlink():
         raise ValueError(f"refusing symlink delivery directory: {root}")
-    wall, mono = (clock or (lambda: (time.time(), time.monotonic())))()
+    wall, mono = (clock or (lambda: (time.time(), time.clock_gettime(time.CLOCK_MONOTONIC))))()
     number(wall, "wall clock")
     number(mono, "monotonic clock")
     if command == "status":
@@ -142,6 +142,8 @@ def execute(directory, command, data, clock=None):
             if s["status"] not in model.TERMINAL:
                 model.advance(s, wall, mono)
             s["revision"] += 1
+        if s["status"] in model.TERMINAL and s["cleanup_mono"] is None:
+            s["cleanup_mono"] = mono
         validate(s)
         atomic_write(root / "STATE.json", json.dumps(s, indent=2, allow_nan=False) + "\n")
         render(root, s)

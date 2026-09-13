@@ -50,8 +50,11 @@ Budgets: ordinary readers 900+300+300 seconds; Forge evaluator/reviewer/triager
 600+120+120; all writers 1800+300+0. Waves serialize writers and fix reader capacity.
 Each task ceiling and sum-of-wave batch ceiling precedes dispatch. Stop/probe allowance
 is inside existing ceilings; terminal cleanup alone adds at most 30 seconds.
-Monotonic time owns arithmetic; UTC timestamps aid inspection. These defaults are
-operational limits, not measured percentiles.
+System `CLOCK_MONOTONIC` owns elapsed arithmetic across helper processes; UTC timestamps
+support inspection. macOS Python 3.9's `time.monotonic()` has a process-relative origin,
+so it is unsuitable for persisted comparisons. A real six-second separate-process
+regression covers that distinction. Terminal cleanup has its own monotonic anchor.
+These defaults are operational limits, not measured percentiles.
 
 Failure/recovery must not consume a Forge evaluator retry or satisfy an RCA gate.
 Explicit reconciliation preserves terminal evidence and requires confirmed shutdown,
@@ -74,3 +77,14 @@ policy evidence are not proof of model compliance. Native transport smoke limita
 must be reported explicitly. No full repository suite or release operation is part of
 this worktree's validation.
 
+Observed implementation regressions include missing Forge/RCA advancement guards,
+uncertain-send reconciliation after explicit failure, and stale batch readiness after
+semantic rejection. Each has a failing production-boundary test before its correction.
+Native Codex smoke exercised persisted intent, actual identity, one bounded reader
+correction, literal correlated acceptance, and unchanged source content. Its first
+response shortened the digest; an owner transcription error invalidated that attempt.
+Both were recorded on AGE-104 before correction. This does not certify universal model
+compliance. Claude native delegation tools were unavailable in this session; both host
+instruction contracts and all three real Codex-installed helper copies are covered.
+Council's separately reproduced macOS clock defect is tracked as AGE-105 and remains
+outside this approved non-Council change.

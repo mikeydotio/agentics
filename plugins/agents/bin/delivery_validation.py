@@ -63,7 +63,7 @@ def validate(s):
         raise ValueError("invalid delivery state schema")
     required = {"batch_id", "owner", "host", "session", "step", "status", "tasks", "waves",
                 "wave", "capacity", "created_at", "created_mono", "last_mono", "last_wall",
-                "deadline", "revision", "history", "remaining", "cleanup_deadline", "reason"}
+                "deadline", "revision", "history", "remaining", "cleanup_deadline", "cleanup_mono", "reason"}
     if not required <= s.keys():
         raise ValueError("invalid delivery state: missing fields")
     for key in ("batch_id", "session", "step"):
@@ -79,6 +79,7 @@ def validate(s):
         number(s[key], key)
     if s["cleanup_deadline"] is not None:
         number(s["cleanup_deadline"], "cleanup_deadline")
+        number(s["cleanup_mono"], "cleanup_mono")
     if not isinstance(s["tasks"], list) or not s["tasks"]:
         raise ValueError("invalid delivery tasks")
     ids = set()

@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -127,10 +128,10 @@ class DeliveryTests(unittest.TestCase):
         self.dispatch()
         self.tick(900)
         self.event("probe-attempted")
-        self.event("progress", working=True, evidence="test battery running")
+        self.event("progress", agent_id=self.task()["agent_id"], working=True, evidence="test battery running")
         deadline = self.task()["deadline"]
         self.tick(250)
-        self.event("progress", working=True, evidence="still running")
+        self.event("progress", agent_id=self.task()["agent_id"], working=True, evidence="still running")
         self.assertEqual(self.task()["deadline"], deadline)
         self.tick(50)
         self.stop()
@@ -266,6 +267,87 @@ class DeliveryTests(unittest.TestCase):
         self.call("finish", outcome="reconciled", reason="partial artifacts preserved and removed from gates",
                   integrity_ok=True, artifacts_reconciled=True)
         self.assertFalse(inspect_runs(self.root.parent)["blocked"])
+
+    def test_rejected_accepted_result_returns_to_running_for_retry(self):
+        """A semantic rejection revokes readiness and stale payload before correction."""
+        self.init()
+        self.dispatch()
+        self.deliver()
+        self.assertEqual(self.result["state"]["status"], "ready")
+        ceiling = self.result["state"]["deadline"]
+        self.event("failure", category="transport", reason="owner rejects off-topic result")
+        self.assertEqual(self.result["state"]["status"], "running")
+        self.assertNotIn("finish", [a["kind"] for a in self.result["actions"]])
+        self.stop()
+        self.assertIsNone(self.task()["payload"])
+        self.dispatch()
+        self.deliver()
+        self.stop()
+        self.call("finish", outcome="succeeded", integrity_ok=True)
+        self.assertEqual(self.result["state"]["deadline"], ceiling)
+
+    def test_explicit_failure_preserves_uncertain_dispatch(self):
+        """A terminal label cannot erase durable evidence of an uncertain send."""
+        self.init()
+        self.event("dispatch-attempted")
+        self.call("finish", outcome="failed", reason="native call returned no identity")
+        with self.assertRaisesRegex(ValueError, "uncertain"):
+            self.call("finish", outcome="reconciled", reason="reviewed",
+                      integrity_ok=True, artifacts_reconciled=True)
+        self.root = self.root.parent / "never-sent"
+        self.result = None
+        self.init()
+        self.call("finish", outcome="interrupted", reason="cancelled before dispatch")
+        self.call("finish", outcome="reconciled", reason="nothing dispatched; artifacts reviewed",
+                  integrity_ok=True, artifacts_reconciled=True)
+        self.assertEqual(self.result["state"]["status"], "reconciled")
+
+    def test_cleanup_after_reboot_has_its_own_finite_clock(self):
+        """A discontinuous original clock cannot renew terminal stop actions."""
+        self.init(writers=(True,))
+        self.dispatch()
+        self.clock = [self.clock[0] - 10000, 1.0]
+        self.call("advance")
+        self.assertEqual(self.result["state"]["status"], "interrupted")
+        self.tick(31)
+        self.assertFalse(self.result["actions"])
+
+    def test_missing_failure_reason_is_a_worker_failure(self):
+        """Valid JSON with an invalid failure body follows bounded transport failure."""
+        self.init()
+        self.dispatch()
+        envelope = self.envelope()
+        envelope["kind"] = "failure"
+        self.deliver(body=json.dumps(envelope))
+        self.assertEqual(self.task()["status"], "stopping")
+
+    def test_stale_progress_cannot_earn_extension(self):
+        """Only the observed native identity from this attempt can earn time."""
+        self.init()
+        self.dispatch()
+        self.tick(900)
+        self.event("probe-attempted")
+        deadline = self.task()["deadline"]
+        self.event("progress", agent_id="stale-native", working=True, evidence="working")
+        self.assertEqual(self.task()["deadline"], deadline)
+        self.assertEqual(self.task()["status"], "probing")
+
+    def test_real_cli_clock_survives_separate_processes(self):
+        """The production clock epoch must survive separate macOS Python processes."""
+        data = dict(owner="agents", host="codex", session="cli-parent", step="smoke", capacity=1,
+                    tasks=[dict(task_id="one", task="Read only", role="skeptic", writer=False)])
+        def run(command, value):
+            result = subprocess.run([sys.executable, "-B", str(BIN / "agent-delivery.py"),
+                                     command, str(self.root)], input=json.dumps(value),
+                                    text=True, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return json.loads(result.stdout)["state"]
+        first = run("init", data)
+        time.sleep(6)
+        second = run("advance", dict(revision=first["revision"]))
+        self.assertEqual(second["status"], "running")
+        self.assertGreaterEqual(second["last_mono"] - first["created_mono"], 5)
+        self.assertEqual(second["deadline"], first["deadline"])
 
     def test_command_line_and_missing_or_legacy_state(self):
         """Installed CLI runs independently and reports malformed input context."""

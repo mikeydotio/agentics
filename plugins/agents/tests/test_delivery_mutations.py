@@ -45,6 +45,22 @@ class MutationTests(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                     path.write_text(source)
 
+    def test_packaging_requires_each_prerequisite(self):
+        """An unavailable packaging runtime is an explicit failed check, never a pass."""
+        tools = {"dirname": "/usr/bin/dirname", "codex": shutil.which("codex"),
+                 "jq": shutil.which("jq"), "python3": sys.executable}
+        for missing in ("codex", "jq", "python3"):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory(dir="/tmp") as directory:
+                for name, executable in tools.items():
+                    if name != missing:
+                        self.assertIsNotNone(executable, name)
+                        (Path(directory) / name).symlink_to(executable)
+                result = subprocess.run(["/bin/bash", str(ROOT / "tests/smoke-codex-install.sh")],
+                                        env=dict(os.environ, PATH=directory), text=True,
+                                        capture_output=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"ERROR: {missing} is required", result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

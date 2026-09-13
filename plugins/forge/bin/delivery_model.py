@@ -67,7 +67,7 @@ def initialise(data, now, mono):
              session=text(data.get("session"), "session"), step=text(data.get("step"), "step"),
              capacity=capacity, tasks=tasks, waves=waves, wave=0, status="running", reason="",
              revision=0, created_at=now, created_mono=mono, last_mono=mono, last_wall=now,
-             deadline=now + ceiling, history=[], remaining=[], cleanup_deadline=None)
+             deadline=now + ceiling, history=[], remaining=[], cleanup_deadline=None, cleanup_mono=None)
     prepare_wave(s, now)
     note(s, now, "prepared", reason="Whole roster persisted before native dispatch")
     return s
@@ -87,7 +87,8 @@ def advance(s, wall, mono):
     """Apply monotonic deadlines before every action and transport event."""
     now = s["created_at"] + mono - s["created_mono"]
     if s["status"] in TERMINAL:
-        return now
+        elapsed = mono - s["cleanup_mono"]
+        return s["cleanup_deadline"] if elapsed < 0 else s["cleanup_deadline"] - 30 + elapsed
     if mono < s["last_mono"] or wall < s["last_wall"] or abs(wall - now) > 5:
         terminal(s, max(now, s["last_wall"]), "interrupted", "Clock discontinuity; no fresh deadline")
         return max(now, s["last_wall"])
@@ -123,6 +124,8 @@ def advance(s, wall, mono):
         elif all(t["stopped"] and t["integrity_ok"] for t in current):
             s["wave"] += 1
             prepare_wave(s, now)
+    else:
+        s["status"] = "running"
     return now
 
 
@@ -141,7 +144,15 @@ def delivery(s, t, data, now):
     if any(result.get(k) != v for k, v in identities.items()):
         note(s, now, "rejected", t, "Stale/wrong batch, task, digest or attempt")
     elif result.get("kind") == "failure":
-        fail(s, t, now, text(result.get("reason"), "failure reason"), result.get("category", "transport"))
+        try:
+            reason = text(result.get("reason"), "failure reason")
+            category = result.get("category", "transport")
+            if category not in ("transport", "permission", "capability", "integrity"):
+                raise ValueError("invalid failure category")
+        except ValueError as exc:
+            fail(s, t, now, f"Malformed failure envelope: {exc}")
+        else:
+            fail(s, t, now, reason, category)
     elif result.get("kind") != "result" or "payload" not in result or result["payload"] is None:
         fail(s, t, now, "Result has no valid payload/kind")
     else:
@@ -176,7 +187,7 @@ def record(s, data, now):
                 return
             note(s, now, "retry", t, f"Stopped {t['agent_id']}; prior integrity verified")
             t.update(attempt=2, attempt_id=str(uuid.uuid4()), agent_id=None, stopped=False,
-                     integrity_ok=False, status="prepared", probe_sent=False, extended=True,
+                     integrity_ok=False, status="prepared", probe_sent=False, extended=True, payload=None,
                      deadline=min(now + t["budget"][2], t["ceiling"]))
         return
     if s["status"] in TERMINAL:
@@ -199,6 +210,9 @@ def record(s, data, now):
         t["probe_sent"] = True
         note(s, now, kind, t)
     elif kind == "progress":
+        if data.get("agent_id") != t["agent_id"]:
+            note(s, now, "rejected", t, "Wrong native progress identity")
+            return
         if t["status"] == "probing" and t["probe_sent"]:
             if data.get("working") is True and isinstance(data.get("evidence"), str) and data["evidence"].strip():
                 t.update(status="pending", extended=True, deadline=t["extension_end"])
@@ -233,8 +247,9 @@ def finish(s, data, now):
     if outcome == "reconciled":
         if s["status"] not in ("failed", "interrupted") or s["remaining"]:
             raise ValueError("reconciliation requires terminal failure and confirmed shutdown")
-        if any(t["status"] == "interrupted" and t["agent_id"] is None and t["deadline"] is not None
-               for t in s["tasks"]):
+        attempted = {e["attempt_id"] for e in s["history"] if e["event"] == "dispatch-attempted"}
+        confirmed = {e["attempt_id"] for e in s["history"] if e["event"] == "dispatched"}
+        if attempted - confirmed:
             raise ValueError("uncertain native dispatch requires external identity reconciliation")
         if data.get("integrity_ok") is not True or data.get("artifacts_reconciled") is not True:
             raise ValueError("reconciliation requires integrity and artifact review")

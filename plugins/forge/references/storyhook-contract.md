@@ -16,7 +16,7 @@ unsure of with `story help <command>` or `story help --all`.
 |---|---|---|
 | Create a story | `story new "<title>"` | Returns the new story's JSON (`.story.story.id`) |
 | Get next actionable story | `story next --json` | See **JSON Output** below — shape and empty-case both differ from what you'd guess |
-| List all stories | `story list --json` | Double-nested — see **JSON Output** |
+| List all stories | `story list --all --json` | Double-nested — see **JSON Output** |
 | Show one story | `story show <id> --json` | |
 | Set state | `story move <id> <state> ["<comment>"]` | Comment is optional and applied atomically with the transition |
 | Set multiple fields at once | `story set <id> --state <slug> --priority <level> …` | See **Field Updates** below |
@@ -100,16 +100,18 @@ Detect "nothing ready" by checking for `.message`, not by checking for empty std
 distinguish "all done" from "some blocked," consult `story summary --json`
 (`.summary.ready_count`, `.summary.blocked_count`, `.summary.total_open`) or `story list --json`.
 
-**Any story with children is never returned, permanently, regardless of the children's state.**
-This is a `story next` design choice (not just a transient readiness gate), and it means `story
-summary --json`'s own `ready_stories`/`ready_count` do NOT apply the same filter — a parent whose
-children are ALL done can show up in `.summary.ready_stories` (with a `progress.children_done ==
-progress.children_total`) while `story next` will still never hand it back. This matters for
-`decompose`'s auto-created parent story (`project_story` in `plan-mapping.json` — see
-`references/story-decomposition.md`): treat it as permanently unreachable via `story next` and
-never require it to reach `done` the same way a leaf story does.
+A parent can be returned once its children are complete. Forge still treats
+`decompose`'s recorded `project_story` as bookkeeping: exclude it from the real
+work completion check, then close it explicitly at execution completion.
 
-### `story list --json`
+### `story list --all --json`
+
+Plain `story list --json` returns open, unarchived stories. Completion also
+archives stories, so completion detection, progress counts, parent-close
+idempotency and mapping reconstruction must explicitly use `--all`. Merely
+adding `--include-closed` does not include archived history. Recovery and
+open dependency-cycle detection intentionally retain the default open scope.
+See `story help list` for the current filter contract.
 
 ```json
 {

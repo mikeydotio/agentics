@@ -267,6 +267,9 @@ teardown() {
   run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_claim'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
   [ "$status" -eq 0 ]
   [ "$(head -1 "$TEST_DIR/.freshen/.codex-reset/active/claimed.signal")" = '$forge:forge resume' ]
+  run find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'completed-*' -print -quit
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
   printf '%s\n' '$forge:forge resume' > "$TEST_DIR/.freshen/forge.signal"
   run bash -c 'cd "$1" && PLUGIN_ROOT="$2" TMUX=1 TMUX_PANE=%%1 CODEX_HOOK_DIR="$2/hooks/codex" CODEX_PLUGIN_DIR="$2" bash -c '\'' . "$CODEX_HOOK_DIR/lifecycle-state.sh"; freshen_codex_transition claimed bootstrap-stop; freshen_codex_claim_continuation_signal >/dev/null; freshen_codex_transition bootstrap-stop continuation-submit-armed'\''' _ "$TEST_DIR" "$FRESHEN_ROOT"
   [ "$status" -eq 0 ]
@@ -275,7 +278,10 @@ teardown() {
   [ -f "$TEST_DIR/.freshen/forge.signal" ]
   [ "$(head -1 "$TEST_DIR/.freshen/forge.signal")" = '$forge:forge resume' ]
   [ ! -d "$TEST_DIR/.freshen/.codex-reset/active" ]
-  find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'completed-*' | grep -q .
+  run find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'completed-*' -print -quit
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  [ "$(cat "$output/phase")" = continuation-stop ]
 }
 
 @test "Codex status and cancellation include the atomically claimed journal signal" {

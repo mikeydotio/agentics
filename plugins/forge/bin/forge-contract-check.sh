@@ -820,10 +820,11 @@ MID_RE='[(;&|`][[:space:]]*story[[:space:]]+([A-Za-z][A-Za-z0-9_.-]*|<[^>]*>)([^
 #     this mechanism becoming the vacuous-green shape it exists to avoid.
 #   - The reason is mandatory. A marker without one is malformed and
 #     suppresses nothing, so it cannot degrade into a silent mute button.
-#   - A marker whose token is itself a placeholder (`<token>`) is a
-#     signature, not a suppression: it neither suppresses nor goes stale.
-#     That is what lets this convention be documented in a scanned file
-#     without self-applying.
+#   - Outside fences, markers quoted in complete same-line backtick spans
+#     are examples, not applied annotations. Inside fences annotations remain
+#     active, preserving negative command examples.
+#   - Only the literal `<token>` convention signature is exempt from staleness;
+#     every other placeholder is accountable just like a concrete token.
 #
 # Stale markers are discriminated, because the distinction is the actionable
 # part: `form_is_valid` (the line was scanned and is clean — storyhook made
@@ -849,14 +850,94 @@ MARKER_HIT_LINES=""  # linenos whose marker suppressed at least one violation
 SCANNED_LINES=""     # linenos the extractor actually handed to the checker
 VIOLATED_LINES=""    # linenos that produced at least one violation
 
+# Emit numbered command units or marker-visible lines using one fence state
+# machine. Marker mode visits every line, even when no invocation is extracted.
+read_document() {
+  awk -v mode="$1" '
+    # Backtick spans are line-local here, as in the command extractor. Outside
+    # spans, comments are atomic: backticks in a reason are not delimiters.
+    function unquoted(line,    out, i, j, n, run, close_run, finish, tail) {
+      out = ""
+      n = length(line)
+      for (i = 1; i <= n;) {
+        tail = substr(line, i)
+        if (substr(tail, 1, 4) == "<!--" && index(tail, "-->")) {
+          finish = index(tail, "-->") + 2
+          out = out substr(tail, 1, finish)
+          i += finish
+        } else if (substr(line, i, 1) == "\\") {
+          # Escapes apply only outside a span. Preserve their literal bytes.
+          out = out substr(line, i, 2)
+          i += 2
+        } else if (substr(line, i, 1) == "`") {
+          run = 1
+          while (substr(line, i + run, 1) == "`") run++
+          finish = 0
+          for (j = i + run; j <= n;) {
+            if (substr(line, j, 1) != "`") { j++; continue }
+            close_run = 1
+            while (substr(line, j + close_run, 1) == "`") close_run++
+            if (close_run == run) { finish = j + close_run; break }
+            j += close_run
+          }
+          if (finish) {
+            # Keep a separator so removing a span cannot manufacture a marker.
+            out = out " "
+            i = finish
+          } else {
+            out = out substr(line, i, run)
+            i += run
+          }
+        } else {
+          out = out substr(line, i, 1)
+          i++
+        }
+      }
+      return out
+    }
+
+    BEGIN { d = 0; flen = 0 }
+    {
+      boundary = 0
+      if (match($0, /^[[:space:]]*(([-*+]|[0-9]+[.)])[[:space:]]+)?`{3,}/)) {
+        tok = substr($0, RSTART, RLENGTH)
+        info = substr($0, RSTART + RLENGTH)
+        marked = (tok ~ /[^[:space:]`]/)
+        run = 0
+        for (i = length(tok); i >= 1; i--) {
+          if (substr(tok, i, 1) == "`") run++; else break
+        }
+        if (d == 0) { d = 1; flen = run; boundary = 1 }
+        else {
+          bare = info
+          gsub(/[[:space:]]/, "", bare)
+          if (!marked && bare == "" && run >= flen) { d = 0; boundary = 1 }
+        }
+      }
+    }
+    mode == "markers" {
+      printf "%d\t%s\n", NR, (d || boundary ? $0 : unquoted($0))
+      next
+    }
+    boundary { next }
+    d == 1 { printf "%d\t%s\n", NR, $0; next }
+    {
+      rest = $0
+      while (match(rest, /`[^`]+`/)) {
+        printf "%d\t%s\n", NR, substr(rest, RSTART + 1, RLENGTH - 2)
+        rest = substr(rest, RSTART + RLENGTH)
+      }
+    }
+  ' "$2"
+}
+
 collect_markers() {
   FILE_MARKERS=""
   MARKER_HIT_LINES=""
   SCANNED_LINES=""
   VIOLATED_LINES=""
-  local n=0 line inner tok reason
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    n=$((n + 1))
+  local n line inner tok reason
+  while IFS=$'\t' read -r n line; do
     [[ "$line" =~ $MARKER_ANY_RE ]] || continue
     inner="${BASH_REMATCH[1]}"
     tok=""
@@ -868,7 +949,7 @@ collect_markers() {
       tok="${BASH_REMATCH[1]}"
     fi
     FILE_MARKERS="${FILE_MARKERS}${FILE_MARKERS:+$'\n'}${n}"$'\t'"${tok}"$'\t'"${reason}"
-  done < "$1"
+  done < <(read_document markers "$1")
 }
 
 # Does a well-formed marker on $1 name exactly the token $2?
@@ -886,8 +967,8 @@ collect_markers() {
 # The exact-match on line 2 below is what keeps the signature case safe:
 # a marker naming `<token>` suppresses only a violation whose reported
 # token is literally `<token>`, so documenting the convention still
-# cannot mute a real finding. Staleness keeps its broader placeholder
-# exemption — see classify_stale_markers.
+# cannot mute a real finding. Quoted examples never enter FILE_MARKERS;
+# staleness exempts only this exact convention sentinel (AGE-39).
 marker_suppresses() {
   local ln tok reason
   [[ -n "$FILE_MARKERS" ]] || return 1
@@ -934,30 +1015,15 @@ try_suppress() {
 # Every marker that suppressed nothing is a failure — classified, because the
 # three cases call for three different corrections.
 #
-# ACCEPTED GAP, and the reason it is accepted (AGE-31). A marker whose token is
-# a placeholder is skipped below, so it can suppress (marker_suppresses no
-# longer refuses it) but can never be reported stale. That asymmetry is
-# deliberate and it is a debt, not a design: narrowing this exemption to the
-# `<token>` sentinel would red the gate on a CORRECT document — one that quotes
-# the marker convention by example, e.g. `<!-- … expect-dead <id> … -->` inside
-# a backtick span. Measured: with the exemption narrowed that fixture reports
-# `contract_ok:false`, and it does so even with AGE-37's origin fix applied,
-# which only relabels the kind (`form_is_valid` -> `not_scanned`) and leaves the
-# false verdict standing. The blocker is that collect_markers cannot tell an
-# APPLIED marker from a QUOTED one — AGE-37's territory.
-#
-# What holds the invariant meanwhile: forge-contract-check.bats asserts
-# markers == suppressions + stale_suppressions over the real corpus. That keeps
-# "a marker never silently does nothing" enforced from OUTSIDE the script, where
-# it cannot manufacture a false positive. Verified to catch the exact case this
-# gap leaves open (markers=1, accounted=0). Narrow this only once AGE-37 can
-# distinguish a quoted marker from an applied one.
+# AGE-39: collection excludes quoted examples at the origin. Only the literal
+# convention sentinel remains exempt; is_placeholder describes command-slot
+# wildcards and must never decide whether an applied annotation is accountable.
 classify_stale_markers() {
   local rel_f="$1" ln tok reason
   [[ -n "$FILE_MARKERS" ]] || return 0
   while IFS=$'\t' read -r ln tok reason; do
     [[ -n "$ln" ]] || continue
-    is_placeholder "$tok" && continue
+    [[ "$tok" == "<token>" ]] && continue
     if [[ -z "$tok" || -z "$reason" ]]; then
       add_stale_suppression "$rel_f" "$ln" "$tok" "malformed"
       continue
@@ -1068,31 +1134,7 @@ while IFS= read -r f; do
         fi
         ;;
     esac
-  done < <(awk '
-    BEGIN { d = 0; flen = 0 }
-    {
-      if (match($0, /^[[:space:]]*(([-*+]|[0-9]+[.)])[[:space:]]+)?`{3,}/)) {
-        tok = substr($0, RSTART, RLENGTH)
-        info = substr($0, RSTART + RLENGTH)
-        marked = (tok ~ /[^[:space:]`]/)
-        run = 0
-        for (i = length(tok); i >= 1; i--) {
-          if (substr(tok, i, 1) == "`") run++; else break
-        }
-        if (d == 0) { d = 1; flen = run; next }
-        bare = info
-        gsub(/[[:space:]]/, "", bare)
-        if (!marked && bare == "" && run >= flen) { d = 0; next }
-      }
-    }
-    d == 1 { printf "%d\t%s\n", NR, $0; next }
-    {
-      rest = $0
-      while (match(rest, /`[^`]+`/)) {
-        printf "%d\t%s\n", NR, substr(rest, RSTART + 1, RLENGTH - 2)
-        rest = substr(rest, RSTART + RLENGTH)
-      }
-    }' "$f")
+  done < <(read_document commands "$f")
 
   classify_stale_markers "$rel_f"
 done <<< "$FILES"

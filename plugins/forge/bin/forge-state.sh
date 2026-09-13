@@ -72,7 +72,7 @@ artifact_exists() {
 }
 
 build_artifacts() {
-  local artifacts=(
+  local artifact_names=(
     "IDEA.md"
     "research/SUMMARY.md"
     "DESIGN.md"
@@ -86,7 +86,7 @@ build_artifacts() {
     "COMPLETION.md"
   )
   local pairs=()
-  for a in "${artifacts[@]}"; do
+  for a in "${artifact_names[@]}"; do
     if artifact_exists "$a"; then
       pairs+=("$a" "true")
     else

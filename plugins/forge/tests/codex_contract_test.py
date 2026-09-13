@@ -19,7 +19,12 @@ class Contracts(unittest.TestCase):
         for step, digest in baseline.items():
             with self.subTest(step=step):
                 original = (ROOT / f"claude/skills/{step}/SKILL.md").read_bytes()
-                self.assertEqual(hashlib.sha256(original).hexdigest(), digest)
+                normalized = re.sub(rb"\n<!-- AGE-104 DELIVERY BEGIN -->.*?<!-- AGE-104 DELIVERY END -->\n", b"", original, flags=re.S)
+                edits = json.loads((ROOT / "tests/claude-liveness-edits.json").read_text())
+                for before, after in edits.get(f"claude/skills/{step}/SKILL.md", []):
+                    self.assertEqual(normalized.count(after.encode()), 1)
+                    normalized = normalized.replace(after.encode(), before.encode())
+                self.assertEqual(hashlib.sha256(normalized).hexdigest(), digest)
                 public = (ROOT / f"skills/{step}/SKILL.md").read_text()
                 self.assertEqual(original.decode().split("---", 2)[1], public.split("---", 2)[1])
                 for host in ("claude", "codex"):

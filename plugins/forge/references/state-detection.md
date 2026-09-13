@@ -1,5 +1,8 @@
 # State Detection and Dispatch
 
+**Dispatch/recovery prerequisite:** read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md`; the helper owns finite
+collection, pending evidence and cleanup. Handle delivery_recovery before continuing.
+
 How `/forge continue` decides which step runs next, and the five non-pass-through cases that need
 handling in the router rather than a step skill.
 
@@ -62,7 +65,7 @@ correlate. If this state detection call is skipped (e.g. `state` was already kno
    - `state == "fix_loop"` → follow **Fix Loop Handling** below. Do NOT fall through to the
      generic bullet just because `dispatch` also happens to end in ` --orchestrated`.
    - `review_validate --orchestrated` → follow **Review+Validate Parallel Dispatch** below (spawns
-     BOTH review's and validate's agent sets in a single message).
+     BOTH review's and validate's agent sets in bounded delivery waves).
    - `blocked_review` → follow **Blocked Stories Pause** below.
    - `escalate_review` → follow **ESCALATE Review Loop** below.
    - `deploy_gate` → follow **Deploy Permission Gate** below.
@@ -99,7 +102,7 @@ the three cases applies, and names it explicitly in `dispatch`:
 
 | `dispatch` | Meaning | What to do |
 |---|---|---|
-| `review_validate --orchestrated` | Neither report exists yet | Read **both** `skills/review/SKILL.md` and `skills/validate/SKILL.md`. Spawn every agent from review's Step 2 AND every agent from validate's Step 1 **in a single message** (Hard Rule 11 — multiple `Agent()` calls, one message, orchestrator waits for all). Synthesize both `.forge/REVIEW-REPORT.md` and `.forge/VALIDATE-REPORT.md`, write both handoffs, commit both, then queue **one** freshen call to `/forge continue`. |
+| `review_validate --orchestrated` | Neither report exists yet | Read **both** `skills/review/SKILL.md` and `skills/validate/SKILL.md`. Spawn every agent from review's Step 2 AND every agent from validate's Step 1 in helper-controlled bounded waves (Hard Rule 11; writers serialized and all required results collected). Synthesize both `.forge/REVIEW-REPORT.md` and `.forge/VALIDATE-REPORT.md`, write both handoffs, commit both, then queue **one** freshen call to `/forge continue`. |
 | `validate --orchestrated` | `REVIEW-REPORT.md` exists, `VALIDATE-REPORT.md` doesn't | Read only `skills/validate/SKILL.md` and run it. On exit, queue freshen to `/forge continue` unconditionally — do not check for the other report first (that file-presence check is exactly what deadlocked before; `forge-state.sh` already decided this dispatch by seeing review's report present). |
 | `review --orchestrated` | `VALIDATE-REPORT.md` exists, `REVIEW-REPORT.md` doesn't | Read only `skills/review/SKILL.md` and run it. Same unconditional-freshen rule as above. |
 

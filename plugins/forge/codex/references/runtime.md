@@ -1,5 +1,8 @@
 # Codex Forge runtime
 
+**Dispatch/recovery prerequisite:** read `<plugin-root>/references/delivery.md`; the helper owns finite
+collection, pending evidence and cleanup. Handle delivery_recovery before continuing.
+
 Read this before every step, including standalone steps. The Codex tree owns host
 mechanics; production shell helpers own pipeline state and artifact transitions.
 
@@ -39,10 +42,10 @@ spawning produces an incomplete step handoff with diagnostics.
 
 Construct each worker prompt in this order: full canonical role, full Forge override
 from codex/agent-overrides when one exists, the execution contract below, then task
-evidence and expected output. Use spawn_agent with a unique step/role/attempt name;
+evidence, expected output and the helper-derived delivery envelope. Use spawn_agent with a unique step/role/attempt name;
 retain the returned identity. Inherit model and effort. Canonical YAML model/tools
 metadata is descriptive, not Codex configuration. Use followup_task for corrections
-to that task, wait_agent to collect final results, and interrupt_agent when aborting
+only through helper-tracked attempts, wait_agent in bounded slices per delivery.md, and interrupt_agent when aborting
 still-running workers. A notification without a result is not a completed task.
 
 Respect available concurrency slots. Run independent readers concurrently when

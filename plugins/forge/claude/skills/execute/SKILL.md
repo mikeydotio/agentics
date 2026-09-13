@@ -5,6 +5,16 @@ argument-hint: "[--dry-run [--dry-run-mode all-pass|all-fail|mixed]]"
 effort: high
 ---
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md` completely before this step, including standalone entry.
+The local helper owns all specialist dispatch/wait/retry/cleanup; persist intent before
+native dispatch and use the state-derived result envelope. On delivery_recovery, inspect
+and recover existing batches before any fresh dispatch, artifact-based advancement or
+cleanup. Preserve partial changes and write an incomplete handoff on failure; never
+convert delivery failure into an evaluator verdict or a fresh generator retry.
+In Plan mode inspect only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # Execute: Autonomous Generator-Evaluator Loop
 
 You are the execute skill. Your job is to implement stories autonomously through a generator-evaluator loop with session persistence, retry logic, and clean handoffs.
@@ -47,7 +57,7 @@ orchestrator's, and not something this skill ever reads.
 generator-never-commits, evaluator-never-writes, clean working tree, re-read state from disk,
 structured JSON feedback, `jq` for JSON) — read them there rather than re-deriving a second copy
 here. Rule 9 (one `AskUserQuestion` at a time) applies if this skill ever needs to ask the user
-something. Rule 11 (foreground-only agents) governs every generator/evaluator/architect spawn
+something. Rule 11 (bounded agent delivery) governs every generator/evaluator/architect spawn
 below. Rule 10's step-exit ordering is this skill's own Exit section, below.
 
 ## Entry Modes

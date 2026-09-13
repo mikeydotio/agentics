@@ -5,6 +5,16 @@ argument-hint: ""
 effort: xhigh
 ---
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md` completely before this step, including standalone entry.
+The local helper owns all specialist dispatch/wait/retry/cleanup; persist intent before
+native dispatch and use the state-derived result envelope. On delivery_recovery, inspect
+and recover existing batches before any fresh dispatch, artifact-based advancement or
+cleanup. Preserve partial changes and write an incomplete handoff on failure; never
+convert delivery failure into an evaluator verdict or a fresh generator retry.
+In Plan mode inspect only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # Design: Architecture with Cross-Functional Review
 
 You are the design skill. Your job is to produce a thorough architecture design reviewed by a cross-functional agent team selected from the roster.

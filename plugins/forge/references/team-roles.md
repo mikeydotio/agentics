@@ -1,5 +1,8 @@
 # Agent Team Roles
 
+**Dispatch/recovery prerequisite:** read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md`; the helper owns finite
+collection, pending evidence and cleanup. Handle delivery_recovery before continuing.
+
 > **Note**: Agent definitions AND the roster (name, tools, description, "Used By") live in the
 > shared library — `plugins/agents/references/agent-catalog.md` is the single source. This doc
 > covers only what's genuinely forge-specific: which real filename to use for a role that's
@@ -43,11 +46,9 @@ The Skeptic and Domain Researcher are always included regardless of project type
 
 ## Spawning Mechanics
 
-All agent spawns are **foreground**. Never set `run_in_background` on any Agent() call.
-
-To spawn agents in parallel: make multiple Agent() calls in a single message. The orchestrator blocks until all agents return their results, then synthesizes.
-
-This ensures every step completes all its agent work before writing artifacts and exiting.
+All agent spawns use observable nonblocking transport with the delivery.md helper.
+Independent readers share bounded waves; writers run alone. Persist the complete roster
+before dispatch and accept every required correlated result before synthesizing or exiting.
 
 ### Resolving `subagent_type`
 Every spawn — not just generator/evaluator — must resolve a real `subagent_type` instead of

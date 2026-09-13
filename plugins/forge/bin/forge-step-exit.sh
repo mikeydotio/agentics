@@ -88,6 +88,17 @@ else
   [ -n "$next_cmd" ] || { echo "Error: --next is required (or pass --terminal)" >&2; exit 1; }
 fi
 
+# AGE-104 DELIVERY GUARD BEGIN
+# Refuse before staging, committing, state writes or reset queueing.
+delivery=$(python3 "$SCRIPT_DIR/agent-delivery.py" status .forge/deliveries --runs)
+if ! printf '%s' "$delivery" | jq -e '.ok == true and .blocked == false' >/dev/null; then
+  jq -n --argjson delivery "$delivery" '{ok:false, error:"delivery_recovery_required",
+    committed:false, commit_hash:null, freshen_queued:false, freshen_cancelled:false,
+    fallback_message:null, delivery:$delivery, display:$delivery.display}'
+  exit 0
+fi
+# AGE-104 DELIVERY GUARD END
+
 # --- Stage + commit ---
 #
 # F053: a plain `git commit -q -m "$msg" && git rev-parse --short HEAD` aborts

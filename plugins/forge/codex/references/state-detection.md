@@ -1,5 +1,8 @@
 # State Detection and Dispatch
 
+**Dispatch/recovery prerequisite:** read `<plugin-root>/references/delivery.md`; the helper owns finite
+collection, pending evidence and cleanup. Handle delivery_recovery before continuing.
+
 How `$forge:forge continue` decides which step runs next, and the five non-pass-through cases that need
 handling in the router rather than a step skill.
 
@@ -62,7 +65,7 @@ correlate. If this state detection call is skipped (e.g. `state` was already kno
    - `state == "fix_loop"` → follow **Fix Loop Handling** below. Do NOT fall through to the
      generic bullet just because `dispatch` also happens to end in ` --orchestrated`.
    - `review_validate --orchestrated` → follow **Review+Validate Parallel Dispatch** below (spawns
-     BOTH review's and validate's agent sets in a single message).
+     BOTH review's and validate's agent sets in bounded delivery waves).
    - `blocked_review` → follow **Blocked Stories Pause** below.
    - `escalate_review` → follow **ESCALATE Review Loop** below.
    - `deploy_gate` → follow **Deploy Permission Gate** below.

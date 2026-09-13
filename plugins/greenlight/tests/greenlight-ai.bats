@@ -1,6 +1,15 @@
 #!/usr/bin/env bats
 load contract-helper
 
+assert_parse_failure() {
+  [ "$status" -eq 0 ] || return 1
+  [ -z "$output" ] || return 1
+  grep -F '[AI_FAIL]' "$GL_TEST_ROOT/decisions.log" || return 1
+  grep -F '[PASS] AI fallback failed, deferring to user' "$GL_TEST_ROOT/decisions.log" || return 1
+  ! grep -E '\[(ALLOW|AI_RESULT)\]' "$GL_TEST_ROOT/decisions.log"
+}
+
+
 @test "AI boolean false approves with rationale disabled" {
   run_safe_ai claude false
   assert_decision allow
@@ -19,13 +28,6 @@ set_response() {
   jq -cn --arg text "$1" '{content:[{type:"text",text:$text}]}' > "$GL_TEST_ROOT/response.json"
 }
 
-assert_parse_failure() {
-  [ "$status" -eq 0 ] || return 1
-  [ -z "$output" ] || return 1
-  grep -F '[AI_FAIL]' "$GL_TEST_ROOT/decisions.log" || return 1
-  grep -F '[PASS] AI fallback failed, deferring to user' "$GL_TEST_ROOT/decisions.log" || return 1
-  ! grep -E '\[(ALLOW|AI_RESULT)\]' "$GL_TEST_ROOT/decisions.log"
-}
 
 @test "AI boolean true preserves destructive context for both hosts" {
   local provider

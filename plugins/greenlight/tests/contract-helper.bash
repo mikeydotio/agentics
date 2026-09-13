@@ -39,7 +39,7 @@ run_payload() {
 }
 
 assert_neutral() {
-  [ "$status" -eq 0 ]
+  [ "${status:?bats run must precede assertions}" -eq 0 ]
   [ -z "$output" ] || jq -e '
     (.hookSpecificOutput // {}) |
     (has("permissionDecision") | not) and (has("permissionDecisionReason") | not)
@@ -47,7 +47,7 @@ assert_neutral() {
 }
 
 assert_decision() {
-  [ "$status" -eq 0 ]
+  [ "${status:?bats run must precede assertions}" -eq 0 ]
   jq -e --arg expected "$1" '
     .hookSpecificOutput.permissionDecision == $expected and
     (.hookSpecificOutput.permissionDecisionReason | length > 0)

@@ -72,8 +72,27 @@ Then install any plugin:
 1. Create a directory under `plugins/` with a `.claude-plugin/plugin.json` manifest
 2. Add skills in `skills/<name>/SKILL.md`, commands in `commands/<name>.md`
 3. Add the plugin entry to `.claude-plugin/marketplace.json`
-4. Run `/semver bump` — Claude Code caches plugins by version string, so shipped
-   content changes are invisible to installs without one
+4. Ship changed content under a new release version through the release workflow.
+   Development candidates do not need a version bump to run their tests.
+
+## Candidate and release validation
+
+| Command | What success establishes |
+|---|---|
+| `make test-plugin-content-drift` | Both identity policies pass their regressions; candidate release state is disclosed. |
+| `make validate-release` | Manifest versions are consistent and shipped source matches its exact release tag, including local changes. |
+| `bash scripts/check-plugin-content.sh --mode candidate --repo DIR` | Reports release-matched, unreleased-changes, or baseline-unavailable; release readiness is not certified. |
+
+The normal test graph uses candidate evaluation in every checkout, including
+central-verifier worktrees. Before publishing a release or installing source as
+a normal version-keyed release, `make validate-release` must succeed. Missing
+tags and changed shipped files fail that preflight. The checker defaults to
+strict release mode when invoked directly.
+
+Disposable packaging smokes test candidate packaging. Source validation does not
+prove the user's installed cache is current; verify the actual installed runtime
+after supported installation. These commands neither modify caches nor intercept
+external installers. See [the validation contract](docs/spec/plugin-content-validation.md).
 
 ## Testing and the retired global hook
 

@@ -355,9 +355,11 @@ if printf '%s\n' "$redir_stripped" | grep -qE '>>?[^&]|>>$|>[[:space:]]|>$'; the
         deny "greenlight: plan exploration may not write to '${_t}' — outside your scratch worktree. $(SCRATCH_HINT)"
       fi
     done <<< "$_redir_targets"
-    allow "plan exploration: redirection within scratch worktree"
+    # A writable destination says nothing about the command producing output.
+    # Continue through command/substitution classification and explorer policy.
+  else
+    pass_silent "file-writing redirection detected"
   fi
-  pass_silent "file-writing redirection detected"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1738,7 +1740,7 @@ fi
 
 # Plan explorer: only an entirely readonly/safe command is auto-allowed. A
 # destructive/privileged command is denied outright; an uncertain one is denied
-# by default (configurable). File-writing redirection was already resolved above.
+# by default (configurable). Redirection destinations were validated above.
 if $EXPLORER_MODE; then
   if $any_destructive; then
     deny "greenlight: '${DESTRUCTIVE_CMD}' is destructive/privileged and is not permitted during plan exploration."
@@ -1748,7 +1750,9 @@ if $EXPLORER_MODE; then
   fi
   case "$CFG_PLAN_EXPLORER_UNCERTAIN" in
     allow)
-      allow "plan exploration: uncertain command allowed by config" ;;
+      # Unknown commands can execute arbitrary code; a worktree is not a
+      # process sandbox. Enforce retirement here even for existing config files.
+      deny "greenlight: plan_explorer_uncertain: allow is unsupported; blanket approval cannot confirm '${COMMAND}' is safe. Set deny, or explicitly opt in to ai with ai_enabled and ANTHROPIC_API_KEY." ;;
     ai)
       [[ "$CFG_AI_ENABLED" == "true" ]] && ai_check "$COMMAND"
       deny "greenlight: could not confirm '${COMMAND}' is safe for plan exploration." ;;

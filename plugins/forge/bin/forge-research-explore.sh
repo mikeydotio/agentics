@@ -15,6 +15,8 @@
 #
 # Usage:
 #   forge-research-explore.sh --topic <slug> --task "<question>" [--forge-dir <dir>]
+#     [--host claude|codex] [--timeout <seconds>]
+# Host defaults to Claude; Codex experiments have a 300-second default deadline.
 #
 # Output (stdout, JSON):
 #   {"enabled":false,"ran":false}
@@ -28,20 +30,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGINS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"   # plugins/forge/bin → plugins
 LAUNCHER="${GREENLIGHT_EXPLORE_BIN:-$PLUGINS_DIR/greenlight/bin/greenlight-explore.sh}"
 
-TOPIC=""; TASK=""; FORGE_DIR=".forge"
+TOPIC=""; TASK=""; FORGE_DIR=".forge"; HOST=claude; EXPLORER_TIMEOUT=300
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --topic|--task|--forge-dir)
+    --topic|--task|--forge-dir|--host|--timeout)
       [ "$#" -ge 2 ] || { printf 'forge-research-explore: %s requires a value\n' "$1" >&2; exit 2; }
       ;;
   esac
   case "$1" in
+    --host) HOST="${2:-}"; shift 2 ;;
+    --timeout) EXPLORER_TIMEOUT="${2:-}"; shift 2 ;;
     --topic)     TOPIC="${2:-}"; shift 2 ;;
     --task)      TASK="${2:-}"; shift 2 ;;
     --forge-dir) FORGE_DIR="${2:-.forge}"; shift 2 ;;
     *) printf 'forge-research-explore: unknown option: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
+
+case "$HOST" in claude|codex) ;; *) echo "forge: invalid host: $HOST" >&2; exit 2 ;; esac
 
 [ -n "$TOPIC" ] || { printf 'forge-research-explore: --topic is required\n' >&2; exit 2; }
 [ -n "$TASK" ]  || { printf 'forge-research-explore: --task is required\n' >&2; exit 2; }
@@ -54,7 +60,7 @@ if [ "$enabled" != "true" ]; then
 fi
 
 # ── Launcher must be present; otherwise degrade gracefully ──
-if [ ! -x "$LAUNCHER" ] && [ ! -f "$LAUNCHER" ]; then
+if [ "$HOST" = claude ] && [ ! -x "$LAUNCHER" ] && [ ! -f "$LAUNCHER" ]; then
   jq -n --arg e "launcher not found: $LAUNCHER" '{enabled:true, ran:false, error:$e}'
   exit 0
 fi
@@ -65,7 +71,18 @@ slug="$(printf '%s' "$TOPIC" | tr '[:upper:] ' '[:lower:]-' | tr -cd '[:alnum:]-
 mkdir -p "$FORGE_DIR/research" 2>/dev/null || true
 OUT="$FORGE_DIR/research/codebase-${slug}.md"
 
-launcher_json="$(bash "$LAUNCHER" run --task "$TASK" --name "$slug" --out "$OUT" 2>/dev/null)"
+if [ "$HOST" = codex ]; then
+  command -v python3 >/dev/null 2>&1 || {
+    jq -n '{enabled:true, ran:false, error:"python3 is required for Codex exploration"}'
+    exit 0
+  }
+  launcher_json="$(python3 "$SCRIPT_DIR/forge-codex-explore.py" --task "$TASK" --out "$OUT" --timeout "$EXPLORER_TIMEOUT")" || {
+    jq -n '{enabled:true, ran:false, error:"Codex explorer launcher failed; see stderr"}'
+    exit 0
+  }
+else
+  launcher_json="$(bash "$LAUNCHER" run --task "$TASK" --name "$slug" --out "$OUT" 2>/dev/null)"
+fi
 ran="$(printf '%s' "$launcher_json" | jq -r '.ok // false' 2>/dev/null || echo false)"
 [ -n "$launcher_json" ] || launcher_json='{}'
 

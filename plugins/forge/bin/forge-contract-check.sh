@@ -667,15 +667,18 @@ FILES=""
 # Shape discovery runs unless --file named the scan set outright. An explicit
 # docs-root always re-enables it, so a root and --file union.
 if [[ "$HAVE_EXPLICIT" -eq 0 || -n "$ROOT_ARG" ]]; then
-  if [[ -d "$DOCS_ROOT/references" ]]; then
-    FILES="$(find "$DOCS_ROOT/references" -maxdepth 1 -name '*.md' -type f | sort)"
-  fi
-  if [[ -d "$DOCS_ROOT/skills" ]]; then
-    skill_files="$(find "$DOCS_ROOT/skills" -mindepth 2 -maxdepth 2 -name 'SKILL.md' -type f | sort)"
-    if [[ -n "$skill_files" ]]; then
-      FILES="$(printf '%s\n%s' "$FILES" "$skill_files" | grep -vE '^$' || true)"
-    fi
-  fi
+  # Public dispatchers supplement, rather than replace, host implementations.
+  for tree in "$DOCS_ROOT" "$DOCS_ROOT/claude" "$DOCS_ROOT/codex"; do
+    for directory in references skills; do
+      [[ -d "$tree/$directory" ]] || continue
+      if [[ "$directory" == references ]]; then
+        discovered="$(find "$tree/$directory" -maxdepth 1 -name '*.md' -type f | sort)"
+      else
+        discovered="$(find "$tree/$directory" -mindepth 2 -maxdepth 2 -name 'SKILL.md' -type f | sort)"
+      fi
+      FILES="$(printf '%s\n%s' "$FILES" "$discovered" | grep -vE '^$' || true)"
+    done
+  done
 fi
 # Appended verbatim, never re-rooted or canonicalised: the string the caller
 # passed is the string a violation is reported against.

@@ -17,6 +17,7 @@
 #                       any pending forge freshen signal instead of queueing
 #                       a new one — there is no next command to resume to.
 #
+# --host claude|codex selects native continuation delivery (default: claude).
 # --extra-path <path> may be repeated. Use it when a step's commit must also
 # capture changes outside .forge/ (e.g. validate committing new test files it
 # wrote) instead of reaching for a broad `git add -A`, which sweeps in
@@ -51,11 +52,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+host=claude
 step="" summary="" next_cmd="" terminal=false transition_id=""
 extra_paths=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --host) host="${2:-}"; shift 2 ;;
+    --host=*) host="${1#*=}"; shift ;;
     --step)    step="$2"; shift 2 ;;
     --step=*)  step="${1#*=}"; shift ;;
     --summary) summary="$2"; shift 2 ;;
@@ -70,6 +74,10 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
+case "$host" in claude|codex) ;; *) echo "Error: invalid host: $host" >&2; exit 1 ;; esac
+# shellcheck source=plugins/forge/bin/forge-host.sh
+. "$SCRIPT_DIR/forge-host.sh"
+next_cmd="$(forge_resume_command "$host" "$next_cmd")"
 [ -n "$transition_id" ] || transition_id="none"
 
 [ -n "$step" ]    || { echo "Error: --step is required" >&2; exit 1; }
@@ -133,6 +141,11 @@ fallback_message=null
 # Best-effort: if freshen isn't installed/available, skip logging silently
 # rather than fail this script over pure diagnostics.
 _TRANSITION_LOG_LIB="$SCRIPT_DIR/../../freshen/lib/transition-log.sh"
+if [ "$host" = codex ]; then
+  if log_root="$(bash "$SCRIPT_DIR/resolve-dependency.sh" freshen)"; then
+    _TRANSITION_LOG_LIB="$log_root/lib/transition-log.sh"
+  fi
+fi
 # shellcheck source=plugins/freshen/lib/transition-log.sh
 [ -f "$_TRANSITION_LOG_LIB" ] && . "$_TRANSITION_LOG_LIB" || true
 log_step_exit_transition() {
@@ -150,7 +163,7 @@ log_step_exit_transition "actual step=${step} transition_id=${transition_id}"
 
 if [ "$terminal" = true ]; then
   # Best-effort — a terminal exit has nothing to resume to either way.
-  bash "$SCRIPT_DIR/../../freshen/bin/freshen.sh" cancel --source forge >/dev/null 2>&1 && freshen_cancelled=true || true
+  forge_freshen "$SCRIPT_DIR/.." "$host" cancel --source forge >/dev/null && freshen_cancelled=true || true
   log_step_exit_transition "forge-step-exit: step '${step}' terminal -- freshen signal cancelled=${freshen_cancelled}"
 else
   # Fully silence freshen.sh's own stdout/stderr — it prints a human-readable
@@ -159,10 +172,14 @@ else
   # corrupt the output for any caller parsing it as JSON. We already
   # synthesize our own freshen_queued/fallback_message below, so none of
   # freshen.sh's own text output is needed here.
-  if bash "$SCRIPT_DIR/../../freshen/bin/freshen.sh" queue "$next_cmd" --source forge --summary "$summary" >/dev/null 2>&1; then
+  if forge_freshen "$SCRIPT_DIR/.." "$host" queue "$next_cmd" --source forge --summary "$summary" >/dev/null; then
     freshen_queued=true
   else
-    fallback_message="Run /clear then: ${next_cmd}"
+    if [ "$host" = codex ]; then
+      fallback_message="Start a new session (/new in Codex CLI), then: ${next_cmd}"
+    else
+      fallback_message="Run /clear then: ${next_cmd}"
+    fi
   fi
   log_step_exit_transition "forge-step-exit: step '${step}' -> queued next '${next_cmd}' (queued=${freshen_queued})"
 fi

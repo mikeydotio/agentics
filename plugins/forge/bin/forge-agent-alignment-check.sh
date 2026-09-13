@@ -88,24 +88,16 @@ real_roster_set = set(real_roster)
 
 # ── Locate every doc that declares a roster or spawns an agent ──
 files = []
-refs_dir = os.path.join(docs_root, "references")
-if os.path.isdir(refs_dir):
-    for fn in sorted(os.listdir(refs_dir)):
-        if fn.endswith(".md"):
-            files.append(os.path.join("references", fn))
-
-skills_dir = os.path.join(docs_root, "skills")
-if os.path.isdir(skills_dir):
-    for sub in sorted(os.listdir(skills_dir)):
-        rel = os.path.join("skills", sub, "SKILL.md")
-        if os.path.isfile(os.path.join(docs_root, rel)):
-            files.append(rel)
-
-overrides_dir = os.path.join(docs_root, "agent-overrides")
-if os.path.isdir(overrides_dir):
-    for fn in sorted(os.listdir(overrides_dir)):
-        if fn.endswith(".md"):
-            files.append(os.path.join("agent-overrides", fn))
+for tree in ("", "claude", "codex"):
+    for directory in ("references", "skills", "agent-overrides"):
+        base = os.path.join(docs_root, tree, directory)
+        if not os.path.isdir(base):
+            continue
+        for folder, _, names in os.walk(base):
+            for name in sorted(names):
+                if name.endswith(".md") and (directory != "skills" or name == "SKILL.md"):
+                    files.append(os.path.relpath(os.path.join(folder, name), docs_root))
+files.sort()
 
 KEBAB = r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
 BULLET_BACKTICK_RE = re.compile(r"^- `(" + KEBAB + r")`")
@@ -117,7 +109,7 @@ PLAIN_BULLET_RE = re.compile(r"^- (" + KEBAB + r")\s*$")
 # way to say "one of these three variants", not a literal single agent name.
 CONDITIONAL_BULLET_RE = re.compile(r"^- (" + KEBAB + r")(-\{[^}]*\})?\s*:")
 
-SUBAGENT_TYPE_RE = re.compile(r'subagent_type:\s*"([^"]+)"')
+SUBAGENT_TYPE_RE = re.compile(r'(?:subagent_type|canonical role):\s*"([^"]+)"')
 HEADING_RE = re.compile(r"^#{1,6}\s+(.*)")
 
 # Only cross-check kebab tokens found under a heading that actually declares a
@@ -173,6 +165,8 @@ for rel in files:
         m = SUBAGENT_TYPE_RE.search(line)
         if m:
             val = m.group(1)
+            if "canonical role:" in line and ":" not in val:
+                val = "agents:" + val
             if val == "general-purpose":
                 has_general_purpose = True
             elif val.startswith("agents:"):

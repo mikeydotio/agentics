@@ -388,6 +388,7 @@ teardown() {
   isolated="$(mktemp -d)"
   mkdir -p "$isolated/forge-only/bin"
   cp "$SCRIPT" "$isolated/forge-only/bin/forge-step-exit.sh"
+  cp "$BATS_TEST_DIRNAME/forge-host.sh" "$isolated/forge-only/bin/forge-host.sh"
   run bash "$isolated/forge-only/bin/forge-step-exit.sh" --step research --summary "done" --next "/forge design --orchestrated"
   [ "$status" -eq 0 ]
   echo "$output" | jq . >/dev/null
@@ -441,6 +442,7 @@ teardown() {
   isolated="$(mktemp -d)"
   mkdir -p "$isolated/forge-only/bin"
   cp "$SCRIPT" "$isolated/forge-only/bin/forge-step-exit.sh"
+  cp "$BATS_TEST_DIRNAME/forge-host.sh" "$isolated/forge-only/bin/forge-host.sh"
   run bash "$isolated/forge-only/bin/forge-step-exit.sh" --step research --summary "done" --next "/forge design --orchestrated" --transition-id "1-1"
   [ "$status" -eq 0 ]
   echo "$output" | jq . >/dev/null

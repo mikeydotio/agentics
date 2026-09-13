@@ -275,7 +275,10 @@ teardown() {
   [ -f "$TEST_DIR/.freshen/forge.signal" ]
   [ "$(head -1 "$TEST_DIR/.freshen/forge.signal")" = '$forge:forge resume' ]
   [ ! -d "$TEST_DIR/.freshen/.codex-reset/active" ]
-  find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'completed-*' | grep -q .
+  run find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name 'completed-*' -print -quit
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  [ "$(cat "$output/phase")" = continuation-stop ]
 }
 
 @test "Codex status and cancellation include the atomically claimed journal signal" {

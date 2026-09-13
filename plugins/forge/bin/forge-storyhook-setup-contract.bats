@@ -38,8 +38,21 @@ run_setup_lines() {
   done <<< "$(setup_lines)"
 }
 
+@test "fresh projects already provide every required Forge workflow state" {
+  run bash -c "cd '$TEST_DIR' && story state list"
+  [ "$status" -eq 0 ]
+  local state
+  for state in todo in-progress verifying blocked; do
+    [[ "$output" == *"$state (OPEN"* ]]
+  done
+  for state in 'done' dropped; do
+    [[ "$output" == *"$state (CLOSED"* ]]
+  done
+}
+
 @test "every documented state/type add line exits 0 against a fresh project" {
   local line
+  [ -n "$(setup_lines)" ]
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     run bash -c "cd '$TEST_DIR' && $line"

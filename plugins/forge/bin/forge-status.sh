@@ -67,7 +67,7 @@ read_execution_state() {
 get_story_counts() {
   if command -v story >/dev/null 2>&1; then
     local story_json
-    story_json=$(story list --json 2>/dev/null) || { echo ""; return; }
+    story_json=$(story list --all --json 2>/dev/null) || { echo ""; return; }
     local total done_count in_progress pending
     total=$(echo "$story_json" | jq '.stories | length')
     # Real shape is double-nested: .stories[].story.state — NOT .stories[].state

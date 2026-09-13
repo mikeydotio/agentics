@@ -99,7 +99,7 @@ write_mapping() {
   [ "$(jq_field '.reason')" = "closed" ]
 
   # Confirm the underlying story state actually changed.
-  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"CP-1\") | .story.state'"
+  run bash -c "cd '$TEST_DIR' && story list --all --json | jq -r '.stories[] | select(.story.id==\"CP-1\") | .story.state'"
   [ "$output" = "done" ]
 }
 
@@ -117,7 +117,7 @@ write_mapping() {
   [ "$(jq_field '.closed')" = "false" ]
   [ "$(jq_field '.reason')" = "tasks_incomplete" ]
 
-  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"CP-1\") | .story.state'"
+  run bash -c "cd '$TEST_DIR' && story list --all --json | jq -r '.stories[] | select(.story.id==\"CP-1\") | .story.state'"
   [ "$output" = "todo" ]
 }
 

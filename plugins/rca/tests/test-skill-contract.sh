@@ -6,26 +6,20 @@
 #   2. every --flag used on that command appears in the script's usage block
 #      (the leading `#` comment) — unless the script documents a generic `--<…>`
 #      flag (rca-scaffold's `set` accepts arbitrary `--<key>` keys).
-# Passes trivially when the skills/references dirs do not yet exist.
+# Missing instruction trees fail loudly.
 source "$(dirname "$0")/lib.sh"
 
-REPO_ROOT="$(cd "$PLUGIN_ROOT/../.." && pwd)"
 SKILLS_DIR="$PLUGIN_ROOT/skills"
 REFS_DIR="$PLUGIN_ROOT/references"
 
-# Gather doc files (skills SKILL.md + reference markdown). None → trivial pass.
+# Inspect both implementations, public dispatchers, and transitive references.
 docs=()
-if [ -d "$SKILLS_DIR" ]; then
+for root in "$SKILLS_DIR" "$REFS_DIR" "$PLUGIN_ROOT/claude/skills" \
+            "$PLUGIN_ROOT/codex/skills" "$PLUGIN_ROOT/codex/references"; do
+  [ -d "$root" ] || { fail_test "missing instruction tree: $root"; continue; }
   while IFS= read -r -d '' f; do docs+=("$f"); done \
-    < <(find "$SKILLS_DIR" -name 'SKILL.md' -print0 2>/dev/null)
-fi
-if [ -d "$REFS_DIR" ]; then
-  while IFS= read -r -d '' f; do docs+=("$f"); done \
-    < <(find "$REFS_DIR" -name '*.md' -print0 2>/dev/null)
-fi
-if [ "${#docs[@]}" -eq 0 ]; then
-  echo "PASS (no skills/references docs yet)"; exit 0
-fi
+    < <(find "$root" -name '*.md' -print0)
+done
 
 # usage_flags <script> — the set of --flags named in the leading comment block.
 usage_flags() {

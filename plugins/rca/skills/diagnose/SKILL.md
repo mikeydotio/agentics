@@ -5,88 +5,18 @@ argument-hint: "[slug]"
 effort: xhigh
 ---
 
-# RCA Diagnose — Hypotheses, Falsification, Verdict
+<!-- HOST_DISPATCH_VERSION: 1 -->
+# Host dispatcher
 
-The core reasoning step. Read `${CLAUDE_PLUGIN_ROOT}/references/hypothesis-falsification.md`,
-`${CLAUDE_PLUGIN_ROOT}/references/odc-classification.md`, and keep
-`${CLAUDE_PLUGIN_ROOT}/references/symptom-vs-root-cause.md` +
-`${CLAUDE_PLUGIN_ROOT}/references/architectural-patterns.md` at hand for pattern matching.
-Worktree rules: `${CLAUDE_PLUGIN_ROOT}/references/worktree-protocol.md`.
+Select exactly one implementation before task work.
 
-**Gate check**: `REPRO.md` or `OVERRIDE.md` must exist (else route to `reproduce`). Inputs:
-GRID.md, REPRO.md/OVERRIDE.md, ORIGIN.md (FULL) or nothing yet (LIGHT), meta.json. Outputs:
-`EVIDENCE.md`, `HYPOTHESES.md`, `experiments/exp-N.md`, `CHALLENGE.md`, and `DIAGNOSIS.md` or
-`INCONCLUSIVE.md`.
-
-## 1. LIGHT tier: slim inline forensics
-
-No ORIGIN.md on LIGHT — run the two cheapest forensics inline on the implicated lines and
-save under `forensics/`:
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-forensics.sh blame --file <f> --lines <a>,<b>
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-forensics.sh pickaxe --term <symbol>
-```
-
-## 2. Evidence sweep (evidence-collector)
-
-Spawn the shared **evidence-collector** (prefer `subagent_type: "agents:evidence-collector"`
-— read-only, enforced; prompt = `${CLAUDE_PLUGIN_ROOT}/agent-overrides/evidence-collector-context.md`
-["diagnose sweep" section] + GRID.md + REPRO.md + ORIGIN.md/forensics). Targeted questions
-from the grid's distinctions — error handling in the failure path, test coverage gaps, sibling
-patterns that work, environmental dependencies. Facts only. You write `EVIDENCE.md` from its
-report.
-
-## 3. Form competing hypotheses
-
-Per hypothesis-falsification.md: **≥2**, each a full `defect → infection → failure` chain
-seeded from distinctions, ORIGIN facts, evidence, and architectural-pattern matches. Run the
-AND-condition check explicitly. Write `HYPOTHESES.md`: per hypothesis — statement, chain,
-evidence for/against, the falsification experiment design (prediction first, one variable,
-discriminating), rank.
-
-## 4. Falsification experiments (experimenter, in the worktree)
-
-For each experiment that must mutate code:
-1. Ensure the worktree: `bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-worktree.sh status <slug>`, create
-   with `--copy <repro-test>` if absent (per worktree-protocol.md).
-2. Spawn the shared **experimenter** (prefer `subagent_type: "agents:experimenter"`; prompt =
-   `${CLAUDE_PLUGIN_ROOT}/agent-overrides/experimenter-context.md` + the experiment brief:
-   hypothesis verbatim, pre-stated prediction, the worktree path as THE designated workspace,
-   the repro command). One experiment per spawn. The toggle gold standard where possible:
-   baseline fail → intervene → pass → revert → fail again.
-3. **After EVERY experimenter return**: `git status --porcelain` in the MAIN tree — anything
-   beyond `.rca/`, known new test files, and the scaffold's `.gitignore` change is a
-   violation: halt, revert, respawn with the violation named. Then persist its record as
-   `experiments/exp-N.md`.
-
-Cheaper rungs (predicted-evidence lookups, input-family probes) run without the worktree —
-you or evidence-collector handle those; still record each as an exp-N.md.
-
-## 5. Challenge
-
-Spawn the shared **hypothesis-challenger** (prefer `subagent_type:
-"agents:hypothesis-challenger"` — read-only; prompt =
-`${CLAUDE_PLUGIN_ROOT}/agent-overrides/hypothesis-challenger-context.md` + the surviving
-hypothesis + HYPOTHESES.md + all experiment records). It attacks the hypothesis AND the
-experiment designs. Write `CHALLENGE.md` from its report. Outcomes per
-hypothesis-falsification.md: VERIFIED → proceed; REFUTED → next hypothesis (back to step 4);
-DEEPER CAUSE → extend the chain and re-verify the new link; all refuted + no new hypotheses →
-write `INCONCLUSIVE.md` (every hypothesis + refuting evidence + what would discriminate) and
-exit honestly.
-
-## 6. Classify and rule
-
-ODC classification (type, qualifier, trigger) per odc-classification.md, then the verdict
-rubric: ODC map + hotspot rank + repeat-offender + blast-radius sketch + reversibility ⇒
-**SURGICAL** or **REDESIGN** (redesign = narrow patch now + logged deliberate-prudent debt +
-escalation as separate scoped work; never inlined).
-
-Write `DIAGNOSIS.md` (required contents per hypothesis-falsification.md, including confidence
-with reason and any override degraded-confidence note).
-
-## 7. Exit
-
-Destroy the worktree unless the user wants it kept for fix reference:
-`bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-worktree.sh destroy <slug>` (default: destroy — no
-question; keep only if the user asked). Summarize: root cause in one sentence, confidence,
-verdict + why. Next: `report` (`/rca continue <slug>` if standalone). Safe to `/clear`.
+1. Determine the host from authoritative runtime identity first. If it is unavailable,
+   use the native tool surface: Codex has `spawn_agent`/`followup_task`/`wait_agent`;
+   Claude Code has `Agent`/`AskUserQuestion`. Environment compatibility aliases are not authoritative
+   host signals. Conflicting or missing authoritative signals are ambiguous.
+2. Resolve `<plugin-root>` two directories above this file's containing directory.
+3. Read exactly one implementation completely:
+   - Claude Code: `<plugin-root>/claude/skills/diagnose/SKILL.md`
+   - Codex: `<plugin-root>/codex/skills/diagnose/SKILL.md`
+4. If selection remains ambiguous, stop with `Ambiguous plugin host for rca:diagnose`.
+5. Follow only the selected tree. Never combine hosts or fall back to the other host.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for forge-crash-recover.sh — reset in-progress/verifying stories back
+# Tests for forge-crash-recover.sh — reset in-progress stories back
 # to todo and clean the working tree in one call (F038), using the real
 # verb-first `story move` CLI.
 #
@@ -10,8 +10,7 @@ SCRIPT="$BATS_TEST_DIRNAME/forge-crash-recover.sh"
 setup() {
   TEST_DIR="$(mktemp -d)"
   ( cd "$TEST_DIR" && git init -q . && git config user.email t@t.com && git config user.name t \
-      && story project new --prefix ST >/dev/null \
-      && story state add verifying --super OPEN >/dev/null 2>&1 )
+      && story project new --prefix ST >/dev/null )
 }
 
 teardown() {
@@ -27,7 +26,7 @@ jq_field() {
 }
 
 story_state() {
-  ( cd "$TEST_DIR" && story list --json | jq -r --arg id "$1" '.stories[] | select(.story.id == $id) | .story.state' )
+  ( cd "$TEST_DIR" && story list --all --json | jq -r --arg id "$1" '.stories[] | select(.story.id == $id) | .story.state' )
 }
 
 # --- story CLI unavailable ---
@@ -71,32 +70,45 @@ story_state() {
   [ "$(story_state ST-1)" = "todo" ]
 }
 
-# --- verifying reset ---
+# --- Verifier ownership ---
 
-@test "resets a single verifying story back to todo" {
-  ( cd "$TEST_DIR" && story new "Task" >/dev/null && story move ST-1 in-progress >/dev/null && story move ST-1 verifying >/dev/null )
+@test "verifying ownership preserves the story and uncommitted working content" {
+  printf 'baseline\n' > "$TEST_DIR/tracked.txt"
+  ( cd "$TEST_DIR" && git add -A && git commit -qm fixture )
+  printf 'candidate work\n' > "$TEST_DIR/tracked.txt"
+  # A real blocked queue item stays verifying without a fabricated PR or lease.
+  ( cd "$TEST_DIR" && story new "Task" >/dev/null && story move ST-1 in-progress >/dev/null && \
+    story block ST-1 "fixture: queued verification is parked" >/dev/null && story move ST-1 verifying >/dev/null )
   [ "$(story_state ST-1)" = "verifying" ]
   run_recover
-  [ "$(jq_field '.reset_stories[0]')" = "ST-1" ]
-  [ "$(story_state ST-1)" = "todo" ]
+  [ "$status" -eq 0 ]
+  [ "$(jq_field '.ok')" = "false" ]
+  [ "$(jq_field '.error')" = "verification_in_progress" ]
+  [ "$(jq_field '.reset_stories | length')" = "0" ]
+  [ "$(jq_field '.tree_clean')" = "false" ]
+  [ "$(story_state ST-1)" = "verifying" ]
+  [ "$(cat "$TEST_DIR/tracked.txt")" = "candidate work" ]
+  run bash -c "cd '$TEST_DIR' && story list --all --json | jq -r '.stories[0].story.awaiting'"
+  [ "$output" = "fixture: queued verification is parked" ]
 }
 
 # --- Multiple stuck stories, mixed states ---
 
-@test "resets every in-progress/verifying story, leaves done/todo alone" {
+@test "a verifying story prevents partial recovery of a mixed backlog" {
   ( cd "$TEST_DIR" && \
     story new "A" >/dev/null && story new "B" >/dev/null && \
     story new "C" >/dev/null && story new "D" >/dev/null && \
     story move ST-1 in-progress >/dev/null && \
-    story move ST-2 in-progress >/dev/null && story move ST-2 verifying >/dev/null && \
+    story move ST-2 in-progress >/dev/null && \
+    story block ST-2 "fixture: queued verification is parked" >/dev/null && story move ST-2 verifying >/dev/null && \
     story move ST-3 done >/dev/null )
   # ST-4 stays todo
   run_recover
-  [ "$(jq_field '.reset_stories | length')" = "2" ]
-  echo "$output" | jq -e '.reset_stories | index("ST-1") != null' >/dev/null
-  echo "$output" | jq -e '.reset_stories | index("ST-2") != null' >/dev/null
-  [ "$(story_state ST-1)" = "todo" ]
-  [ "$(story_state ST-2)" = "todo" ]
+  [ "$(jq_field '.ok')" = "false" ]
+  [ "$(jq_field '.error')" = "verification_in_progress" ]
+  [ "$(jq_field '.reset_stories | length')" = "0" ]
+  [ "$(story_state ST-1)" = "in-progress" ]
+  [ "$(story_state ST-2)" = "verifying" ]
   [ "$(story_state ST-3)" = "done" ]
   [ "$(story_state ST-4)" = "todo" ]
 }

@@ -2,9 +2,25 @@
 # Repository-owned testing: this target covers every headless plugin suite.
 # Agentics installs no global test-enforcement hook (AGE-102 / SH-682).
 
-.PHONY: test test-store-isolation test-gate-integrity test-hook-retirement test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
+.DEFAULT_GOAL := test
+override TEST_SUITES := test-store-isolation test-gate-integrity test-hook-retirement test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-gate-receipt
+.PHONY: test test-gate-preflight $(TEST_SUITES)
 
-test: test-store-isolation test-gate-integrity test-hook-retirement test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca
+test: $(TEST_SUITES)
+	bash scripts/test-gate-receipt.sh postlude
+
+# A target's own recipe is too late for preflight: its prerequisites ran first.
+# Every leg needs the same barrier, including under parallel/multiple goals.
+# Focused nested Make calls must not overwrite the outer gate's preflight.
+ifneq ($(filter test,$(if $(MAKECMDGOALS),$(MAKECMDGOALS),test)),)
+$(TEST_SUITES): | test-gate-preflight
+endif
+
+test-gate-preflight:
+	bash scripts/test-gate-receipt.sh preflight
+
+test-gate-receipt:
+	bash tests/with-isolated-store.sh bash tests/gate-receipt.sh
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects
@@ -50,11 +66,17 @@ test-root-bats:
 test-plugin-versions:
 	bash tests/with-isolated-store.sh bash tests/plugin-versions.sh
 
-# Marketplace-wide content-drift guard: shipped plugin source under plugins/**
-# must not change without a version bump, or the version-keyed plugin cache
-# serves stale code (issue #71). Plain bash so it always runs in the pre-push gate.
+# Test both identity policies, then disclose the candidate's release state.
+# Candidate success never certifies publication or version-keyed installation.
 test-plugin-content-drift:
 	bash tests/with-isolated-store.sh bash tests/plugin-content-drift.sh
+	bash tests/with-isolated-store.sh bash scripts/check-plugin-content.sh --mode candidate
+
+# Mandatory release/install-source preflight, outside the candidate test graph.
+# Keep the strict checker last so successful manifest tests cannot mask drift.
+.PHONY: validate-release
+validate-release: test-plugin-versions
+	bash tests/with-isolated-store.sh bash scripts/check-plugin-content.sh --mode release
 
 # Storyhook's retired per-repo directory must not come back: no --extra-path may
 # name it (any spelling, repo-wide), and shipped plugin content must not assert

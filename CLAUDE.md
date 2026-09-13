@@ -553,11 +553,20 @@ version's content in place, or installs keep running the old code while the
 manifest reports the (unchanged) version. This was issue #71: a deployit fix
 stranded under an unbumped `2.25.1`, so no install ever received it.
 
-- `tests/plugin-content-drift.sh` (in `make test`) enforces this — it fails the
-  pre-push gate if shipped content under `plugins/**` differs from the release tag
-  `v<VERSION>` (git blob OIDs are content hashes; the check is a `git diff <tag>
-  HEAD`). "Shipped" excludes plugin `tests/`, `*.bats`, and plugin `README.md`; a
-  `/semver bump` retags at the new HEAD, which clears the guard.
+- The candidate test graph runs `tests/plugin-content-drift.sh` regressions and
+  explicitly evaluates candidate source with `scripts/check-plugin-content.sh`.
+  Unreleased changes and missing tags are disclosed, never called release proof.
+  This contract is identical in ordinary, linked and detached checkouts.
+- **Before release publication or normal version-keyed installation from a
+  checkout, `make validate-release` must pass.** It combines manifest-version
+  validation with strict tag-to-HEAD and staged/unstaged/untracked shipped-content
+  checks. Missing release tags fail. The checker defaults to strict release mode.
+  VERSION and the marketplace manifest count, alongside plugin runtime files;
+  plugin tests, `*.bats`, and top-level plugin READMEs remain excluded.
+- Disposable installation smokes test candidate packaging, not release readiness
+  or the user's active cache. After supported installation, verify the installed
+  runtime separately. No repository command intercepts external installers.
+  See `docs/spec/plugin-content-validation.md` for the full contract.
 - **Landing a release-bump PR** (keep the tag from being stranded): let
   `/semver bump` create the local tag, push the **branch only** (never the tag);
   after the PR merges, re-point the tag onto main's release commit and push it

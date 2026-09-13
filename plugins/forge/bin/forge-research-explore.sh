@@ -31,6 +31,11 @@ LAUNCHER="${GREENLIGHT_EXPLORE_BIN:-$PLUGINS_DIR/greenlight/bin/greenlight-explo
 TOPIC=""; TASK=""; FORGE_DIR=".forge"
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --topic|--task|--forge-dir)
+      [ "$#" -ge 2 ] || { printf 'forge-research-explore: %s requires a value\n' "$1" >&2; exit 2; }
+      ;;
+  esac
+  case "$1" in
     --topic)     TOPIC="${2:-}"; shift 2 ;;
     --task)      TASK="${2:-}"; shift 2 ;;
     --forge-dir) FORGE_DIR="${2:-.forge}"; shift 2 ;;

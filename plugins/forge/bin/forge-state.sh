@@ -242,12 +242,8 @@ detect_handoff() {
 
 # `story decompose` auto-creates a synthetic "parent"/project story from
 # PLAN.md's `## Task Breakdown` heading (see references/story-decomposition.md)
-# and records its ID as `project_story` in plan-mapping.json. storyhook's
-# `story next` permanently excludes ANY story with children from ever being
-# offered (a `has_children` filter in storyhook's own app.rs, out of scope to
-# change — see HARD CONSTRAINT in the hardening plan). So once every real task
-# story reaches `done`, the project story is the only story left `todo` —
-# forever, since nothing ever hands it back to `story next` to move it along.
+# and records its ID as `project_story` in plan-mapping.json. That parent
+# remains bookkeeping even when StoryHook offers it after its children finish.
 # Read it here so check_storyhook can exclude it from the "are all stories
 # done" computation below; a completely separate, best-effort close of the
 # project story (for `story list`/`story summary` hygiene, not correctness)
@@ -272,7 +268,7 @@ check_storyhook() {
 
   if command -v story >/dev/null 2>&1; then
     local story_json
-    story_json=$(story list --json 2>/dev/null) || return 0
+    story_json=$(story list --all --json 2>/dev/null) || return 0
     storyhook_available=true
 
     local story_count
@@ -282,8 +278,7 @@ check_storyhook() {
       read_project_story
       # Real shape is double-nested: .stories[].story.state / .story.title —
       # NOT .stories[].state / .title. Exclude project_story (if recorded) —
-      # see read_project_story above for why it can never reach `done` via
-      # the normal `story next` path a leaf task story does.
+      # see read_project_story above for its separate hygiene-close contract.
       #
       # Count with jq's `length` (as forge-close-project-story.sh does for
       # its own analogous count), NOT a `states=$(... ) | grep -c` shell

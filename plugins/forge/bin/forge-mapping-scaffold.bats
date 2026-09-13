@@ -115,6 +115,25 @@ EOF
   [ "$files_expected" -eq 0 ]
 }
 
+@test "mapping-scaffold: retains completed task IDs when rebuilding a mapping" {
+  cd "$TEST_DIR"
+  write_plan
+  story project new --prefix MS >/dev/null
+  story decompose .forge/PLAN.md --json >/dev/null
+  run bash "$SCRIPT" --plan .forge/PLAN.md
+  [ "$status" -eq 0 ]
+  local task title count
+  task="$(echo "$output" | jq -r '.stories | keys[0]')"
+  title="$(echo "$output" | jq -r --arg id "$task" '.stories[$id].title')"
+  count="$(echo "$output" | jq '.stories | length')"
+  [ "$count" -gt 0 ]
+  story move "$task" 'done' >/dev/null
+  run bash "$SCRIPT" --plan .forge/PLAN.md
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq '.stories | length')" -eq "$count" ]
+  [ "$(echo "$output" | jq -r --arg id "$task" '.stories[$id].title')" = "$title" ]
+}
+
 @test "mapping-scaffold: output is valid JSON" {
   cd "$TEST_DIR"
   write_plan

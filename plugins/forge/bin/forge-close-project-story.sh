@@ -4,13 +4,9 @@
 #
 # `story decompose` auto-creates a synthetic parent story from PLAN.md's
 # `## Task Breakdown` heading and records its ID as `project_story` in
-# plan-mapping.json (see references/story-decomposition.md). storyhook's
-# `story next` permanently excludes ANY story with children from ever being
-# offered (a `has_children` filter in storyhook's own src/app.rs — out of
-# scope to change, see the hardening plan's HARD CONSTRAINT), so the project
-# story can never reach `done` by the normal generator/evaluator loop path a
-# leaf task story does. Left alone, it stays `todo` forever even after every
-# real task story is done.
+# plan-mapping.json (see references/story-decomposition.md). The parent is
+# bookkeeping rather than another implementation task. StoryHook may offer it
+# once its children finish; Forge closes it explicitly after the real work.
 #
 # forge-state.sh's check_storyhook() already excludes project_story from its
 # "are all stories done" computation (reading it directly from
@@ -83,10 +79,10 @@ story_out_file="$(mktemp)"
 story_err_file="$(mktemp)"
 trap 'rm -f "$story_out_file" "$story_err_file"' EXIT
 
-if ! story list --json >"$story_out_file" 2>"$story_err_file"; then
+if ! story list --all --json >"$story_out_file" 2>"$story_err_file"; then
   story_err="$(cat "$story_err_file")"
   emit false false "$project_story" "story_list_failed" \
-    "[forge] close-project-story: skipped — \`story list --json\` failed: $story_err"
+    "[forge] close-project-story: skipped — \`story list --all --json\` failed: $story_err"
   exit 0
 fi
 story_json="$(cat "$story_out_file")"

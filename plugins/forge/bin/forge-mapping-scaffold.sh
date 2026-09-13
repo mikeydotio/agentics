@@ -56,14 +56,14 @@ stories_json="{}"
 story_list='{"stories":[]}'
 
 if command -v story >/dev/null 2>&1; then
-  # `story list --json` writes its JSON body to stdout on BOTH success and
+  # `story list --all --json` writes its JSON body to stdout on BOTH success and
   # failure (an uninitialized project still emits a `{"result":"error",...}`
   # envelope to stdout, not stderr) — a bare `cmd || echo fallback` would
   # concatenate the failed call's own stdout with the fallback, handing jq
   # two JSON documents instead of one. Only adopt the real output when the
   # command actually exited 0; otherwise keep the empty-stories default.
   story_list_out=""
-  if story_list_out="$(story list --json 2>/dev/null)"; then
+  if story_list_out="$(story list --all --json 2>/dev/null)"; then
     story_list="$story_list_out"
   fi
 

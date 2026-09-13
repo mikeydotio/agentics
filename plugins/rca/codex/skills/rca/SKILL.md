@@ -3,6 +3,17 @@ name: rca
 description: Use when a KNOWN bug, regression, or defect needs its true root cause found and fixed well — not for discovering whether bugs exist. Reproduction-gated scientific-debugging pipeline: Kepner-Tregoe intake, deterministic git forensics (bisect/blame/pickaxe/hotspots), competing-hypothesis falsification in disposable worktrees, ODC classification, surgical-vs-redesign verdicts, gated two-hats fixes, committed blameless postmortems. Resumable; latches to GitHub/storyhook issues.
 ---
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `<plugin-root>/references/delivery.md` completely before this step, including standalone entry.
+Use the local delivery helper for every specialist dispatch, wait, retry and cleanup.
+Persist the full roster and dispatch intent before native calls; retain returned IDs
+and require the state-derived delivery envelope. On delivery_recovery, reconcile existing
+batches before the artifact ladder, fresh dispatch or worktree/artifact cleanup. Failed
+workers produce an incomplete HANDOFF.md and leave this step's gate unsatisfied.
+Never retry a writer automatically or replace an independent challenge with self-review.
+In Plan mode remain read-only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # RCA: Root Cause Analysis Orchestrator
 
 ## Resolve runtime first

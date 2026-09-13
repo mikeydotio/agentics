@@ -5,6 +5,17 @@ argument-hint: "[slug]"
 effort: high
 ---
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md` completely before this step, including standalone entry.
+Use the local delivery helper for every specialist dispatch, wait, retry and cleanup.
+Persist the full roster and dispatch intent before native calls; retain returned IDs
+and require the state-derived delivery envelope. On delivery_recovery, reconcile existing
+batches before the artifact ladder, fresh dispatch or worktree/artifact cleanup. Failed
+workers produce an incomplete HANDOFF.md and leave this step's gate unsatisfied.
+Never retry a writer automatically or replace an independent challenge with self-review.
+In Plan mode remain read-only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # RCA Locate — Origin Forensics
 
 You are running origin location (FULL tier only — LIGHT does slim inline forensics inside

@@ -18,6 +18,7 @@ set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || { printf '{"ok":false,"error":"no_jq","detail":"jq is required"}\n'; exit 1; }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RCA_DIR=".rca"
 ONLY_SLUG=""
 while [ $# -gt 0 ]; do
@@ -66,6 +67,7 @@ option_for() {
   case "$state" in
     complete|awaiting_caller) verb="Review";   desc="$summary" ;;
     corrupt)                  verb="Clean up"; desc="Corrupt — no valid meta.json" ;;
+    delivery_recovery)        verb="Recover";  desc="Pending/interrupted delivery; preserve partial work" ;;
     inconclusive)             verb="Resume";   desc="Inconclusive — needs another diagnosis pass" ;;
     intake_incomplete|needs_repro|needs_tier|needs_locate|needs_diagnosis|needs_report|needs_fix|needs_postmortem)
                               verb="Resume";   desc="$summary" ;;
@@ -102,15 +104,23 @@ while IFS= read -r -d '' dir; do
     state="${sd%%$'\t'*}"; dispatch="${sd#*$'\t'}"
   fi
 
+  # AGE-104 DELIVERY GUARD BEGIN
+  # Partial writer artifacts cannot satisfy the ordinary RCA ladder.
+  delivery=$(python3 "$SCRIPT_DIR/agent-delivery.py" status "$dir/deliveries" --runs)
+  if ! printf '%s' "$delivery" | jq -e '.ok == true and .blocked == false' >/dev/null; then
+    state="delivery_recovery"; dispatch="delivery_recovery"
+  fi
+  # AGE-104 DELIVERY GUARD END
   summary=$(summary_of "$dir")
   opt=$(option_for "$state" "$slug" "$summary")
   label="${opt%%$'\t'*}"; odesc="${opt#*$'\t'}"
 
   items=$(printf '%s' "$items" | jq \
+    --argjson delivery "$delivery" \
     --arg slug "$slug" --arg state "$state" --arg dispatch "$dispatch" \
     --arg tier "$tier" --argjson issue "$issue_json" --arg summary "$summary" \
     --argjson wl "$worktree_live" --arg label "$label" --arg odesc "$odesc" '
-    . + [{slug:$slug, state:$state, dispatch:$dispatch, tier:$tier, issue:$issue,
+    . + [{slug:$slug, state:$state, dispatch:$dispatch, delivery:$delivery, tier:$tier, issue:$issue,
           summary:$summary, worktree_live:$wl, option:{label:$label, description:$odesc}}]')
 
   display="$display

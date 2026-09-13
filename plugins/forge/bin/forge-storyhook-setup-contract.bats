@@ -13,7 +13,7 @@
 #
 # Mock-free: drives the real `story` CLI in a throwaway /tmp repo (CLAUDE.md).
 
-SKILL_MD="$BATS_TEST_DIRNAME/../skills/decompose/SKILL.md"
+SKILL_MD="${FORGE_SETUP_SKILL:-$BATS_TEST_DIRNAME/../claude/skills/decompose/SKILL.md}"
 REFERENCE_MD="$BATS_TEST_DIRNAME/../references/story-decomposition.md"
 
 setup() {

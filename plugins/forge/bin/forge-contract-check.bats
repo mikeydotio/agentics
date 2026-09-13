@@ -776,11 +776,8 @@ Annotate the denied line, e.g. `<!-- contract-check: expect-dead <id> -- why it 
 EOF
   run bash "$SCRIPT" "$FIXTURE_DIR"
   echo "$output" >&2
-  # AGE-37 LOCK. collect_markers cannot yet tell an APPLIED marker from a QUOTED
-  # one, so narrowing the placeholder exemption in classify_stale_markers would
-  # extend AGE-37's existing defect class to placeholder tokens and red the
-  # pre-push gate on a correct document. This asserts the ordering: anyone who
-  # narrows it before AGE-37 lands fails here immediately.
+  # AGE-39 keeps this true by excluding quoted markers at collection, rather
+  # than exempting every placeholder from stale-marker accountability.
   [ "$(jq_field '.contract_ok')" = "true" ]
   [ "$(jq_field '.stale_suppressions | length')" -eq 0 ]
 }
@@ -797,8 +794,8 @@ EOF
   accounted=$(( $(jq_field '.suppressions | length') + $(jq_field '.stale_suppressions | length') ))
   # The invariant keeping the escape hatch honest: a marker either suppresses
   # something or is reported stale. Never silently nothing. This holds it from
-  # OUTSIDE the script, so it costs nothing and cannot red the gate on the
-  # AGE-37 class the way narrowing classify_stale_markers would.
+  # OUTSIDE the script. This corpus has no quoted non-sentinel markers; the
+  # AGE-39 fixtures separately pin accounting where applied and quoted coexist.
   [ "$markers" -eq "$accounted" ]
 }
 
@@ -1830,4 +1827,135 @@ EOF
   # the five counter-examples any candidate must clear first, and a measured
   # ladder of three candidates so you need not re-derive it.
   [ "$(jq_field '.relation_violations | length')" -eq 0 ]
+}
+
+# AGE-39: expected annotation counts come from these authored fixtures, never
+# from the production collector. Quoted examples are not applied annotations.
+@test "contract-check: AGE-39 expired placeholders enter every stale category" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'MD'
+# Fixture
+```bash
+story next --json
+```
+<!-- contract-check: expect-dead <id> -- expired -->
+`story next --json` <!-- contract-check: expect-dead <id> -- now valid -->
+`story <id> is done` <!-- contract-check: expect-dead <ident> -- wrong token -->
+`story <id> is done` <!-- contract-check: expect-dead <id> -->
+`story <id> is done` <!-- contract-check: expect-dead <id> -- still dead -->
+MD
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  [ "$status" -eq 0 ]
+  echo "$output" | jq -e '
+    .ok and (.contract_ok == false) and
+    ([.stale_suppressions[] | [.line, .token, .kind]] ==
+      [[5,"<id>","not_scanned"], [6,"<id>","form_is_valid"],
+       [7,"<ident>","token_mismatch"], [8,"<id>","malformed"]]) and
+    ([.suppressions[] | [.line,.token]] == [[9,"<id>"]]) and
+    ([.verb_violations[] | [.line,.verb]] == [[7,"<id>"],[8,"<id>"]]) and
+    (.subcommand_violations == []) and (.relation_violations == [])'
+}
+
+@test "contract-check: AGE-39 quoted markers never activate or suppress" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'MD'
+# Fixture
+Use `<!-- contract-check: expect-dead HP-N -- example -->`.
+Use ``<!-- contract-check: expect-dead <id> -- `reason` -->``.
+Use `<!-- contract-check: expect-dead HP-N -->`.
+Use ``<!-- contract-check: expect-dead HP-N -->``.
+`story HP-N is done` and `<!-- contract-check: expect-dead HP-N -- only quoted -->`.
+`story <id> is done` and ``<!-- contract-check: expect-dead <id> -- only quoted -->``.
+MD
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  echo "$output" | jq -e '
+    .ok and (.contract_ok == false) and (.suppressions == []) and
+    (.stale_suppressions == []) and
+    ([.verb_violations[] | [.line,.verb]] == [[6,"HP-N"],[7,"<id>"]])'
+}
+
+@test "contract-check: AGE-39 quoted examples beside applied markers preserve the real reason" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'MD'
+# Fixture
+`<!-- contract-check: expect-dead BAD -- example -->` `story <id> is done` <!-- contract-check: expect-dead <id> -- actual `reason` -->
+`story HP-N is done` <!-- contract-check: expect-dead HP-N -- actual `reason` --> ``<!-- contract-check: expect-dead BAD -- example -->``
+`story <id> is done` <!-- contract-check: expect-dead <id> -- unmatched ` in reason --> `<!-- contract-check: expect-dead BAD -- example -->`
+MD
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  echo "$output" | jq -e '
+    .ok and .contract_ok and (.stale_suppressions == []) and
+    ([.suppressions[] | [.line,.token,.reason]] ==
+      [[2,"<id>","actual `reason`"],[3,"HP-N","actual `reason`"],
+       [4,"<id>","unmatched ` in reason"]])'
+}
+
+@test "contract-check: AGE-39 unmatched ticks do not hide applied annotations" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'MD'
+# Fixture
+Unmatched ` <!-- contract-check: expect-dead <id> -- visible -->
+Unequal `` <!-- contract-check: expect-dead <id> -- visible --> `
+Escaped \` <!-- contract-check: expect-dead <id> -- visible --> \`
+MD
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  echo "$output" | jq -e '
+    .ok and (.contract_ok == false) and (.suppressions == []) and
+    ([.stale_suppressions[] | [.line,.token]] == [[2,"<id>"],[3,"<id>"],[4,"<id>"]])'
+}
+
+@test "contract-check: AGE-39 fence state preserves annotations and resets before prose" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'MD'
+# Fixture
+1. ````bash
+   story <id> is done <!-- contract-check: expect-dead <id> -- list fence -->
+   ```
+   story HP-N is done <!-- contract-check: expect-dead HP-N -- shorter fence -->
+   ````
+Example `<!-- contract-check: expect-dead HP-N -- quoted -->`.
+```bash
+story <id> is done <!-- contract-check: expect-dead <id> -- plain fence -->
+```
+<!-- contract-check: expect-dead <token> -- signature -->
+MD
+  # Exercise CRLF without a final newline as well as ordinary LF input.
+  local variant
+  for variant in lf crlf; do
+    if [ "$variant" = crlf ]; then
+      perl -pi -e 's/\n/\r\n/g; s/\r\n\z// if eof' "$FIXTURE_DIR/references/storyhook-contract.md"
+    fi
+    run bash "$SCRIPT" "$FIXTURE_DIR"
+    echo "$output" >&2
+    echo "$output" | jq -e '
+      .ok and .contract_ok and (.stale_suppressions == []) and
+      ([.suppressions[] | [.line,.token,.reason]] ==
+        [[3,"<id>","list fence"],[5,"HP-N","shorter fence"],[9,"<id>","plain fence"]])'
+  done
+}
+
+@test "contract-check: AGE-39 empty tokens and non-angle placeholders are accountable" {
+  cat > "$FIXTURE_DIR/references/storyhook-contract.md" <<'MD'
+# Fixture
+<!-- contract-check: expect-dead -->
+<!-- contract-check: expect-dead [id] -- expired -->
+<!-- contract-check: expect-dead $id -- expired -->
+<!-- contract-check: expect-dead <token> -- signature -->
+MD
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  echo "$output" | jq -e '
+    .ok and (.contract_ok == false) and (.suppressions == []) and
+    ([.stale_suppressions[] | [.line,.token,.kind]] ==
+      [[2,"","malformed"],[3,"[id]","not_scanned"],[4,"$id","not_scanned"]])'
+}
+
+@test "contract-check: AGE-39 final-line markers survive and span removal cannot invent markers" {
+  # The final marker must produce a finding: an exempt sentinel here would let
+  # a reader silently drop the final line and still satisfy the assertion.
+  printf '%s\r\n%s' '<`quoted`!-- contract-check: expect-dead HP-N -- not a marker -->' '<!-- contract-check: expect-dead <id> -- final line -->' > "$FIXTURE_DIR/references/storyhook-contract.md"
+  run bash "$SCRIPT" "$FIXTURE_DIR"
+  echo "$output" >&2
+  echo "$output" | jq -e '
+    .ok and (.contract_ok == false) and (.suppressions == []) and
+    ([.stale_suppressions[] | [.line,.token,.kind]] == [[2,"<id>","not_scanned"]])'
 }

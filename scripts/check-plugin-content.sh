@@ -28,7 +28,11 @@ case "$mode" in candidate|release) ;; *) usage ;; esac
 command -v git >/dev/null 2>&1 || die 'git is required'
 
 # A caller's Git hook environment must not redirect --repo into another index.
-for variable in ${!GIT_@}; do unset "$variable"; done
+# Alternates supply immutable objects, not refs or index selection. The central
+# verifier's speculative HEAD exists only there; let Git parse the list intact.
+for variable in ${!GIT_@}; do
+    case "$variable" in GIT_ALTERNATE_OBJECT_DIRECTORIES) ;; *) unset "$variable" ;; esac
+done
 export GIT_OPTIONAL_LOCKS=0 GIT_NO_REPLACE_OBJECTS=1
 
 if [ -z "$repo" ]; then

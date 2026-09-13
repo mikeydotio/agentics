@@ -4,14 +4,51 @@
 import json
 import os
 from pathlib import Path
+import signal
 import stat
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "hooks/retire-pre-push-hook.py"
+
+
+def run_fixture_git(repo, *args, env, check=True, timeout=10):
+    """Bound fixture Git's process family and retain phase evidence on timeout."""
+    command = ["git", "-C", str(repo), *args]
+    with tempfile.NamedTemporaryFile(prefix="git-trace-", dir=repo) as trace:
+        traced_env = dict(env, GIT_TRACE2_EVENT=trace.name)
+        # A new group owns hook/transport descendants without leaving the
+        # verifier's session, which must still be able to cancel this test.
+        launcher = [sys.executable, "-c",
+                    "import os, sys; os.setpgrp(); os.execvp(sys.argv[1], sys.argv[1:])",
+                    *command]
+        with subprocess.Popen(launcher, env=traced_env,
+                              text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired as error:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass  # The group exited, or the launcher has not set it yet.
+                process.kill()
+                stdout, stderr = process.communicate(timeout=2)
+                trace.seek(0)
+                events = trace.read().decode("utf-8", errors="replace").splitlines()
+                raise AssertionError(
+                    f"fixture Git timed out after {timeout}s: {command!r}\n"
+                    f"stdout: {stdout}\nstderr: {stderr}\n"
+                    "Git Trace2 final events:\n" + "\n".join(events[-20:])
+                ) from error
+        result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        if check:
+            result.check_returncode()
+        return result
 
 
 class RetirementTests(unittest.TestCase):
@@ -185,8 +222,7 @@ class RetirementTests(unittest.TestCase):
 
         def git(*args, check=True):
             """Execute real Git only within the fixture repository."""
-            return subprocess.run(["git", "-C", str(repo), *args], env=git_env,
-                                  text=True, capture_output=True, timeout=10, check=check)
+            return run_fixture_git(repo, *args, env=git_env, check=check)
 
         git("init", "-q")
         git("init", "-q", "--bare", str(remote))
@@ -207,6 +243,62 @@ class RetirementTests(unittest.TestCase):
         hook.write_text("#!/bin/sh\nexit 0\n")
         git("push", str(remote), "HEAD:refs/heads/feature")
         self.assertIn("refs/heads/feature", git("ls-remote", str(remote)).stdout)
+
+    def test_git_timeout_reaps_hook_descendants_and_reports_phase(self):
+        """A stuck real Git hook fails loudly without leaking its process family."""
+        repo = self.home / "stuck-project"
+        repo.mkdir()
+        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        run_fixture_git(repo, "init", "-q", "--template=", env=env)
+        hook = repo / ".git/hooks/pre-push"
+        hook.parent.mkdir(exist_ok=True)
+        child = repo / "hang.py"
+        child.write_text(
+            "import json, os, subprocess, sys, time\n"
+            "from pathlib import Path\n"
+            "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+            "Path('pids.json').write_text(json.dumps([os.getpid(), p.pid, os.getsid(0)]))\n"
+            "print('fixture-hook-entered', flush=True)\n"
+            "p.wait()\n"
+        )
+        hook.write_text(f'#!/bin/sh\nexec python3 "{child}"\n')
+        hook.chmod(0o755)
+
+        def cleanup_children():
+            """Reap only this fault fixture's known processes if the regression fails."""
+            if (repo / "pids.json").exists():
+                for pid in json.loads((repo / "pids.json").read_text())[:2]:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+
+        self.addCleanup(cleanup_children)
+        failure = None
+        try:
+            run_fixture_git(repo, "hook", "run", "pre-push", env=env, timeout=2)
+        except (subprocess.TimeoutExpired, AssertionError) as error:
+            failure = error
+        self.assertIsNotNone(failure, "the deliberately stuck hook must fail")
+        self.assertTrue((repo / "pids.json").exists(), "hook never reached the fault injection")
+        parent, descendant, session = json.loads((repo / "pids.json").read_text())
+        self.assertEqual(session, os.getsid(0), "fixture escaped verifier session ownership")
+        alive = [parent, descendant]
+        deadline = time.monotonic() + 2
+        while alive and time.monotonic() < deadline:
+            for pid in alive[:]:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    alive.remove(pid)
+            if alive:
+                time.sleep(0.02)
+        self.assertEqual(alive, [], "timed-out Git left hook descendants alive")
+        self.assertIsInstance(failure, AssertionError)
+        self.assertIn("fixture Git timed out", str(failure))
+        self.assertIn("fixture-hook-entered", str(failure))
+        self.assertIn('"child_start"', str(failure))
+        self.assertIn("pre-push", str(failure))
 
     def test_retired_source_and_install_targets_cannot_reinstall_the_hook(self):
         """Retired source and install targets cannot reinstall the hook."""

@@ -6,10 +6,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-for command_name in codex jq; do
+for command_name in codex jq python3; do
   command -v "$command_name" >/dev/null 2>&1 || {
-    printf 'SKIP: %s is not installed; Codex Agents packaging smoke not run\n' "$command_name"
-    exit 0
+    printf 'ERROR: %s is required for the Codex Agents packaging smoke\n' "$command_name"
+    exit 1
   }
 done
 
@@ -47,6 +47,8 @@ jq -e '
 INSTALLED_MANIFEST="$(find "$SMOKE_CODEX_HOME" -path '*/.codex-plugin/plugin.json' -type f -print -quit)"
 [ -n "$INSTALLED_MANIFEST" ]
 INSTALLED_ROOT="$(cd "$(dirname "$INSTALLED_MANIFEST")/.." && pwd)"
+DELIVERY_TEST_BIN="$INSTALLED_ROOT/bin" python3 -B -W error "$PLUGIN_ROOT/tests/test_delivery.py"
+
 
 [ -f "$INSTALLED_ROOT/skills/agents/SKILL.md" ]
 [ -f "$INSTALLED_ROOT/codex/skills/agents/SKILL.md" ]

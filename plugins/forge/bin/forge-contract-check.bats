@@ -1032,10 +1032,10 @@ EOF
   cp -R "$FORGE_ROOT/claude" "$tree/claude"
   local target="$tree/claude/skills/execute/SKILL.md"
   # Fail loud if the document was restructured rather than silently testing nothing.
-  grep -qF '4. ```bash' "$target"
+  [ "$(grep -cFx '4. ```bash' "$target")" -eq 1 ]
   # Plant the exact grammar this guard was built to kill, in a real forge doc,
   # inside the fence shape the shipped detector cannot see.
-  awk 'NR == 173 { print "   story HP-N is done"; next } { print }' "$target" > "$target.tmp"
+  awk '{ print } $0 == "4. ```bash" { print "   story HP-N is done" }' "$target" > "$target.tmp"
   mv "$target.tmp" "$target"
   run bash "$SCRIPT" "$tree"
   echo "$output" >&2

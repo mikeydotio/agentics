@@ -1,0 +1,14 @@
+{
+  "claude/skills/forge/SKILL.md": [
+    [
+      "11. **All agents run in foreground.** Never use `run_in_background`. \"In parallel\" means multiple Agent() calls in a single message \u2014 the orchestrator waits for all to return before proceeding.",
+      "11. **Bound every agent delivery.** Follow references/delivery.md for nonblocking dispatch, durable pending intent, exact returned identities, finite collection and cleanup. No foreground call may hold the parent for an entire task."
+    ]
+  ],
+  "claude/skills/execute/SKILL.md": [
+    [
+      "Rule 11 (foreground-only agents)",
+      "Rule 11 (bounded agent delivery)"
+    ]
+  ]
+}

@@ -5,6 +5,16 @@ argument-hint: "[--yolo]"
 effort: xhigh
 ---
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md` completely before this step, including standalone entry.
+The local helper owns all specialist dispatch/wait/retry/cleanup; persist intent before
+native dispatch and use the state-derived result envelope. On delivery_recovery, inspect
+and recover existing batches before any fresh dispatch, artifact-based advancement or
+cleanup. Preserve partial changes and write an incomplete handoff on failure; never
+convert delivery failure into an evaluator verdict or a fresh generator retry.
+In Plan mode inspect only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # Triage: FIX or ESCALATE Deliberation
 
 You are the triage skill. Your job is to deliberate on findings from the review and validation reports, deciding which should be automatically fixed (FIX) and which require user decision (ESCALATE).

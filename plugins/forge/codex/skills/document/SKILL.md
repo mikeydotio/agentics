@@ -6,6 +6,16 @@ description: Comprehensive project documentation. Works even with ESCALATE stori
 Resolve `<plugin-root>` three directories above this loaded file's containing directory.
 Read `<plugin-root>/codex/references/runtime.md` before this step.
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `<plugin-root>/references/delivery.md` completely before this step, including standalone entry.
+The local helper owns all specialist dispatch/wait/retry/cleanup; persist intent before
+native dispatch and use the state-derived result envelope. On delivery_recovery, inspect
+and recover existing batches before any fresh dispatch, artifact-based advancement or
+cleanup. Preserve partial changes and write an incomplete handoff on failure; never
+convert delivery failure into an evaluator verdict or a fresh generator retry.
+In Plan mode inspect only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # Document: Project Documentation
 
 You are the document skill. Your job is to produce comprehensive project documentation covering architecture decisions, API usage, setup guides, and implementation notes. This step runs regardless of whether ESCALATE stories are pending — documentation is always valuable.

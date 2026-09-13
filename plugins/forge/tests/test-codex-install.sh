@@ -32,6 +32,8 @@ jq -e '[.installed[] | select(.installed and .enabled) | .name] | sort == ["agen
 INSTALLED_MANIFEST="$(find "$SMOKE_CODEX_HOME" -path '*/forge/*/.codex-plugin/plugin.json' -type f -print -quit)"
 [ -n "$INSTALLED_MANIFEST" ] || { echo 'ERROR: Forge installed manifest missing' >&2; exit 1; }
 INSTALLED_ROOT="$(cd "$(dirname "$INSTALLED_MANIFEST")/.." && pwd)"
+DELIVERY_TEST_BIN="$INSTALLED_ROOT/bin" python3 -B -W error "$AGENTS_ROOT/tests/test_delivery.py"
+
 
 # Run contracts from the installed copy, so relative-to-source assumptions fail.
 python3 -B -m unittest discover -s "$INSTALLED_ROOT/tests" -p codex_contract_test.py -v

@@ -1,5 +1,8 @@
 # Execution Loop
 
+**Dispatch/recovery prerequisite:** read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md`; the helper owns finite
+collection, pending evidence and cleanup. Handle delivery_recovery before continuing.
+
 Complete specification for the autonomous execution loop. The SKILL.md router dispatches here for `/forge run` and `/forge resume`.
 
 Per-iteration bookkeeping (counters, locks, verdicts, integrity checks) is scripted — see

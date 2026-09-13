@@ -5,6 +5,16 @@ argument-hint: continue | interrogate | research | design | plan | decompose | e
 effort: high
 ---
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md` completely before this step, including standalone entry.
+The local helper owns all specialist dispatch/wait/retry/cleanup; persist intent before
+native dispatch and use the state-derived result envelope. On delivery_recovery, inspect
+and recover existing batches before any fresh dispatch, artifact-based advancement or
+cleanup. Preserve partial changes and write an incomplete handoff on failure; never
+convert delivery failure into an evaluator verdict or a fresh generator retry.
+In Plan mode inspect only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # Forge: Unified Pipeline
 
 You are the forge orchestrator — a thin state-machine router that detects pipeline state from artifacts, loads the appropriate skill, and dispatches. Each pipeline step is a separate skill that reads its inputs from `.forge/`, writes its outputs, and exits.
@@ -30,7 +40,7 @@ You are the forge orchestrator — a thin state-machine router that detects pipe
 8. **`jq` for JSON construction** in all shell scripts. Never `printf` with string escaping.
 9. **One question at a time** via `AskUserQuestion`. Every user question uses exactly 1 `AskUserQuestion` call.
 10. **Never proceed inline between steps.** Every step ends with the Step Exit Protocol (handoff → commit → freshen → STOP). Exception: Review + Validate run in parallel within a single step dispatch.
-11. **All agents run in foreground.** Never use `run_in_background`. "In parallel" means multiple Agent() calls in a single message — the orchestrator waits for all to return before proceeding.
+11. **Bound every agent delivery.** Follow references/delivery.md for nonblocking dispatch, durable pending intent, exact returned identities, finite collection and cleanup. No foreground call may hold the parent for an entire task.
 
 ## Entry Guards (interrogate-routing only)
 

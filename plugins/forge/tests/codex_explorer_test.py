@@ -1,12 +1,24 @@
-"""Exercise the production explorer lifecycle, stubbing only the external model CLI."""
+"""Exercise production explorer behavior with real processes and controlled model startup."""
+import importlib.util
 import json
 import os
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_launcher():
+    """Load a fresh production module so fault injection cannot affect another test."""
+    spec = importlib.util.spec_from_file_location("forge_explorer", ROOT / "bin/forge-codex-explore.py")
+    launcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(launcher)
+    return launcher
 
 
 class Explorer(unittest.TestCase):
@@ -85,17 +97,82 @@ Path(args[args.index('--output-last-message')+1]).write_text('Evidence from expe
         self.assertFalse((self.repo / ".forge/research/codebase-code-shape.md").exists())
         self.assert_caller_preserved()
 
-    def test_timeout_reaps_descendants(self):
-        """The deadline owns ordinary child processes before removing their worktree."""
+    def assert_timeout_reaps_ready_child(self, startup_delay, launcher=None):
+        """Control external startup readiness; keep real production wait and cleanup."""
+        pid_file = self.repo / f"child-{startup_delay}.pid"
         (self.repo / "fakebin/codex").write_text(
-            '#!/bin/sh\nsleep 60 &\nprintf "%s\\n" "$!" > "$PID_FILE"\nwait\n')
+            f'#!/bin/sh\nsleep {startup_delay}\nsleep 60 &\nprintf "%s\\n" "$!" > "$PID_FILE"\nwait\n')
+        launcher = launcher or load_launcher()
+        real_popen = subprocess.Popen
+        owned = []
+
+        def ready_popen(command, *args, **kwargs):
+            process = real_popen(command, *args, **kwargs)
+            if "codex" not in command:
+                return process
+            owned.append(process)
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if pid_file.exists() and pid_file.read_text().strip():
+                    child = int(pid_file.read_text())
+                    self.assertEqual(os.getpgid(child), process.pid, "Fixture child is not in the owned group")
+                    return process
+                self.assertIsNone(process.poll(), "External fixture exited before child readiness")
+                time.sleep(0.01)
+            self.fail(f"External fixture never became ready: pid={process.pid}, marker={pid_file}")
+
+        original_cwd = Path.cwd()
+        try:
+            os.chdir(self.repo)
+            with patch.dict(os.environ, dict(self.env, PID_FILE=str(pid_file))), \
+                    patch.object(subprocess, "Popen", ready_popen):
+                data = launcher.explore("Inspect source", self.repo / ".forge/research/timeout.md", 0.5)
+            self.assertEqual(len(owned), 1, "Production did not dispatch the real model process")
+            self.assertFalse(data["ok"], data)
+            self.assertIn("timeout", data["error"])
+            pid = int(pid_file.read_text())
+            result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], text=True, capture_output=True)
+            self.assertEqual(result.stderr, "", "Process inspection failed: " + result.stderr)
+            self.assertTrue(result.returncode != 0 or result.stdout.strip().startswith("Z"),
+                            f"Descendant survived production cleanup: pid={pid}, status={result.stdout}")
+            self.assert_caller_preserved()
+        finally:
+            os.chdir(original_cwd)
+            # A deliberately broken cleanup implementation must not leak fixture processes.
+            for process in owned:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    if process.poll() is None:
+                        process.kill()
+                process.wait(timeout=5)
+
+    def test_timeout_reaps_descendants(self):
+        """The unchanged deadline reaps confirmed children despite slow external startup."""
+        for delay in (0, 1):
+            with self.subTest(startup_delay=delay):
+                self.assert_timeout_reaps_ready_child(delay)
+
+    def test_timeout_oracle_rejects_leader_only_cleanup(self):
+        """The ready-child oracle fails if cleanup kills the leader but leaves its child."""
+        launcher = load_launcher()
+
+        def leader_only(process):
+            process.kill()
+            process.wait(timeout=5)
+
+        with patch.object(launcher, "stop_group", leader_only):
+            with self.assertRaisesRegex(AssertionError, "Descendant survived production cleanup"):
+                self.assert_timeout_reaps_ready_child(0, launcher)
+
+    def test_timeout_before_child_readiness(self):
+        """The public seam may time out before the external CLI creates any PID marker."""
+        (self.repo / "fakebin/codex").write_text(
+            '#!/bin/sh\nsleep 60\nprintf "unexpected" > "$PID_FILE"\n')
         data = self.run_explorer("--timeout", "0.5")
-        self.assertFalse(data["ran"])
+        self.assertFalse(data["ran"], data)
         self.assertIn("timeout", data["launcher"]["error"])
-        pid = int((self.repo / "child.pid").read_text())
-        result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], text=True, capture_output=True)
-        self.assertEqual(result.stderr, "", "Process inspection failed: " + result.stderr)
-        self.assertTrue(result.returncode != 0 or result.stdout.strip().startswith("Z"), result.stdout)
+        self.assertFalse((self.repo / "child.pid").exists())
         self.assert_caller_preserved()
 
     def test_disabled_does_not_launch(self):

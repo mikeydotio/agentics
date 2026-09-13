@@ -28,6 +28,14 @@ without its shared role definition — don't silently proceed as if nothing were
 
 ## Spawning Pattern
 
+Before every non-Council dispatch, read the owning plugin's `references/delivery.md`
+and use its bundled `bin/agent-delivery.py`. This applies to every example below,
+including fallback dispatch and Workflow/Agent-style fan-out. Persist pending intent,
+record returned native identities, and collect only within helper deadlines. Council
+retains its own liveness protocol. Role resolution never overrides delivery ownership.
+A failed registration lookup may fall back only when the transport confirms no agent
+was started; uncertain dispatch must be reconciled, never blindly repeated.
+
 Determine `subagent_type` before constructing the prompt — don't default to `general-purpose`
 out of habit, since that makes every agent's `tools:`/`read_only:` frontmatter purely cosmetic
 (the platform grants `general-purpose` the full tool set regardless of what the `.md` says).

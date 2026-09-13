@@ -1,5 +1,8 @@
 # Recovery Protocol
 
+**Dispatch/recovery prerequisite:** read `<plugin-root>/references/delivery.md`; the helper owns finite
+collection, pending evidence and cleanup. Handle delivery_recovery before continuing.
+
 Resume and recovery sequence for forge — restoring context after session boundaries or crashes.
 
 ## Recovery Sequence (`$forge:forge resume`)

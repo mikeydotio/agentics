@@ -37,6 +37,12 @@ test writes, experiments, issue comments, or artifact writes until execution is 
 
 ## Specialist dispatch
 
+Read `<plugin-root>/references/delivery.md` completely. The local delivery helper owns
+pending state, finite deadlines, bounded waves, envelopes and cleanup on every dispatch.
+Handle delivery_recovery before any artifact-based routing, fresh work or cleanup.
+The helper is bundled locally and remains available in the override-only fallback.
+
+
 Run `bash "<plugin-root>/bin/resolve-agents-root.sh"` and inspect its exit code:
 
 - 0: read the absolute root from stdout. For each role run
@@ -56,13 +62,13 @@ For each task, construct the prompt in this order:
 1. Full canonical role definition (when available).
 2. Full RCA override from `<plugin-root>/agent-overrides/<role>-context.md`.
 3. Codex execution contract below.
-4. Dynamic task evidence, expected output, and allowed absolute paths.
+4. Dynamic task evidence, expected output, allowed absolute paths and the state-derived delivery envelope.
 
 Use `spawn_agent` with a unique task name containing the investigation, step, role, and
 attempt. Inherit the active model and effort; omit overrides. Role YAML tool/model fields
 are descriptive registration metadata, not Codex runtime settings. Do not spawn further
 agents from a specialist. Keep the returned agent identifier; use `followup_task` for
-corrections to that same task and `wait_agent` to collect its final result. Independent
+only helper-tracked correction attempts and bounded `wait_agent` slices to collect its final result. Independent
 challenge must run in a separate specialist, never as the diagnosing agent's self-review.
 If native spawning is unavailable, return an incomplete HANDOFF.md with the missing
 capability; do not substitute a fictional specialist report.

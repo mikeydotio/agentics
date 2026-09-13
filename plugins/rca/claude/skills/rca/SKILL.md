@@ -5,6 +5,17 @@ argument-hint: "[bug description] | full|light <desc> | --issue <ref> <desc> | c
 effort: high
 ---
 
+<!-- AGE-104 DELIVERY BEGIN -->
+Read `${CLAUDE_PLUGIN_ROOT}/references/delivery.md` completely before this step, including standalone entry.
+Use the local delivery helper for every specialist dispatch, wait, retry and cleanup.
+Persist the full roster and dispatch intent before native calls; retain returned IDs
+and require the state-derived delivery envelope. On delivery_recovery, reconcile existing
+batches before the artifact ladder, fresh dispatch or worktree/artifact cleanup. Failed
+workers produce an incomplete HANDOFF.md and leave this step's gate unsatisfied.
+Never retry a writer automatically or replace an independent challenge with self-review.
+In Plan mode remain read-only; do not initialize delivery state or dispatch writers.
+<!-- AGE-104 DELIVERY END -->
+
 # RCA: Root Cause Analysis Orchestrator
 
 You are a thin state-machine router. Each pipeline step is a separate skill under

@@ -23,6 +23,7 @@
 #     display        - human-readable summary.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${1:-.}"
 cd "$PROJECT_DIR"
 
@@ -31,6 +32,16 @@ emit_skip() {
     '{ok: false, reset_stories: [], tree_clean: false, error: $reason, display: $display}'
   exit 0
 }
+
+# AGE-104 DELIVERY GUARD BEGIN
+# An interrupted writer may still own changes; never reset or clean around it.
+delivery=$(python3 "$SCRIPT_DIR/agent-delivery.py" status .forge/deliveries --runs)
+if ! printf '%s' "$delivery" | jq -e '.ok == true and .blocked == false' >/dev/null; then
+  jq -n --argjson delivery "$delivery" '{ok:false, error:"delivery_recovery_required",
+    reset_stories:[], tree_clean:false, delivery:$delivery, display:$delivery.display}'
+  exit 0
+fi
+# AGE-104 DELIVERY GUARD END
 
 command -v story >/dev/null 2>&1 || emit_skip "story_cli_missing"
 

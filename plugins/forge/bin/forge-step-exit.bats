@@ -389,6 +389,7 @@ teardown() {
   mkdir -p "$isolated/forge-only/bin"
   cp "$SCRIPT" "$isolated/forge-only/bin/forge-step-exit.sh"
   cp "$BATS_TEST_DIRNAME/forge-host.sh" "$isolated/forge-only/bin/forge-host.sh"
+  cp "$BATS_TEST_DIRNAME/agent-delivery.py" "$BATS_TEST_DIRNAME"/delivery_*.py "$isolated/forge-only/bin/"
   run bash "$isolated/forge-only/bin/forge-step-exit.sh" --step research --summary "done" --next "/forge design --orchestrated"
   [ "$status" -eq 0 ]
   echo "$output" | jq . >/dev/null
@@ -443,6 +444,7 @@ teardown() {
   mkdir -p "$isolated/forge-only/bin"
   cp "$SCRIPT" "$isolated/forge-only/bin/forge-step-exit.sh"
   cp "$BATS_TEST_DIRNAME/forge-host.sh" "$isolated/forge-only/bin/forge-host.sh"
+  cp "$BATS_TEST_DIRNAME/agent-delivery.py" "$BATS_TEST_DIRNAME"/delivery_*.py "$isolated/forge-only/bin/"
   run bash "$isolated/forge-only/bin/forge-step-exit.sh" --step research --summary "done" --next "/forge design --orchestrated" --transition-id "1-1"
   [ "$status" -eq 0 ]
   echo "$output" | jq . >/dev/null

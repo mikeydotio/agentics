@@ -72,7 +72,7 @@ artifact_exists() {
 }
 
 build_artifacts() {
-  local artifacts=(
+  local artifact_names=(
     "IDEA.md"
     "research/SUMMARY.md"
     "DESIGN.md"
@@ -86,7 +86,7 @@ build_artifacts() {
     "COMPLETION.md"
   )
   local pairs=()
-  for a in "${artifacts[@]}"; do
+  for a in "${artifact_names[@]}"; do
     if artifact_exists "$a"; then
       pairs+=("$a" "true")
     else
@@ -471,10 +471,19 @@ read_config
 check_storyhook
 read_state_json
 
+# Delivery evidence takes precedence over plausible partial report artifacts.
+delivery=$(python3 "$SCRIPT_DIR/agent-delivery.py" status "$FORGE_DIR/deliveries" --runs)
 result=$(detect_state)
 state=$(echo "$result" | sed -n '1p')
 dispatch=$(echo "$result" | sed -n '2p')
 category=$(echo "$result" | sed -n '3p')
+# AGE-104 DELIVERY GUARD BEGIN
+if ! printf '%s' "$delivery" | jq -e '.ok == true and .blocked == false' >/dev/null; then
+  state="delivery_recovery"
+  dispatch="delivery_recovery"
+  category="delivery_recovery"
+fi
+# AGE-104 DELIVERY GUARD END
 fix_cycle=$(count_fix_cycles)
 
 # auto_advance is a pure derived view of category (one predicate, one
@@ -503,6 +512,7 @@ if [ "$RECORD_TRANSITION" = "true" ]; then
 fi
 
 jq -n \
+  --argjson delivery "$delivery" \
   --arg state "$state" \
   --arg dispatch "$dispatch" \
   --arg category "$category" \
@@ -521,6 +531,7 @@ jq -n \
   --argjson state_json_exists "$state_json_exists" \
   --arg state_json_status "$state_json_status" \
   '{
+    delivery: $delivery,
     state: $state,
     dispatch: $dispatch,
     category: $category,

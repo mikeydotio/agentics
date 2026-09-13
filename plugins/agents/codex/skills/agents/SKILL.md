@@ -40,19 +40,27 @@ metadata, role tags, guardrails, model policy, and effort values.
 
 ### `$agents:agents run <name> <task>`
 
-Require both a catalog name and a concrete task, then:
+Require both a catalog name and a concrete task, then read
+`<plugin-root>/references/delivery.md` completely. Its helper owns every dispatch,
+retry, wait, finish and recovery below. Inspect `.agent-runs/` before starting;
+create durable init/dispatch-attempted records before calling native tools.
 
 1. Resolve the role with `bash <plugin-root>/bin/resolve-agent.sh <name>` and read the returned file
    completely. Stop if resolution fails.
 2. Read `read_only:` from the validated file's frontmatter. If it is `true`, note the current
    worktree status before delegation and verify afterward that the role made no changes.
-3. Call native `spawn_agent` with:
+3. Follow the helper dispatch action using native `spawn_agent` with:
    - a task name derived from `agents_<name>`, replacing hyphens with underscores;
    - no model or reasoning-effort override, so the subagent inherits the active Codex settings;
    - a prompt containing, in order: the full canonical definition, the Codex execution contract
-     below, and the user's concrete task.
-4. Use `wait_agent` to collect the role's final result. If a prompt-enforced read-only role changed
-   files, discard its result, identify the changed paths, and tell the user the boundary failed.
+     below, the user's concrete task, and the state-derived delivery envelope.
+4. Record the exact returned agent ID, then use bounded `wait_agent` slices and
+   helper advance/record calls per delivery.md. If a prompt-enforced read-only role
+   changed files, record an integrity failure, identify changed paths and preserve
+   evidence. Do not retry or return the role result as successful.
+   A writer timeout preserves partial changes and ends this run without replay.
+   Finish succeeded only after the result, semantic and integrity checks pass;
+   otherwise return an incomplete outcome with the audit path. Cleanup is bounded.
 5. Return the role's result and state that it ran through the Codex prompt-adapter path. Do not
    claim that the catalog's Claude tool allowlist was structurally enforced.
 
@@ -65,7 +73,8 @@ The preceding canonical definition is your specialist role. Its YAML `tools`, `m
 `effort` fields describe the Claude-native registration and are not literal Codex tool names or
 model overrides. Use only the Codex tools available in this spawned session. Obey `read_only: true`
 as a strict no-write boundary. Complete only the task below, do not spawn further agents, and
-return the role's requested output to the parent.
+return the role's requested output inside the supplied delivery envelope. Do not ask
+the user questions or wait for input; report permission/capability failures immediately.
 
 ## Task
 

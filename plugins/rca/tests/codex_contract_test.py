@@ -20,7 +20,9 @@ class HostContracts(unittest.TestCase):
         for step, expected in baseline.items():
             with self.subTest(step=step):
                 body = (ROOT / f"claude/skills/{step}/SKILL.md").read_bytes()
-                self.assertEqual(hashlib.sha256(body).hexdigest(), expected)
+                normalized = re.sub(rb"\n<!-- AGE-104 DELIVERY BEGIN -->.*?<!-- AGE-104 DELIVERY END -->\n", b"", body, flags=re.S)
+                self.assertEqual(body.count(b"<!-- AGE-104 DELIVERY BEGIN -->"), 1)
+                self.assertEqual(hashlib.sha256(normalized).hexdigest(), expected)
 
     def test_dispatch_routes_every_entrypoint(self):
         """Host aliases cannot select or mix implementation trees."""

@@ -55,6 +55,12 @@ Disable fsmonitor caching, and fail with context if shipped index entries carry
 assume-unchanged or skip-worktree flags: Git intentionally omits working-file
 checks in those states. Do not clear flags or change the user's index.
 
+The checker sets LC_ALL=C before parsing ASCII Git markers and SemVer. Locale
+collation can otherwise include uppercase H in [a-z], incorrectly rejecting
+ordinary index entries. Regression coverage varies the caller's LC_ALL,
+LC_COLLATE and LANG while preserving clean, drifted and hidden-file verdicts.
+See the [Bash range rules](https://www.gnu.org/s/bash/manual/html_node/Pattern-Matching.html).
+
 ## Entry points and limits
 
 `test-plugin-content-drift` runs production-CLI regressions followed by explicit

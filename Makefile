@@ -50,11 +50,17 @@ test-root-bats:
 test-plugin-versions:
 	bash tests/with-isolated-store.sh bash tests/plugin-versions.sh
 
-# Marketplace-wide content-drift guard: shipped plugin source under plugins/**
-# must not change without a version bump, or the version-keyed plugin cache
-# serves stale code (issue #71). Plain bash so it always runs in the pre-push gate.
+# Test both identity policies, then disclose the candidate's release state.
+# Candidate success never certifies publication or version-keyed installation.
 test-plugin-content-drift:
 	bash tests/with-isolated-store.sh bash tests/plugin-content-drift.sh
+	bash tests/with-isolated-store.sh bash scripts/check-plugin-content.sh --mode candidate
+
+# Mandatory release/install-source preflight, outside the candidate test graph.
+# Keep the strict checker last so successful manifest tests cannot mask drift.
+.PHONY: validate-release
+validate-release: test-plugin-versions
+	bash tests/with-isolated-store.sh bash scripts/check-plugin-content.sh --mode release
 
 # Storyhook's retired per-repo directory must not come back: no --extra-path may
 # name it (any spelling, repo-wide), and shipped plugin content must not assert

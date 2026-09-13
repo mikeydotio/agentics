@@ -115,3 +115,89 @@ j() { echo "$output" | jq -r "$1" 2>/dev/null; }
   # the canned findings text must NOT appear on the launcher's stdout
   ! echo "$output" | grep -q "All good"
 }
+
+# A fixture package changes only data; launcher and hook are production source.
+prepare_config_package() {
+  PACKAGE="$XROOT/plugin package"
+  mkdir -p "$PACKAGE"
+  cp -R "$BATS_TEST_DIRNAME/../bin" "$BATS_TEST_DIRNAME/../lib" \
+    "$BATS_TEST_DIRNAME/../hooks" "$BATS_TEST_DIRNAME/../references" "$PACKAGE/"
+  local bundled="$PACKAGE/references/default-config.yaml"
+  sed -e 's|^plan_explorer_model:.*|plan_explorer_model: fixture-model|' \
+    -e 's|^plan_explorer_scratch_prefix:.*|plan_explorer_scratch_prefix: research/|' \
+    -e 's|^plan_explorer_worktree_segment:.*|plan_explorer_worktree_segment: .research/worktrees|' \
+    "$bundled" > "$XROOT/defaults"
+  mv "$XROOT/defaults" "$bundled"
+}
+
+run_package() {
+  run env -i HOME="$TEST_HOME" PATH="$STUB:$PATH" GL_STUB_LOG="$GL_STUB_LOG" \
+    "$@" bash "$PACKAGE/bin/greenlight-explore.sh" run --task x --repo "$REPO" --out "$XROOT/findings" --keep
+}
+
+@test "explorer inherits bundled model and scratch identity recognized by the real hook" {
+  prepare_config_package
+  run_package
+  [ "$status" -eq 0 ]
+  [ "$(j '.model')" = fixture-model ]
+  [[ "$(j '.branch')" == research/* ]]
+  local wt data
+  wt="$(j '.worktree')"
+  [[ "$wt" == "$REPO/.research/worktrees/"* ]]
+  grep -F -- '--model fixture-model' "$GL_STUB_LOG"
+  data="$(jq -cn --arg cwd "$wt" --arg file "$wt/f.txt" \
+    '{tool_name:"Edit",tool_input:{file_path:$file},cwd:$cwd,permission_mode:"dontAsk"}')"
+  run env -i HOME="$TEST_HOME" PATH="$PATH" PLUGIN_ROOT="$PACKAGE" GREENLIGHT_PLAN_EXPLORER=1 \
+    bash "$PACKAGE/hooks/greenlight.sh" <<< "$data"
+  [ "$status" -eq 0 ]
+  jq -e '.hookSpecificOutput.permissionDecision == "allow"' <<< "$output"
+  [ ! -e "$TEST_HOME/.config" ]
+}
+
+@test "explorer user pins and CLI model override bundled values" {
+  prepare_config_package
+  mkdir -p "$TEST_HOME/.config/greenlight"
+  printf 'plan_explorer_model: user-model\nplan_explorer_scratch_prefix: user/\nplan_explorer_worktree_segment: .user/worktrees\n' > "$TEST_HOME/.config/greenlight/config.yaml"
+  run_package
+  [ "$status" -eq 0 ]
+  [ "$(j '.model')" = user-model ]
+  [[ "$(j '.branch')" == user/* ]]
+  [[ "$(j '.worktree')" == "$REPO/.user/worktrees/"* ]]
+  run env -i HOME="$TEST_HOME" PATH="$STUB:$PATH" GL_STUB_LOG="$GL_STUB_LOG" \
+    bash "$PACKAGE/bin/greenlight-explore.sh" run --task x --repo "$REPO" --model cli-model --out "$XROOT/cli-findings"
+  [ "$status" -eq 0 ]
+  [ "$(j '.model')" = cli-model ]
+}
+
+@test "explorer root variables select the same bundled precedence as the hook" {
+  prepare_config_package
+  local production_root
+  production_root="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
+  run_package PLUGIN_ROOT="$PACKAGE" CLAUDE_PLUGIN_ROOT="$production_root"
+  [ "$status" -eq 0 ]
+  [ "$(j '.model')" = fixture-model ]
+  run_package PLUGIN_ROOT= CLAUDE_PLUGIN_ROOT="$PACKAGE"
+  [ "$status" -eq 0 ]
+  [ "$(j '.model')" = fixture-model ]
+  run_package PLUGIN_ROOT="$production_root" CLAUDE_PLUGIN_ROOT="$PACKAGE"
+  [ "$status" -eq 0 ]
+  [ "$(j '.model')" = claude-sonnet-5 ]
+}
+
+@test "explorer refuses invalid configuration before creating worktrees or running Claude" {
+  prepare_config_package
+  mkdir -p "$TEST_HOME/.config/greenlight"
+  printf 'ai_enabled: invalid\n' > "$TEST_HOME/.config/greenlight/config.yaml"
+  run_package
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'greenlight config:'* ]]
+  [[ "$output" == *'"ok": false'* ]]
+  [ ! -e "$GL_STUB_LOG" ]
+  [ ! -e "$REPO/.research" ]
+  [ "$(git -C "$REPO" worktree list --porcelain | sed -n '/^worktree /p' | wc -l | tr -d ' ')" -eq 1 ]
+  rm "$TEST_HOME/.config/greenlight/config.yaml" "$PACKAGE/references/default-config.yaml"
+  run_package
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'greenlight config:'* ]]
+  [ ! -e "$GL_STUB_LOG" ]
+}

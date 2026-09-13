@@ -13,8 +13,9 @@ prepare_roots() {
     mkdir -p "$root/hooks" "$root/references"
     # Invoke the production hook; only bundled data differs to identify the root.
     ln -s "$GL_PRODUCTION_ROOT/hooks/greenlight.sh" "$root/hooks/greenlight.sh"
-    cp "$GL_PRODUCTION_ROOT/references/default-config.yaml" "$root/references/default-config.yaml"
-    printf '\n# Selected %s fixture root\n' "$host" >> "$root/references/default-config.yaml"
+    ln -s "$GL_PRODUCTION_ROOT/lib" "$root/lib"
+    sed "s|^log_file:.*|log_file: $root/decisions.log|" \
+      "$GL_PRODUCTION_ROOT/references/default-config.yaml" > "$root/references/default-config.yaml"
   done
   rm "$GL_CONFIG"
 }
@@ -23,13 +24,19 @@ run_manifest() {
   local invocation
   invocation="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$GL_PRODUCTION_ROOT/hooks/hooks.json")"
   run env -i HOME="$GL_TEST_ROOT" PATH="$GL_TEST_ROOT/bin:$PATH" "$@" \
-    bash -c "$invocation" <<< "$(payload codex SomeFutureTool '')"
+    bash -c "$invocation" <<< "$(payload codex Read '')"
 }
 
 assert_root() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  cmp "$GL_CONFIG" "$1/references/default-config.yaml"
+  [ ! -e "$GL_CONFIG" ]
+  [ -s "$1/decisions.log" ]
+  grep -F '[ALLOW] Read:' "$1/decisions.log"
+  local other
+  for other in "$GL_TEST_ROOT/codex plugin" "$GL_TEST_ROOT/claude plugin"; do
+    [[ "$other" == "$1" ]] || [ ! -e "$other/decisions.log" ]
+  done
   [ ! -e "$GL_TEST_ROOT/curl.log" ]
 }
 
@@ -64,8 +71,8 @@ assert_root() {
 }
 
 @test "direct hook invocation finds its own bundled resources without root variables" {
-  rm "$GL_CONFIG"
+  prepare_roots
   run env -i HOME="$GL_TEST_ROOT" PATH="$GL_TEST_ROOT/bin:$PATH" \
-    bash "$GL_PRODUCTION_ROOT/hooks/greenlight.sh" <<< "$(payload claude SomeFutureTool '')"
-  assert_root "$GL_PRODUCTION_ROOT"
+    bash "$GL_TEST_ROOT/codex plugin/hooks/greenlight.sh" <<< "$(payload codex Read '')"
+  assert_root "$GL_TEST_ROOT/codex plugin"
 }

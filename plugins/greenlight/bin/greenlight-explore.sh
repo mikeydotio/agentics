@@ -16,7 +16,7 @@
 #   greenlight-explore run --task "<question>" [options]
 #     --task <str>     (required) the research task / prompt for the explorer
 #     --repo <path>    repo root (default: git toplevel of cwd)
-#     --model <name>   model (default: config plan_explorer_model or claude-sonnet-5)
+#     --model <name>   model (default: effective plan_explorer_model)
 #     --name <slug>    human label for the worktree/branch (default: from --task)
 #     --base <ref>     base commit for the worktree (default: HEAD)
 #     --out <file>     write findings here (default: a temp file); path echoed in JSON
@@ -78,13 +78,14 @@ fi
 [ -n "$REPO" ] || emit_error "not inside a git repository (pass --repo)"
 REPO="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null)" || emit_error "--repo is not a git repository: $REPO"
 
-# ── Config (greenlight user config supplies the defaults) ──
-CONFIG_FILE="${HOME}/.config/greenlight/config.yaml"
-read_cfg() { grep "^${1}:" "$CONFIG_FILE" 2>/dev/null | head -1 | sed "s/^${1}:[[:space:]]*//" | tr -d "'\""; }
-SCRATCH_PREFIX="$(read_cfg plan_explorer_scratch_prefix)"; [ -n "$SCRATCH_PREFIX" ] || SCRATCH_PREFIX="greenlight/scratch-"
-WORKTREE_SEG="$(read_cfg plan_explorer_worktree_segment)"; [ -n "$WORKTREE_SEG" ] || WORKTREE_SEG=".claude/worktrees"
-[ -n "$MODEL" ] || MODEL="$(read_cfg plan_explorer_model)"
-[ -n "$MODEL" ] || MODEL="claude-sonnet-5"
+# Creation and hook enforcement must resolve the same scratch identity.
+PLUGIN_ROOT="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}}"
+# shellcheck source=../lib/config.sh
+source "$PLUGIN_ROOT/lib/config.sh" || emit_error "Greenlight configuration reader unavailable: $PLUGIN_ROOT"
+gl_config_load "$PLUGIN_ROOT" || emit_error 'Greenlight configuration is invalid; no explorer started'
+SCRATCH_PREFIX="$CFG_PLAN_EXPLORER_SCRATCH_PREFIX"
+WORKTREE_SEG="$CFG_PLAN_EXPLORER_WORKTREE_SEGMENT"
+[ -n "$MODEL" ] || MODEL="$CFG_PLAN_EXPLORER_MODEL"
 
 # ── Slug / branch / worktree paths ──
 slugify() { printf '%s' "$1" | tr '[:upper:] ' '[:lower:]-' | tr -cd '[:alnum:]-' | cut -c1-40; }

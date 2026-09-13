@@ -19,7 +19,23 @@ Greenlight auto-disables in **Bypass Permissions** mode and stays active in all 
 
 ## Configuration
 
-Config at `~/.config/greenlight/config.yaml` (auto-initialized on first run from bundled defaults).
+Optional overrides live at `~/.config/greenlight/config.yaml`. Missing keys inherit
+`references/default-config.yaml` on every invocation. No file is created on first use.
+The hook, explorer, and management commands share the same reader.
+
+Existing entries remain explicit pins, even if they match an old or current default.
+`/greenlight status` shows effective values, bundled values, sources, and pins.
+Use `/greenlight unset ai_enabled ai_model ai_show_rationale` to adopt corrected AI
+defaults without changing other settings. `/greenlight reset` backs up the existing
+file and clears all overrides so future default updates apply too.
+
+Configuration is flat scalar data, never shell code. Matching outer quotes are literal;
+no nesting, arrays, multiline values, YAML escape expansion, or inline comments.
+Explicit empty lists and log paths clear their setting; empty scalar settings inherit.
+Malformed or duplicate recognized entries fail visibly: the normal hook defers and a
+tagged explorer denies. Management commands refuse invalid files and symlink mutations.
+Correct invalid files before attempting edits; never remove a writer lock while its
+owner may still be running.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -51,7 +67,8 @@ Use `/greenlight` to manage at runtime:
 /greenlight block terraform          Always pass 'terraform' to user
 /greenlight test "curl -s ..."       Dry-run through the hook
 /greenlight explore "<task>"         Launch a governed plan explorer
-/greenlight reset                    Restore defaults
+/greenlight unset <key>...           Restore live defaults for selected keys
+/greenlight reset                    Back up configuration and clear all overrides
 ```
 
 ## AI Fallback

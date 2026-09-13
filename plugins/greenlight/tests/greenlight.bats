@@ -4,9 +4,7 @@
 #
 # Mock-free: drives the real hook script end to end via stdin JSON, exactly
 # as Claude Code would invoke it. Each test gets a throwaway $HOME so the
-# hook's config auto-init (~/.config/greenlight/config.yaml, copied from
-# the plugin's bundled default-config.yaml on first run) never touches the
-# real user's config.
+# hook never reads or writes the real user's config.
 
 HOOK="$BATS_TEST_DIRNAME/../hooks/greenlight.sh"
 PLUGIN_ROOT="$BATS_TEST_DIRNAME/.."
@@ -125,27 +123,32 @@ run_tool_x() {
   run env HOME="$TEST_HOME" CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT" GREENLIGHT_PLAN_EXPLORER=1 bash "$HOOK" <<< "$json"
 }
 
-# --- Config auto-init ---
+# --- Live bundled defaults ---
 
-@test "auto-initializes config from the bundled default on first run" {
+@test "uses bundled defaults without initializing user config on first run" {
   [ ! -f "$TEST_HOME/.config/greenlight/config.yaml" ]
   run_bash "ls"
-  [ -f "$TEST_HOME/.config/greenlight/config.yaml" ]
+  [ "$status" -eq 0 ]
+  [ "$(decision)" = allow ]
+  [ ! -e "$TEST_HOME/.config/greenlight" ]
 }
 
-@test "F077/F078: ai_enabled defaults to false in the auto-initialized config" {
-  run_bash "ls"
-  grep -qE '^ai_enabled:\s*false' "$TEST_HOME/.config/greenlight/config.yaml"
+@test "F077/F078: effective ai_enabled defaults to false" {
+  run env -i HOME="$TEST_HOME" PATH="$PATH" bash "$PLUGIN_ROOT/bin/greenlight-config.sh" get ai_enabled
+  [ "$status" -eq 0 ]
+  [ "$output" = false ]
 }
 
-@test "F082: ai_show_rationale defaults to false in the auto-initialized config" {
-  run_bash "ls"
-  grep -qE '^ai_show_rationale:\s*false' "$TEST_HOME/.config/greenlight/config.yaml"
+@test "F082: effective ai_show_rationale defaults to false" {
+  run env -i HOME="$TEST_HOME" PATH="$PATH" bash "$PLUGIN_ROOT/bin/greenlight-config.sh" get ai_show_rationale
+  [ "$status" -eq 0 ]
+  [ "$output" = false ]
 }
 
-@test "F078: the default ai_model is a structured-outputs-capable model" {
-  run_bash "ls"
-  grep -qE '^ai_model:\s*claude-haiku-4-5' "$TEST_HOME/.config/greenlight/config.yaml"
+@test "F078: effective ai_model retains the bundled Haiku default" {
+  run env -i HOME="$TEST_HOME" PATH="$PATH" bash "$PLUGIN_ROOT/bin/greenlight-config.sh" get ai_model
+  [ "$status" -eq 0 ]
+  [ "$output" = claude-haiku-4-5 ]
 }
 
 # --- Non-Bash tools ---

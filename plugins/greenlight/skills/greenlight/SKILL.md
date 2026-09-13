@@ -9,136 +9,81 @@ effort: medium
 
 Greenlight evaluates every tool call for safety before execution. It auto-allows known readonly commands, warns on destructive commands, and uses Claude AI as a fallback for uncertain ones. It is permission-mode-aware and can be selectively enabled/disabled per mode.
 
-## Config File
+## Configuration and routing
 
-`~/.config/greenlight/config.yaml` — strict `key: value` flat format (no nesting, no arrays, no multi-line values). Changes take effect immediately — the hook re-reads on every invocation.
+The optional `~/.config/greenlight/config.yaml` contains explicit overrides in flat
+`key: value` format. Missing keys inherit the current bundled defaults on every
+invocation. Reading configuration never creates a file. Do not copy bundled defaults
+into the user file or manufacture an inline default snapshot.
 
-## Command Router
-
-Parse the ARGUMENTS after `/greenlight` to determine the action:
-
-| Argument | Action |
-|----------|--------|
-| `status` or empty | Show current configuration |
-| `enable <mode>` | Enable greenlight in a permission mode |
-| `disable <mode>` | Disable greenlight in a permission mode |
-| `mode <value>` | Change analysis mode |
-| `ai <on\|off>` | Toggle AI fallback |
-| `model <name>` | Change AI model |
-| `allow <cmd>` | Add command to always-allow list |
-| `block <cmd>` | Add command to always-pass (block) list |
-| `unallow <cmd>` | Remove command from always-allow list |
-| `unblock <cmd>` | Remove command from always-pass list |
-| `explore <task>` | Launch a governed Sonnet explorer in a disposable worktree |
-| `test <command>` | Dry-run a command through the hook |
-| `log` | Show recent log entries |
-| `log clear` | Clear the log file |
-| `reset` | Restore default configuration |
-
-## Permission Mode Commands
-
-Claude Code has four permission modes: `default` (normal), `plan`, `acceptEdits`, and `bypassPermissions`. Greenlight can be enabled or disabled per mode.
-
-**By default, greenlight is enabled in all modes except `bypassPermissions`.**
-
-### /greenlight enable <mode>
-Enable greenlight in the given permission mode by removing it from the `disabled_modes` list.
-
-Valid modes: `default`, `plan`, `acceptEdits`, `bypassPermissions`
+Resolve the installed plugin root from `PLUGIN_ROOT`, then `CLAUDE_PLUGIN_ROOT`, or
+this skill's package location when neither is available. Run its management helper
+with safely quoted arguments:
 
 ```bash
-# Read current disabled modes
-current=$(grep '^disabled_modes:' ~/.config/greenlight/config.yaml | sed 's/^disabled_modes: *//')
-# Remove the mode from the list
-updated=$(echo "$current" | tr ' ' '\n' | grep -v "^<mode>$" | tr '\n' ' ' | sed 's/ *$//')
-# Write back — portable in-place edit (BSD sed's `-i` requires a backup-suffix
-# argument and silently misparses `-i "s/.../"` as one; GNU sed doesn't. A
-# temp-file rewrite works identically on both.)
-tmp=$(mktemp)
-sed "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml > "$tmp" \
-  && mv "$tmp" ~/.config/greenlight/config.yaml
+bash "${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/bin/greenlight-config.sh" status
 ```
 
-Report the change: "Greenlight is now **enabled** in `<mode>` mode."
+| `/greenlight` arguments | Helper arguments / action |
+|---|---|
+| `status` or empty | `status` |
+| `enable <mode>` | `remove disabled_modes <mode>` |
+| `disable <mode>` | `add disabled_modes <mode>` |
+| `mode <value>` | `set mode <value>` |
+| `ai on` / `ai off` | `set ai_enabled true` / `set ai_enabled false` |
+| `model <name>` | `set ai_model <name>` |
+| `allow <cmd>` / `unallow <cmd>` | `add custom_allow <cmd>` / `remove custom_allow <cmd>` |
+| `block <cmd>` / `unblock <cmd>` | `add custom_pass <cmd>` / `remove custom_pass <cmd>` |
+| `unset <key>...` | `unset <key>...` |
+| `reset` | `reset` |
+| `explore <task>` | Explorer launcher below |
+| `test <command>` | Hook replay below |
+| `log` / `log clear` | Effective log path, below |
 
-### /greenlight disable <mode>
-Disable greenlight in the given permission mode by adding it to the `disabled_modes` list.
+Only report a mutation as successful after exit 0 and `ok:true`. Exit 2 is an
+argument error; exit 1 is an operational error. Show contextual stderr on failure.
+Do not retry a busy writer lock indefinitely or delete it automatically. An abandoned
+`.config.lock` may be removed only after confirming its writer has stopped.
+
+### Status
+
+Display `.settings` as a table with each key's `value`, `default`, `source`, and
+`pinned`. A pin equal to today's default still prevents future updates. An empty
+scalar entry inherits (`source: bundled`) but remains `pinned: true` until removed.
+Show enabled/disabled permission modes using effective `disabled_modes` and report
+whether `ANTHROPIC_API_KEY` is set, never its value. Status requires no user file.
+
+### Settings
+
+Valid permission modes: `default`, `plan`, `acceptEdits`, `bypassPermissions`.
+Analysis modes: `standard` (deterministic checks with optional AI), `strict` (no AI),
+`permissive` (more lenient deterministic checks with optional AI). AI remains opt-in.
+Before recommending an AI model, verify the provider's current structured-output
+support; setting a name does not establish its availability.
+
+The helper edits only requested overrides, preserving comments and unknown keys.
+Lists start from their effective value, so enabling the last disabled mode writes
+an explicit empty list. Explicit empty `disabled_modes`, `custom_allow`, `custom_pass`,
+and `log_file` values clear those settings; empty scalar settings inherit defaults.
+The format supports literal matching outer quotes, CRLF and a missing final newline;
+it does not interpret shell expressions, YAML escapes, inline comments, nesting,
+arrays, or multiline values. Duplicate or malformed recognized entries are errors.
+
+### Migration and reset
+
+Existing files remain explicit pins: their creation date and resemblance to an old
+bundle cannot prove user intent. To adopt the corrected AI defaults while keeping
+other customization:
 
 ```bash
-current=$(grep '^disabled_modes:' ~/.config/greenlight/config.yaml | sed 's/^disabled_modes: *//')
-# Only add if not already present
-if ! echo " $current " | grep -q " <mode> "; then
-  updated="${current} <mode>"
-  updated=$(echo "$updated" | sed 's/^ *//')
-  # Portable in-place edit — see the note above (mktemp + sed + mv,
-  # not `sed -i` which is GNU-only without a backup-suffix argument).
-  tmp=$(mktemp)
-  sed "s/^disabled_modes: .*/disabled_modes: ${updated}/" ~/.config/greenlight/config.yaml > "$tmp" \
-    && mv "$tmp" ~/.config/greenlight/config.yaml
-fi
+bash "${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/bin/greenlight-config.sh" unset ai_enabled ai_model ai_show_rationale
 ```
 
-Report the change: "Greenlight is now **disabled** in `<mode>` mode."
-
-### /greenlight status
-Read and display `~/.config/greenlight/config.yaml`. Format as a table showing each setting and its current value. Also:
-- Check whether `ANTHROPIC_API_KEY` is set (report set/unset, never show the key)
-- Show which permission modes greenlight is active/disabled in:
-  - Read `disabled_modes` from config
-  - For each of `default`, `plan`, `acceptEdits`, `bypassPermissions`: show enabled/disabled
-
-## Analysis Mode Commands
-
-### /greenlight mode <standard|strict|permissive>
-Change the analysis mode:
-- **standard**: Deterministic allow/pass for known commands. AI fallback for uncertain commands.
-- **strict**: No AI. Everything uncertain passes to user for manual approval.
-- **permissive**: More lenient deterministic checks. AI fallback for the rest.
-
-```bash
-tmp=$(mktemp)
-sed 's/^mode: .*/mode: <value>/' ~/.config/greenlight/config.yaml > "$tmp" && mv "$tmp" ~/.config/greenlight/config.yaml
-```
-
-### /greenlight ai <on|off>
-Enable or disable AI fallback (opt-in — off by default; see AI Fallback in README.md for why):
-```bash
-tmp=$(mktemp)
-sed 's/^ai_enabled: .*/ai_enabled: <true|false>/' ~/.config/greenlight/config.yaml > "$tmp" && mv "$tmp" ~/.config/greenlight/config.yaml
-```
-
-### /greenlight model <model-name>
-Change the AI model for fallback analysis. Must be a structured-outputs-capable model (this
-feature calls `output_config.format`) — check the current model roster (e.g. via the `claude-api`
-skill's model reference) rather than assuming a name is still valid; do not hand-roll a dated
-snapshot ID.
-```bash
-tmp=$(mktemp)
-sed 's/^ai_model: .*/ai_model: <value>/' ~/.config/greenlight/config.yaml > "$tmp" && mv "$tmp" ~/.config/greenlight/config.yaml
-```
-Structured-outputs-capable models as of this writing: `claude-haiku-4-5` (default — cheapest/fastest,
-appropriate for a boolean safety check), `claude-sonnet-5`, `claude-opus-4-8`. Verify against the
-live model roster before suggesting a different one — this list goes stale.
-
-## Allow/Block Commands
-
-### /greenlight allow <command-name>
-Add a command to the custom always-allow list. Read current `custom_allow`, append the command, write back:
-```bash
-current=$(grep '^custom_allow:' ~/.config/greenlight/config.yaml | sed 's/^custom_allow: *//')
-tmp=$(mktemp)
-sed "s/^custom_allow: .*/custom_allow: ${current} <command-name>/" ~/.config/greenlight/config.yaml > "$tmp" \
-  && mv "$tmp" ~/.config/greenlight/config.yaml
-```
-
-### /greenlight block <command-name>
-Same as `allow` but for the `custom_pass` key. Commands on this list always pass to user for confirmation.
-
-### /greenlight unallow <command-name>
-Remove a command from the `custom_allow` list.
-
-### /greenlight unblock <command-name>
-Remove a command from the `custom_pass` list.
+`reset` makes a unique adjacent backup (returned as `.backup`) and empties the user
+file. Report the backup path. An absent file needs no backup. The result inherits
+current and future bundled defaults; it is not a frozen copy. Invalid configuration
+must be corrected before management mutations. Symlink configuration paths can be
+read, but the helper refuses to mutate them; edit the intended target explicitly.
 
 ## Plan-Explorer Commands
 
@@ -178,46 +123,17 @@ Codex safe calls emit no output, or context only when AI rationale is enabled;
 they retain normal host permission checks. Denials retain `deny` and a reason.
 The decision log distinguishes a safe classification from silent deferral.
 
-### /greenlight log
-Show the last 20 lines of the log file (if enabled):
-```bash
-tail -20 "$(grep '^log_file:' ~/.config/greenlight/config.yaml | sed 's/^log_file: *//')"
-```
-If `log_file` is empty, report that logging is disabled and offer to enable it.
+### /greenlight log and log clear
 
-### /greenlight log clear
-Truncate the log file.
-
-### /greenlight reset
-Restore default configuration by copying from the plugin's bundled default:
-```bash
-cp "${CLAUDE_PLUGIN_ROOT}/references/default-config.yaml" ~/.config/greenlight/config.yaml
-```
-If `CLAUDE_PLUGIN_ROOT` is not available, write the defaults inline:
-```bash
-cat > ~/.config/greenlight/config.yaml << 'EOF'
-disabled_modes: bypassPermissions
-mode: standard
-ai_enabled: false
-ai_model: claude-haiku-4-5
-ai_timeout: 10
-ai_show_rationale: false
-plan_explorer_enabled: true
-plan_explorer_scratch_prefix: greenlight/scratch-
-plan_explorer_worktree_segment: .claude/worktrees
-plan_explorer_uncertain: deny
-plan_explorer_model: claude-sonnet-5
-custom_allow:
-custom_pass:
-log_file:
-verbose: false
-EOF
-```
+Use the helper's `get log_file` and check exit status before using the path. An empty
+value means logging is disabled. Otherwise, show the last 20 lines with `tail -n 20 --
+"<resolved path>"`; `log clear` truncates that exact file. Quote the path as data.
+Do not read the raw user file: the log path may come from bundled defaults.
 
 ## Notes
 
 - The hook re-reads config on every invocation — no restart needed.
 - `ANTHROPIC_API_KEY` must be set as an environment variable for AI fallback. Not stored in config.
-- The hook never blocks tool execution on failure. Worst case: defers to user.
+- Configuration failures defer normal sessions with diagnostics and deny tagged explorers.
 - Greenlight supersedes the older `safe-readonly.sh` hook.
 - **Scope**: Greenlight only evaluates Bash commands. Write and Edit tool calls are not intercepted — they go through Claude Code's built-in permission system.

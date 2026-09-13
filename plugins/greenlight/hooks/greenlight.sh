@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# greenlight — Intelligent Claude Code PreToolUse Safety Hook
+# greenlight — Claude Code and Codex PreToolUse Safety Hook
 #
 # Three-tier decision pipeline for tool safety:
 #   1. Deterministic ALLOW — known-safe readonly commands
@@ -21,6 +21,9 @@
 
 INPUT="$(cat)"
 TOOL_NAME="$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)" || exit 0
+# Codex payloads contain turn_id; their host rejects allow without updatedInput.
+# This hook never rewrites tool input, so safe Codex calls defer normally.
+IS_CODEX="$(printf '%s' "$INPUT" | jq -r 'has("turn_id")' 2>/dev/null)" || exit 0
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  CONFIGURATION
@@ -109,11 +112,19 @@ log_decision() {
   printf '%s [%s] %s\n' "$ts" "$decision" "$detail" >> "$CFG_LOG_FILE" 2>/dev/null
 }
 
+# Serialize every safe classification for its receiving host. Optional context
+# belongs on the wire; optional diagnostic detail preserves the AI log contract.
 allow() {
-  local reason="$1"
-  log_decision "ALLOW" "${TOOL_NAME}: ${reason}"
-  jq -n --arg reason "$reason" \
-    '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":$reason}}'
+  local reason="$1" context="${2:-}" detail
+  detail="${3:-${TOOL_NAME}: ${reason}}"
+  log_decision "ALLOW" "$detail"
+  if [[ "$IS_CODEX" == "true" && -z "$context" ]]; then
+    exit 0
+  fi
+  jq -n --arg reason "$reason" --arg context "$context" --argjson codex "$IS_CODEX" \
+    '{"hookSpecificOutput": ({"hookEventName":"PreToolUse"}
+      + (if $codex then {} else {"permissionDecision":"allow","permissionDecisionReason":$reason} end)
+      + (if $context == "" then {} else {"additionalContext":$context} end))}'
   exit 0
 }
 
@@ -1559,10 +1570,8 @@ PROMPT_END
   else
     # AI says safe — allow, but still surface rationale if configured
     if [[ "$CFG_AI_SHOW_RATIONALE" == "true" ]]; then
-      log_decision "ALLOW" "AI confirmed safe: ${rationale}"
-      jq -n --arg rationale "[greenlight] AI analysis: ${rationale}" \
-        '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"AI confirmed safe","additionalContext":$rationale}}'
-      exit 0
+      allow "AI confirmed safe" "[greenlight] AI analysis: ${rationale}" \
+        "AI confirmed safe: ${rationale}"
     else
       allow "AI confirmed safe"
     fi

@@ -351,16 +351,45 @@ test_guard_exits_zero_against_a_shim_reporting_a_supported_major() {
 
 # --- Wiring into the gate ---------------------------------------------------
 #
-# Nothing else in this repo asserts `test:` membership for ANY target, so
-# without these two a target could be dropped from the gate and red nothing.
+# Preserve both membership and relative prerequisite order for the version
+# guard; the separate receipt suite also pins the aggregate suite census.
 
-# The ordered `test:` prerequisite list.
+# Read Make's expanded prerequisites, not the spelling of a variable reference.
+# Inspect an empty goal: even -q can execute recursive recipes on traversed goals.
 _test_target_list() {
-    /usr/bin/grep -E '^test:' "$REPO_ROOT/Makefile" | head -1 | sed 's/^test://'
+    local database rc=0 list
+    database="$(
+        unset MAKEFLAGS MFLAGS GNUMAKEFLAGS MAKEFILES
+        make --no-print-directory -qp -C "$REPO_ROOT" -f Makefile -f - __storyhook_version_pin_query <<'MAKE'
+.PHONY: __storyhook_version_pin_query
+__storyhook_version_pin_query:
+MAKE
+    )" || rc=$?
+    # Query status 1 means an out-of-date target, not a Make error.
+    if [ "$rc" -gt 1 ]; then
+        printf 'version-pin: cannot evaluate %s/Makefile (make exit %s)\n' "$REPO_ROOT" "$rc" >&2
+        return 1
+    fi
+    list="$(printf '%s\n' "$database" | awk '
+        /^test: / {
+            count++
+            for (i = 2; i <= NF && $i != "|"; i++) {
+                printf "%s%s", separator, $i
+                separator = " "
+            }
+        }
+        END { if (count != 1 || separator == "") exit 1 }
+    ')" || {
+        printf 'version-pin: no unambiguous nonempty test prerequisites in %s/Makefile\n' "$REPO_ROOT" >&2
+        return 1
+    }
+    printf '%s\n' "$list"
 }
 
 test_guard_is_a_member_of_make_test() {
-    case " $(_test_target_list) " in
+    local list
+    list="$(_test_target_list)" || return 1
+    case " $list " in
         *" test-storyhook-version-pin "*) ;;
         *) fail "test-storyhook-version-pin is not a prerequisite of \`test:\` — a guard nobody runs is worse than no guard"; return 1 ;;
     esac
@@ -376,7 +405,7 @@ STORYHOOK_DRIVING_TARGETS=(test-storyhook-contract-root test-forge)
 
 test_guard_precedes_every_storyhook_driving_target() {
     local list idx=0 pin=-1 t; local -a order=()
-    list="$(_test_target_list)"
+    list="$(_test_target_list)" || return 1
     for t in $list; do order+=("$t"); done
     for t in "${order[@]}"; do
         [ "$t" = "test-storyhook-version-pin" ] && pin=$idx
@@ -393,6 +422,84 @@ test_guard_precedes_every_storyhook_driving_target() {
         [ "$pin" -lt "$found" ] || { fail "test-storyhook-version-pin runs at position $pin, AFTER $d at $found — the attributing line must come first"; return 1; }
     done
 }
+
+# Exercise the same reader/assertions against real Make syntax and broken graphs.
+# Fixture recipes deliberately have side effects, including forced/recursive
+# lines which query mode alone would not suppress if it traversed the test goal.
+test_target_reader_expands_dependencies_without_running_recipes() (
+    local d list form
+    d="$(mktemp -d /private/tmp/age102-make-reader.XXXXXX)"
+    trap 'rm -rf "$d"' EXIT
+    REPO_ROOT="$d"
+    for form in literal variable; do
+        if [ "$form" = literal ]; then
+            printf 'test: test-storyhook-version-pin test-storyhook-contract-root test-forge\n' >"$d/Makefile"
+        else
+            cat >"$d/Makefile" <<'MAKE'
+PIN = test-storyhook-version-pin
+SUITES := $(PIN) \
+    test-storyhook-contract-root
+SUITES += test-forge
+test: $(SUITES)
+MAKE
+        fi
+        cat >>"$d/Makefile" <<'MAKE'
+	+touch recipe-ran
+	$(MAKE) --version > recursive-ran
+	"$$STORYHOOK_GATE_RECEIPT" preflight
+.PHONY: test test-storyhook-version-pin test-storyhook-contract-root test-forge
+test-storyhook-version-pin test-storyhook-contract-root test-forge:
+	+touch prerequisite-ran
+MAKE
+        printf '#!/bin/sh\ntouch "%s/receipt-ran"\n' "$d" >"$d/writer"
+        chmod +x "$d/writer"
+        export STORYHOOK_GATE_RECEIPT="$d/writer"
+        list="$(_test_target_list)" || return 1
+        [ "$list" = 'test-storyhook-version-pin test-storyhook-contract-root test-forge' ] \
+            || { fail "$form dependency expansion was incorrect: $list"; return 1; }
+        test_guard_is_a_member_of_make_test || return 1
+        test_guard_precedes_every_storyhook_driving_target || return 1
+        [ ! -e "$d/recipe-ran" ] && [ ! -e "$d/recursive-ran" ] \
+            && [ ! -e "$d/prerequisite-ran" ] && [ ! -e "$d/receipt-ran" ] \
+            || { fail "dependency inspection executed a fixture recipe"; return 1; }
+    done
+)
+
+test_target_reader_rejects_missing_and_reordered_guards() (
+    local d suites
+    d="$(mktemp -d /private/tmp/age102-make-reader.XXXXXX)"
+    trap 'rm -rf "$d"' EXIT
+    REPO_ROOT="$d"
+    for suites in \
+        'test-storyhook-contract-root test-forge' \
+        'test-storyhook-version-pin test-forge' \
+        'test-storyhook-version-pin test-storyhook-contract-root' \
+        'test-storyhook-contract-root test-storyhook-version-pin test-forge' \
+        'test-forge test-storyhook-version-pin test-storyhook-contract-root'; do
+        printf 'SUITES := %s\ntest: $(SUITES)\n.PHONY: test $(SUITES)\n' "$suites" >"$d/Makefile"
+        if test_guard_precedes_every_storyhook_driving_target >"$d/diagnostic" 2>&1; then
+            fail "ordering assertion accepted broken dependencies: $suites"; return 1
+        fi
+    done
+    printf 'test: test-forge\n.PHONY: test test-forge\n' >"$d/Makefile"
+    if test_guard_is_a_member_of_make_test >"$d/diagnostic" 2>&1; then
+        fail "membership assertion accepted a missing version guard"; return 1
+    fi
+)
+
+test_target_reader_reports_unreadable_make_graphs() (
+    local d body
+    d="$(mktemp -d /private/tmp/age102-make-reader.XXXXXX)"
+    trap 'rm -rf "$d"' EXIT
+    REPO_ROOT="$d"
+    for body in 'test: test-storyhook-version-pin\n$(error deliberate parse failure)\n' 'unrelated:\n' 'test:\n'; do
+        printf '%b' "$body" >"$d/Makefile"
+        if _test_target_list >"$d/output" 2>"$d/error"; then
+            fail "dependency reader accepted an invalid or empty graph: $body"; return 1
+        fi
+        [ -s "$d/error" ] || { fail "dependency reader failed without context"; return 1; }
+    done
+)
 
 # --- Doc <-> code -----------------------------------------------------------
 #

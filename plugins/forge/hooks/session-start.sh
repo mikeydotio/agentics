@@ -9,6 +9,17 @@
 # CRITICAL: Uses jq for all JSON construction — never printf with string escaping.
 
 set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=plugins/forge/bin/forge-host.sh
+. "$SCRIPT_DIR/../bin/forge-host.sh"
+# emit_context <text> — serialize for the receiving host, including corrupt-state paths.
+emit_context() {
+  if [ "${FORGE_HOST:-claude}" = codex ]; then
+    jq -n --arg ctx "$1" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$ctx}}'
+  else
+    jq -n --arg ctx "$1" '{additionalContext:$ctx}'
+  fi
+}
 
 # Locate project directory
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
@@ -50,7 +61,9 @@ RESUME_JSON="$(jq -r '{
 JQ_STATUS=$?
 if [[ $JQ_STATUS -ne 0 ]]; then
   echo "forge: session-start: ${STATE_FILE} is unreadable/malformed (jq exit ${JQ_STATUS})" >&2
-  jq -n '{"additionalContext": "Forge project detected but .forge/state.json is unreadable or corrupt. Run /forge status or /forge resume to diagnose."}'
+  status_cmd="$(forge_resume_command "${FORGE_HOST:-claude}" '/forge status')"
+  resume_cmd="$(forge_resume_command "${FORGE_HOST:-claude}" '/forge resume')"
+  emit_context "Forge project detected but .forge/state.json is unreadable or corrupt. Run $status_cmd or $resume_cmd to diagnose."
   exit 0
 fi
 
@@ -63,6 +76,7 @@ STORIES="$(printf '%s' "$RESUME_JSON" | jq -r '.stories')"
 RETRIES="$(printf '%s' "$RESUME_JSON" | jq -r '.retries')"
 RESUME_SUM="$(printf '%s' "$RESUME_JSON" | jq -r '.resume.summary // empty')"
 RESUME_CMD="$(printf '%s' "$RESUME_JSON" | jq -r '.resume.command // empty')"
+RESUME_CMD="$(forge_resume_command "${FORGE_HOST:-claude}" "$RESUME_CMD")"
 RESUME_HF="$(printf '%s' "$RESUME_JSON" | jq -r '.resume.handoff_file // empty')"
 
 CTX="Forge ${STATUS}. Sessions: ${SESSIONS}, Stories: ${STORIES}, Retries: ${RETRIES}."
@@ -82,6 +96,6 @@ else
   fi
 fi
 
-jq -n --arg ctx "$CTX" '{"additionalContext": $ctx}'
+emit_context "$CTX"
 
 exit 0

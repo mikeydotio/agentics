@@ -82,3 +82,29 @@ After execution, Review + Validate run in parallel. Triage deliberates on findin
 - Runaway safeguards: max sessions, max retries, max fix cycles
 - Deploy: never without explicit user permission
 - Always pauses after Document step for user review
+
+
+## Codex
+
+Forge exposes the same twelve public skills on Claude Code and Codex. Invoke
+`$forge:forge` with the existing command arguments in Codex. Public skill files
+select the native implementation; Claude registration metadata and original skill
+bodies are preserved under `claude/skills/`.
+
+Codex uses native specialist tools and the Agents library, with inherited runtime
+permissions and explicit integrity checks. Freshen owns automatic reset delivery
+inside a Codex CLI tmux pane. Without that capability, Forge persists a handoff and
+returns manual continuation instructions. The app can resume those same artifacts.
+Installed dependencies resolve by enabled identity and exact version; explicit
+`AGENTS_PLUGIN_ROOT`, `FRESHEN_PLUGIN_ROOT`, and `HOOK_GUARD_PLUGIN_ROOT` overrides
+are validated and authoritative.
+
+Shared step-exit and research-explore helpers accept `--host claude|codex` and default
+to Claude for existing callers. Codex exploration uses a disposable worktree and
+native workspace sandboxing; `--timeout` defaults to 300 seconds (maximum 3600).
+No host permissions, hook trust, model selection, or installed cache is changed.
+
+The existing Forge Bats runner includes native instruction, dependency, hook,
+explorer, packaging and lifecycle tests. The lifecycle fixture substitutes only the
+external terminal and accepted-input events; it runs production Forge/Freshen hooks.
+These tests do not claim live model compliance or a live Codex TUI end-to-end result.

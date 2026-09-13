@@ -1,0 +1,25 @@
+{
+  "name": "forge",
+  "version": "3.9.1",
+  "description": "Unified idea-to-deployment pipeline \u2014 interrogation, research, design, planning, autonomous execution, review, validation, triage, documentation, and deployment with freshen-based context clearing between steps",
+  "author": {
+    "name": "mikeydotio"
+  },
+  "skills": "./skills/",
+  "repository": "https://github.com/mikeydotio/agentics",
+  "interface": {
+    "displayName": "Forge",
+    "shortDescription": "Move ideas through a complete delivery pipeline",
+    "developerName": "mikeydotio",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Use Forge to develop this idea."
+    ],
+    "longDescription": "Unified idea-to-deployment pipeline \u2014 interrogation, research, design, planning, autonomous execution, review, validation, triage, documentation, and deployment with freshen-based context clearing between steps"
+  }
+}

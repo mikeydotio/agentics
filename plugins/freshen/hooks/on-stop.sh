@@ -38,6 +38,40 @@ CLEAR_COMMAND="${FRESHEN_CLEAR_COMMAND:-/clear}"
 # Disabled — silently skip
 [ -f "$FRESHEN_DIR/.disabled" ] && exit 0
 
+# AGE-100: acceptance is not execution. A /clear which never executes cannot
+# consume its marker, so deduplication must expire on a later eligible Stop.
+# Check even without a signal: another hook may queue one later in this batch.
+if [ -f "$FRESHEN_DIR/.clear-pending" ]; then
+  CLEAR_PENDING_TTL=120
+  if ! PENDING_MTIME="$(stat -c%Y "$FRESHEN_DIR/.clear-pending" 2>/dev/null \
+    || stat -f%m "$FRESHEN_DIR/.clear-pending")"; then
+    PENDING_MTIME=""
+  fi
+  if ! NOW_TS="$(date +%s)"; then
+    NOW_TS=""
+  fi
+
+  # on-clear may have consumed the marker while metadata was being read.
+  if [ -f "$FRESHEN_DIR/.clear-pending" ]; then
+    # Canonical decimal seconds only; bound the width before Bash arithmetic
+    # so malformed utility output cannot wrap, use octal, or become shell math.
+    if ! [[ "$PENDING_MTIME" =~ ^(0|-?[1-9][0-9]{0,11})$ \
+      && "$NOW_TS" =~ ^(0|-?[1-9][0-9]{0,11})$ ]]; then
+      echo "freshen: WARNING cannot determine age of $FRESHEN_DIR/.clear-pending (stat/date timestamp unavailable or invalid) -- retaining marker; no clear sent" >&2
+      exit 0
+    fi
+    PENDING_AGE=$((NOW_TS - PENDING_MTIME))
+    if [ "$PENDING_AGE" -ge "$CLEAR_PENDING_TTL" ]; then
+      if ! rm -f "$FRESHEN_DIR/.clear-pending"; then
+        echo "freshen: ERROR failed to remove $FRESHEN_DIR/.clear-pending (age ${PENDING_AGE}s, threshold ${CLEAR_PENDING_TTL}s) -- no clear sent" >&2
+        exit 1
+      fi
+      echo "freshen: WARNING expired .clear-pending (age ${PENDING_AGE}s, threshold ${CLEAR_PENDING_TTL}s) -- allowing queued signal retry" >&2
+      freshen_log_transition "on-stop: expired .clear-pending (age ${PENDING_AGE}s, threshold ${CLEAR_PENDING_TTL}s) -- allowing queued signal retry"
+    fi
+  fi
+fi
+
 # Delete stale signals (older than 2 hours)
 find "$FRESHEN_DIR" -name '*.signal' -mmin +120 -delete 2>/dev/null || true
 

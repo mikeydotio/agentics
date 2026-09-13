@@ -1032,7 +1032,8 @@ EOF
   mkdir -p "$tree"
   cp -R "$FORGE_ROOT/references" "$tree/references"
   cp -R "$FORGE_ROOT/skills" "$tree/skills"
-  local target="$tree/skills/execute/SKILL.md"
+  cp -R "$FORGE_ROOT/claude" "$tree/claude"
+  local target="$tree/claude/skills/execute/SKILL.md"
   # Fail loud if the document was restructured rather than silently testing nothing.
   grep -qF '4. ```bash' "$target"
   # Plant the exact grammar this guard was built to kill, in a real forge doc,
@@ -1045,7 +1046,7 @@ EOF
   [ "$(jq_field '.contract_ok')" = "false" ]
   # Reach proven on real content, asserted through the public JSON only, so this
   # survives any future change to how the detector is implemented.
-  [ "$(jq_field '[.verb_violations[] | select(.verb == "HP-N") | .file] | join(",")')" = "skills/execute/SKILL.md" ]
+  [ "$(jq_field '[.verb_violations[] | select(.verb == "HP-N") | .file] | join(",")')" = "claude/skills/execute/SKILL.md" ]
 }
 
 @test "contract-check: no real corpus file leaves the detector latched at EOF" {

@@ -287,9 +287,11 @@ DANGEROUS=(
     'git grep foo | grep -q bar'
     'git blame f | grep -q needle'
     'find . -name x | grep -q y'
+    'find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name "completed-*" | grep -q .'
     'git log --oneline | head -5'
 )
 BENIGN=(
+    'run find "$TEST_DIR/.freshen/.codex-reset" -maxdepth 1 -type d -name "completed-*" -print -quit'
     'echo "$out" | grep -q needle'
     'printf "%s" "$x" | grep -q needle'
     'cat file.txt | grep -q needle'

@@ -1,0 +1,125 @@
+---
+name: validate
+description: Test hardening — run tests, find coverage gaps, write missing tests. Produces VALIDATE-REPORT.md with findings by severity. Runs in parallel with review.
+---
+
+Resolve `<plugin-root>` three directories above this loaded file's containing directory.
+Read `<plugin-root>/codex/references/runtime.md` before this step.
+
+# Validate: Test Hardening
+
+You are the validate skill. Your job is to harden the test suite — run tests, find coverage gaps, write missing tests, and verify that the implementation meets requirements. You run in parallel with the review skill — both produce reports consumed by triage.
+
+**Read inputs:**
+- `.forge/IDEA.md` (required — requirements to verify)
+- `.forge/PLAN.md` (required — acceptance criteria per task)
+- `.forge/DESIGN.md` (required — component boundaries for integration tests)
+- `.forge/handoffs/handoff-execute.md` (for test state and patterns)
+
+**New reference (read before starting):**
+- `<plugin-root>/codex/references/severity-levels.md` — Finding severity definitions
+- `<plugin-root>/codex/references/report-format.md` — Report structure with solution options
+- `<plugin-root>/codex/references/team-roles.md` — "Resolving canonical role" governs the spawns below; `validator`
+  has a forge override (`<plugin-root>/codex/agent-overrides/validator-context.md`), `qa-engineer` doesn't
+
+## Steps
+
+### 1. Spawn Validation Agents
+
+Resolve `canonical role` per `<plugin-root>/codex/references/team-roles.md` for each (load the canonical role and Forge override through runtime.md):
+
+**Always spawn:**
+- `validator` — Primary test analysis and writing agent. Unlike `reviewer`/`triager`, this agent
+  is legitimately `read_only: false` (it writes tests and the report itself) — its override's
+  "write to VALIDATE-REPORT.md" instruction is correct as written, no contradiction to resolve here.
+- `qa-engineer` — Test strategy review and edge case identification
+
+Both agents receive IDEA.md, PLAN.md, DESIGN.md, and the execute handoff.
+
+### 2. Run Test Suite
+
+The validator runs the full test suite first to establish baseline:
+
+```bash
+# Auto-detect test command
+npm test / pytest / cargo test / make test / etc.
+```
+
+Record: total, pass, fail, skip, duration.
+
+### 3. Coverage Analysis
+
+The validator and qa-engineer independently assess:
+- Which IDEA.md requirements have test coverage
+- Which components have unit tests
+- Which integration boundaries are tested
+- Which error handling paths are exercised
+- Which edge cases are covered
+
+### 4. Write Missing Tests
+
+The validator writes tests for critical gaps found during analysis:
+- Use the project's existing test framework and patterns
+- Focus on behavior tests, not implementation detail tests
+- All written tests must pass
+
+### 5. Synthesize VALIDATE-REPORT.md
+
+```markdown
+# Validation Report
+
+## Test Suite Results
+- Total: X | Pass: Y | Fail: Z | Skip: W
+- Run command: [command]
+- Duration: [time]
+
+## Findings
+
+### [Finding Title]
+- **Severity**: Critical | Important | Useful
+- **Description**: [what's missing or broken]
+- **Option 1 (Recommended)**: [solution] — Pros: ... Cons: ...
+- **Option 2**: [solution] — Pros: ... Cons: ...
+- **Option 3**: [solution] — Pros: ... Cons: ...
+
+[Repeat for each finding]
+
+## Requirement Coverage
+| Requirement | Tested? | Test Location | Notes |
+|------------|---------|---------------|-------|
+| [from IDEA.md] | YES/NO | [file:test_name] | [gaps] |
+
+## Tests Written This Step
+- [test file]: [what it tests, why it was missing]
+
+## Strengths
+[Good testing patterns to reinforce]
+```
+
+**Finding severity levels:**
+- **Critical**: Meaningful risk to system/data security/integrity (untested critical path, failing tests)
+- **Important**: Usability issues that tests should catch
+- **Useful**: Nothing broken but tests would improve confidence
+
+## Exit
+
+**If `--orchestrated`:** Write `.forge/VALIDATE-REPORT.md`, then follow the Step Exit Protocol
+(`<plugin-root>/codex/references/step-handoff.md`) — write `handoff-validate.md` (Validate Handoff table) and commit
+`.forge/` plus every test file written in Step 4, passing each one explicitly as its own
+`--extra-path` — NOT a blanket `git add -A` (which would sweep in unrelated untracked files —
+coverage output, caches, stray build artifacts — from the user's target project):
+```bash
+bash "<plugin-root>/bin/forge-step-exit.sh" --host codex --step validate \
+  --summary "test hardening + report" --next '$forge:forge continue' \
+  --extra-path <test-file-1> --extra-path <test-file-2> ...
+```
+
+**Note:** Validate never checks for `.forge/REVIEW-REPORT.md` before deciding whether to queue
+freshen — that file-presence "whoever finishes second queues" coordination previously deadlocked
+the pipeline. See `<plugin-root>/codex/skills/review/SKILL.md`'s Exit section and `<plugin-root>/codex/skills/forge/SKILL.md`'s
+**Review+Validate Parallel Dispatch** for the full model: `forge-state.sh` decides whether review,
+validate, or both still need to run, and the orchestrator dispatches accordingly. This Exit section
+applies when validate runs alone (`dispatch: "validate --orchestrated"`, i.e. review's report
+already exists).
+
+**If standalone:** Write report, commit tests, report findings to user, exit.

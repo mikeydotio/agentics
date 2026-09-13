@@ -15,6 +15,10 @@ and return a defensible decision with a full audit trail.
 You do **not** vote. You orchestrate, record, and — only when ranked-choice cannot resolve a
 tie — break ties using a documented heuristic.
 
+Resolve `<plugin-root>` as three directories above this installed file's directory.
+Resolve every reference below against that root. Read `references/liveness.md`
+completely before any dispatch; use `bin/council-state.py` for all four phases.
+
 **Load on demand, not all at once:**
 - `references/council-protocol.md` — full phase-by-phase protocol with prompt templates
 - `references/team-composition.md` — example questions, ideal 3-member panels, selection rubric
@@ -25,10 +29,11 @@ tie — break ties using a documented heuristic.
 
 1. **Panel size is exactly 3.** Not 2, not 4, not 5. Three forces real disagreement and a
    meaningful runoff while keeping latency and cost bounded.
-2. **Three members, dispatched in parallel in one message (3 `Agent` calls), never
-   backgrounded.** Sequential dispatch defeats independent reasoning and inflates latency;
-   never use `run_in_background` — the chair must have all 3 responses in hand before it
-   can tally a vote or write the round's artifact.
+2. **Three members dispatched in parallel, with observable nonblocking collection.**
+   Persist all intents before native dispatch. Start all three before collecting research.
+   Use asynchronous `Agent` dispatch with `run_in_background: true` when supported;
+   a false flag is not proof of synchronous completion. If the host cannot return control
+   for bounded waits, abort before dispatch. Tally only after helper `phase-complete`.
 3. **Round-1 research is blind.** Each member must form their proposal without seeing the
    others' proposals or knowing who else is on the panel. Anchoring is the enemy of a good
    council.
@@ -43,18 +48,17 @@ tie — break ties using a documented heuristic.
    not modify the codebase. Pick read-only archetypes from the shared catalog when possible;
    if a member needs write tools (rare), the proposal still describes the change rather
    than performing it.
-8. **Member responses are JSON; malformed responses get exactly one retry, then abstain.**
-   On parse failure or missing/empty required fields, re-dispatch that single seat once
-   with a "your previous response was malformed" preamble. If the retry also fails, mark
-   the seat as abstaining and proceed. Two abstentions in one phase aborts the council —
-   write `ABORT.md` and return an error, never fabricate a decision. Full protocol:
-   `references/council-protocol.md` § "Member response failures".
+8. **Missing and malformed deliveries share exactly one retry, then abstention.**
+   Follow `references/liveness.md`: research ceiling 1500 seconds; every later phase
+   300 seconds. Probe once, extend only on current-attempt working evidence, and never
+   reset a deadline. Two abstentions in one phase write `ABORT.md`; return an error.
+   Surface every retry, extension, abstention, and abort with elapsed time and audit path.
 9. **Decline cleanly if you can't dispatch in parallel.** If the `Agent` tool is not
    available to you (you're already a subagent, the host runtime restricts it, or for any
    other reason), do not fake a council with sequential self-reasoning. Write
    `.council/<slug>/ABORT.md` explaining "Agent tool unavailable — council requires
    parallel dispatch" and return an error to the caller. This includes the recursive case:
-   council members are themselves subagents and cannot convene sub-councils.
+   council members must not spawn further agents or convene sub-councils, even if tools permit it.
 
 ## Invocation contract
 
@@ -80,11 +84,11 @@ phases are:
 | # | Phase | What happens | Artifacts |
 |---|-------|--------------|-----------|
 | 0 | **Slugify** | Derive `<slug>` from the question (kebab-case, ≤50 chars). If `.council/<slug>/` exists, append `-2`, `-3`, … until free. Create the directory. | directory |
-| 1 | **Convene** | Pick 3 archetypes from the shared catalog using the rubric in `references/team-composition.md`. Record panel + rationale. | `QUESTION.md`, `PANEL.md` |
-| 2 | **Independent research** | Dispatch all 3 members in parallel with identical context+question. Each returns a structured proposal. | `proposals-round-1.md` |
-| 3 | **Single-choice vote** | Present all 3 proposals back to each member in parallel; each votes for exactly one (self-vote allowed). Unanimous → skip to phase 6. | `vote-round-1.md` |
-| 4 | **Deliberation** | Share the tally and rationales with all 3 members in parallel. Each may revise their own proposal or stand. | `deliberation.md`, `proposals-round-2.md` |
-| 5 | **Ranked-choice runoff** | Each member ranks all 3 (possibly revised) proposals 1–3. Run IRV (`references/voting-mechanics.md`). Chair tiebreaker only if IRV cannot resolve. | `vote-round-2.md` |
+| 1 | **Convene** | Pick 3 archetypes from the shared catalog using the rubric in `references/team-composition.md`. Record panel + rationale. | `QUESTION.md`, `PANEL.md`, `STATE.json` |
+| 2 | **Independent research** | Dispatch all 3 members in parallel with identical context+question. Each returns a structured proposal. | `STATE.json`, `LIVENESS.md`, `proposals-round-1.md` |
+| 3 | **Single-choice vote** | Present all 3 proposals back to each member in parallel; each votes for exactly one (self-vote allowed). Unanimous → skip to phase 6. | `STATE.json`, `LIVENESS.md`, `vote-round-1.md` |
+| 4 | **Deliberation** | Share the tally and rationales with all 3 members in parallel. Each may revise their own proposal or stand. | `STATE.json`, `LIVENESS.md`, `deliberation.md`, `proposals-round-2.md` |
+| 5 | **Ranked-choice runoff** | Each member ranks all 3 (possibly revised) proposals 1–3. Run IRV (`references/voting-mechanics.md`). Chair tiebreaker only if IRV cannot resolve. | `STATE.json`, `LIVENESS.md`, `vote-round-2.md` |
 | 6 | **Decide + return** | Write `DECISION.md` and return decision + rationale + dissent + artifact path to the caller. | `DECISION.md` |
 
 ## Picking the panel (quick rubric)
@@ -118,10 +122,27 @@ environments consult the host's docs):
    general-purpose` and paste the archetype's full role block from
    `plugins/agents/agents/<archetype-name>.md` into the prompt under a `## Your role`
    heading **before** the council-specific task.
-3. **Don't guess.** If you can't tell what's available, try `agents:<name>` once; if it
-   errors, retry that seat with `general-purpose` + injected role. Record which path you
-   took in `PANEL.md` so the audit trail explains why a member's voice may differ from
-   the catalog's default.
+3. **Do not guess.** Resolve available roles before dispatch. A dispatch error is a
+   helper `failure`, consuming the same one retry as a missing response; no extra
+   role-selection retry. Record fallback role injection in `PANEL.md`. Check that the
+   selected role exposes required measurement tools before assigning executable work.
+
+Use helper-provided unique names for each attempt and retain the **returned agent ID**.
+For later phases, message/resume that ID. Use `ListAgents` only when exposed and only as
+observed evidence; neither presence nor idle proves successful delivery. All collection
+waits are at most 30 seconds and constrained by helper deadlines. Send one probe per
+attempt; no polling loop may refresh a deadline.
+
+Require each member to call **`SendMessage` to the recorded chair** (`main` for the
+root chair, otherwise its actual ID). The message body must be a **string containing
+one fenced JSON envelope**, never a bare tool-argument object. Plain final text or an
+idle notification alone is not the delivery contract. Pass actual sender and original
+body to helper `record kind:delivery`; never insert missing identity fields yourself.
+
+Every attempt gets the chair-created private scratch path from state. Members may write
+measurement artifacts only there, never to the repository or shared scratch. Require
+short measurement collection calls and immediate failure delivery for denied permissions,
+unavailable tools, or missing facts; no user-question wait, recursion, or permission bypass.
 
 Each member prompt must include:
 - The full **context summary** verbatim
@@ -130,7 +151,8 @@ Each member prompt must include:
   3-member council") — including any domain-nuance you want to inject on top of the
   archetype's default role
 - The **phase-specific task** (research and propose / vote / deliberate / rank)
-- The exact **output format** required (see `references/council-protocol.md`)
+- The exact **identity envelope**, chair recipient, scratch path, and phase payload
+  (see `references/liveness.md` and `references/council-protocol.md`)
 - A reminder that the member is **read-only**: they investigate and write proposals, they
   do not modify the codebase
 

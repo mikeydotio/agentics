@@ -86,3 +86,15 @@ runfre() { run env GREENLIGHT_EXPLORE_BIN="$MOCK" MOCK_LOG="$MOCK_LOG" bash "$BI
   runfre --topic x --forge-dir "$FORGE_DIR"
   [ "$status" -ne 0 ]
 }
+
+@test "missing option values fail promptly with contextual usage errors" {
+  run python3 - "$BIN" <<'PYTEST'
+import subprocess, sys
+for option in ("--topic", "--task", "--forge-dir"):
+    result = subprocess.run(["bash", sys.argv[1], option],
+                            capture_output=True, text=True, timeout=2)
+    assert result.returncode == 2, (option, result.returncode, result.stderr)
+    assert option + " requires a value" in result.stderr, result.stderr
+PYTEST
+  [ "$status" -eq 0 ]
+}

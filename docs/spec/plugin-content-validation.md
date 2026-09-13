@@ -61,6 +61,16 @@ ordinary index entries. Regression coverage varies the caller's LC_ALL,
 LC_COLLATE and LANG while preserving clean, drifted and hidden-file verdicts.
 See the [Bash range rules](https://www.gnu.org/s/bash/manual/html_node/Pattern-Matching.html).
 
+Clear ambient Git variables that could redirect the repository, refs, index or
+object writes. Preserve GIT_ALTERNATE_OBJECT_DIRECTORIES verbatim: the central
+verifier supplies immutable speculative commit/tree objects through this
+read-only lookup contract. Git owns its directory-list and quoting syntax
+([Git environment documentation](https://git-scm.com/docs/git)). The checkout
+still selects HEAD and index, replacements remain disabled, and unavailable
+objects remain errors in both modes. Linked-checkout regressions keep HEAD only
+in an alternate store, exercise quoted paths and conflicting redirection
+variables, and prove clean acceptance plus strict refusal of changed content.
+
 ## Entry points and limits
 
 `test-plugin-content-drift` runs production-CLI regressions followed by explicit

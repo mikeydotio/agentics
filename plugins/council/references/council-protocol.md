@@ -4,9 +4,13 @@ Every prompt template and JSON shape the chair needs to run a full council. The 
 (orchestrator) follows these phases in order. Each phase is bounded — there is no
 "maybe we'll add a third round" branch.
 
+Before any dispatch, read `liveness.md` completely and follow its mandatory state-helper
+loop for **every** phase. The examples below are payloads inside its identity envelope.
+
 ## Phase 0 — Slugify and scaffold
 
-Derive `<slug>` from the question:
+First inspect unfinished `STATE.json` files and follow `liveness.md` recovery.
+Then derive `<slug>` from the question:
 
 1. Lowercase, replace non-alphanumeric runs with `-`, strip leading/trailing `-`.
 2. Truncate to ≤50 characters at a word boundary.
@@ -18,7 +22,7 @@ Create the directory: `mkdir -p .council/<slug>/`.
 ## Phase 1 — Convene
 
 Pick exactly 3 archetypes using the rubric in `team-composition.md`. Write
-`QUESTION.md` and `PANEL.md`.
+`QUESTION.md` and `PANEL.md`. Run the state helper `init` before dispatch.
 
 ### `.council/<slug>/QUESTION.md`
 
@@ -58,9 +62,9 @@ guidance for primary CTAs.">
 
 ## Phase 2 — Independent research (parallel)
 
-Dispatch all 3 members in a **single message** with 3 Agent tool calls. Each member
-receives the same context and question, sees no information about the other members, and
-returns a structured proposal.
+Run `begin-phase` with `phase:"research"`, then the host adapter's bounded dispatch/collection
+loop from `liveness.md`. Start all 3 members before collecting. Each receives the same
+context and question, sees no other proposals, and returns an identity-enveloped proposal.
 
 ### Member prompt template (round-1 research)
 
@@ -81,11 +85,11 @@ speculate about who else is on the panel; assume your seat covers your domain.
 
 Investigate this question from your domain's perspective. You are read-only —
 investigate the codebase, read relevant docs, consult your domain expertise, but
-do not modify any files.
+do not modify repository files. Measurement artifacts belong only in your assigned
+private scratch directory. Do not spawn further agents or wait for user input.
 
-When you have an answer, respond with a single JSON object. All fields are
-required and must be non-empty. Do not wrap in markdown code fences. Do not add
-any prose before or after the JSON.
+Deliver the identity envelope through your host delivery channel. The payload below
+has required nonempty fields. Bare JSON or one JSON code fence is valid; no surrounding prose.
 
 Field specifications:
 - summary: one sentence — the decision you propose.
@@ -104,7 +108,7 @@ Example of a well-formed response:
 }
 ```
 
-After all 3 return, parse each JSON object and write
+After the helper reports `phase-complete`, render accepted responses and write
 `.council/<slug>/proposals-round-1.md` as a human-readable markdown rendering:
 
 ```markdown
@@ -135,8 +139,8 @@ benefit; the artifact is for human review.
 
 ## Phase 3 — Single-choice vote (parallel)
 
-Dispatch all 3 members again, in parallel. Each receives all 3 proposals
-(now labeled A/B/C) and casts one vote.
+Run `begin-phase` with `phase:"vote"`, then the bounded loop in `liveness.md`.
+Dispatch all 3 seats in parallel; each receives the surviving proposal slate and casts one vote.
 
 ### Member prompt template (round-1 vote)
 
@@ -166,9 +170,8 @@ to this question:
 Cast a single vote for the proposal you believe best answers the question. You
 may vote for your own proposal.
 
-Respond with a single JSON object. All fields are required and must be
-non-empty. Do not wrap in markdown code fences. Do not add any prose before or
-after the JSON.
+Deliver the identity envelope through your host delivery channel, with the following
+nonempty payload fields. Bare JSON or one JSON fence is valid; no surrounding prose.
 
 Field specifications:
 - choice: exactly one of "A", "B", or "C".
@@ -205,8 +208,9 @@ directly to phase 6 and record `DECISION.md` with `vote_method: unanimous`.
 
 ## Phase 4 — Deliberation (one round, parallel)
 
-Share the round-1 tally and rationales with all 3 members. Each may revise
-their proposal in light of what they've learned, or stand.
+Run `begin-phase` with `phase:"deliberation"`, then the bounded loop in `liveness.md`.
+Share the tally and rationales with participating proposal authors. Each may revise
+their own proposal or stand. A seat without a proposal has nothing to revise.
 
 ### Member prompt template (deliberation)
 
@@ -238,8 +242,8 @@ You may revise your own proposal based on what you've learned from the other
 members' reasoning, or stand by it unchanged. You may NOT revise another
 member's proposal. Be specific about what you changed and why.
 
-Respond with a single JSON object. All fields are required. Do not wrap in
-markdown code fences. Do not add any prose before or after the JSON.
+Deliver the identity envelope through your host delivery channel with the payload below.
+All fields are required. Bare JSON or one JSON fence is valid; no surrounding prose.
 
 Field specifications:
 - seat: integer matching your seat number.
@@ -285,7 +289,9 @@ their familiarity).
 
 ## Phase 5 — Ranked-choice runoff (parallel)
 
-Dispatch all 3 members again, in parallel. Each ranks all 3 round-2 proposals 1–3.
+Run `begin-phase` with `phase:"runoff"`, then the bounded loop in `liveness.md`.
+Dispatch all 3 seats again in parallel. Each ranks every surviving round-2 proposal.
+For two proposals, omit C and the third ranking field from the template and examples.
 
 ### Member prompt template (ranked-choice)
 
@@ -313,8 +319,8 @@ Rank all three proposals from best (1) to worst (3). You may rank your own
 proposal. No ties allowed in your ranking — every proposal must appear in
 exactly one position.
 
-Respond with a single JSON object. All fields are required. Do not wrap in
-markdown code fences. Do not add any prose before or after the JSON.
+Deliver the identity envelope through your host delivery channel with the payload below.
+All fields are required. Bare JSON or one JSON fence is valid; no surrounding prose.
 
 Field specifications:
 - first, second, third: each is exactly one of "A", "B", or "C". The three
@@ -354,7 +360,8 @@ Round 2 (after eliminating <X>): <tally>
 
 ## Phase 6 — Decide and return
 
-Write `.council/<slug>/DECISION.md`:
+Pass the following rendered Markdown to helper `finish` with `outcome:"decision"`.
+The helper persists terminal state before writing `.council/<slug>/DECISION.md`:
 
 ```markdown
 # Council Decision
@@ -389,7 +396,7 @@ concern in one sentence. If unanimous, write "None — unanimous decision.">
 ```
 
 Return to the caller in this exact shape (plain text, not JSON — the caller is
-a Claude agent, not a program):
+an agent, not a program):
 
 ```
 ## Council Decision
@@ -409,48 +416,17 @@ The caller is then responsible for acting on the decision. The council is done.
 
 ## Member response failures
 
-Asking for JSON with a worked sample drives malformation rates close to zero, but
-not to zero. When a member's response can't be parsed cleanly, the chair follows
-this bounded protocol so the council always terminates.
+Silent, malformed, blocked, and failed seats use the **same** state-helper path in
+`liveness.md`: probe silence at the initial deadline, grant one evidenced working
+extension, retry exactly once, then abstain. The helper validates sender and envelope
+identity before parsing phase payloads. A stale or duplicate delivery never counts.
 
-### 1. Parse leniently first
-
-- Strip leading/trailing whitespace.
-- If the response is wrapped in ```` ```json ```` or ```` ``` ```` fences, strip
-  them. Models sometimes add fences even when told not to.
-- Try `json.loads` (or the host language equivalent).
-- If it parses and all required fields for that phase are present and non-empty
-  (and any enum fields contain a valid value), accept it.
-
-### 2. Retry once on failure
-
-If parsing fails, required fields are missing/empty, enums are invalid, or the
-ranking response contains duplicates, re-dispatch that single seat with this
-preamble prepended to the original phase prompt:
-
-> Your previous response was malformed: <one sentence on the specific problem,
-> e.g., "missing 'rationale' field", "not valid JSON — extra prose after the
-> closing brace", or "'first', 'second', 'third' did not cover all of A/B/C">.
-> Please respond again, in the exact JSON format below, with all fields
-> populated. Do not include any prose outside the JSON object and do not wrap
-> in code fences.
-
-Then re-send the rest of the original phase prompt. Only that seat is
-re-dispatched, not the whole panel.
-
-### 3. Abstain on second failure
-
-If the retry also fails, mark the seat as **abstaining** for this phase. Append
-to `PANEL.md` under an "Abstentions" heading:
-
-```markdown
-## Abstentions
-
-- Seat <N> (<archetype>) abstained from <phase name>: <one sentence on why,
-  e.g., "two consecutive malformed responses; chair could not parse JSON".>
-```
-
-Then proceed with the remaining members.
+The chair must use helper outcomes instead of inventing extra retries. On retry,
+repeat the original phase task and evidence, the precise failure reason, and the new
+attempt identity. Stop the prior run before redispatch. Surface retries, extensions,
+and abstentions to the user as well as preserving `STATE.json`, `LIVENESS.md`, and the
+helper-managed Abstentions section in `PANEL.md`. Do not overwrite that section when
+rendering panel notes.
 
 ### How abstentions affect tallies
 
@@ -471,5 +447,5 @@ Then proceed with the remaining members.
   a meaningful decision. Write `.council/<slug>/ABORT.md` with the phase that
   collapsed, the seats that abstained, and the last salvageable artifacts.
   Return an error to the caller — do not invent a decision. The caller should
-  fall back to `AskUserQuestion` or whatever it would have done without a
-  council.
+  follow its existing authorized fallback. An unavailable user is not a reason to wait
+  indefinitely. Surface the error and audit path without inventing a council decision.

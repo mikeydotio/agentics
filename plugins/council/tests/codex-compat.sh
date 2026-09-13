@@ -18,20 +18,8 @@ make_agents_root() {
   printf '{"name":"agents"}\n' > "$root/.codex-plugin/plugin.json"
 }
 
-test_claude_skill_and_shared_protocol_are_unchanged() {
-  local skill_hash references_hash
-  skill_hash="$(shasum -a 256 "$PLUGIN_ROOT/claude/skills/council-vote/SKILL.md" | awk '{print $1}')"
-  references_hash="$({
-    find "$PLUGIN_ROOT/references" -maxdepth 1 -type f -name '*.md' -print \
-      | sort \
-      | xargs shasum -a 256 \
-      | awk '{print $1}'
-  } | shasum -a 256 | awk '{print $1}')"
-
-  [ "$skill_hash" = "34cfa1d9e032bdde54fa8e576b8a72c1e612485ba164f131c56eb58189d9b502" ] \
-    || fail "Claude Council skill changed while adding Codex support"
-  [ "$references_hash" = "0bb812289eafdc3456f2b071aeb12f65218d931e526db6aa0839f50b59384425" ] \
-    || fail "shared Claude Council protocol changed while adding Codex support"
+test_shared_liveness_contract_preserves_both_hosts() {
+  PYTHONDONTWRITEBYTECODE=1 python3 -W error "$PLUGIN_ROOT/tests/test_contract.py"
 }
 
 test_codex_manifest_is_valid_and_versioned() {

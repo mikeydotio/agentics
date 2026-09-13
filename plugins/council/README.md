@@ -59,6 +59,23 @@ paragraph rationale, any dissent, and the path to `DECISION.md`.
 See `skills/council-vote/SKILL.md` and the `references/` directory for the full
 protocol and voting mechanics.
 
+## Bounded delivery and recovery
+
+Both hosts require Python 3 and use the packaged state helper. Research has a 25-minute
+hard response ceiling; vote, deliberation, and runoff have five minutes each. A silent
+seat gets a liveness probe, one evidenced extension, and one retry before abstaining.
+Two abstentions in a phase abort visibly instead of inventing a decision.
+
+`STATE.json` records dispatch intent and actual agent identities before waiting.
+`LIVENESS.md` records retries, extensions, failures, and recovery. On resumption the chair
+inspects unfinished sittings and preserves their original deadlines. A lost chair or
+uncertain dispatch leaves an interrupted `ABORT.md`; a new sitting never overwrites it.
+
+See [the command and delivery contract](references/liveness.md). Native transport still
+belongs to the chair: the helper proves policy and persistence, not model compliance or
+progress while the host is dead. Members may create measurement artifacts only in their
+assigned private scratch directories; AGE-77's broader enforcement work remains separate.
+
 ## Suggested gitignore
 
 Add to your project's `.gitignore` if you don't want council transcripts checked in:

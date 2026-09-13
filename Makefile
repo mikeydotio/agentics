@@ -142,9 +142,9 @@ test-agents:
 	bash tests/with-isolated-store.sh bash plugins/agents/tests/codex-compat.sh
 	bash tests/with-isolated-store.sh bash plugins/agents/tests/smoke-codex-install.sh
 
-# Dual-host Council contract: Claude bytes stay pinned while Codex gets native
-# parallel orchestration, portable Agents discovery, and an isolated install.
+# Both hosts use the same executable liveness policy and retain native dispatch.
 test-council:
+	bash tests/with-isolated-store.sh bash plugins/council/tests/run-tests.sh
 	bash tests/with-isolated-store.sh bash plugins/council/tests/codex-compat.sh
 	bash tests/with-isolated-store.sh bash plugins/council/tests/smoke-codex-install.sh
 

@@ -171,7 +171,12 @@ Dry-run the hook against a command to see what decision it would make:
 ```bash
 echo '{"tool_name":"Bash","tool_input":{"command":"<the command>"},"permission_mode":"default"}' | bash ${CLAUDE_PLUGIN_ROOT}/hooks/greenlight.sh
 ```
-Display the JSON output and interpret: ALLOW (permissionDecision=allow), PASS with warning (additionalContext present), or silent PASS (no output).
+This sample uses Claude payload semantics: ALLOW (`permissionDecision=allow`),
+context (`additionalContext`), or silent PASS (no output). To replay Codex, add a
+`turn_id` key and invoke `bash "${PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/hooks/greenlight.sh"`.
+Codex safe calls emit no output, or context only when AI rationale is enabled;
+they retain normal host permission checks. Denials retain `deny` and a reason.
+The decision log distinguishes a safe classification from silent deferral.
 
 ### /greenlight log
 Show the last 20 lines of the log file (if enabled):

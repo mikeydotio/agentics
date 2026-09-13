@@ -6,10 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COUNCIL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENTS_ROOT="$(cd "$COUNCIL_ROOT/../agents" && pwd)"
 
-for command_name in codex jq; do
+for command_name in codex jq python3; do
   command -v "$command_name" >/dev/null 2>&1 || {
-    printf 'SKIP: %s is not installed; Codex Council packaging smoke not run\n' "$command_name"
-    exit 0
+    printf 'ERROR: %s is required; Council packaging was not verified\n' "$command_name" >&2
+    exit 1
   }
 done
 
@@ -63,4 +63,31 @@ RESOLVED_AGENTS="$(CODEX_HOME="$SMOKE_CODEX_HOME" bash "$INSTALLED_ROOT/bin/reso
 [ -f "$RESOLVED_AGENTS/bin/resolve-agent.sh" ]
 [ "$(bash "$RESOLVED_AGENTS/bin/resolve-agent.sh" --list | wc -l | tr -d ' ')" = "28" ]
 
-printf 'PASS: Codex installed Council with native orchestration and its 28-role Agents dependency\n'
+# Execute the installed payload, not the source helper or a fake implementation.
+export PYTHONDONTWRITEBYTECODE=1
+for host_name in claude codex; do
+  council_dir="$SMOKE_ROOT/state smoke $host_name"
+  jq -n --arg host "$host_name" '{question:"Which migration?",chair:"packaging-smoke",
+    host:$host,archetypes:["architect","database","challenger"]}' \
+    | python3 -W error "$INSTALLED_ROOT/bin/council-state.py" init "$council_dir" \
+    > "$SMOKE_ROOT/state-init.json"
+  jq -e '.ok and .state.status == "ready" and (.state.seats | length == 3)' \
+    "$SMOKE_ROOT/state-init.json" >/dev/null
+  jq '{revision:.state.revision,phase:"research"}' "$SMOKE_ROOT/state-init.json" \
+    | python3 -W error "$INSTALLED_ROOT/bin/council-state.py" begin-phase "$council_dir" \
+    > "$SMOKE_ROOT/state-phase.json"
+  jq -e '.ok and .state.status == "running" and
+    (.state.hard_deadline - .state.phase_started == 1500) and
+    ([.actions[] | select(.kind == "dispatch")] | length == 3)' \
+    "$SMOKE_ROOT/state-phase.json" >/dev/null
+  jq '{revision:.state.revision,outcome:"abort",reason:"packaging smoke complete"}' \
+    "$SMOKE_ROOT/state-phase.json" \
+    | python3 -W error "$INSTALLED_ROOT/bin/council-state.py" finish "$council_dir" \
+    > "$SMOKE_ROOT/state-final.json"
+  jq -e '.ok and .state.status == "aborted"' "$SMOKE_ROOT/state-final.json" >/dev/null
+  [ -s "$council_dir/ABORT.md" ]
+  [ -s "$council_dir/STATE.json" ]
+  [ ! -e "$council_dir/DECISION.md" ]
+done
+
+printf 'PASS: installed Council helper executes for both hosts with its 28-role Agents dependency\n'

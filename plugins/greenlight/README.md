@@ -21,7 +21,7 @@ Greenlight auto-disables in **Bypass Permissions** mode and stays active in all 
 
 Optional overrides live at `~/.config/greenlight/config.yaml`. Missing keys inherit
 `references/default-config.yaml` on every invocation. No file is created on first use.
-The hook and management commands share the same reader.
+The hook, explorer, and management commands share the same reader.
 
 Existing entries remain explicit pins, even if they match an old or current default.
 `/greenlight status` shows effective values, bundled values, sources, and pins.

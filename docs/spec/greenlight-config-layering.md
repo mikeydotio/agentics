@@ -102,7 +102,11 @@ effective decision-log path, rather than requiring a copied file.
 Run new tests red→green and the directly impacted Greenlight suite via
 `TMPDIR=/tmp bash tests/with-isolated-store.sh bash plugins/greenlight/tests/run-tests.sh`.
 Run shell syntax, entrypoint ShellCheck with sourced libraries, and whitespace
-checks. Explorer integration is a separate fix commit with its own regression.
+checks. Explorer integration is a separate fix commit with four new regressions:
+three failed before the change (bundled scratch identity/model, root precedence,
+and invalid-configuration refusal), while the user/CLI precedence control passed.
+All 15 explorer tests pass afterward, including a real hook evaluation inside the
+worktree created using the fixture bundle's changed scratch settings.
 Final results are recorded on AGE-52. The centralized verifier owns the full
 repository suite, publication, merge, completion, and cleanup. No version,
 release, or installed user configuration changes occur in this worktree.

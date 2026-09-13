@@ -7,7 +7,20 @@ import tempfile
 import time
 
 import council_model as model
-from council_validation import integer, loads, validate_state
+from council_validation import integer, loads, number, validate_state
+
+
+def _system_clock():
+    """Read clocks whose epochs remain stable across supported helper processes."""
+    try:
+        wall = time.time()
+    except OSError as exc:
+        raise ValueError(f"system wall clock unavailable: {exc}") from exc
+    try:
+        mono = time.clock_gettime(time.CLOCK_MONOTONIC)
+    except (AttributeError, OSError, ValueError) as exc:
+        raise ValueError(f"system monotonic clock unavailable: {exc}") from exc
+    return wall, mono
 
 
 def atomic_write(path, content):
@@ -112,12 +125,14 @@ def execute(root, command, data, clock=None):
     root = Path(root).absolute()
     if root.is_symlink():
         raise ValueError("refusing symlink council directory")
+    now, mono = (clock or _system_clock)()
+    number(now, "wall clock")
+    number(mono, "monotonic clock")
     if command == "init":
         root.mkdir(parents=True, exist_ok=True)
-    now, mono = (clock or (lambda: (time.time(), time.monotonic())))()
     if command == "status":
         state = _load(root)
-        return _response(root, state, max(now, state["created_at"] + mono - state["created_mono"]), 0)
+        return _response(root, state, model.observed_time(state, now, mono), 0)
     lock = root / ".state.lock"
     fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
@@ -136,10 +151,8 @@ def execute(root, command, data, clock=None):
                 raise ValueError(f"revision conflict: current revision is {state['revision']}")
             since = len(state["history"])
             was_terminal = state["status"] in model.TERMINAL
-            model.advance(state, now, mono, root)
+            now = model.advance(state, now, mono, root)
             newly_terminal = not was_terminal and state["status"] in model.TERMINAL
-            if state["status"] not in model.TERMINAL:
-                now = state["created_at"] + mono - state["created_mono"]
             if not newly_terminal:
                 if command == "begin-phase":
                     model.begin_phase(state, data, now, root)

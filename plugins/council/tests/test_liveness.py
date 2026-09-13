@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -251,6 +252,134 @@ class CouncilTests(unittest.TestCase):
         self.call("advance")
         self.assertEqual(self.result["state"]["status"], "aborted")
         self.assertIn("clock", self.result["state"]["reason"])
+
+    def test_real_cli_clock_survives_separate_processes(self):
+        """The production clock epoch must survive separate macOS Python processes."""
+        root = self.root / "real-cli"
+
+        def run(command, data):
+            result = subprocess.run(
+                [sys.executable, "-B", "-W", "error", str(BIN / "council-state.py"),
+                 command, str(root)], input=json.dumps(data), capture_output=True,
+                text=True, timeout=10, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return json.loads(result.stdout)["state"]
+
+        first = run("init", {
+            "question": "Clock compatibility probe", "chair": "fixture", "host": "codex",
+            "archetypes": ["architect", "skeptic", "qa"],
+        })
+        time.sleep(6)
+        after = run("advance", {"revision": first["revision"]})
+
+        self.assertEqual(after["status"], "ready")
+        self.assertGreaterEqual(after["clock_mono"] - first["created_mono"], 5)
+        self.assertFalse((root / "ABORT.md").exists())
+
+    def test_production_clock_ignores_process_relative_monotonic(self):
+        """The durable boundary must use the explicit system clock API."""
+        root = self.root / "system-clock"
+        with patch("council_store.time.monotonic",
+                   side_effect=AssertionError("process-relative clock used")):
+            result = execute(root, "init", {
+                "question": "Clock API", "chair": "fixture", "host": "codex",
+                "archetypes": ["architect", "skeptic", "qa"],
+            })
+        self.assertEqual(result["state"]["status"], "ready")
+
+    def test_unavailable_or_nonfinite_clock_fails_before_artifacts(self):
+        """Clock failures must be contextual and leave no partial sitting."""
+        data = {"question": "Clock API", "chair": "fixture", "host": "codex",
+                "archetypes": ["architect", "skeptic", "qa"]}
+        unavailable_cases = (
+            ("wall", "council_store.time.time", "system wall clock unavailable"),
+            ("monotonic", "council_store.time.clock_gettime",
+             "system monotonic clock unavailable"),
+        )
+        for name, target, message in unavailable_cases:
+            with self.subTest(unavailable=name):
+                root = self.root / f"clock-unavailable-{name}"
+                with patch(target, side_effect=OSError("unavailable")):
+                    with self.assertRaisesRegex(ValueError, message):
+                        execute(root, "init", data)
+                self.assertFalse(root.exists())
+
+        invalid_cases = (
+            ("wall-infinite", (float("inf"), 1000.0), "wall clock"),
+            ("monotonic-infinite", (1000000.0, float("inf")), "monotonic clock"),
+            ("wall-boolean", (True, 1000.0), "wall clock"),
+            ("monotonic-boolean", (1000000.0, False), "monotonic clock"),
+        )
+        for name, sample, message in invalid_cases:
+            with self.subTest(invalid=name):
+                root = self.root / f"clock-invalid-{name}"
+                with self.assertRaisesRegex(ValueError, f"{message}.*finite"):
+                    execute(root, "init", data, lambda: sample)
+                self.assertFalse(root.exists())
+
+    def test_clock_discontinuity_tolerance_is_exactly_five_seconds(self):
+        """The compatibility repair must not widen the existing drift tolerance."""
+        self.begin()
+        deadlines = (self.result["state"]["initial_deadline"],
+                     self.result["state"]["hard_deadline"],
+                     [self.seat(n)["deadline"] for n in (1, 2, 3)])
+        self.now[0] += 10
+        self.now[1] += 5
+        self.call("advance")
+        self.assertEqual(self.result["state"]["status"], "running")
+
+        self.now[0] += 0.001
+        self.call("advance")
+        self.assertEqual(self.result["state"]["status"], "aborted")
+        self.assertEqual((self.result["state"]["initial_deadline"],
+                          self.result["state"]["hard_deadline"],
+                          [self.seat(n)["deadline"] for n in (1, 2, 3)]), deadlines)
+
+    def test_terminal_cleanup_uses_monotonic_time_when_wall_moves_backward(self):
+        """Backward wall time cannot renew or prematurely expire terminal cleanup."""
+        self.begin()
+        self.call("finish", outcome="abort", reason="capability unavailable")
+        deadline = self.result["state"]["cleanup_deadline"]
+
+        self.now[0] -= 10000
+        self.now[1] += 29
+        self.call("status")
+        self.assertTrue(self.result["actions"])
+        self.assertEqual(self.result["state"]["cleanup_deadline"], deadline)
+        self.now[1] += 1
+        self.call("status")
+        self.assertEqual(self.result["actions"], [])
+
+    def test_terminal_cleanup_expires_when_monotonic_clock_resets(self):
+        """Reboot cannot grant a terminal Council a fresh cleanup window."""
+        self.begin()
+        self.call("finish", outcome="abort", reason="capability unavailable")
+        deadline = self.result["state"]["cleanup_deadline"]
+        self.assertTrue(self.result["actions"])
+        before = (self.root / "STATE.json").read_bytes()
+
+        self.now = [self.now[0] - 10000, 1.0]
+        self.call("status")
+        self.assertEqual((self.root / "STATE.json").read_bytes(), before)
+        self.assertEqual(self.result["actions"], [])
+        self.call("advance")
+        self.assertEqual(self.result["actions"], [])
+        self.assertEqual(self.result["state"]["cleanup_deadline"], deadline)
+
+    def test_nonfinite_terminal_cleanup_deadline_is_rejected(self):
+        """Stored numeric overflow cannot create an unbounded cleanup obligation."""
+        self.begin()
+        self.call("finish", outcome="abort", reason="capability unavailable")
+        path = self.root / "STATE.json"
+        original = path.read_text()
+        finite = f'"cleanup_deadline": {self.result["state"]["cleanup_deadline"]}'
+        self.assertEqual(original.count(finite), 1)
+        corrupted = original.replace(finite, '"cleanup_deadline": 1e309')
+        path.write_text(corrupted)
+
+        with self.assertRaisesRegex(ValueError, "cleanup_deadline.*finite"):
+            self.call("status")
+        self.assertEqual(path.read_text(), corrupted)
 
     def test_terminal_artifact_recovery_is_idempotent(self):
         """A crash after state persistence can regenerate a missing abort."""

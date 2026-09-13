@@ -160,10 +160,17 @@ uncertain send, a lost pending agent, or a clock discontinuity aborts the old si
 interrupted. Preserve the record; a separately authorized fresh council uses a new slug
 and ID. Do not automatically loop through fresh sittings after abort.
 
-Monotonic elapsed time governs active waits. UTC deadlines remain in state for inspection;
-backward time or more than five seconds of wall/monotonic disagreement aborts rather
-than granting time after suspend/reboot/clock adjustment. `recover` regenerates terminal
-artifacts after a crash between state persistence and Markdown rendering.
+Monotonic elapsed time governs active waits. The helper uses the system-wide
+`clock_gettime(CLOCK_MONOTONIC)` epoch so persisted samples remain comparable across
+separate processes, including macOS Python 3.9. UTC deadlines remain in state for
+inspection; backward time or more than five seconds of wall/monotonic disagreement aborts
+rather than granting time after suspend/reboot/clock adjustment. Clock access or nonfinite
+samples fail before state mutation.
+
+After a terminal transition, the last persisted monotonic sample anchors the independent
+30-second cleanup window. Terminal status ignores wall-clock changes; a monotonic reset
+expires cleanup instead of granting new time. `recover` regenerates terminal artifacts
+after a crash between state persistence and Markdown rendering.
 
 For pre-helper directories without STATE.json, report legacy interrupted/unknown state;
 preserve them and never claim they were not dispatched. No process emits notices while

@@ -12,6 +12,12 @@ not present in this worktree; historical observations are attributed, not re-mea
 AGE-89 introduced Codex native IDs but retained the unbounded wait. Reviewed obviation
 candidates: AGE-45/50/62/83/85/87/88/89/90/91/92/93/95/96/101/102/103; none replaces this work.
 
+AGE-105 measured a separate compatibility defect in this state machine. On macOS,
+`/usr/bin/python3` 3.9.6 gave `time.monotonic()` a process-relative origin: an `init`
+followed six seconds later by `advance` in a new interpreter falsely aborted an otherwise
+idle sitting. Python 3.14 preserved it. AGE-52/54 affect Greenlight, and AGE-104 explicitly
+excluded Council; none of AGE-105's obviation candidates repaired this boundary.
+
 | Mode | Evidence class | Mechanism | Resolution |
 |---|---|---|---|
 | Plain final text invisible | Observed, AGE-81 | Notification without usable delivery | Explicit host delivery + deadline |
@@ -71,11 +77,20 @@ unbounded measurement; these are defensible operating defaults, not latency perc
 Each wait is at most 30 seconds and never exceeds the current deadline. Cleanup has a
 separate 30 seconds and cannot delay durable completion.
 
-Active time uses monotonic elapsed time translated to the original UTC clock pair.
-Backward clocks or cumulative disagreement above five seconds abort. Recovery never
-grants fresh time. Changed chair identity, missing pending native IDs, and uncertain
-dispatch abort the interrupted sitting. Old artifacts remain; legacy directories without
-STATE.json are explicitly unknown, not proof of no dispatch.
+Active time uses `clock_gettime(CLOCK_MONOTONIC)`, whose system-wide epoch survives
+separate helper processes on the supported macOS Python 3.9 runtime, translated to the
+original UTC clock pair. Both samples must be finite and available before artifacts are
+created. Backward clocks or cumulative disagreement above five seconds abort; the
+tolerance is unchanged. Recovery never grants fresh time.
+
+The persisted `clock_mono` sample becomes the anchor after a terminal transition, when
+active deadline arithmetic is finished. Terminal status and commands advance the cleanup
+window from that sample, independent of wall-clock changes. A negative monotonic delta
+expires cleanup immediately, so reboot or an incompatible old process epoch cannot renew
+the 30-second obligation. This retains schema version 1 and its existing state fields.
+Changed chair identity, missing pending native IDs, and uncertain dispatch abort the
+interrupted sitting. Old artifacts remain; legacy directories without STATE.json are
+explicitly unknown, not proof of no dispatch.
 
 The helper preserves the existing full-panel seat-order labels and two-proposal
 arrival-order labels. Research abstainers can vote later but cannot revise a nonexistent
@@ -93,9 +108,12 @@ Instruction contracts require every dispatch phase and both host skills to use t
 
 The mutation battery first runs a successful production baseline. Each mutation must
 apply exactly once and trigger its named assertion, not a missing-file/import/setup error.
-It removes timeout, retry limit, identity checks, two-abstention abort, and terminal-state
-persistence in disposable copies. A historical-protocol baseline confirms the original
-voting artifacts exist while the new integration assertions reject its missing bounds.
+It removes timeout, retry limit, identity checks, two-abstention abort, terminal-state
+persistence, finite terminal deadline validation, the cross-process clock, the exact drift
+threshold, and negative-delta cleanup handling in disposable copies. A historical-protocol
+baseline confirms the original voting artifacts exist while the new integration assertions
+reject its missing bounds. A real six-second, separate-interpreter CLI regression runs on
+Python 3.9 and the current default interpreter; it spawns no Council worker.
 
 Only Council and directly impacted guards run locally. Central verification owns the
 full suite and publication. No live-model end-to-end guarantee is claimed: policy and

@@ -18,6 +18,13 @@ def integer(value, name):
     return value
 
 
+def number(value, name):
+    """Require a finite number rather than JSON's distinct boolean type."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f"{name}: expected finite number")
+    return value
+
+
 def loads(raw):
     """Parse JSON without duplicate keys or nonfinite numeric constants."""
     def pairs(items):
@@ -107,8 +114,7 @@ def validate_state(s):
         if s["question_digest"] != hashlib.sha256(s["question"].encode()).hexdigest():
             raise ValueError("question digest mismatch")
         for key in ("clock_wall", "clock_mono", "created_at", "created_mono"):
-            if type(s[key]) not in (int, float) or not math.isfinite(s[key]):
-                raise ValueError(f"invalid {key}")
+            number(s[key], key)
         if not isinstance(s["seats"], dict) or set(s["seats"]) != {"1", "2", "3"}:
             raise ValueError("expected three seats")
         for key in ("history", "participants"):
@@ -174,7 +180,6 @@ def validate_state(s):
             text(s["decision"], "decision")
         if s["status"] in ("aborted", "decided"):
             text(s["reason"], "terminal reason")
-            if type(s["cleanup_deadline"]) not in (int, float):
-                raise ValueError("invalid cleanup deadline")
+            number(s["cleanup_deadline"], "cleanup_deadline")
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"invalid council state: {exc}") from exc

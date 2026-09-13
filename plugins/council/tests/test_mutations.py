@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class MutationTests(unittest.TestCase):
     """Change only disposable copies; missing programs are never caught mutants."""
 
-    def test_baseline_then_five_removed_safeguards(self):
+    def test_baseline_then_nine_removed_safeguards(self):
         """Each mutant must apply and fail its specific behavior assertion."""
         cases = [
             ("council_model.py", 'or now < seat["deadline"]:', 'or True:',
@@ -28,6 +28,14 @@ class MutationTests(unittest.TestCase):
             ("council_store.py", 'atomic_write(root / "STATE.json", json.dumps(state, indent=2, allow_nan=False) + "\\n")',
              'if state["status"] != "aborted":\n            atomic_write(root / "STATE.json", json.dumps(state, indent=2, allow_nan=False) + "\\n")',
              "test_persistence_crash_after_terminal_state_is_recoverable"),
+            ("council_store.py", "time.clock_gettime(time.CLOCK_MONOTONIC)", "time.monotonic()",
+             "test_production_clock_ignores_process_relative_monotonic"),
+            ("council_model.py", "abs(now - logical_now) > 5", "abs(now - logical_now) > 50",
+             "test_clock_discontinuity_tolerance_is_exactly_five_seconds"),
+            ("council_model.py", "if elapsed < 0", "if False",
+             "test_terminal_cleanup_expires_when_monotonic_clock_resets"),
+            ("council_validation.py", 'number(s["cleanup_deadline"], "cleanup_deadline")',
+             's["cleanup_deadline"]', "test_nonfinite_terminal_cleanup_deadline_is_rejected"),
         ]
         with tempfile.TemporaryDirectory(prefix="council-mutants-", dir="/tmp") as temp:
             copied = Path(temp) / "council"

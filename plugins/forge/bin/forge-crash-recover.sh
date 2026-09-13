@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # forge-crash-recover.sh — reset any storyhook story stuck in `in-progress`
-# or `verifying` back to `todo` and clean the working tree, in one call
+# back to `todo` and clean the working tree, in one call
 # (WS4/F038). Replaces references/recovery-protocol.md Step 4's manual
 # query-and-loop prose.
 #
@@ -13,7 +13,7 @@
 #   {ok, reset_stories, tree_clean, display}
 #     ok             - true if the recovery ran to completion (or found
 #                       nothing to do). false means it was skipped entirely
-#                       (story CLI missing, `story list` failed) — check
+#                       (CLI/query failure or verifier ownership) — check
 #                       `error`; the working tree is NOT touched in that case.
 #     reset_stories  - array of story IDs actually moved back to `todo`.
 #     tree_clean     - true once `git checkout .` has run (always attempted
@@ -36,8 +36,14 @@ command -v story >/dev/null 2>&1 || emit_skip "story_cli_missing"
 
 story_json="$(story list --json 2>/dev/null)" || emit_skip "story_list_failed"
 
+# The central verifier owns submitted work, including parked queue items.
+# Refuse before any state mutation or checkout could disturb its candidate.
+if echo "$story_json" | jq -e 'any(.stories[]?; .story.state == "verifying")' >/dev/null; then
+  emit_skip "verification_in_progress"
+fi
+
 stuck_ids_json="$(echo "$story_json" | jq \
-  '[.stories[]? | select(.story.state == "in-progress" or .story.state == "verifying") | .story.id]')"
+  '[.stories[]? | select(.story.state == "in-progress") | .story.id]')"
 stuck_count="$(echo "$stuck_ids_json" | jq 'length')"
 
 reset_ids=()

@@ -1,5 +1,6 @@
 """Exercise release identity through the production CLI and real Git fixtures."""
 
+import json
 import os
 from pathlib import Path
 import shutil
@@ -288,6 +289,48 @@ class ContentIdentityTests(unittest.TestCase):
                                 capture_output=True, text=True)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("release-matched", result.stdout)
+
+    def test_private_alternate_objects_preserve_source_identity(self):
+        """Verifier-only objects remain readable without redirecting the checkout."""
+        source_objects = self.repo / ".git/objects"
+        lease = self.home / 'lease objects:private'
+        lease.mkdir()
+        unused = self.home / "unused objects"
+        unused.mkdir()
+        linked = self.home / "candidate checkout"
+        self.git("worktree", "add", "--detach", str(linked), "HEAD")
+        self.repo = linked
+        ordinary_env = self.env
+        alternates = str(unused) + ":" + json.dumps(str(lease))
+        for changed in (False, True):
+            # Only the immutable candidate objects go into the private store.
+            # The linked checkout still owns its refs, HEAD and index.
+            self.env = dict(ordinary_env, GIT_OBJECT_DIRECTORY=str(lease),
+                            GIT_ALTERNATE_OBJECT_DIRECTORIES=str(source_objects))
+            if changed:
+                self.write(TOOL, "candidate change")
+                self.git("add", TOOL)
+            self.git("commit", "--allow-empty", "-qm", "private candidate")
+            head = self.git("rev-parse", "HEAD")
+            self.env = ordinary_env
+            missing = subprocess.run([GIT, "-C", str(linked), "cat-file", "-e", head],
+                                     env=ordinary_env, capture_output=True)
+            self.assertNotEqual(0, missing.returncode, "HEAD leaked into shared objects")
+            env = dict(ordinary_env, GIT_ALTERNATE_OBJECT_DIRECTORIES=alternates,
+                       GIT_DIR=str(self.home / "wrong-git-dir"),
+                       GIT_COMMON_DIR=str(self.home / "wrong-common-dir"),
+                       GIT_WORK_TREE=str(self.home),
+                       GIT_INDEX_FILE=str(self.home / "wrong-index"),
+                       GIT_OBJECT_DIRECTORY=str(self.home / "wrong-write-store"))
+            for mode in ("candidate", "release"):
+                with self.subTest(changed=changed, mode=mode):
+                    self.verdict(mode, 1, "cannot resolve HEAD")
+                    code = 1 if changed and mode == "release" else 0
+                    state = "unreleased-changes" if changed else "release-matched"
+                    output = self.verdict(mode, code, state, env=env)
+                    self.assertIn(head, output)
+                    if changed:
+                        self.assertIn(TOOL, output)
 
     def test_hidden_worktree_changes_fail_with_context(self):
         """Index shortcuts cannot certify content Git was told not to inspect."""

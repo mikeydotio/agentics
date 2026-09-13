@@ -1,5 +1,6 @@
 # greenlight configuration
-# Location: ~/.config/greenlight/config.yaml
+# Live bundled defaults; do not copy this file into user configuration.
+# Optional explicit overrides: ~/.config/greenlight/config.yaml
 # Changes take effect immediately (hook re-reads on every invocation)
 # Manage with /greenlight command
 

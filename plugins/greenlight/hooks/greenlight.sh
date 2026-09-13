@@ -29,75 +29,17 @@ IS_CODEX="$(printf '%s' "$INPUT" | jq -r 'has("turn_id")' 2>/dev/null)" || exit 
 #  CONFIGURATION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-CONFIG_DIR="${HOME}/.config/greenlight"
-CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 PLUGIN_ROOT="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}}"
-DEFAULT_CONFIG="${PLUGIN_ROOT}/references/default-config.yaml"
-
-# Auto-initialize config from bundled default on first run
-if [[ ! -f "$CONFIG_FILE" && -f "$DEFAULT_CONFIG" ]]; then
-  mkdir -p "$CONFIG_DIR"
-  cp "$DEFAULT_CONFIG" "$CONFIG_FILE" 2>/dev/null
-fi
-
-# Defaults (used when config is missing or a key is absent)
-#
-# F077/F078/F082: the AI fallback used to fire automatically (ai_enabled:
-# true) on every "uncertain" command — and with the F076 fast-allowlist
-# additions above still leaving plenty of real-world commands uncertain,
-# that put a Claude API round-trip (latency + token cost) on the critical
-# path of any autonomous loop, unconditionally. It also defaulted to a
-# model (claude-sonnet-4-6) not on the structured-outputs support list this
-# feature depends on (Fable 5 / Opus 4.8 / Sonnet 5 / Haiku 4.5 + legacy
-# Opus 4.5/4.1 — see the claude-api skill's model reference), so every call
-# likely 400'd and fell through to defer anyway: pure overhead, zero
-# benefit. Fixed: default the AI tier OFF (opt-in — a user who wants the
-# extra judgment call turns it on deliberately), and when it IS enabled,
-# default to claude-haiku-4-5 (cheapest/fastest structured-outputs-capable
-# model, and the deterministic answer this feature actually needs is a
-# single boolean). ai_show_rationale now also defaults off (F082) — the
-# rationale line was injected into context on every AI-approved command
-# regardless of whether the AI tier is even in use, adding transcript noise
-# that works against the harness's own signal-to-noise goals.
-CFG_MODE="standard"
-CFG_AI_ENABLED="false"
-CFG_AI_MODEL="claude-haiku-4-5"
-CFG_AI_TIMEOUT="10"
-CFG_AI_SHOW_RATIONALE="false"
-CFG_CUSTOM_ALLOW=""
-CFG_CUSTOM_PASS=""
-CFG_LOG_FILE=""
-CFG_VERBOSE="false"
-CFG_DISABLED_MODES="bypassPermissions"
-# Plan-explorer policy (only consulted when GREENLIGHT_PLAN_EXPLORER=1)
-CFG_PLAN_EXPLORER_ENABLED="true"
-CFG_PLAN_EXPLORER_SCRATCH_PREFIX="greenlight/scratch-"
-CFG_PLAN_EXPLORER_WORKTREE_SEGMENT=".claude/worktrees"
-CFG_PLAN_EXPLORER_UNCERTAIN="deny"
-CFG_PLAN_EXPLORER_MODEL="claude-sonnet-5"
-
-read_config() {
-  local val
-  val="$(grep "^${1}:" "$CONFIG_FILE" 2>/dev/null | sed "s/^${1}:[[:space:]]*//" | tr -d "'\"")"
-  printf '%s' "${val:-$2}"
-}
-
-if [[ -f "$CONFIG_FILE" ]]; then
-  CFG_MODE="$(read_config mode "$CFG_MODE")"
-  CFG_AI_ENABLED="$(read_config ai_enabled "$CFG_AI_ENABLED")"
-  CFG_AI_MODEL="$(read_config ai_model "$CFG_AI_MODEL")"
-  CFG_AI_TIMEOUT="$(read_config ai_timeout "$CFG_AI_TIMEOUT")"
-  CFG_AI_SHOW_RATIONALE="$(read_config ai_show_rationale "$CFG_AI_SHOW_RATIONALE")"
-  CFG_CUSTOM_ALLOW="$(read_config custom_allow "$CFG_CUSTOM_ALLOW")"
-  CFG_CUSTOM_PASS="$(read_config custom_pass "$CFG_CUSTOM_PASS")"
-  CFG_LOG_FILE="$(read_config log_file "$CFG_LOG_FILE")"
-  CFG_VERBOSE="$(read_config verbose "$CFG_VERBOSE")"
-  CFG_DISABLED_MODES="$(read_config disabled_modes "$CFG_DISABLED_MODES")"
-  CFG_PLAN_EXPLORER_ENABLED="$(read_config plan_explorer_enabled "$CFG_PLAN_EXPLORER_ENABLED")"
-  CFG_PLAN_EXPLORER_SCRATCH_PREFIX="$(read_config plan_explorer_scratch_prefix "$CFG_PLAN_EXPLORER_SCRATCH_PREFIX")"
-  CFG_PLAN_EXPLORER_WORKTREE_SEGMENT="$(read_config plan_explorer_worktree_segment "$CFG_PLAN_EXPLORER_WORKTREE_SEGMENT")"
-  CFG_PLAN_EXPLORER_UNCERTAIN="$(read_config plan_explorer_uncertain "$CFG_PLAN_EXPLORER_UNCERTAIN")"
-  CFG_PLAN_EXPLORER_MODEL="$(read_config plan_explorer_model "$CFG_PLAN_EXPLORER_MODEL")"
+# The bundle remains live; the optional user file contains only explicit pins.
+# A partial configuration must never grant an approval or enable an API call.
+# shellcheck source=../lib/config.sh
+if ! source "$PLUGIN_ROOT/lib/config.sh" || ! gl_config_load "$PLUGIN_ROOT"; then
+  printf 'greenlight config: configuration unavailable; deferring tool call\n' >&2
+  if [[ "${GREENLIGHT_PLAN_EXPLORER:-}" == 1 ]]; then
+    jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",
+      permissionDecisionReason:"Greenlight configuration is invalid; repair it before exploration."}}'
+  fi
+  exit 0
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

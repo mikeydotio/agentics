@@ -42,5 +42,8 @@ Thumbs.db
 # permanently dirty and refuses to reclaim it -- AGE-61/AGE-67)
 .claude/scheduled_tasks.lock
 
+# StoryHook's generated session witness must survive without dirtying submission.
+/.claude/dispatch-sentinel.json
+
 # Session handoff notes (working state, not repo history)
 HANDOFF.md

@@ -507,6 +507,31 @@ class CouncilTests(unittest.TestCase):
         self.assertEqual(failed["agent_id"], "agent-1")
         self.assertEqual(failed["scratch"], old["scratch"])
 
+    def test_stop_obligation_survives_excluded_deliberation(self):
+        """A proposal-less vote abstainer still needs stopping before runoff."""
+        self.begin()
+        self.deliver(1)
+        self.deliver(2)
+        self.event(3, "failure", reason="no proposal")
+        self.retry(3)
+        self.event(3, "failure", reason="still no proposal")
+        self.begin("vote")
+        for n in (1, 2):
+            self.deliver(n, self.envelope(n, payload={"choice": "AB"[n - 1], "reason": "x"}))
+        self.event(3, "failure", reason="no vote")
+        self.retry(3)
+        self.event(3, "failure", reason="still no vote")
+        self.call("begin-phase", phase="deliberation")
+        self.assertEqual(self.seat(3)["status"], "excluded")
+        for n in (1, 2):
+            self.dispatch(n)
+            self.deliver(n)
+        self.call("begin-phase", phase="runoff")
+        self.assertEqual(self.seat(3)["status"], "stopping")
+        self.event(3, "stopped", agent_id="agent-3", stopped=True)
+        self.assertIsNone(self.seat(3)["old_agent_id"])
+        self.assertEqual(self.seat(3)["status"], "prepared")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -75,7 +75,8 @@ def begin_phase(s, data, now, root):
     s["participants"] = []
     for seat in s["seats"].values():
         excluded = phase == "deliberation" and seat["proposal_label"] is None
-        needs_stop = seat.get("status") == "abstained" and seat.get("agent_id") is not None
+        needs_stop = (seat.get("status") == "abstained" or seat.get("old_agent_id") is not None) \
+            and seat.get("agent_id") is not None
         seat.update(status="excluded" if excluded else "stopping" if needs_stop else "prepared", retry_count=0,
                     deadline=now + initial, extended=False, response=None, reason="",
                     old_agent_id=seat["agent_id"] if needs_stop else None)
@@ -218,7 +219,7 @@ def record(s, data, now, root):
         if data.get("agent_id") != seat["old_agent_id"] or data.get("stopped") is not True:
             fail(s, seat, now, "could not confirm old attempt stopped", root)
         else:
-            seat["status"] = "prepared"
+            seat.update(status="prepared", old_agent_id=None)
     elif kind == "failure":
         fail(s, seat, now, text(data.get("reason"), "reason"), root)
     elif kind == "delivery" and status in ("pending", "probing"):

@@ -40,15 +40,18 @@ bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-lock.sh acquire --session-id "$SESSION_ID" 
 
 ### 4. Crash Recovery
 
-Reset any story stuck in `in-progress`/`verifying` back to `todo` and clean the working tree, in
-one call:
+Reset stories stuck in `in-progress` back to `todo` and clean the working tree.
+If any story is `verifying`, recovery refuses before changing stories or files:
+the central verifier owns those submissions, including parked queue items.
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/bin/forge-crash-recover.sh .
 ```
 
 Parse the JSON result:
-- `ok: false` → the `story` CLI is unavailable or `story list --json` failed (see `error`) — this
+- `ok: false`, `error: verification_in_progress` → leave the stories and worktree
+  intact for the central verifier. Do not reset its queue or clean its candidate.
+- Other `ok: false` results → the `story` CLI is unavailable or `story list --json` failed (see `error`) — this
   is a storyhook-health problem, not a "nothing to recover" result; do not treat it as success.
 - `ok: true` → `reset_stories` lists every story ID actually moved back to `todo` (empty is a
   normal, healthy outcome — most resumes have nothing stuck); `tree_clean` confirms `git checkout

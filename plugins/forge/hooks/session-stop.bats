@@ -268,7 +268,8 @@ guard_file_for() {
   # ...but the breaker trip must still suppress the one thing it exists to
   # gate: queuing the freshen auto-resume signal / sending /clear.
   [ ! -f "$TEST_DIR/.freshen/forge.signal" ]
-  [ ! -s "$TMUX_LOG" ]
+  # StoryHook may use tmux for its own activity windows; no terminal send is allowed.
+  ! grep -q '^send-keys ' "$TMUX_LOG"
 }
 
 # --- F055: portable duration computation (no GNU-only `date -d`) ---

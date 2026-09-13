@@ -415,12 +415,15 @@ run_state_in_project() {
   run bash -c "cd '$TEST_DIR' && bash '$SCRIPT' '$FORGE_DIR'"
 }
 
-@test "stories_all_done reads the real double-nested story list --json shape" {
+@test "stories_all_done includes completed history hidden by the default list" {
   init_storyhook
   mkdir -p "$FORGE_DIR"
   ( cd "$TEST_DIR" && \
     story new "Task A" >/dev/null && story new "Task B" >/dev/null && \
     story move ST-1 done >/dev/null && story move ST-2 done >/dev/null )
+  run bash -c "cd '$TEST_DIR' && story list --json | jq '.stories | length'"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
   run_state_in_project
   [ "$status" -eq 0 ]
   # Before the fix, the wrong selector (.stories[].state) always parsed
@@ -532,17 +535,9 @@ run_state_in_project() {
 
 # --- The decompose-created "project story" deadlock ---
 #
-# `story decompose` auto-creates a synthetic parent story from the input
-# markdown's top heading (see references/story-decomposition.md). storyhook's
-# `story next` permanently excludes ANY story with children from ever being
-# offered (a `has_children` filter in storyhook's src/app.rs), so once every
-# real task story reaches `done`, the parent is the only story left non-done
-# -- forever, since nothing ever hands it back to `story next` to close it.
-# Before the fix, check_storyhook() required this parent to be `done` via
-# the exact same path as a real leaf story, so `stories_all_done` could never
-# become true and forge-state.sh reported `state:"execute"` forever instead
-# of transitioning to `review_validate`. This is a live-testing find, not one
-# of the plan's 106 catalogued findings.
+# The synthetic parent is bookkeeping, not another implementation task. Even
+# when StoryHook offers it after its children complete, Forge must recognize
+# that real work is finished and let its explicit hygiene step close it.
 
 decompose_single_task_plan() {
   ( cd "$TEST_DIR" && \
@@ -558,18 +553,17 @@ decompose_single_task_plan() {
   # ST-1 is the auto-created parent ("Task Breakdown"), ST-2 is the one real
   # task story -- confirm the fixture matches the documented decompose shape
   # before asserting anything about forge-state.sh's behavior on top of it.
-  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.relationships[0].relation'"
+  run bash -c "cd '$TEST_DIR' && story list --all --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.relationships[0].relation'"
   [ "$output" = "parent-of" ]
 
   echo '{"plan_hash":"x","project_story":"ST-1","stories":{}}' > "$FORGE_DIR/plan-mapping.json"
   ( cd "$TEST_DIR" && story move ST-2 in-progress >/dev/null && story move ST-2 done >/dev/null )
 
-  # Confirm the underlying storyhook bug this test guards against: `story
-  # next` really does refuse to ever hand back the parent, and it really
-  # does stay "todo" forever with no other action taken.
-  run bash -c "cd '$TEST_DIR' && story next --json | jq -r '.message'"
-  [ "$output" = "no ready stories" ]
-  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.state'"
+  # Current StoryHook offers the parent after its children complete. Forge's
+  # completion decision still excludes that bookkeeping story.
+  run bash -c "cd '$TEST_DIR' && story next --json | jq -r '.story.story.id'"
+  [ "$output" = "ST-1" ]
+  run bash -c "cd '$TEST_DIR' && story list --all --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.state'"
   [ "$output" = "todo" ]
 
   # forge-state.sh must not be fooled by this: with plan-mapping.json's
@@ -594,7 +588,7 @@ decompose_single_task_plan() {
   # for hygiene (references/execution-loop.md).
   run bash "$BATS_TEST_DIRNAME/forge-close-project-story.sh" "$TEST_DIR"
   [ "$(echo "$output" | jq -r '.reason')" = "closed" ]
-  run bash -c "cd '$TEST_DIR' && story list --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.state'"
+  run bash -c "cd '$TEST_DIR' && story list --all --json | jq -r '.stories[] | select(.story.id==\"ST-1\") | .story.state'"
   [ "$output" = "done" ]
 
   # forge-state.sh's own detection is unaffected either way -- defense in

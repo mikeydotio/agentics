@@ -1,0 +1,24 @@
+{
+  "name": "rca",
+  "version": "3.9.1",
+  "description": "Reproduction-gated root cause analysis for known defects \u2014 scientific-debugging pipeline with git forensics, hypothesis falsification in disposable worktrees, ODC classification, surgical-vs-redesign verdicts, gated fixes, and committed blameless postmortems",
+  "author": {
+    "name": "mikeydotio"
+  },
+  "skills": "./skills/",
+  "repository": "https://github.com/mikeydotio/agentics",
+  "interface": {
+    "displayName": "Root Cause Analysis",
+    "shortDescription": "Diagnose and fix known defects",
+    "developerName": "mikeydotio",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Use RCA to investigate this known defect."
+    ]
+  }
+}

@@ -5,71 +5,18 @@ argument-hint: "[slug]"
 effort: high
 ---
 
-# RCA Locate — Origin Forensics
+<!-- HOST_DISPATCH_VERSION: 1 -->
+# Host dispatcher
 
-You are running origin location (FULL tier only — LIGHT does slim inline forensics inside
-`diagnose`). Read `${CLAUDE_PLUGIN_ROOT}/references/git-forensics.md` and
-`${CLAUDE_PLUGIN_ROOT}/references/worktree-protocol.md` first.
+Select exactly one implementation before task work.
 
-**Gate check**: `.rca/<slug>/REPRO.md` or `OVERRIDE.md` must exist. Missing → stop and route
-back to `reproduce`. Inputs: GRID.md (classification + known_good + aligned changes),
-REPRO.md (repro command + test paths), meta.json. Output: `forensics/*.json`, `ORIGIN.md`,
-`worktree.json` if a worktree was created.
-
-This step mutates nothing in the main tree: forensics scripts are read-only; bisect runs only
-inside the slug worktree.
-
-## 1. Choose the lead (per git-forensics.md's table)
-
-Regression + usable `known_good` + deterministic repro → bisect. Otherwise → timeline +
-pickaxe around the WHEN boundary; longstanding → blame/intro + hotspots.
-
-## 2. Bisect (when applicable)
-
-Estimate first: steps ≈ log2(commits between good and bad — `git rev-list --count`), times the
-per-step build+test cost. On slow stacks (xcodebuild especially) present the estimate and ONE
-AskUserQuestion: run bisect / pickaxe-first / skip. Then:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-worktree.sh create <slug> --copy <repro-test-path> \
-  [--copy <fixture-path>] [--setup-cmd "<stack setup_cmd>"]
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-bisect.sh run <slug> --good <known_good> --bad HEAD \
-  --test-cmd "<single-test cmd>"
-```
-
-The repro test is untracked — it MUST travel via `--copy`. Handle: `good_is_bad` → the
-known-good claim is wrong, revisit GRID.md WHEN with the user; `setup_failed` / no setup_cmd
-available → degrade per worktree-protocol.md (skip bisect, record the gap). Save the output
-as `forensics/bisect.json`. Remember: the culprit is where the failure became *observable* —
-possibly an exposer of a deeper defect, not the defect itself.
-
-## 3. Static forensics (always)
-
-Run what the grid implicates, saving each JSON under `forensics/`:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-forensics.sh blame --file <f> --lines <a>,<b>
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-forensics.sh intro --file <f> --lines <a>,<b>
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-forensics.sh pickaxe --term <symbol> --since <boundary>
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-forensics.sh timeline --paths <implicated> --since <boundary>
-bash ${CLAUDE_PLUGIN_ROOT}/bin/rca-hotspots.sh --paths <implicated dirs>
-```
-
-## 4. Synthesis (investigator)
-
-Spawn the shared **investigator** (prefer `subagent_type: "agents:investigator"` — read-only,
-platform-enforced; prompt = `${CLAUDE_PLUGIN_ROOT}/agent-overrides/investigator-context.md` +
-dynamic context: GRID.md, REPRO.md, every `forensics/*.json`, the bisect culprit's diff). Its
-brief: ground in the deterministic record first, walk the implicated code, and return a
-FACTS-ONLY origin report — timelines, attributions, structural observations, discrepancies
-between script output and code reading. No causation claims.
-
-The investigator is read-only: it returns the report; YOU write `ORIGIN.md` from it (format
-per git-forensics.md — every entry cites a SHA).
-
-## 5. Exit
-
-Destroy the worktree only if no mutation experiments are expected imminently (default: keep —
-`diagnose` usually needs it; it is recorded in `worktree.json` and surfaced by rca-status as
-live). Summarize: culprit or candidates, hotspot/repeat-offender flags, the one or two
-sharpest facts. Next: `diagnose` (`/rca continue <slug>` if standalone). Safe to `/clear`.
+1. Determine the host from authoritative runtime identity first. If it is unavailable,
+   use the native tool surface: Codex has `spawn_agent`/`followup_task`/`wait_agent`;
+   Claude Code has `Agent`/`AskUserQuestion`. Environment compatibility aliases are not authoritative
+   host signals. Conflicting or missing authoritative signals are ambiguous.
+2. Resolve `<plugin-root>` two directories above this file's containing directory.
+3. Read exactly one implementation completely:
+   - Claude Code: `<plugin-root>/claude/skills/locate/SKILL.md`
+   - Codex: `<plugin-root>/codex/skills/locate/SKILL.md`
+4. If selection remains ambiguous, stop with `Ambiguous plugin host for rca:locate`.
+5. Follow only the selected tree. Never combine hosts or fall back to the other host.

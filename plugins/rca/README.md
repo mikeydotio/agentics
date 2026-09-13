@@ -63,3 +63,29 @@ software-architect, software-engineer, technical-writer).
 dispatch) · `bin/` deterministic scripts (status/scaffold/stack/repro/worktree/bisect/
 forensics/hotspots — JSON contracts, plain-bash tests in `tests/`) · `references/`
 methodology docs · `agent-overrides/<name>-context.md` pipeline context for shared agents.
+
+
+## Codex support
+
+Install RCA and the optional Agents plugin from the same Codex marketplace. Invoke
+`$rca <description>`, `$rca full|light <description>`, `$rca continue [slug]`, or
+`$rca status`; the arguments match the Claude commands above. All eight public skills
+select their host implementation from runtime identity, not environment aliases.
+
+`claude/skills/` preserves the Claude workflow; `codex/skills/` uses native questions
+and specialist dispatch. Both use the same shell scripts and saved investigation state.
+The historical `.claude/worktrees/rca/` path remains intentional for compatibility.
+After context loss, start a new session and invoke `$rca continue <slug>`.
+
+Codex specialist roles are prompt instructions with explicit path limits and checks
+against the pre-dispatch baseline; they do not grant Claude's registered tool permissions.
+The runtime inherits the active sandbox, model, and effort. Missing native spawning
+leaves an incomplete handoff. Missing Agents permits a recorded override-only fallback;
+invalid configuration and damaged enabled installations fail with diagnostics. Set
+`AGENTS_PLUGIN_ROOT` to an absolute valid installation to resolve deliberate ambiguity.
+Codex offers durable lessons for `AGENTS.md`; Claude retains its `CLAUDE.md` lesson offer.
+
+The RCA test target includes host contracts, actual shell lifecycle parity, and a real
+Codex packaging smoke in an isolated home under `/private/tmp`. It requires `python3`
+and `codex` in addition to the existing test dependencies. No personal installation is
+changed. These tests verify mechanics and instructions, not live model compliance.

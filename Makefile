@@ -138,6 +138,9 @@ test-prompt-hygiene:
 # part of the pre-push gate, so WS-A's model-pin and self-verification
 # checks went unenforced. Plain bash so it always runs.
 test-agents:
+	bash tests/with-isolated-store.sh python3 -B -W error plugins/agents/tests/test_delivery_mutations.py
+	bash tests/with-isolated-store.sh python3 -B -W error plugins/agents/tests/test_delivery.py
+	bash tests/with-isolated-store.sh python3 -B scripts/sync-agent-delivery.py --check
 	bash tests/with-isolated-store.sh bash plugins/agents/bin/validate-agents.sh
 	bash tests/with-isolated-store.sh bash plugins/agents/tests/codex-compat.sh
 	bash tests/with-isolated-store.sh bash plugins/agents/tests/smoke-codex-install.sh

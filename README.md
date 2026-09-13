@@ -77,6 +77,20 @@ Then install any plugin:
 
 ## Candidate and release validation
 
+`make test` retains every required headless suite. When the central verifier
+supplies `STORYHOOK_GATE_RECEIPT`, a shared preflight dependency runs before any
+suite (also under parallel Make), and `postlude gate` runs only after every
+suite succeeds. Writer errors fail the gate; tracked source changes during the
+run prevent certification. This uses the portable writer without installing
+Git hooks. Make's ignore-errors mode cannot certify a run.
+
+Without the writer variable, local tests run normally and earn no central
+receipt. Individual suite targets leave the calling checkout's receipt state
+alone, including nested focused checks. `make test-gate-receipt` tests the actual
+Make graph with private substitute suite legs; supplying the writer also adds
+real-Git receipt/identity checks in disposable repositories. These fixture
+receipts never certify the product checkout or a previous test run.
+
 | Command | What success establishes |
 |---|---|
 | `make test-plugin-content-drift` | Both identity policies pass their regressions; candidate release state is disclosed. |

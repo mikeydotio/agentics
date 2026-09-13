@@ -95,7 +95,7 @@ flowchart TD
     A["tool call"] --> B{tool_name}
     B -->|Read/Glob/Grep/WebFetch/WebSearch| ALLOW1["ALLOW (exploration)"]
     B -->|Edit/Write/MultiEdit/NotebookEdit| T["resolve target path(s)"]
-    B -->|Bash| S["existing safety classification"]
+    B -->|Bash| R{file-writing redirection?}
     B -->|other| DEFER["defer → dontAsk auto-denies"]
 
     T --> TS{all targets inside<br/>active scratch worktree?}
@@ -104,8 +104,9 @@ flowchart TD
 
     S -->|all readonly-safe| ALLOW3["ALLOW"]
     S -->|known destructive / system / push / install| DENY2["DENY + 'not permitted in exploration'"]
-    S -->|writes a file| W{target inside<br/>scratch worktree?}
-    W -->|yes| ALLOW4["ALLOW"]
+    R -->|no| S["existing safety classification"]
+    R -->|yes| W{all targets in scratch worktree<br/>or outside Git working trees?}
+    W -->|yes| S
     W -->|no / indeterminate| DENY3["DENY + reason"]
     S -->|uncertain| U["plan_explorer_uncertain:<br/>deny (default) | ai<br/>legacy allow → deny"]
 ```
@@ -203,6 +204,14 @@ list of package runners would leave equivalent execution paths approved.
 Worktrees separate working files; they do not contain processes, network access,
 credentials or shared stores. AI evaluation and explicit custom approvals are
 trust decisions, and the build/test allowlist is not an adversarial sandbox.
+
+Redirection destination validation is necessary but does not authorize the
+command producing output. After valid destinations, classification still checks
+the command, later segments and substitutions before explorer policy decides.
+Protected or indeterminate destinations deny before AI evaluation. The existing
+destination rule remains: scratch-worktree paths or paths outside Git working
+trees are permitted, not only temporary paths. Safe echo redirection retains
+approval; normal-session file-writing redirection still defers.
 
 Regression coverage drives the production hook with command strings encoded as
 JSON, never executed. It checks execution families, compounds, substitutions,

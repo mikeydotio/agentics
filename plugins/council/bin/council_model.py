@@ -130,19 +130,29 @@ def complete_phase(s, now):
     note(s, now, "phase-complete")
 
 
+def observed_time(s, wall, mono):
+    """Calculate read-only active time or monotonic terminal-cleanup time."""
+    if s["status"] in TERMINAL:
+        elapsed = mono - s["clock_mono"]
+        return s["cleanup_deadline"] if elapsed < 0 else s["cleanup_deadline"] - 30 + elapsed
+    return max(wall, s["created_at"] + mono - s["created_mono"])
+
+
 def advance(s, now, mono, root):
     """Apply elapsed deadlines before accepting any new transport event."""
     if s["status"] in TERMINAL:
-        return
+        return observed_time(s, now, mono)
     wall_delta, mono_delta = now - s["clock_wall"], mono - s["clock_mono"]
     logical_now = s["created_at"] + mono - s["created_mono"]
     if wall_delta < 0 or mono_delta < 0 or abs(now - logical_now) > 5:
-        abort(s, now, "interrupted council: clock discontinuity; original deadlines preserved")
-        return
+        terminal_now = max(logical_now, s["clock_wall"])
+        abort(s, terminal_now, "interrupted council: clock discontinuity; original deadlines preserved")
+        s["clock_mono"] = mono
+        return terminal_now
     s.update(clock_wall=now, clock_mono=mono)
     now = logical_now
     if s["status"] != "running":
-        return
+        return now
     for n in s["participants"]:
         seat = s["seats"][str(n)]
         if seat["status"] in RESOLVED or now < seat["deadline"]:
@@ -158,6 +168,7 @@ def advance(s, now, mono, root):
         else:
             fail(s, seat, now, "response deadline exhausted", root)
     complete_phase(s, now)
+    return now
 
 
 def delivery(s, seat, data, now, root):

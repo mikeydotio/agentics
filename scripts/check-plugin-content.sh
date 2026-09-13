@@ -2,6 +2,10 @@
 # Read-only source identity preflight. Candidate acceptance is not release proof.
 set -euo pipefail
 
+# Git markers and SemVer are ASCII protocols. Locale collation can put uppercase
+# H inside [a-z], falsely classifying every normal index entry as hidden.
+export LC_ALL=C
+
 # Report a verification failure without discarding a producer's stderr.
 die() { printf 'plugin-content: %s\n' "$*" >&2; exit 1; }
 

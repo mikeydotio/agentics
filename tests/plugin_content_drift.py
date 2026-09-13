@@ -301,6 +301,30 @@ class ContentIdentityTests(unittest.TestCase):
                 self.git("update-index", "--no-" + flag, TOOL)
                 self.git("restore", TOOL)
 
+    def test_caller_locale_preserves_clean_drift_and_hidden_verdicts(self):
+        """ASCII index markers retain their meaning under caller collation."""
+        for variable in ("LC_ALL", "LC_COLLATE", "LANG"):
+            for caller_locale in ("C", "en_US.UTF-8"):
+                with self.subTest(variable=variable, locale=caller_locale):
+                    env = {k: v for k, v in self.env.items()
+                           if k != "LANG" and not k.startswith("LC_")}
+                    env[variable] = caller_locale
+                    for mode in ("candidate", "release"):
+                        self.verdict(mode, 0, "release-matched", env=env)
+                    self.write(TOOL, "visible change")
+                    self.drift(env=env)
+                    self.git("restore", TOOL)
+                    for flag in ("assume-unchanged", "skip-worktree"):
+                        self.git("update-index", "--" + flag, TOOL)
+                        try:
+                            self.write(TOOL, "hidden change")
+                            for mode in ("candidate", "release"):
+                                output = self.verdict(mode, 1, "index flags", env=env)
+                                self.assertIn(TOOL, output)
+                        finally:
+                            self.git("update-index", "--no-" + flag, TOOL)
+                            self.git("restore", TOOL)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

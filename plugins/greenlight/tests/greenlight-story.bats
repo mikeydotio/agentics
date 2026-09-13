@@ -345,33 +345,27 @@ context_text() {
   [ "$(decision)" = "deny" ]
 }
 
-# THE TEST THAT PINS RETURN 2 RATHER THAN 1, and the reason bucket 2 exists at
-# all. `$any_destructive -> deny` (:1569) runs BEFORE the
-# CFG_PLAN_EXPLORER_UNCERTAIN case (:1575), so return 2 is the only verdict no
-# configuration can flip. Under return 1 this test fails: the knob would
-# re-arm `story purge --force` inside a headless explorer.
-#
-# Recorded honestly, because the council argued it hard: this does NOT make the
-# explorer safe against an adversary. The same config auto-approves
-# `npx <anything>` (:1261-1262, "execute arbitrary code, always uncertain"),
-# which can reach the store by another route — filed as AGE-54. What bucket 2
-# buys is accident-prevention, on the same footing `rm` already has at 2 even
-# though `perl -e unlink` exists.
+# AGE-54 retires blanket approval of uncertainty. Destructive verbs must still
+# take the destructive branch, not merely fail because the setting is retired.
+# The AI-enabled regression in greenlight-policy.bats separately proves these
+# verbs cannot reach an otherwise approving uncertainty evaluator.
 @test "AGE-26: plan_explorer_uncertain=allow cannot re-arm a destructive verb" {
   mkdir -p "$TEST_HOME/.config/greenlight"
   cp "$PLUGIN_ROOT/references/default-config.yaml" "$TEST_HOME/.config/greenlight/config.yaml"
   sed -i.bak 's/^plan_explorer_uncertain:.*/plan_explorer_uncertain: allow/' \
     "$TEST_HOME/.config/greenlight/config.yaml"
 
-  # Precondition: the knob really is set to allow, and really does flip an
-  # ordinary uncertain command. Without this the test could pass vacuously.
+  grep -q '^plan_explorer_uncertain: allow$' "$TEST_HOME/.config/greenlight/config.yaml"
   run_bash_explorer "some-unknown-command --flag"
-  [ "$(decision)" = "allow" ]
+  [ "$(decision)" = "deny" ]
+  [[ "$output" == *'plan_explorer_uncertain: allow'* ]]
 
   run_bash_explorer "story purge ST-1 --force"
   [ "$(decision)" = "deny" ]
+  [[ "$output" == *'destructive/privileged'* ]]
   run_bash_explorer "story update --force"
   [ "$(decision)" = "deny" ]
+  [[ "$output" == *'destructive/privileged'* ]]
 }
 
 # --- Structural pins ----------------------------------------------------------

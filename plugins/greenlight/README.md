@@ -34,7 +34,7 @@ Config at `~/.config/greenlight/config.yaml` (auto-initialized on first run from
 | `plan_explorer_enabled` | `true` | Master switch for the plan-explorer policy (below) |
 | `plan_explorer_scratch_prefix` | `greenlight/scratch-` | Branch prefix marking a disposable scratch worktree |
 | `plan_explorer_worktree_segment` | `.claude/worktrees` | Path segment a scratch worktree must live under |
-| `plan_explorer_uncertain` | `deny` | Uncertain command in explorer mode: `deny` / `allow` / `ai` |
+| `plan_explorer_uncertain` | `deny` | Uncertain command in explorer mode: `deny` / `ai`; legacy `allow` denies with migration guidance |
 | `plan_explorer_model` | `claude-sonnet-5` | Default model for spawned explorers |
 
 ## Management
@@ -81,6 +81,16 @@ The worktree (a `greenlight/scratch-*` branch under `.claude/worktrees/`) and
 its branch are removed when the explorer finishes; only the findings survive.
 The launcher is `bin/greenlight-explore.sh` and is reusable by other tools —
 forge's `research` step calls it when `governed_explorer` is enabled.
+
+Uncertain commands default to denial. Legacy `plan_explorer_uncertain: allow`
+now denies uncertain commands with migration guidance, including in existing
+configuration files; the hook does not rewrite those files. Use `deny`, or
+explicitly opt in to `ai` with `ai_enabled: true` and `ANTHROPIC_API_KEY`.
+Deterministic approvals and explicit custom configuration retain their precedence.
+
+A worktree separates working files; it does not contain processes, network
+access, credentials, or shared stores. AI evaluation and `custom_allow` are trust
+decisions. The existing build/test allowlist is not an adversarial sandbox.
 
 Everything above is gated on `GREENLIGHT_PLAN_EXPLORER=1`; a normal session sees
 no behavior change whatsoever.

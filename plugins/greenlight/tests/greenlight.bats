@@ -528,11 +528,12 @@ reason() { echo "$output" | jq -r '.hookSpecificOutput.permissionDecisionReason 
 
 # --- Config knobs ---
 
-@test "explorer: plan_explorer_uncertain=allow flips uncertain to ALLOW" {
+@test "AGE-54: explorer legacy allow denies uncertain commands with migration guidance" {
   mk_fixture
   set_config plan_explorer_uncertain allow
   run_bash_x "npx some-random-tool" "$WT"
-  [ "$(decision)" = "allow" ]
+  [ "$(decision)" = "deny" ]
+  [[ "$output" == *'plan_explorer_uncertain: allow'* ]]
 }
 
 @test "explorer: plan_explorer_enabled=false disables the policy entirely" {

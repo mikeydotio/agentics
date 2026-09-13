@@ -59,8 +59,11 @@ plan_explorer_worktree_segment: .claude/worktrees
 
 # What to do with a command the deterministic checks can't place, in explorer
 # mode: deny (safe default — the explorer self-corrects from the reason),
-# allow (trust the isolation of the worktree), or ai (route to the AI fallback
-# fitness check; requires ai_enabled + ANTHROPIC_API_KEY).
+# or ai (opt in to AI evaluation; requires ai_enabled + ANTHROPIC_API_KEY).
+# Legacy allow is unsupported and denies uncertain commands without rewriting
+# this file. A worktree separates working files, not processes, network access,
+# credentials, or shared stores. AI evaluation and custom_allow are trust
+# decisions, not containment; the build/test allowlist is not a process sandbox.
 plan_explorer_uncertain: deny
 
 # Default model for greenlight-explore's spawned explorers. Must be a valid

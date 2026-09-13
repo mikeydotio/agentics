@@ -1748,7 +1748,9 @@ if $EXPLORER_MODE; then
   fi
   case "$CFG_PLAN_EXPLORER_UNCERTAIN" in
     allow)
-      allow "plan exploration: uncertain command allowed by config" ;;
+      # Unknown commands can execute arbitrary code; a worktree is not a
+      # process sandbox. Enforce retirement here even for existing config files.
+      deny "greenlight: plan_explorer_uncertain: allow is unsupported; blanket approval cannot confirm '${COMMAND}' is safe. Set deny, or explicitly opt in to ai with ai_enabled and ANTHROPIC_API_KEY." ;;
     ai)
       [[ "$CFG_AI_ENABLED" == "true" ]] && ai_check "$COMMAND"
       deny "greenlight: could not confirm '${COMMAND}' is safe for plan exploration." ;;

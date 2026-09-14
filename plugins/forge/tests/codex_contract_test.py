@@ -20,6 +20,7 @@ class Contracts(unittest.TestCase):
             with self.subTest(step=step):
                 original = (ROOT / f"claude/skills/{step}/SKILL.md").read_bytes()
                 normalized = re.sub(rb"\n<!-- AGE-104 DELIVERY BEGIN -->.*?<!-- AGE-104 DELIVERY END -->\n", b"", original, flags=re.S)
+                normalized = re.sub(rb"\n<!-- AGE-55 INTEGRITY BEGIN -->.*?<!-- AGE-55 INTEGRITY END -->\n", b"", normalized, flags=re.S)
                 edits = json.loads((ROOT / "tests/claude-liveness-edits.json").read_text())
                 for before, after in edits.get(f"claude/skills/{step}/SKILL.md", []):
                     self.assertEqual(normalized.count(after.encode()), 1)

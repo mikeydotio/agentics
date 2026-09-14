@@ -1,5 +1,8 @@
 # Execution Loop
 
+**Integrity prerequisite:** read `<plugin-root>/references/integrity-results.md` completely.
+It is the only result-classification contract for every snapshot and check below.
+
 Complete specification for the autonomous execution loop. The SKILL.md router dispatches here for `$forge:forge run` and `$forge:forge resume`.
 
 Per-iteration bookkeeping (counters, locks, verdicts, integrity checks) is scripted — see
@@ -104,6 +107,9 @@ bash "<plugin-root>/bin/forge-lock.sh" heartbeat --session-id "$SESSION_ID" --fo
 bash "<plugin-root>/bin/forge-integrity.sh" snapshot --phase pre-gen --forge-dir .forge --scope forge-only --session-id "$SESSION_ID"
 ```
 
+Apply the shared integrity result contract. Spawn no generator unless this result is a verified snapshot.
+Follow its pre-worker unverified action before the dispatch instructions below.
+
 Resolve the generator canonical role and Forge override through runtime.md. Spawn a separate generator:
 
 ```
@@ -138,24 +144,8 @@ Defense-in-depth: verify the generator did not modify forge state files, and did
 bash "<plugin-root>/bin/forge-integrity.sh" check --phase pre-gen --forge-dir .forge --scope forge-only --session-id "$SESSION_ID"
 ```
 
-Parse the JSON result:
-- `tampered: false` → proceed to Step 4.
-- `tampered: true`, `action: "restored"` → the generator modified `.forge/config.json` or
-  `.forge/state.json`; the script already restored their exact pre-spawn content (content-hash
-  based, correct even for the gitignored `state.json`). Mark story blocked: `story move
-  HP-N blocked`; add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator
-  modified forge state files"}'`; continue to next iteration.
-- `tampered: true`, `head_moved: true`, `action: "manual_review_required"`: the generator
-  committed, violating Hard Rule 3. This is more serious than the file-content case above and is
-  **NOT** auto-reverted — a `git reset` here risks destroying the commit's forensic trail or
-  interacting badly with any concurrent work. Instead: mark story blocked (`story move HP-N
-  blocked`); add comment: `story comment HP-N '{"blocked_reason":"integrity","description":"Generator
-  committed (HEAD moved from <head_before> to <head_after>) — violates Hard Rule 3. Needs manual
-  review before continuing."}'` (use the script's own `head_before`/`head_after` fields); write a
-  handoff noting the exact SHAs and pause (do not silently continue the loop past this — treat it
-  the same as a runaway-safeguard trip).
-- `tampered: true`, `action: "restore_failed"` → the script could not restore forge state files.
-  Treat as blocked + pause; this needs manual intervention.
+Apply the shared integrity result contract for the generator's post-worker check. Only a verified clean check may proceed to Step 4.
+Follow its unverified and tamper actions; never branch on `tampered` alone or treat restoration as validation.
 
 ### Step 4: Deterministic Pre-Checks
 
@@ -180,6 +170,9 @@ story move HP-N verifying
 bash "<plugin-root>/bin/forge-lock.sh" heartbeat --session-id "$SESSION_ID" --forge-dir .forge
 bash "<plugin-root>/bin/forge-integrity.sh" snapshot --phase pre-eval --forge-dir .forge --scope full-tree --session-id "$SESSION_ID"
 ```
+
+Apply the shared integrity result contract. Spawn no evaluator unless this result is a verified snapshot.
+Follow its pre-worker unverified action before the dispatch instructions below.
 
 Resolve the evaluator canonical role and Forge override through runtime.md. Spawn an independent evaluator; enforce the full-tree integrity gate before using its verdict:
 
@@ -211,28 +204,12 @@ fail:
 bash "<plugin-root>/bin/forge-integrity.sh" check --phase pre-eval --forge-dir .forge --scope full-tree --session-id "$SESSION_ID"
 ```
 
-The full-tree integrity check is mandatory on Codex. Native children inherit runtime
-permissions; a role definition is not a tool-access barrier. If snapshot or check returns
-ok: false, halt with an incomplete handoff before acting on a verdict.
-
-Parse the JSON result:
-- `tampered: false` → discard nothing; proceed to **Parse evaluator response** below.
-- `tampered: true`, `action: "restored"` → the evaluator modified the working tree (content-hash
-  based — this catches BOTH an edit to a file the generator already touched AND a brand-new
-  untracked file, the two cases a filename-set diff misses). The script already
-  restored the exact pre-evaluator content and removed anything newly added. Discard the
-  evaluator's verdict entirely (do not act on it, pass or fail). Re-run the evaluator once (spawn
-  again, fresh integrity snapshot). If it tampers again → mark story blocked: `story move HP-N
-  blocked` with an integrity-violation reason.
-- `tampered: true`, `head_moved: true`, `action: "manual_review_required"` → the evaluator
-  committed (via Bash — it retains Bash even without Write/Edit). Same reasoning as Step 3a's
-  generator case: do NOT auto-revert. Mark story blocked, write a handoff with the exact SHAs, and
-  pause.
-- `tampered: true`, `action: "restore_failed"` → mark blocked + pause for manual intervention.
+This check is mandatory after every evaluator run. Tool restrictions are defense in depth, not integrity evidence.
+Apply the shared integrity result contract for the evaluator's post-worker check. Only a verified clean check may reach **Parse evaluator response**.
+Follow its unverified and tamper actions; never use the verdict after an unverified or contaminated result.
 
 **Parse evaluator response** (the FULL schema — see `evaluator.md`'s Output Format, the single
-authoritative verdict schema). Only reachable once the integrity check above reports
-`tampered: false`:
+authoritative verdict schema). Only reachable after the verified clean check above:
 - `verdict: "pass"` →
   - Commit atomically: `git add -A && git commit -m "feat(<story>): <title>"`
   - `story move HP-N done`

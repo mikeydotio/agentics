@@ -64,7 +64,7 @@ Then install any plugin:
 ## Runtime Dependencies
 
 - **tmux** — required by freshen and every hook-based context-clearing flow (forge step transitions, `/issue do`).
-- **storyhook** (major 3) — required by forge's story tracking and the test suite.
+- **storyhook** (major 3) (>=3.0.0, <4.0.0) — required by forge's story tracking and the test suite.
 - **gh CLI**, authenticated — required by issue, reconcile-pr, and deployit's release path.
 
 ## Adding a Plugin

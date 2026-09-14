@@ -7,6 +7,10 @@ set -uo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FILTER="${1:-}"
 
+# Several tests import executable Python modules from bin/. Keep those imports
+# from creating __pycache__ in the source checkout and dirtying the worktree.
+export PYTHONDONTWRITEBYTECODE=1
+
 # Per-run scratch log. This used to be the fixed path /tmp/deployit-test.log,
 # which two concurrent runs interleave into — and concurrent runs are routine
 # here (the global pre-push hook runs `make test`, and worktree sessions run

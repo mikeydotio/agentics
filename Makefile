@@ -3,7 +3,7 @@
 # Agentics installs no global test-enforcement hook (AGE-102 / SH-682).
 
 .DEFAULT_GOAL := test
-override TEST_SUITES := test-store-isolation test-gate-integrity test-hook-retirement test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-gate-receipt
+override TEST_SUITES := test-store-isolation test-gate-integrity test-hook-retirement test-storyhook-version-pin test-root-bats test-plugin-versions test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation test-prompt-hygiene test-agents test-council test-semver test-deployit test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight test-freshen test-issue test-reconcile-pr test-rca test-worktree-preservation test-gate-receipt
 .PHONY: test test-gate-preflight $(TEST_SUITES)
 
 test: $(TEST_SUITES)
@@ -21,6 +21,10 @@ test-gate-preflight:
 
 test-gate-receipt:
 	bash tests/with-isolated-store.sh bash tests/gate-receipt.sh
+
+# Local preservation exercises real archives and independent Git restoration.
+test-worktree-preservation:
+	bash tests/with-isolated-store.sh bash tests/worktree-preservation.sh
 
 # Every test target must run against a storyhook store of its own. Pinned
 # mechanically: a target added without the wrapper is how 394 fixture projects

@@ -36,7 +36,7 @@ Agentics is a Claude Code plugin marketplace (`mikeydotio/agentics`) providing p
 
 **tmux** is a hard requirement for the freshen plugin and all hook-based context-clearing flows (forge step transitions). Without tmux, these flows fall back to manual `/clear` instructions.
 
-**storyhook** is a hard test-time requirement, and this repository's suites are written against **storyhook major 2** (>=2.0.0, <3.0.0). The pin is enforced by `tests/storyhook-version-pin.sh` (`make test-storyhook-version-pin`), which fails the gate naming the observed and expected versions — an incompatible or unverifiable CLI is never skipped into a green. Measured on the real v1.0.0 binary: 87 failing assertions across three suites, none naming a version. Raising the pin means porting the suites, then changing `STORYHOOK_MAJOR` in that file *and* this sentence together.
+**storyhook** is a hard test-time requirement, and this repository's suites are written against **storyhook major 3** (>=3.0.0, <4.0.0). The pin is enforced by `tests/storyhook-version-pin.sh` (`make test-storyhook-version-pin`), which fails the gate naming the observed and expected versions — an incompatible or unverifiable CLI is never skipped into a green. Measured on the real v3.0.0 binary: all 526 Forge tests and all nine root grammar tests pass. Measured on the real v1.0.0 binary: 87 assertions fail across three suites, none naming a version. Raising the pin means porting the suites, then changing `STORYHOOK_MAJOR` in that file *and* this sentence together.
 
 **Bounded commands must never be captured through `$(…)`** — `timeout` signals only the process
 group it created, so a descendant that `setsid()`s out of that group survives, keeps the

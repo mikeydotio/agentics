@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "hooks/retire-pre-push-hook.py"
 
 
-def run_fixture_git(repo, *args, env, check=True, timeout=10):
+def run_fixture_git(
+    repo, *args, env, check=True, timeout=10, ready_path=None, ready_timeout=10,
+):
     """Bound fixture Git's process family and retain phase evidence on timeout."""
     command = ["git", "-C", str(repo), *args]
     with tempfile.NamedTemporaryFile(prefix="git-trace-", dir=repo) as trace:
@@ -29,22 +31,51 @@ def run_fixture_git(repo, *args, env, check=True, timeout=10):
                     *command]
         with subprocess.Popen(launcher, env=traced_env,
                               text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
-            try:
-                stdout, stderr = process.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired as error:
+            def failure_message(reason, stdout, stderr):
+                """Render process and Git phase evidence for one fixture failure."""
+                trace.seek(0)
+                events = trace.read().decode("utf-8", errors="replace").splitlines()
+                return (
+                    f"{reason}: {command!r}\n"
+                    f"stdout: {stdout}\nstderr: {stderr}\n"
+                    "Git Trace2 final events:\n" + "\n".join(events[-20:])
+                )
+
+            def terminate(reason, error=None):
+                """Kill the fixture process group, collect evidence, and fail."""
                 try:
                     os.killpg(process.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass  # The group exited, or the launcher has not set it yet.
                 process.kill()
                 stdout, stderr = process.communicate(timeout=2)
-                trace.seek(0)
-                events = trace.read().decode("utf-8", errors="replace").splitlines()
-                raise AssertionError(
-                    f"fixture Git timed out after {timeout}s: {command!r}\n"
-                    f"stdout: {stdout}\nstderr: {stderr}\n"
-                    "Git Trace2 final events:\n" + "\n".join(events[-20:])
-                ) from error
+                failure = AssertionError(failure_message(reason, stdout, stderr))
+                if error is None:
+                    raise failure
+                raise failure from error
+
+            if ready_path is not None:
+                ready_path = Path(ready_path)
+                ready_deadline = time.monotonic() + ready_timeout
+                while not ready_path.exists():
+                    if process.poll() is not None:
+                        stdout, stderr = process.communicate(timeout=2)
+                        raise AssertionError(failure_message(
+                            f"fixture Git exited before readiness marker {ready_path}",
+                            stdout, stderr,
+                        ))
+                    remaining = ready_deadline - time.monotonic()
+                    if remaining <= 0:
+                        terminate(
+                            f"fixture Git did not create readiness marker {ready_path} "
+                            f"within {ready_timeout}s"
+                        )
+                    time.sleep(min(0.01, remaining))
+
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired as error:
+                terminate(f"fixture Git timed out after {timeout}s", error)
         result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
         if check:
             result.check_returncode()
@@ -244,6 +275,27 @@ class RetirementTests(unittest.TestCase):
         git("push", str(remote), "HEAD:refs/heads/feature")
         self.assertIn("refs/heads/feature", git("ls-remote", str(remote)).stdout)
 
+    def test_git_readiness_timeout_fails_with_phase_evidence(self):
+        """A missing readiness marker fails on its own bounded deadline."""
+        repo = self.home / "unready-project"
+        repo.mkdir()
+        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        run_fixture_git(repo, "init", "-q", "--template=", env=env)
+        hook = repo / ".git/hooks/pre-push"
+        hook.parent.mkdir(exist_ok=True)
+        hook.write_text("#!/bin/sh\nsleep 60\n")
+        hook.chmod(0o755)
+        marker = repo / "never-created"
+
+        with self.assertRaises(AssertionError) as failure:
+            run_fixture_git(
+                repo, "hook", "run", "pre-push", env=env, timeout=10,
+                ready_path=marker, ready_timeout=0.1,
+            )
+
+        self.assertIn(f"did not create readiness marker {marker}", str(failure.exception))
+        self.assertIn("Git Trace2 final events", str(failure.exception))
+
     def test_git_timeout_reaps_hook_descendants_and_reports_phase(self):
         """A stuck real Git hook fails loudly without leaking its process family."""
         repo = self.home / "stuck-project"
@@ -256,8 +308,10 @@ class RetirementTests(unittest.TestCase):
         child.write_text(
             "import json, os, subprocess, sys, time\n"
             "from pathlib import Path\n"
+            "time.sleep(0.2)\n"
             "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
             "Path('pids.json').write_text(json.dumps([os.getpid(), p.pid, os.getsid(0)]))\n"
+            "Path('ready').touch()\n"
             "print('fixture-hook-entered', flush=True)\n"
             "p.wait()\n"
         )
@@ -276,7 +330,10 @@ class RetirementTests(unittest.TestCase):
         self.addCleanup(cleanup_children)
         failure = None
         try:
-            run_fixture_git(repo, "hook", "run", "pre-push", env=env, timeout=2)
+            run_fixture_git(
+                repo, "hook", "run", "pre-push", env=env, timeout=0.1,
+                ready_path=repo / "ready", ready_timeout=10,
+            )
         except (subprocess.TimeoutExpired, AssertionError) as error:
             failure = error
         self.assertIsNotNone(failure, "the deliberately stuck hook must fail")

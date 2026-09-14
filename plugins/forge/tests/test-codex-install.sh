@@ -37,6 +37,7 @@ DELIVERY_TEST_BIN="$INSTALLED_ROOT/bin" python3 -B -W error "$AGENTS_ROOT/tests/
 
 # Run contracts from the installed copy, so relative-to-source assumptions fail.
 python3 -B -m unittest discover -s "$INSTALLED_ROOT/tests" -p codex_contract_test.py -v
+python3 -B -W error "$INSTALLED_ROOT/tests/integrity_contract_test.py" -v
 RESOLVED_AGENTS="$(unset AGENTS_PLUGIN_ROOT; CODEX_HOME="$SMOKE_CODEX_HOME" bash "$INSTALLED_ROOT/bin/resolve-dependency.sh" agents)"
 for role in domain-researcher software-architect software-engineer qa-engineer project-manager skeptic technical-writer generator evaluator reviewer validator triager ux-designer-cli ux-designer-web ux-designer-mobile security-researcher accessibility-engineer; do
   role_path="$(bash "$RESOLVED_AGENTS/bin/resolve-agent.sh" "$role")"

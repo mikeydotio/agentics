@@ -106,6 +106,10 @@ Follow `<plugin-root>/codex/references/recovery-protocol.md`:
 
 ## Execution Loop
 
+Read `<plugin-root>/references/integrity-results.md` completely before the loop.
+Require a verified snapshot before each generator or evaluator dispatch. Require a verified clean check
+before pre-check progression or verdict use. Every evaluator path uses the post-worker check.
+
 Follow `<plugin-root>/codex/references/execution-loop.md` **completely** — plus `<plugin-root>/codex/references/execution-loop-retry.md`
 once an attempt fails and `<plugin-root>/codex/references/execution-loop-complete.md` once every story is done. High-level flow:
 

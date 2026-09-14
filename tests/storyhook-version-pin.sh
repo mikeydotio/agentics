@@ -45,7 +45,7 @@
 #           the numerals 8 and 2, so a version parse must not harvest from it.
 #   v2.0.0  exit 0, "story 2.0.0" anywhere.
 #   v3.0.0  exit 0, "story 3.0.0 (build 4186eed5129c)". Forge passes
-#           523/523, and storyhook-contract-root passes 9/9 against this binary.
+#           526/526, and storyhook-contract-root passes 9/9 against this binary.
 #
 # Two consequences follow, and they decide the design:
 #

@@ -31,6 +31,10 @@ snapshot_dir_for_test() {
     "$(printf '%s' "$TEST_DIR" | git hash-object --stdin | cut -c1-16)"
 }
 
+snapshot_file_for_test() {
+  printf '%s/default/%s.json' "$(snapshot_dir_for_test)" "$1"
+}
+
 teardown() {
   rm -rf "$TEST_DIR"
   # Delete ONLY this test's own project-keyed snapshot dir.
@@ -88,11 +92,32 @@ jq_field() {
   rm -rf "$nogit"
 }
 
-@test "check with no prior snapshot for the phase: ok=false, does not crash" {
-  run_in_repo "check --phase never-snapshotted --forge-dir .forge"
+@test "check after its fixture-owned snapshot is lost: ok=false, does not crash" {
+  run_in_repo "snapshot --phase lost --forge-dir .forge"
+  [ "$(jq_field '.ok')" = "true" ]
+  rm -f "$(snapshot_file_for_test lost)"
+  run_in_repo "check --phase lost --forge-dir .forge"
   [ "$status" -eq 0 ]
   [ "$(jq_field '.ok')" = "false" ]
-  [[ "$(jq_field '.error')" == no_snapshot_for_phase_* ]]
+  [ "$(jq_field '.error')" = "no_snapshot_for_phase_lost" ]
+}
+
+@test "check with a corrupt fixture-owned snapshot exits nonzero with diagnostics" {
+  run_in_repo "snapshot --phase corrupt --forge-dir .forge"
+  [ "$(jq_field '.ok')" = "true" ]
+  printf '%s\n' '{not-json' > "$(snapshot_file_for_test corrupt)"
+  run_in_repo "check --phase corrupt --forge-dir .forge"
+  [ "$status" -ne 0 ]
+  [ -n "$output" ]
+}
+
+@test "check with an unreadable fixture-owned snapshot exits nonzero with diagnostics" {
+  run_in_repo "snapshot --phase unreadable --forge-dir .forge"
+  [ "$(jq_field '.ok')" = "true" ]
+  chmod 000 "$(snapshot_file_for_test unreadable)"
+  run_in_repo "check --phase unreadable --forge-dir .forge"
+  [ "$status" -ne 0 ]
+  [ -n "$output" ]
 }
 
 # --- snapshot output shape ---

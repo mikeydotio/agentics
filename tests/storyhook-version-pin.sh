@@ -29,7 +29,7 @@
 # natural next move is to "fix" this repo. That is worse than unattributable —
 # it points at the wrong repository. One sentence from this file replaces it.
 #
-# WHAT THE THREE REAL MAJORS ACTUALLY DO — every string below was recorded by
+# WHAT THE FOUR REAL MAJORS ACTUALLY DO — every string below was recorded by
 # running the real binary, never hand-written. This corpus is the reason the
 # tests need no second binary and no network.
 #
@@ -44,6 +44,8 @@
 #           only understands up to version 2 ...". That refusal text contains
 #           the numerals 8 and 2, so a version parse must not harvest from it.
 #   v2.0.0  exit 0, "story 2.0.0" anywhere.
+#   v3.0.0  exit 0, "story 3.0.0 (build 4186eed5129c)". Forge passes
+#           523/523, and storyhook-contract-root passes 9/9 against this binary.
 #
 # Two consequences follow, and they decide the design:
 #
@@ -60,14 +62,14 @@
 # WHY THE ANCHOR IS STRICT, WHICH LOOKS WRONG UNTIL YOU SEE THE MEASUREMENT
 #
 # A looser, program-name-tolerant scan ("first MAJOR.MINOR.PATCH anywhere") is
-# tempting, because it keeps a cosmetic rebrand like `storyhook 2.1.0` green.
+# tempting, because it keeps a cosmetic rebrand like `storyhook 3.1.0` green.
 # It also admits a SILENT FALSE GREEN, measured:
 #
-#     warning: 2.0.0 config format is deprecated
-#     story 3.0.0
+#     warning: 3.0.0 config format is deprecated
+#     story 4.0.0
 #
-#   first-triple-anywhere -> 2.0.0   ** a major-3 binary PASSES **
-#   ^story <triple>       -> 3.0.0      correctly fails
+#   first-triple-anywhere -> 3.0.0   ** a major-4 binary PASSES **
+#   ^story <triple>       -> 4.0.0      correctly fails
 #
 # `grep -E` is per-line, so the strict anchor skips the banner instead of
 # binding it. A rebrand false red is bounded, loud and self-announcing; a false
@@ -77,13 +79,13 @@
 #
 # WHAT THIS GUARD DELIBERATELY DOES NOT DO
 #
-#   - It does NOT catch a break shipped WITHIN major 2. That is
+#   - It does NOT catch a break shipped WITHIN major 3. That is
 #     forge-contract-check.sh's job: it derives every verb, relation and
 #     subcommand from the LIVE binary and trusts no version number at all. This
 #     file is the cheap, loud attribution layer; that one is the semantic layer.
 #     Do not sell this as the thing that catches breakage.
 #   - It does NOT use `story --version --json`. That form nests the SAME free
-#     text ({"result":"ok","message":"story 2.0.0"}), so it needs an identical
+#     text ({"result":"ok","message":"story 3.0.0"}), so it needs an identical
 #     triple parse while adding a jq dependency and a second upstream shape that
 #     can break independently — zero extra detection for two new failure modes.
 #     v0.2.0 offers neither surface anyway.
@@ -112,7 +114,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # THE one datum. Raising it is the completion criterion for a storyhook port,
 # not a formality: change it here, and change the CLAUDE.md sentence that
 # test_claude_md_states_the_pinned_major derives from it.
-STORYHOOK_MAJOR=2
+STORYHOOK_MAJOR=3
 
 fail() { echo "        $1" >&2; return 1; }
 
@@ -223,8 +225,24 @@ test_installed_story_cli_is_a_supported_major() {
 
 # --- verdict(): recorded real outputs ---------------------------------------
 
-test_verdict_accepts_recorded_real_major_2() {
-    [ "$(verdict 0 'story 2.0.0')" = ok ] || { fail "recorded real v2.0.0 banner was rejected"; return 1; }
+test_verdict_rejects_recorded_real_major_2() {
+    [ "$(verdict 0 'story 2.0.0')" = "major_mismatch:2.0.0" ] \
+        || { fail "recorded real v2.0.0 banner was accepted after the major-3 compatibility boundary"; return 1; }
+}
+
+test_verdict_accepts_recorded_real_major_3() {
+    [ "$(verdict 0 'story 3.0.0')" = ok ] || { fail "recorded real v3.0.0 banner was rejected"; return 1; }
+}
+
+# Recorded from the installed CLI during AGE-108 compatibility validation.
+test_verdict_accepts_recorded_major_3_build_banner() {
+    [ "$(verdict 0 'story 3.0.0 (build 4186eed5129c)')" = ok ] \
+        || { fail "recorded major-3 build banner was rejected"; return 1; }
+}
+
+test_verdict_rejects_a_distant_future_major() {
+    [ "$(verdict 0 'story 99.0.0')" = 'major_mismatch:99.0.0' ] \
+        || { fail "a distant unsupported major was accepted"; return 1; }
 }
 
 test_verdict_rejects_recorded_real_major_1() {
@@ -260,24 +278,26 @@ test_verdict_rejects_the_recorded_schema_refusal() {
 # boolean, or record a future banner that does parse, and this becomes the only
 # guard again. Subsumed defence-in-depth, not a redundancy.
 test_verdict_rejects_a_nonzero_exit_whose_text_parses_as_a_version() {
-    [ "$(verdict 5 'story 2.0.0')" = nonzero_exit ] \
+    [ "$(verdict 5 'story 3.0.0')" = nonzero_exit ] \
         || { fail "a CLI that EXITED NON-ZERO was trusted because its stdout happened to parse — rc must be checked before the text"; return 1; }
 }
 
-test_verdict_rejects_a_future_major() {
-    [ "$(verdict 0 'story 3.0.0')" = "major_mismatch:3.0.0" ] || { fail "major 3 — the risk actually being guarded — was accepted"; return 1; }
+test_verdict_rejects_the_next_major() {
+    local next; next=$((STORYHOOK_MAJOR + 1))
+    [ "$(verdict 0 "story $next.0.0")" = "major_mismatch:$next.0.0" ] \
+        || { fail "major $next — the next unsupported major — was accepted"; return 1; }
 }
 
 test_verdict_accepts_any_minor_or_patch_within_the_major() {
     local b
-    for b in 'story 2.0.1' 'story 2.1.0' 'story 2.99.7'; do
+    for b in 'story 3.0.1' 'story 3.1.0' 'story 3.99.7'; do
         [ "$(verdict 0 "$b")" = ok ] || { fail "[$b] was rejected — the pin must not false-red inside its own major"; return 1; }
     done
 }
 
 test_verdict_rejects_unparseable_output() {
     local b
-    for b in '' 'story unknown' 'story 2.0' 'storyhook-version-2'; do
+    for b in '' 'story unknown' 'story 3.0' 'storyhook-version-3'; do
         [ "$(verdict 0 "$b")" = unparseable ] \
             || { fail "[$b] did not land in the unparseable branch — cannot-verify must never read as pass"; return 1; }
     done
@@ -286,16 +306,16 @@ test_verdict_rejects_unparseable_output() {
 # THE FALSE GREEN, measured during the council and the reason the anchor is
 # strict. Only this test reds if anyone re-unanchors the regex.
 test_verdict_is_not_fooled_by_a_version_in_a_leading_banner() {
-    local out; out=$'warning: 2.0.0 config format is deprecated\nstory 3.0.0'
-    [ "$(verdict 0 "$out")" = "major_mismatch:3.0.0" ] \
-        || { fail "a leading banner masked the real version — an unanchored scan reads 2.0.0 here and PASSES a major-3 binary, which is a silent false green on the exact scenario this guard exists to catch"; return 1; }
+    local out; out=$'warning: 3.0.0 config format is deprecated\nstory 4.0.0'
+    [ "$(verdict 0 "$out")" = "major_mismatch:4.0.0" ] \
+        || { fail "a leading banner masked the real version — an unanchored scan reads 3.0.0 here and PASSES a major-4 binary, which is a silent false green on the exact scenario this guard exists to catch"; return 1; }
 }
 
 # A cosmetic rebrand is REJECTED (strict anchor) but must be ATTRIBUTABLE, not
 # silent — it lands in unparseable, whose sentence names the observed output.
 test_verdict_rejects_an_unrecognized_banner_format() {
     local b
-    for b in 'storyhook 2.1.0' 'story-cli 2.1.0'; do
+    for b in 'storyhook 3.1.0' 'story-cli 3.1.0'; do
         [ "$(verdict 0 "$b")" = unparseable ] \
             || { fail "[$b] did not land in the unparseable branch — a rebrand must fail loudly, never silently pass or be misreported as a major mismatch"; return 1; }
     done
@@ -303,12 +323,12 @@ test_verdict_rejects_an_unrecognized_banner_format() {
 
 # Only this test reds if `head -1` becomes `tail -1`.
 test_verdict_reads_the_first_banner_line_not_a_trailing_one() {
-    [ "$(verdict 0 $'story 2.1.0\nstory 9.9.9')" = ok ] \
+    [ "$(verdict 0 $'story 3.1.0\nstory 9.9.9')" = ok ] \
         || { fail "the parser did not bind the FIRST story banner line"; return 1; }
 }
 
 test_verdict_tolerates_a_v_prefix() {
-    [ "$(verdict 0 'story v2.1.0')" = ok ] || { fail "a 'v' prefix inside the supported major was rejected"; return 1; }
+    [ "$(verdict 0 'story v3.1.0')" = ok ] || { fail "a 'v' prefix inside the supported major was rejected"; return 1; }
 }
 
 # --- The script's wiring: verdict -> exit status -> message -----------------
@@ -322,18 +342,18 @@ test_absent_story_cli_fails_the_gate() {
 }
 
 test_failure_message_names_observed_and_expected() {
-    local out; out="$(verdict 0 'story 3.0.0')"
-    [ "$out" = "major_mismatch:3.0.0" ] || { fail "expected major_mismatch:3.0.0, got $out"; return 1; }
+    local out; out="$(verdict 0 'story 4.0.0')"
+    [ "$out" = "major_mismatch:4.0.0" ] || { fail "expected major_mismatch:4.0.0, got $out"; return 1; }
     # Render it through the real message path with a shim, so the assertion
     # covers the sentence an operator actually reads — not just the verdict.
     local d; d="$(mktemp -d /private/tmp/age19-shim.XXXXXX)"
-    printf '#!/bin/sh\necho "story 3.0.0"\n' >"$d/story"; chmod +x "$d/story"
+    printf '#!/bin/sh\necho "story 4.0.0"\n' >"$d/story"; chmod +x "$d/story"
     "$d/story" >/dev/null 2>&1   # warm it: macOS assesses a fresh executable on first exec
     local msg rc; rc=0
     msg="$( export PATH="$d:$PATH"; check_live_cli )" || rc=$?
     rm -rf "$d"
-    [ "$rc" -ne 0 ] || { fail "the guard exited 0 against a shim reporting major 3"; return 1; }
-    case "$msg" in *3.0.0*) ;; *) fail "the failure message did not name the OBSERVED version: $msg"; return 1 ;; esac
+    [ "$rc" -ne 0 ] || { fail "the guard exited 0 against a shim reporting major 4"; return 1; }
+    case "$msg" in *4.0.0*) ;; *) fail "the failure message did not name the OBSERVED version: $msg"; return 1 ;; esac
     case "$msg" in *"major $STORYHOOK_MAJOR"*) ;; *) fail "the failure message did not name the EXPECTED major: $msg"; return 1 ;; esac
 }
 
@@ -341,7 +361,7 @@ test_failure_message_names_observed_and_expected() {
 # fail unconditionally satisfies every other assertion in this file.
 test_guard_exits_zero_against_a_shim_reporting_a_supported_major() {
     local d; d="$(mktemp -d /private/tmp/age19-shim.XXXXXX)"
-    printf '#!/bin/sh\necho "story 2.4.1"\n' >"$d/story"; chmod +x "$d/story"
+    printf '#!/bin/sh\necho "story 3.4.1"\n' >"$d/story"; chmod +x "$d/story"
     "$d/story" >/dev/null 2>&1
     local rc; rc=0
     ( export PATH="$d:$PATH"; check_live_cli >/dev/null ) || rc=$?
@@ -511,6 +531,12 @@ test_claude_md_states_the_pinned_major() {
     local needle="storyhook major $STORYHOOK_MAJOR"
     /usr/bin/grep -qF "$needle" "$REPO_ROOT/CLAUDE.md" \
         || { fail "CLAUDE.md does not contain \"$needle\" — the declared major and the enforced one disagree"; return 1; }
+}
+
+test_readme_states_the_pinned_major() {
+    local needle="storyhook** (major $STORYHOOK_MAJOR)"
+    /usr/bin/grep -qF "$needle" "$REPO_ROOT/README.md" \
+        || { fail "README.md does not contain \"$needle\" — its dependency summary disagrees with the enforced major"; return 1; }
 }
 
 # Effect oracle for the above: proves the doc check can be FALSE. Without it a

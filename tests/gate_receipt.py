@@ -26,7 +26,7 @@ test-plugin-content-drift test-storyhook-path-guard test-storyhook-contract-root
 test-sigpipe-shape-guard test-bounded-capture-guard test-forge-integrity-isolation
 test-prompt-hygiene test-agents test-council test-semver test-deployit
 test-deployit-capture-diagnostics test-forge test-hook-guard test-greenlight
-test-freshen test-issue test-reconcile-pr test-rca test-gate-receipt""".split())
+test-freshen test-issue test-reconcile-pr test-rca test-worktree-preservation test-gate-receipt""".split())
 
 EVENTS = r'''import json, os, pathlib, sys, time
 mode, name = sys.argv[1:3]

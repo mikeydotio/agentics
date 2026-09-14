@@ -5,6 +5,7 @@
 set -euo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
+source "$TESTS_DIR/backend-test-helper.sh"
 
 ROOT=$(mktemp -d)
 mkdir -p "$ROOT/serve" "$ROOT/index" "$ROOT/logs"
@@ -13,16 +14,9 @@ cat > "$ROOT/index/builds.json" <<'JSON'
 {"version": 1, "builds": []}
 JSON
 
-PORT=18733
-python3 "$PLUGIN_ROOT/bin/deployit-backend" --port "$PORT" --root "$ROOT" --no-git-pull \
-    > "$ROOT/backend.log" 2>&1 &
-BACKEND_PID=$!
-trap 'kill "$BACKEND_PID" 2>/dev/null || true' EXIT
-
-for _ in {1..50}; do
-    curl -sf "http://127.0.0.1:$PORT/deployit/_healthz" >/dev/null && break
-    sleep 0.1
-done
+BACKEND_PID=""
+trap 'stop_backend "${BACKEND_PID:-}"; rm -rf "$ROOT"' EXIT
+start_backend "$ROOT" --no-git-pull
 
 check() {
     local path="$1" expected_ctype="$2"

@@ -11,6 +11,7 @@ set -euo pipefail
 export DEPLOYIT_SKIP_GC_PUSH=1
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
+source "$TESTS_DIR/backend-test-helper.sh"
 
 BASE="https://demo.tail.ts.net/deployit"
 OTHER="https://other.tail.ts.net/deployit"
@@ -56,15 +57,9 @@ cat > "$ROOT/index/builds.json" <<JSON
 }
 JSON
 
-PORT=18748
-python3 "$PLUGIN_ROOT/bin/deployit-backend" --port "$PORT" --root "$ROOT" --no-git-pull \
-    > "$ROOT/backend.log" 2>&1 &
-BACKEND_PID=$!
-trap 'kill "$BACKEND_PID" 2>/dev/null || true; rm -rf "$ROOT"' EXIT
-for _ in {1..50}; do
-    curl -sf "http://127.0.0.1:$PORT/deployit/_healthz" >/dev/null && break
-    sleep 0.1
-done
+BACKEND_PID=""
+trap 'stop_backend "${BACKEND_PID:-}"; rm -rf "$ROOT"' EXIT
+start_backend "$ROOT" --no-git-pull
 B="http://127.0.0.1:$PORT"
 
 has() { python3 -c "

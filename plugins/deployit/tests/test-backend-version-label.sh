@@ -6,6 +6,7 @@
 set -euo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
+source "$TESTS_DIR/backend-test-helper.sh"
 
 ROOT=$(mktemp -d)
 mkdir -p "$ROOT/serve" "$ROOT/index" "$ROOT/logs"
@@ -55,16 +56,9 @@ cat > "$ROOT/serve/$PLAIN_ID/_meta.json" <<JSON
 {"id":"$PLAIN_ID","platform":"ios","project":"Other","bundle_id":"io.mikeydotio.Other","marketing_version":"1.2.3","semver_version":null,"build_number":"7","commit":"pln5678","timestamp":"2026-06-01T11:00:00-07:00","origin_host":"studio.tail-abc.ts.net","origin_base_url":"https://studio.tail-abc.ts.net/deployit","install":{"kind":"itms-services","manifest_url":"https://y/m.plist","ipa_url":"https://y/a.ipa"}}
 JSON
 
-PORT=18743
-python3 "$PLUGIN_ROOT/bin/deployit-backend" --port "$PORT" --root "$ROOT" --no-git-pull \
-    > "$ROOT/backend.log" 2>&1 &
-BACKEND_PID=$!
-trap 'kill "$BACKEND_PID" 2>/dev/null || true; rm -rf "$ROOT"' EXIT
-
-for _ in {1..50}; do
-    curl -sf "http://127.0.0.1:$PORT/deployit/_healthz" >/dev/null && break
-    sleep 0.1
-done
+BACKEND_PID=""
+trap 'stop_backend "${BACKEND_PID:-}"; rm -rf "$ROOT"' EXIT
+start_backend "$ROOT" --no-git-pull
 
 # --- Listing rows ---
 listing=$(curl -sf "http://127.0.0.1:$PORT/deployit/")

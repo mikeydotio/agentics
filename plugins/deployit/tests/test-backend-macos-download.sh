@@ -6,6 +6,7 @@
 set -euo pipefail
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "$TESTS_DIR/.." && pwd)"
+source "$TESTS_DIR/backend-test-helper.sh"
 
 ROOT=$(mktemp -d)
 BUILD_ID="lillist-macos-20260520-090000-mac0001"
@@ -36,16 +37,9 @@ cat > "$ROOT/serve/$BUILD_ID/_meta.json" <<JSON
 {"id":"$BUILD_ID","platform":"macos","project":"Lillist","bundle_id":"io.mikey.lillist","marketing_version":"0.1.0","build_number":"5","commit":"mac0001","timestamp":"2026-05-20T09:00:00-07:00","origin_host":"studio.tail-abc.ts.net","origin_base_url":"https://studio.tail-abc.ts.net/deployit","install":{"kind":"direct-download","dmg_url":"https://studio.tail-abc.ts.net/deployit/$BUILD_ID/Lillist.dmg"},"primary_artifact":"Lillist.dmg"}
 JSON
 
-PORT=18746
-python3 "$PLUGIN_ROOT/bin/deployit-backend" --port "$PORT" --root "$ROOT" --no-git-pull \
-    > "$ROOT/backend.log" 2>&1 &
-BACKEND_PID=$!
-trap 'kill "$BACKEND_PID" 2>/dev/null || true; rm -rf "$ROOT"' EXIT
-
-for _ in {1..50}; do
-    curl -sf "http://127.0.0.1:$PORT/deployit/_healthz" >/dev/null && break
-    sleep 0.1
-done
+BACKEND_PID=""
+trap 'stop_backend "${BACKEND_PID:-}"; rm -rf "$ROOT"' EXIT
+start_backend "$ROOT" --no-git-pull
 
 # --- Listing: Download button + canonical macOS casing + .dmg href ---
 listing=$(curl -sf "http://127.0.0.1:$PORT/deployit/")

@@ -683,7 +683,10 @@ def main(argv):
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_cls)
     server.git_pull_enabled = not args.no_git_pull
     server.local_host = args.local_host
-    sys.stderr.write(f"backend: listening on 127.0.0.1:{args.port}, root={args.root}\n")
+    sys.stderr.write(
+        f"backend: listening on 127.0.0.1:{server.server_port}, root={args.root}\n"
+    )
+    sys.stderr.flush()
     server.serve_forever()
 
 

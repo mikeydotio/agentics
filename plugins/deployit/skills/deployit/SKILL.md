@@ -56,11 +56,20 @@ repo, with release notes you author from the commit/issue history.
      Default scheme is `<Name>-<Platform>` (e.g. `Lillist-iOS`).
   2. **Single-app layout:** `./<Name>.xcodeproj` + `./project.yml`. Default
      scheme is `<Name>` (e.g. `moshtail`).
+  3. **Bare Xcode project:** `./<Name>.xcodeproj` with **no `project.yml`** —
+     the default shape of any project XcodeGen did not generate (e.g. SCADPad).
+     Default scheme is `<Name>`; a sibling `./<Name>.xcworkspace` is preferred
+     as the archive container when one exists. Bundle id and marketing version
+     come from `xcodebuild -showBuildSettings` rather than a spec file, so
+     Xcode stays the single source of truth. If xcodebuild cannot answer, or
+     answers without one of those two settings, the deploy refuses loudly and
+     names what was missing — it never guesses an identity or a version.
 
   `MARKETING_VERSION` and `PRODUCT_BUNDLE_IDENTIFIER` may be quoted or
   unquoted in `project.yml`. If the CLI fails with "no recognised Xcode
-  project layout in cwd," the user is likely in the wrong directory —
-  confirm with them before suggesting a scheme override.
+  project layout in cwd," there is no `.xcodeproj` in cwd at all, so the user
+  is likely in the wrong directory (a nested `<Repo>/<Name>/<Name>.xcodeproj`
+  is common) — confirm with them before suggesting a scheme override.
 
   If the project's own `.deployit/config.toml` has a `[toolchain]` table,
   archive/export use that pinned Xcode instead of the machine's

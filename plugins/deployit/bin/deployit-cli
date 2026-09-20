@@ -352,8 +352,39 @@ def _short_sha(cwd: Path) -> str:
     return res.stdout.strip()
 
 
-def _derive_metadata(cwd: Path, platform: str) -> dict:
-    """Detect the Xcode project + spec layout. Supports two shapes:
+def _settings_derived_identity(meta: dict, scheme, env=None) -> tuple:
+    """(bundle_id, marketing_version) straight from `xcodebuild -showBuildSettings`.
+
+    Used by the bare-Xcode-project layout, which has no `project.yml` to read.
+    `meta` must already carry the container flag/path, platform and
+    default_scheme, so the query names the same build the archive will run —
+    `_archive_build_settings` reuses `_settings_argv` to guarantee that.
+
+    Refuses loudly rather than defaulting. A guessed bundle id publishes a
+    build under the wrong identity and a guessed version mislabels it in the
+    index and the GitHub release; both are worse than not deploying."""
+    where = f'{meta["xcode_container_path"]} (scheme {scheme or meta["default_scheme"]})'
+    settings = _archive_build_settings(meta, scheme, env=env)
+    if settings is None:
+        fail(
+            f"xcodebuild could not resolve build settings for {where}. This "
+            "project has no project.yml, so its bundle id and marketing "
+            "version can only come from Xcode. Check that the scheme exists "
+            "and builds for this platform (--scheme overrides it)."
+        )
+    missing = [k for k in ("PRODUCT_BUNDLE_IDENTIFIER", "MARKETING_VERSION")
+               if not settings.get(k)]
+    if missing:
+        fail(
+            f"xcodebuild resolved {where} but returned no "
+            f"{' or '.join(missing)}. deployit will not guess it — set it on "
+            "the target's build settings."
+        )
+    return settings["PRODUCT_BUNDLE_IDENTIFIER"], settings["MARKETING_VERSION"]
+
+
+def _derive_metadata(cwd: Path, platform: str, scheme=None, env=None) -> dict:
+    """Detect the Xcode project + spec layout. Supports three shapes:
 
     Apps-layout (Lillist):   ./Foo.xcworkspace + ./Apps/Foo-<Platform>/project.yml
                              default scheme = "<Project>-<Platform>"
@@ -361,8 +392,19 @@ def _derive_metadata(cwd: Path, platform: str) -> dict:
     Single-app layout:       ./Foo.xcodeproj   + ./project.yml
                              default scheme = "<project>" (the .xcodeproj stem)
 
-    Apps-layout takes precedence when both signals are present, so existing
-    consumers keep working unchanged.
+    Bare Xcode project:      ./Foo.xcodeproj   (+ optional ./Foo.xcworkspace)
+                             with NO project.yml anywhere. This is the default
+                             shape of any project XcodeGen did not generate.
+                             bundle id and version come from
+                             `xcodebuild -showBuildSettings` instead, and the
+                             workspace wins as the archive container when one
+                             exists — it is what Xcode opens, and what resolves
+                             local Swift package path dependencies.
+
+    The arms are tried in the order above, so both project.yml layouts keep
+    precedence and behave bit-identically; `scheme` and `env` are consulted
+    only by the bare arm, which needs them to ask xcodebuild about the same
+    build the archive will run.
     """
     workspace      = _find_workspace(cwd)
     apps_yml       = _find_apps_project_yml(cwd, platform)
@@ -382,26 +424,44 @@ def _derive_metadata(cwd: Path, platform: str) -> dict:
         container_path = str(xcodeproj)
         project_yml    = root_yml
         default_scheme = project_name
+    elif xcodeproj is not None:
+        project_name   = xcodeproj.stem
+        container_flag = "-workspace" if workspace is not None else "-project"
+        container_path = str(workspace if workspace is not None else xcodeproj)
+        project_yml    = None
+        default_scheme = project_name
     else:
         fail(
             "no recognised Xcode project layout in cwd. "
             "deployit looks for one of:\n"
             "  • <Name>.xcworkspace + Apps/<Name>-{Platform}/project.yml (monorepo)\n"
             "  • <Name>.xcodeproj  + ./project.yml                       (single-app)\n"
+            "  • <Name>.xcodeproj  alone                                 (bare Xcode project)\n"
             f"cwd: {cwd}"
         )
 
-    return {
+    meta = {
         "project": project_name,
         "platform": platform,
-        "bundle_id": _read_bundle_id(project_yml),
-        "marketing_version": _read_marketing_version(project_yml),
         "commit": _short_sha(cwd),
-        "project_yml": str(project_yml),
+        "project_yml": str(project_yml) if project_yml is not None else None,
         "xcode_container_flag": container_flag,
         "xcode_container_path": container_path,
         "default_scheme": default_scheme,
     }
+
+    # The bare arm has no spec file, so Xcode itself is the only authority for
+    # these two. Resolved after `meta` exists because the query needs the
+    # container, scheme and destination it carries.
+    if project_yml is None:
+        bundle_id, marketing_version = _settings_derived_identity(meta, scheme, env=env)
+    else:
+        bundle_id        = _read_bundle_id(project_yml)
+        marketing_version = _read_marketing_version(project_yml)
+
+    meta["bundle_id"]         = bundle_id
+    meta["marketing_version"] = marketing_version
+    return meta
 
 
 def _parse_semver_config(cwd: Path):
@@ -2139,14 +2199,20 @@ def cmd_deploy(args):
         fail("--platform required (one of ios | macos | visionos)")
     cwd = Path.cwd()
     _refuse_if_worktree(cwd)
-    meta = _derive_metadata(cwd, args.platform)
 
     # Per-project toolchain pin (.deployit/config.toml [toolchain] — see
     # _resolve_toolchain_developer_dir). None when the project sets none, in
     # which case archive/export inherit the ambient environment unchanged.
+    #
+    # Resolved BEFORE _derive_metadata on purpose: a bare Xcode project (no
+    # project.yml) gets its bundle id and version from xcodebuild, and that
+    # query must be answered by the same Xcode that will archive. Reading them
+    # from a different toolchain could describe a different SDK than it ships.
     project_cfg = _read_project_config(cwd)
     developer_dir = _resolve_toolchain_developer_dir(project_cfg)
     build_env = {**os.environ, "DEVELOPER_DIR": developer_dir} if developer_dir else None
+
+    meta = _derive_metadata(cwd, args.platform, args.scheme, build_env)
 
     if getattr(args, "dump_metadata", False):
         ok({"display": "metadata", **meta, "developer_dir": developer_dir})
@@ -2376,7 +2442,7 @@ def cmd_preflight(args):
     if not args.platform:
         fail("--platform required (one of ios | macos | visionos)")
     cwd = Path.cwd()
-    meta = _derive_metadata(cwd, args.platform)
+    meta = _derive_metadata(cwd, args.platform, args.scheme)
     semver_version = _semver_active_version(cwd)
 
     if semver_version is None:
@@ -2915,7 +2981,9 @@ def build_parser():
 
     p_preflight = sub.add_parser("preflight")
     p_preflight.add_argument("--platform", choices=["ios", "macos", "visionos"])
-    p_preflight.add_argument("--scheme")  # accepted for symmetry with deploy; unused
+    # Not inert: preflight resolves bundle_id, and on a bare Xcode project that
+    # answer comes from xcodebuild, which must be asked about this scheme.
+    p_preflight.add_argument("--scheme")
     p_preflight.set_defaults(func=cmd_preflight)
 
     p_bump = sub.add_parser("bump")

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Fake `xcodebuild -showBuildSettings -json`. Echoes the argv it was given to
+# $FAKE_XCODEBUILD_ARGV_LOG (when set) so a test can assert the query names the
+# same container/scheme/destination the archive would, then emits settings from
+# the FAKE_XCODEBUILD_* environment. Setting FAKE_XCODEBUILD_FAIL=1 makes it
+# exit non-zero, standing in for "xcodebuild cannot answer".
+if [[ -n "${FAKE_XCODEBUILD_ARGV_LOG:-}" ]]; then
+    printf '%s\n' "$*" >>"$FAKE_XCODEBUILD_ARGV_LOG"
+fi
+
+if [[ -n "${FAKE_XCODEBUILD_FAIL:-}" ]]; then
+    echo "fake-xcodebuild: refusing on purpose" >&2
+    exit 70
+fi
+
+settings=""
+add() { settings="${settings:+$settings,}\"$1\": \"$2\""; }
+[[ -n "${FAKE_XCODEBUILD_BUNDLE_ID-unset}" ]] && add PRODUCT_BUNDLE_IDENTIFIER "${FAKE_XCODEBUILD_BUNDLE_ID:-io.example.fake}"
+[[ -n "${FAKE_XCODEBUILD_VERSION-unset}"   ]] && add MARKETING_VERSION        "${FAKE_XCODEBUILD_VERSION:-9.9.9}"
+add SWIFT_OPTIMIZATION_LEVEL "${FAKE_XCODEBUILD_OPT:--O}"
+add CONFIGURATION            "${FAKE_XCODEBUILD_CONFIG:-Release}"
+
+cat <<JSON
+[{"action": "archive", "target": "fake", "buildSettings": {$settings}}]
+JSON

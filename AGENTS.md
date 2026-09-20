@@ -7,6 +7,9 @@
   Authoritative for forge's own storyhook usage:
   plugins/forge/references/storyhook-contract.md
 -->
+
+> Project standards, environment, and git policy live in [CLAUDE.md](./CLAUDE.md) — read it alongside this file.
+
 <!-- BEGIN GENERATED -->
 
 # AGENTS.md — Project Task Management

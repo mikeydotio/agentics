@@ -47,3 +47,10 @@ Thumbs.db
 
 # Session handoff notes (working state, not repo history)
 HANDOFF.md
+
+# story per-story git worktrees (ephemeral — never commit)
+.codex/worktrees/
+
+# Python bytecode caches (deployit CLI is python3)
+__pycache__/
+*.pyc

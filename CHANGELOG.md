@@ -3,6 +3,41 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.9.3] - 2026-09-20
+
+### Added
+- deploy a bare Xcode project with no project.yml (d986264)
+- verify independent dirty-worktree recovery (AGE-66) (f755fb8)
+
+### Fixed
+- synchronize Git hook timeout fixture (AGE-55) (b86ba7f)
+- support StoryHook major 3 (AGE-108) (0acb6fe)
+- accept validated StoryHook 3 (AGE-55) (262902d)
+- fail closed on unverified integrity results (AGE-55) (f2fc4f0)
+- isolate backend fixtures (AGE-56) (0f1823c)
+- keep bytecode out of source tree (AGE-56) (1835657)
+
+### Changed
+- Merge pull request #207 from mikeydotio/feat/deployit-bare-xcodeproj (f8b7f34)
+- Merge pull request #206 from mikeydotio/chore/retire-claude-md (a30d019)
+- Merge pull request #205 from mikeydotio/chore/ignore-ephemeral-dirs (3b0dd0f)
+- Merge pull request #204 from mikeydotio/worktree-AGE-66 (29891d0)
+- Merge pull request #202 from mikeydotio/worktree-AGE-55 (e8be499)
+- Merge pull request #201 from mikeydotio/worktree-AGE-56 (a0952ce)
+- Merge remote-tracking branch 'origin/main' into worktree-AGE-55 (f0265fb)
+- Merge pull request #203 from mikeydotio/worktree-AGE-108 (0b5f89e)
+- Merge pull request #200 from mikeydotio/release/v3.9.2 (6a41a83)
+
+### Documentation
+- reconcile and retain the dual-host prototype (AGE-66) (20eeb66)
+
+### Maintenance
+- retire CLAUDE.md into AGENTS.md, keeping it as a symlink (ae5fa93)
+- ignore ephemeral dirs and cross-link CLAUDE.md from AGENTS.md (f000202)
+- merge StoryHook 3 support into AGE-56 (7d494dd)
+
+_[manual]_
+
 ## [v3.9.2] - 2026-09-13
 
 ### Added

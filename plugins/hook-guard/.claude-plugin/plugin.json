@@ -1,5 +1,5 @@
 {
   "name": "hook-guard",
-  "version": "3.9.2",
+  "version": "3.9.3",
   "description": "Circuit breaker for Claude Code hooks — prevents stop hook infinite loops by detecting rapid repeated firings"
 }

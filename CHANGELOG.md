@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.9.5] - 2026-09-20
+
+### Fixed
+- preserve exact dirty file paths (5b2eebe)
+- run pre-hooks for all version assignments (203d892)
+
+### Changed
+- Merge pull request #210 from mikeydotio/chore/release-v3.9.4 (f4fafdb)
+
+### Testing
+- refresh diagnostic coverage for new fixtures (7a5d6a8)
+
+_[manual]_
+
 ## [v3.9.4] - 2026-09-20
 
 ### Fixed

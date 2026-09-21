@@ -91,6 +91,7 @@ test-appcast-module.sh
 test-bootstrap-dirs.sh
 test-cli-archive-build-number.sh
 test-cli-archive-configuration.sh
+test-cli-archive-gate-absent-keys.sh
 test-cli-backend-link-rot.sh
 test-cli-bump.sh
 test-cli-classify-push-failure.sh
@@ -117,6 +118,7 @@ test-cli-stage-macos-sparkle.sh
 test-cli-version.sh
 test-cli-worktree-guard.sh
 test-gc.sh
+test-metadata-bare-xcodeproj.sh
 test-metadata-single-app.sh
 test-metadata.sh
 test-release-adhoc-signing.sh
@@ -145,6 +147,7 @@ HHHHHL test-cli-rm.sh
 LNNNNN test-cli-version.sh
 LLHHNN test-cli-worktree-guard.sh
 LLHNNN test-gc.sh
+LLLLLL test-metadata-bare-xcodeproj.sh
 LNNNNN test-metadata-single-app.sh
 LNNNNN test-metadata.sh
 LLNNNN test-release-adhoc-signing.sh

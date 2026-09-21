@@ -64,9 +64,9 @@ rm -rf "$repo"
 
 # ---------------------------------------------------- 3. --scheme reaches argv
 repo=$(make_repo); log=$(mktemp)
-FAKE_XCODEBUILD_ARGV_LOG="$log" dump "$repo" --scheme SCADPad-Alt >/dev/null
+out=$(FAKE_XCODEBUILD_ARGV_LOG="$log" dump "$repo" --scheme SCADPad-Alt)
 t="--scheme overrides the scheme the settings query asks about"
-if grep -q -- "-scheme SCADPad-Alt" "$log"; then ok "$t"; else bad "$t" "$(cat "$log")"; fi
+if grep -q -- "-scheme SCADPad-Alt" "$log"; then ok "$t"; else bad "$t" "$out"; cat "$log"; fi
 rm -rf "$repo" "$log"
 
 # ------------------------------------------- 4. xcodebuild silent -> loud refusal

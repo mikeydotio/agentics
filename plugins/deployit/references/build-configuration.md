@@ -43,14 +43,24 @@ answer is the one that actually governs the build, not a guess. Cost is a few se
 The verdict is **substance-based, never name-based**, so a configuration *named* `Release` that
 compiles `-Onone` is still caught:
 
-| Rung | Setting | Unoptimized when |
+| Rung | Setting | Verdict |
 |---|---|---|
-| 1 | `SWIFT_OPTIMIZATION_LEVEL` | `== -Onone` |
-| 2 | *(no Swift key)* `GCC_OPTIMIZATION_LEVEL` | `== 0` |
-| 3 | *(neither key)* | → **unresolved**, see below |
+| 1 | `SWIFT_OPTIMIZATION_LEVEL` | unoptimized when `== -Onone` |
+| 2 | *(no Swift key)* `GCC_OPTIMIZATION_LEVEL` | unoptimized when `== 0` |
+| 3 | *(neither key, but xcodebuild answered)* | **optimized** — inherits the xcspec defaults |
+| — | *(xcodebuild gave no answer at all)* | → **unresolved**, see below |
 
-> A healthy Release archive **omits** `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and
-> `GCC_OPTIMIZATION_LEVEL` entirely. Absence is the *healthy* signal and never triggers a refusal.
+> Rung 3 is a toolchain fact, not a guess. Xcode's `Swift.xcspec` declares
+> `SWIFT_OPTIMIZATION_LEVEL` DefaultValue `-O` and `Clang.xcspec` declares
+> `GCC_OPTIMIZATION_LEVEL` DefaultValue `s`, so a configuration that simply inherits those
+> defaults compiles optimized while reporting neither key. An explicitly unoptimized
+> configuration reports `-Onone` / `0` and is caught on rungs 1–2. The archive records the
+> inherited case as `optimization_level: "xcspec-default"` so it is never confused with
+> "could not tell", which is now `null` and reachable only from the last row.
+>
+> **`unresolved` means xcodebuild did not answer — nothing else.** Before AGE-110 it also
+> covered rung 3, so deployit refused every project whose Release inherits Xcode's defaults
+> (the normal case) while telling the operator that xcodebuild had failed, which it had not.
 
 ## Outcomes
 

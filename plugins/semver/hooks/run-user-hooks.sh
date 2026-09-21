@@ -3,7 +3,7 @@
 #
 # Usage: run-user-hooks.sh <phase> <bump_type> <old_version> <new_version> <project_dir>
 #   phase:       "pre-bump" or "post-bump"
-#   bump_type:   "major", "minor", or "patch"
+#   bump_type:   "major", "minor", "patch", "set", or "init"
 #   old_version: current version string (e.g., "v1.2.3")
 #   new_version: computed new version string (e.g., "v1.3.0")
 #   project_dir: absolute path to the project root

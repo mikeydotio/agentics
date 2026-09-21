@@ -9,7 +9,11 @@ Both are **interactive** commands modeled on `bump run`/`bump execute`: the rout
 calls a `run` subcommand that gathers state and, on the happy path, executes in the
 same call; when interaction is needed it returns a `questions` array for the SKILL
 Question Loop, which then calls the `execute` subcommand with the collected flags.
-Post-bump user hooks (e.g. this repo's `01-sync-plugin-versions.sh`) fire and keep
+Pre-bump scripts run before a new VERSION is written and can stage related
+metadata in the same release commit. Script failures abort before version or
+initialization config writes. Same-version re-cuts and init enable/adopt do not
+run pre-bump scripts. Pre-bump prompt hooks cause a read-only handoff before
+execute, including a clean init with no questions. Post-bump user hooks (e.g. this repo's `01-sync-plugin-versions.sh`) fire and keep
 manifests in sync regardless of `--plugin-root` — the CLI locates its own hook
 runner by default (see `user-hooks.md`'s Hook Runner Resolution). The router still
 threads `--plugin-root` through both commands as an explicit override, but it was

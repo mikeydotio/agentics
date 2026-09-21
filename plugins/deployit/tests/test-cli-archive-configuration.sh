@@ -207,14 +207,47 @@ for plat in PLATFORMS:
 # M6: UNRESOLVED — refused, distinctly, and NOT silenced by allow_debug.
 # "I know this is unoptimized and I accept it" is a different claim from
 # "deployit could not tell"; one key must not silence both.
-for label, settings in (("empty", {}), ("none", None),
-                        ("no optimization key", {"CONFIGURATION": "Release"})):
+#
+# AGE-110: this loop used to carry a third row, {"CONFIGURATION": "Release"}
+# with no optimization key, asserting it refuse as unresolved. That row cited
+# no capture — unlike REAL_RELEASE/REAL_DEBUG above — and was false. Xcode's
+# Swift.xcspec declares SWIFT_OPTIMIZATION_LEVEL DefaultValue "-O" and
+# Clang.xcspec declares GCC_OPTIMIZATION_LEVEL DefaultValue "s", so an answer
+# naming neither key is OPTIMIZED, not indeterminate. Measured on SCADPad,
+# whose Release archive reports neither key while its Debug archive reports
+# -Onone and 0 explicitly. The row refused the safe build and accepted
+# nothing; it now lives below as M6b, asserting the opposite.
+for label, settings in (("empty", {}), ("none", None)):
     r = gate(settings, NO_ACK, "ios", False)
     check(f"M6: unresolved ({label}) must refuse", r["verdict"] == "refuse")
     check(f"M6: unresolved ({label}) must be its own reason", r["reason"] == "unresolved")
     r_ack = gate(settings, ACK, "ios", False)
     check(f"M6: allow_debug must NOT silence unresolved ({label})",
           r_ack["verdict"] == "refuse" and r_ack["reason"] == "unresolved")
+
+# M6b: ANSWERED but naming no optimization key — the xcspec defaults apply and
+# they are optimized, so this proceeds on every platform, publishing or not.
+# It must NOT be reported as unresolved: that reason is now reserved for an
+# answer xcodebuild never gave, so the two facts no longer share a string.
+KEYLESS = {"CONFIGURATION": "Release", "SWIFT_COMPILATION_MODE": "wholemodule"}
+for plat, dr in (("ios", False), ("macos", False), ("macos", True),
+                 ("visionos", False)):
+    r = gate(KEYLESS, NO_ACK, plat, dr)
+    check(f"M6b: answered-but-keyless/{plat}/do_release={dr} must proceed",
+          r["verdict"] == "proceed")
+    check(f"M6b: answered-but-keyless/{plat}/do_release={dr} must not warn",
+          r["warnings"] == [])
+    check(f"M6b: answered-but-keyless/{plat}/do_release={dr} is not unresolved",
+          r["reason"] != "unresolved")
+# The recorded level must be auditable: a distinct marker, never None, so
+# _meta.json cannot confuse "inherited the optimized default" with "no answer".
+r = gate(KEYLESS, NO_ACK, "ios", False)
+check("M6b: the inherited default is recorded as a distinct marker",
+      r["optimization_level"] == mod._OPT_XCSPEC_DEFAULT)
+check("M6b: the inherited default is recorded as optimized",
+      r["unoptimized"] is False)
+check("M6b: an unanswered gate still records no level",
+      gate(None, NO_ACK, "ios", False)["optimization_level"] is None)
 
 # The ObjC rung: a target with no Swift key is decided on GCC_OPTIMIZATION_LEVEL
 # rather than falling through to unresolved.

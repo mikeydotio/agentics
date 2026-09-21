@@ -878,6 +878,11 @@ def _archive_build_settings(meta: dict, scheme, env=None):
 
 # Reasons `_archive_gate` can refuse. Distinct strings so a later refactor
 # cannot collapse the branches unnoticed — a test asserts they stay distinct.
+# What `optimization_level` records when xcodebuild answered but named no
+# optimization key: the archive inherits Xcode's xcspec defaults (-O / -Os),
+# which are optimized. Distinct from None, which now means only "no answer".
+_OPT_XCSPEC_DEFAULT = "xcspec-default"
+
 _GATE_UNACKNOWLEDGED = "unoptimized_unacknowledged"
 _GATE_PUBLISH        = "unoptimized_publish"
 _GATE_UNRESOLVED     = "unresolved"
@@ -934,15 +939,31 @@ def _archive_gate(settings, project_cfg: dict, platform: str,
 
         SWIFT_OPTIMIZATION_LEVEL → GCC_OPTIMIZATION_LEVEL → unresolved
 
-    Absence of `SWIFT_ACTIVE_COMPILATION_CONDITIONS` / `GCC_OPTIMIZATION_LEVEL`
-    is the **healthy** signal (measured: a real Release archive omits both), so
-    it must never itself trigger a refusal.
+    An answer that names **neither** optimization key is optimized, and must
+    never itself trigger a refusal. That is a toolchain fact, not an inference
+    from one project: Xcode's `Swift.xcspec` declares `SWIFT_OPTIMIZATION_LEVEL`
+    DefaultValue `-O` and `Clang.xcspec` declares `GCC_OPTIMIZATION_LEVEL`
+    DefaultValue `s`, so a configuration that simply inherits those defaults
+    compiles optimized while reporting neither key. An explicitly unoptimized
+    configuration reports `-Onone` / `0` and is caught on the rungs above.
+
+    (An earlier wording of this note named `SWIFT_ACTIVE_COMPILATION_CONDITIONS`
+    and `GCC_OPTIMIZATION_LEVEL` and cited "a real Release archive omits both".
+    That measurement was about the **debug markers** — the golden `REAL_RELEASE`
+    fixture sets `SWIFT_OPTIMIZATION_LEVEL` to `-O` explicitly — so it never
+    licensed the keyless case either way. AGE-110.)
 
     `platform` and `do_release` are parameters rather than globals so the
     refusal boundary is directly testable. Note `do_release` is a *ceiling on
     the escape hatch*, not the trigger: it is macOS-only by construction, so
     triggering on it would leave every iOS deploy — the case that motivated
     this — unprotected."""
+    # "xcodebuild gave no answer at all" and "xcodebuild answered, naming no
+    # optimization key" are different facts and must not share a verdict
+    # (AGE-110). _archive_build_settings signals the former as None, and
+    # normalises an empty buildSettings to None too, so `bool` — not
+    # `is not None` — is the test that keeps an empty dict on the refusing side.
+    answered = bool(settings)
     settings = settings or {}
     allow_debug = bool((project_cfg.get("build") or {}).get("allow_debug"))
 
@@ -952,7 +973,14 @@ def _archive_gate(settings, project_cfg: dict, platform: str,
         optimization_level, unoptimized = swift, (swift == "-Onone")
     elif gcc is not None:
         optimization_level, unoptimized = gcc, (gcc == "0")
+    elif answered:
+        # Neither key named in an answer xcodebuild did give: the xcspec
+        # defaults apply and they are optimized. Recorded as a distinct marker
+        # rather than None so `_meta.json` and the index can never confuse
+        # "inherited the optimized default" with "could not tell" (AGE-110).
+        optimization_level, unoptimized = _OPT_XCSPEC_DEFAULT, False
     else:
+        # No answer at all. None here is the ONLY meaning of "could not tell".
         optimization_level, unoptimized = None, None
 
     verdict = {
@@ -966,7 +994,7 @@ def _archive_gate(settings, project_cfg: dict, platform: str,
         "warnings": [],
     }
 
-    if optimization_level is None:
+    if not answered:
         return {**verdict, "verdict": "refuse", "reason": _GATE_UNRESOLVED}
     if not unoptimized:
         return verdict

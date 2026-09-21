@@ -390,8 +390,8 @@ test_bump_execute_stash_dirty() {
     git -C "$repo" add -A
     git -C "$repo" commit -q -m "feat: add feature"
 
-    # Create dirty file
-    echo "uncommitted work" > "$repo/dirty.txt"
+    # Change a tracked file: git stash does not include untracked files.
+    echo "uncommitted work" >> "$repo/feature.txt"
 
     local out
     out=$(cd "$repo" && "$CLI" bump execute minor --dirty-action stash)
@@ -399,8 +399,9 @@ test_bump_execute_stash_dirty() {
     assert_json_field "$out" ".ok" "true" "ok should be true" &&
     assert_json_field "$out" ".stash_applied" "true" "stash should be applied back" &&
 
-    # Dirty file should still be present
-    assert_file_exists "$repo/dirty.txt" "dirty file should exist after stash pop"
+    # User edits return to the working tree, not the release commit.
+    assert_file_contains "$repo/feature.txt" "uncommitted work" "restore user edit" &&
+    assert_eq "feature" "$(git -C "$repo" show HEAD:feature.txt)" "exclude user edit from release"
 }
 
 

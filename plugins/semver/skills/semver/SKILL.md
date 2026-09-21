@@ -81,7 +81,10 @@ happy path — executes in the same call. Mirrors the Bump Flow:
    `post_hooks.warnings`, show the `display` field, and stop.
 3. If **`executed` is false** → interaction is needed. Process the `questions`
    array (`backward_version`, `dirty_tree`, `wrong_branch`, `validation_failed`,
-   `tag_conflict`) via the Question Loop, then execute with the collected flags:
+   `tag_conflict`) via the Question Loop. If `has_pre_bump_prompt_hook` is true,
+   read `pre_bump_prompt_hook_path` and follow it before execute, even when the
+   questions array is empty. Context: `set`, old_version, new_version. Do not
+   trigger a version operation from the hook. Then execute with the collected flags:
    `python3 ${CLAUDE_PLUGIN_ROOT}/bin/semver-cli set execute <version> [collected flags] --source set --plugin-root ${CLAUDE_PLUGIN_ROOT}`
    Then handle `post_hooks.prompt_hook` (**do NOT trigger `/semver set`**), report
    `post_hooks.warnings`, and show the `display` field.
@@ -95,11 +98,19 @@ changelog + version tag (default `v0.1.0`). The router runs `init run [version]`
 2. If **`executed` is true** → a clean init ran (no prior artifacts). Follow
    `post_hooks.prompt_hook` if present, report `post_hooks.warnings`, show the
    `display` field, and stop.
-3. If **`executed` is false** → the repo already has semver artifacts; the
+3. If **`executed` is false** and `action` is `fresh_init`, only the pre-bump
+   prompt needs attention. Read `pre_bump_prompt_hook_path` and follow it, then
+   run `python3 ${CLAUDE_PLUGIN_ROOT}/bin/semver-cli init execute --mode fresh
+   [--version <requested version>] [original init options] --plugin-root ${CLAUDE_PLUGIN_ROOT}`.
+   Handle post-hook instructions and warnings, show `display`, and stop.
+4. Otherwise **`executed` is false** → the repo already has semver artifacts; the
    response carries a read-only assessment (`artifacts`) and a single
    `init_existing` question. Present it via `AskUserQuestion`, then act on the
    selected option's `command_mapping` value:
-   - `init execute --mode <fresh|enable|adopt|reinit>` → run
+   - `init execute --mode <fresh|enable|adopt|reinit>` → for `fresh` or `reinit`
+     that changes VERSION, follow `pre_bump_prompt_hook_path` first if present.
+     Resolve the target version before reading the prompt. Context: `init`, the
+     prior VERSION (or `(none)`), and the selected new version. Then run
      `python3 ${CLAUDE_PLUGIN_ROOT}/bin/semver-cli <value> --plugin-root ${CLAUDE_PLUGIN_ROOT}`.
      For `--mode reinit`, if the value has no `--version` (i.e. `reinit_needs_version`
      is true), first ask the user for the target version and append `--version <vX.Y.Z>`.

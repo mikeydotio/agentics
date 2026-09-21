@@ -1,6 +1,6 @@
 {
   "name": "freshen",
-  "version": "3.9.4",
+  "version": "3.9.5",
   "description": "Clear context and continue long workflows safely through tmux.",
   "author": {
     "name": "mikeydotio",

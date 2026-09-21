@@ -20,6 +20,20 @@ Hooks are **optional**. If `.semver/hooks/` does not exist, the bump proceeds no
 
 ## Script Hook Contract
 
+### Version Changes
+
+Pre-bump scripts run for `bump`, `set`, fresh `init`, `init --mode reinit`,
+`bump first-version`, and fresh `tracking start --version`. They run before
+VERSION, CHANGELOG, or initialization config writes. Files staged by the hook
+are included in the version commit and tag. When `bump` or `set` stashes user
+edits, it does so **before** scripts run; hook output stays in the release.
+
+No pre-bump scripts run when VERSION stays unchanged: same-version re-cuts,
+init enable/adopt, or tracking start without a version. Archive restoration
+restores historical artifacts and does not create a new release identity.
+A failed hook prevents a release but keeps hook-owned side effects (such as a
+consumed build number). A required script that cannot be launched also aborts.
+
 ### Environment Variables
 
 Every hook script receives these environment variables:
@@ -108,7 +122,9 @@ Reference these in your instructions as prose (e.g., "If this is a major bump...
 
 ### Timing
 
-- **Pre-bump PROMPT_HOOK.md** is read **before** shell scripts run and **before** VERSION is modified. The AI can signal an abort if it finds a blocking issue.
+- **Pre-bump PROMPT_HOOK.md** for `bump`, `set`, and `init` is read **before** shell scripts run and **before** VERSION is modified. The AI can signal an abort if it finds a blocking issue.
+  The legacy `bump first-version` and `tracking start` passthrough commands run
+  shell hooks only; use `init` for an interactive pre-prompt handoff.
 - **Post-bump PROMPT_HOOK.md** is read **after** shell scripts run and **after** the commit and tag exist.
 
 ### Constraints

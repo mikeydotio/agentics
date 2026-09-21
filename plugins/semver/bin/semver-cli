@@ -169,7 +169,7 @@ def git(*args, cwd=None):
             cwd=cwd or os.getcwd(),
             capture_output=True, text=True, timeout=30,
         )
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
+        return result.returncode, result.stdout.rstrip("\n"), result.stderr.strip()
     except subprocess.TimeoutExpired:
         return 1, "", "git command timed out"
     except FileNotFoundError:
@@ -257,13 +257,18 @@ def is_dirty():
 
 
 def dirty_files():
-    rc, out, _ = git("status", "--porcelain")
+    """Return exact destination paths from NUL-delimited Git status records."""
+    rc, out, _ = git("status", "--porcelain", "-z")
     if rc != 0 or not out:
         return []
     files = []
-    for line in out.splitlines():
-        if len(line) > 3:
-            files.append(line[3:].strip())
+    records = iter(out.split("\0"))
+    for record in records:
+        if len(record) > 3:
+            files.append(record[3:])
+            # Rename/copy records include a second, source-path-only record.
+            if "R" in record[:2] or "C" in record[:2]:
+                next(records, None)
     return files
 
 
@@ -853,17 +858,17 @@ def _default_plugin_root():
     return os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-def _pending_post_bump_hooks(project_dir):
-    """Names of executable *.sh files in the project's post-bump hooks dir.
+def _pending_post_bump_hooks(project_dir, phase="post-bump"):
+    """Names of executable *.sh files in the requested hook phase directory.
 
     Mirrors run-user-hooks.sh's own discovery rules (*.sh, executable) so the
     two never disagree about what counts as a hook. Used to tell "the project
-    defines no post-bump hooks" (safe to report success) apart from "hooks
+    defines no scripts for this phase" (safe to report success) apart from "hooks
     are defined but the runner could not execute them" (must be reported).
     Sorted for determinism; Python's default string ordering matches the
     runner's `LC_COLLATE=C` byte-order sort for ASCII filenames.
     """
-    hooks_dir = os.path.join(project_dir, ".semver", "hooks", "post-bump")
+    hooks_dir = os.path.join(project_dir, ".semver", "hooks", phase)
     if not os.path.isdir(hooks_dir):
         return []
     names = []
@@ -907,6 +912,49 @@ def run_user_hooks(phase, bump_type, old_version, new_version, project_dir, plug
         return {"status": "error", "message": f"{phase} hooks timed out after 120s"}
     except FileNotFoundError:
         return {"status": "error", "message": "bash not found"}
+
+
+def _run_pre_bump_hooks(bump_type, old_version, new_version, project_dir, plugin_root):
+    """Gate a version change before any release-owned files are written.
+
+    Hooks own their side effects (for example consumed build numbers). A failed
+    hook leaves those effects available for diagnosis; it cannot create a release.
+    """
+    if os.environ.get("SEMVER_BUMP_IN_PROGRESS") == "1":
+        output_error("reentrancy", "A version operation is already in progress.")
+    if old_version == new_version:
+        return {"hooks_run": 0, "prompt_hook": None, "warnings": []}
+    result = run_user_hooks(
+        "pre-bump", bump_type, old_version, new_version, project_dir, plugin_root)
+    status = result.get("status")
+    if status == "blocked":
+        output_error("reentrancy", result.get("reason", "Reentrancy blocked"))
+    if status == "failed":
+        output_error("pre_hook_failed",
+                     f"Pre-bump hook '{result.get('failed_hook', '?')}' failed "
+                     f"(exit {result.get('exit_code', '?')})",
+                     detail=result.get("output", ""))
+    if status != "ok" and _pending_post_bump_hooks(project_dir, "pre-bump"):
+        output_error("pre_hook_failed", "Pre-bump hooks could not run.",
+                     detail=result.get("message", "Invalid hook runner response"))
+    return result
+
+
+def _pre_prompt_state(project_dir):
+    """Describe a pre-bump prompt without executing or modifying the project."""
+    path = os.path.join(project_dir, ".semver", "hooks", "pre-bump", "PROMPT_HOOK.md")
+    return {"has_pre_bump_prompt_hook": os.path.isfile(path),
+            "pre_bump_prompt_hook_path": path if os.path.isfile(path) else None}
+
+
+def _stash_before_version(message):
+    """Stash user edits before hooks, returning whether a new stash was made."""
+    _, before, _ = git("rev-parse", "--verify", "refs/stash")
+    rc, _, err = git("stash", "push", "-m", message)
+    if rc != 0:
+        raise RuntimeError(f"git stash failed: {err}")
+    _, after, _ = git("rev-parse", "--verify", "refs/stash")
+    return before != after
 
 
 # ─── Subcommands ─────────────────────────────────────────────────────────────
@@ -1488,18 +1536,6 @@ def cmd_bump_execute(args):
     old_version = version
     today = datetime.date.today().isoformat()
 
-    # Run pre-bump hooks (before lock, per original design). plugin_root is
-    # optional here too — run_user_hooks self-locates when it is omitted.
-    pre_hooks_result = run_user_hooks(
-        "pre-bump", bump_type, old_version, new_version, project_dir, plugin_root)
-    if pre_hooks_result.get("status") == "failed":
-        output_error("pre_hook_failed",
-                     f"Pre-bump hook '{pre_hooks_result.get('failed_hook', '?')}' failed "
-                     f"(exit {pre_hooks_result.get('exit_code', '?')})",
-                     detail=pre_hooks_result.get("output", ""))
-    if pre_hooks_result.get("status") == "blocked":
-        output_error("reentrancy", pre_hooks_result.get("reason", "Reentrancy blocked"))
-
     lock = FileLock(project_dir)
     stashed = False
     result = {"ok": True, "executed": True, "old_version": old_version, "new_version": new_version}
@@ -1510,8 +1546,11 @@ def cmd_bump_execute(args):
             if dirty_action == "include":
                 git("add", "-A")
             elif dirty_action == "stash":
-                git("stash", "push", "-m", "semver: pre-bump stash")
-                stashed = True
+                stashed = _stash_before_version("semver: pre-bump stash")
+
+            # Hooks must stage their output after user edits have been stashed.
+            pre_hooks_result = _run_pre_bump_hooks(
+                bump_type, old_version, new_version, project_dir, plugin_root)
 
             # Get commits for changelog
             lvc = last_version_commit()
@@ -1546,6 +1585,10 @@ def cmd_bump_execute(args):
             # Tag
             _apply_tag(new_version, tagging, skip_tag, overwrite_tag, result)
 
+    except SystemExit:
+        if stashed:
+            git("stash", "pop")
+        raise
     except RuntimeError as e:
         # Clean up partial changes
         git("checkout", "VERSION", "CHANGELOG.md")
@@ -1618,6 +1661,10 @@ def cmd_bump_first_version(args):
     if parse_version(version, prefix) is None:
         output_error("invalid_version", f"Invalid version format: '{version}'. Expected: {prefix}MAJOR.MINOR.PATCH")
 
+    old_version = read_version_file(project_dir)
+    pre_hooks_result = _run_pre_bump_hooks(
+        "init", old_version, version, project_dir, None)
+
     # Write VERSION
     version_path = os.path.join(project_dir, "VERSION")
     with open(version_path, "w") as f:
@@ -1646,14 +1693,20 @@ def cmd_bump_first_version(args):
     if tag_created:
         display_lines.append(f"  Tag: {version} created")
 
-    output({
+    result = {
         "ok": True,
         "version": version,
         "changelog_created": True,
         "tag_created": tag_created,
         "commit_hash": commit_hash,
         "display": build_display(display_lines),
-    })
+    }
+    skipped = _run_post_bump_and_verify(
+        "init", old_version, version, tagging, False,
+        project_dir, None, pre_hooks_result, result)
+    if skipped:
+        result["display"] += "\n  ⚠ post-bump hooks did NOT run — see post_hooks.warnings"
+    output(result, exit_code=3 if skipped else 0)
 
 
 # ─── set (assign an explicit version) ────────────────────────────────────────
@@ -1826,8 +1879,12 @@ def cmd_set_run(args):
     if result["has_post_bump_prompt_hook"]:
         result["post_bump_prompt_hook_path"] = post_hook
 
+    result.update(_pre_prompt_state(project_dir))
+
     # Blockers → hand back (or abort when non-interactive)
     blockers = list(result["questions_needed"])
+    if result["has_pre_bump_prompt_hook"]:
+        blockers.append("a pre-bump PROMPT_HOOK.md must run first")
     if blockers:
         if getattr(args, "non_interactive", False):
             result["ok"] = False
@@ -1840,7 +1897,7 @@ def cmd_set_run(args):
             lines = [f"[semver] Preparing to set version: {old or '(none)'} → {target}"]
             lines.append(f"  Questions to resolve: {', '.join(blockers)}")
             result["display"] = build_display(lines)
-        output(result)
+        output(result, exit_code=0 if result["ok"] else 1)
 
     # Happy path — execute straight through (outputs + exits).
     cmd_set_execute(args)
@@ -1888,8 +1945,11 @@ def cmd_set_execute(args):
             if dirty_action == "include":
                 git("add", "-A")
             elif dirty_action == "stash":
-                git("stash", "push", "-m", "semver: pre-set stash")
-                stashed = True
+                stashed = _stash_before_version("semver: pre-set stash")
+
+            # Hooks must stage their output after user edits have been stashed.
+            pre_hooks_result = _run_pre_bump_hooks(
+                "set", old_version, new_version, project_dir, plugin_root)
 
             changelog_path = os.path.join(project_dir, "CHANGELOG.md")
             if has_prior:
@@ -1931,6 +1991,10 @@ def cmd_set_execute(args):
             # Tag
             _apply_tag(new_version, tagging, skip_tag, overwrite_tag, result)
 
+    except SystemExit:
+        if stashed:
+            git("stash", "pop")
+        raise
     except RuntimeError as e:
         git("checkout", "VERSION", "CHANGELOG.md")
         if stashed:
@@ -1946,11 +2010,10 @@ def cmd_set_execute(args):
         git("stash", "pop")
         result["stash_applied"] = True
 
-    # Post-bump hooks + verification (source sentinel "set"; set runs no pre-hooks)
+    # Post-bump hooks + verification with the same version context as pre-hooks.
     hooks_skipped = _run_post_bump_and_verify(
         "set", old_version, new_version, tagging, skip_tag,
-        project_dir, plugin_root,
-        {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+        project_dir, plugin_root, pre_hooks_result, result)
 
     # Build display
     lines = [f"[semver] Set version → {new_version}"]
@@ -2006,7 +2069,7 @@ def cmd_tracking_start(args):
 
 def _init_fresh_core(project_dir, config_path, *, version, prefix, tagging, fmt, branch,
                      commit_message="chore: initialize semver tracking",
-                     raise_on_commit_fail=False):
+                     raise_on_commit_fail=False, plugin_root=None):
     """Write config + optional VERSION/CHANGELOG + CLAUDE.md, commit, and tag.
 
     Shared by `tracking start` (version may be None) and `init` (version always
@@ -2017,6 +2080,16 @@ def _init_fresh_core(project_dir, config_path, *, version, prefix, tagging, fmt,
     original behavior).
     """
     today = datetime.date.today().isoformat()
+
+    old_version = read_version_file(project_dir)
+    pre_hooks_result = {"hooks_run": 0, "prompt_hook": None, "warnings": []}
+    if version:
+        raw = version.strip()
+        resolved = prefix + raw if prefix and not raw.startswith(prefix) else raw
+        if parse_version(resolved, prefix) is None:
+            output_error("invalid_version", f"Invalid version: '{resolved}'")
+        pre_hooks_result = _run_pre_bump_hooks(
+            "init", old_version, resolved, project_dir, plugin_root)
 
     # Create config (tracking + auto-bump enabled)
     config = Config(config_path)
@@ -2035,11 +2108,6 @@ def _init_fresh_core(project_dir, config_path, *, version, prefix, tagging, fmt,
     version_set = False
     tag_created = False
     if version:
-        raw = version.strip()
-        resolved = prefix + raw if prefix and not raw.startswith(prefix) else raw
-        if parse_version(resolved, prefix) is None:
-            output_error("invalid_version", f"Invalid version: '{resolved}'")
-
         version_path = os.path.join(project_dir, "VERSION")
         with open(version_path, "w") as f:
             f.write(resolved + "\n")
@@ -2070,6 +2138,8 @@ def _init_fresh_core(project_dir, config_path, *, version, prefix, tagging, fmt,
         tag_created = True
 
     return {
+        "old_version": old_version,
+        "pre_hooks": pre_hooks_result,
         "version_prefix": prefix,
         "git_tagging": tagging,
         "changelog_format": fmt,
@@ -2093,7 +2163,7 @@ def _tracking_start_fresh(project_dir, config_path, args):
     branch = args.branch or detect_default_branch()
 
     core = _init_fresh_core(project_dir, config_path, version=args.version, prefix=prefix,
-                            tagging=tagging, fmt=fmt, branch=branch)
+                            tagging=tagging, fmt=fmt, branch=branch, plugin_root=args.plugin_root)
 
     result = {
         "ok": True,
@@ -2120,9 +2190,9 @@ def _tracking_start_fresh(project_dir, config_path, args):
     hooks_skipped = False
     if core["version_set"]:
         hooks_skipped = _run_post_bump_and_verify(
-            "init", None, core["version"], tagging, False,
+            "init", core["old_version"], core["version"], tagging, False,
             project_dir, args.plugin_root,
-            {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+            core["pre_hooks"], result)
         if hooks_skipped:
             display_lines.append("  ⚠ post-bump hooks did NOT run — see post_hooks.warnings")
 
@@ -2505,7 +2575,7 @@ def _init_do_fresh(project_dir, config_path, args):
                 project_dir, config_path, version=raw, prefix=prefix, tagging=tagging,
                 fmt=fmt, branch=branch,
                 commit_message=f"chore: initialize semver tracking at {resolved}",
-                raise_on_commit_fail=True)
+                raise_on_commit_fail=True, plugin_root=args.plugin_root)
     except RuntimeError as e:
         _init_cleanup(project_dir)
         output_error("init_failed", str(e))
@@ -2522,9 +2592,9 @@ def _init_do_fresh(project_dir, config_path, args):
         "commit_hash": core["commit_hash"],
     })
     hooks_skipped = _run_post_bump_and_verify(
-        "init", None, core["version"], tagging, False,
+        "init", core["old_version"], core["version"], tagging, False,
         project_dir, args.plugin_root,
-        {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+        core["pre_hooks"], result)
     lines = [f"[semver] Initialized semver tracking at {core['version']}"]
     lines.append(f"  Auto-bump: on | Branch: {branch} | Tags: {'on' if tagging else 'off'} | Changelog: {fmt}")
     if hooks_skipped:
@@ -2589,6 +2659,7 @@ def _init_assess(project_dir, args, snap):
     assessment = "; ".join(parts) if parts else "existing semver artifacts"
 
     output({
+        **_pre_prompt_state(project_dir),
         "ok": True,
         "executed": False,
         "operation": "init",
@@ -2631,6 +2702,11 @@ def cmd_init_run(args):
 
     snap = _init_snapshot(project_dir, args)
     if not snap["has_artifacts"]:
+        prompt = _pre_prompt_state(project_dir)
+        if prompt["has_pre_bump_prompt_hook"]:
+            output({"ok": True, "executed": False, "operation": "init",
+                    "action": "fresh_init", "questions": [], **prompt,
+                    "display": "[semver] Run the pre-bump PROMPT_HOOK.md before init execute --mode fresh."})
         _init_do_fresh(project_dir, config_path, args)  # outputs + exits
     _init_assess(project_dir, args, snap)  # outputs + exits
 
@@ -2737,6 +2813,9 @@ def _init_reinit(project_dir, config_path, args):
               "version": resolved}
     lock = FileLock(project_dir)
     with lock:
+        old_version = read_version_file(project_dir)
+        pre_hooks_result = _run_pre_bump_hooks(
+            "init", old_version, resolved, project_dir, args.plugin_root)
         config = Config(config_path)
         config.set("tracking", "true")
         config.set("auto_bump", "true")
@@ -2768,9 +2847,9 @@ def _init_reinit(project_dir, config_path, args):
         _apply_tag(resolved, tagging, False, True, result)
 
     hooks_skipped = _run_post_bump_and_verify(
-        "init", None, resolved, tagging, False,
+        "init", old_version, resolved, tagging, False,
         project_dir, args.plugin_root,
-        {"hooks_run": 0, "prompt_hook": None, "warnings": []}, result)
+        pre_hooks_result, result)
     lines = [f"[semver] Re-initialized semver at {resolved}"]
     if result.get("tag_created"):
         lines.append(f"  Tag: {resolved} " + ("moved" if result.get("tag_overwritten") else "created"))

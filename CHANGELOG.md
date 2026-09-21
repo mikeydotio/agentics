@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.9.4] - 2026-09-20
+
+### Fixed
+- an answered archive naming no optimization key is optimized (2e53154)
+
+### Changed
+- Merge pull request #209 from mikeydotio/fix/age-110-archive-gate-absent-optimization-keys (a8d9736)
+- Merge pull request #208 from mikeydotio/chore/release-v3.9.3 (9fa36cc)
+
+_[manual]_
+
 ## [v3.9.3] - 2026-09-20
 
 ### Added

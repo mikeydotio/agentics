@@ -169,7 +169,7 @@ def git(*args, cwd=None):
             cwd=cwd or os.getcwd(),
             capture_output=True, text=True, timeout=30,
         )
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
+        return result.returncode, result.stdout.rstrip("\n"), result.stderr.strip()
     except subprocess.TimeoutExpired:
         return 1, "", "git command timed out"
     except FileNotFoundError:
@@ -257,13 +257,18 @@ def is_dirty():
 
 
 def dirty_files():
-    rc, out, _ = git("status", "--porcelain")
+    """Return exact destination paths from NUL-delimited Git status records."""
+    rc, out, _ = git("status", "--porcelain", "-z")
     if rc != 0 or not out:
         return []
     files = []
-    for line in out.splitlines():
-        if len(line) > 3:
-            files.append(line[3:].strip())
+    records = iter(out.split("\0"))
+    for record in records:
+        if len(record) > 3:
+            files.append(record[3:])
+            # Rename/copy records include a second, source-path-only record.
+            if "R" in record[:2] or "C" in record[:2]:
+                next(records, None)
     return files
 
 

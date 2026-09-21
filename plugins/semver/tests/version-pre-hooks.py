@@ -201,6 +201,21 @@ set -euo pipefail
                 self.assertEqual(self.snapshot(root), before)
                 self.assertEqual((root / "BUILD").read_text(), "10\n")
 
+    def test_dirty_file_names_are_lossless(self):
+        """Git status columns and quoting must never become filename content."""
+        root = self.fixture()
+        self.git(root, "commit", "--allow-empty", "-qm", "feat: release candidate")
+        (root / "BUILD").write_text("11\n")
+        strange = [" leading space ", "line\nbreak", "quote\"name", "unicode-é"]
+        for name in strange:
+            (root / name).write_text("new file\n")
+        self.git(root, "mv", "notes", "renamed notes")
+        expected = {"BUILD", "renamed notes", *strange}
+        for args in (["bump", "gather", "patch"], ["set", "run", "v2.0.0"]):
+            with self.subTest(args=args):
+                result = self.cli(root, args)
+                self.assertEqual(set(result["dirty_files"]), expected)
+
     def test_set_prompt_hook_hands_back_without_mutation(self):
         """Set run must let the agent review pre-bump prompt instructions first."""
         root = self.fixture()

@@ -6,3 +6,6 @@ export PYTHONDONTWRITEBYTECODE=1
 python3 -W error "$SCRIPT_DIR/test_liveness.py"
 python3 -W error "$SCRIPT_DIR/test_mutations.py"
 python3 -W error "$SCRIPT_DIR/test_packaging_preconditions.py"
+python3 -W error "$SCRIPT_DIR/test_integrity.py"
+python3 -W error "$SCRIPT_DIR/test_integrity_contract.py"
+python3 -W error "$SCRIPT_DIR/test_integrity_mutations.py"

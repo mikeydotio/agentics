@@ -25,7 +25,7 @@ def main():
                                      "Preserve artifacts; inspect status before retrying."}))
         return 1
     print(json.dumps(result, allow_nan=False))
-    return 0
+    return 0 if result["ok"] else 1
 
 
 if __name__ == "__main__":

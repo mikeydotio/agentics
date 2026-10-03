@@ -7,6 +7,7 @@ import tempfile
 import time
 
 import council_model as model
+import council_integrity as integrity
 from council_validation import integer, loads, number, validate_state
 
 
@@ -98,7 +99,7 @@ def _load(root):
     if path.is_symlink():
         raise ValueError("refusing symlink STATE.json")
     try:
-        state = loads(path.read_text())
+        state = loads(integrity.read_evidence(path).decode("utf-8"))
         validate_state(state)
     except (ValueError, TypeError) as exc:
         raise ValueError(f"cannot read state {path}: {exc}") from exc
@@ -111,7 +112,9 @@ def _load(root):
 def _response(root, s, now, since):
     notices = [h for h in s["history"][since:] if h["event"] in
                ("retry", "probe", "extension", "abstain", "abort", "recovered", "cleanup")]
-    return {"ok": True, "state": s, "actions": model.actions(s, now), "notices": notices,
+    verified = s.get("integrity", {}).get("status") not in ("drift", "unverified")
+    return {"ok": verified, "integrity": s.get("integrity"),
+            "state": s, "actions": model.actions(s, now), "notices": notices,
             "display": f"Council {s['council_id']}: {s['status']} ({s['phase'] or 'not dispatched'}); "
                        f"elapsed {now - s['created_at']:.1f}s; audit {root / 'LIVENESS.md'}"}
 
@@ -123,6 +126,7 @@ def execute(root, command, data, clock=None):
     if not isinstance(data, dict):
         raise ValueError("command input must be a JSON object")
     root = Path(root).absolute()
+    integrity.directory(root)
     if root.is_symlink():
         raise ValueError("refusing symlink council directory")
     now, mono = (clock or _system_clock)()
@@ -141,16 +145,30 @@ def execute(root, command, data, clock=None):
         except BlockingIOError as exc:
             raise ValueError(f"council state busy: {root}") from exc
         if command == "init":
-            if any((root / name).exists() for name in ("STATE.json", "DECISION.md", "ABORT.md")):
+            if any((root / name).exists() for name in ("STATE.json", "DECISION.md", "ABORT.md", "BASELINE.json")):
                 raise ValueError("council already exists; use status/recover, never overwrite")
             state = model.initialise(data, now, mono)
             since = 0
+            try:
+                integrity.initialise(root, state, data, atomic_write)
+            except (OSError, ValueError) as exc:
+                failure = {"status": "unverified", "baseline": state.get("baseline"),
+                           "checkpoint": "init", "changed_paths": [], "details": [str(exc)],
+                           "excluded": [], "head_changed": False}
+                integrity.invalidate(state, failure, {}, now)
         else:
             state = _load(root)
             if integer(data.get("revision"), "revision") != state["revision"]:
                 raise ValueError(f"revision conflict: current revision is {state['revision']}")
             since = len(state["history"])
             was_terminal = state["status"] in model.TERMINAL
+            if not was_terminal:
+                check = integrity.verify(root, state, command + ":" + str(data.get("kind", "")))
+                state["integrity"] = check
+                if check["status"] != "clean":
+                    integrity.invalidate(state, check, data, model.observed_time(state, now, mono))
+                    # Terminal cleanup elapsed time starts at detection, not the prior event.
+                    state.update(clock_wall=now, clock_mono=mono)
             now = model.advance(state, now, mono, root)
             newly_terminal = not was_terminal and state["status"] in model.TERMINAL
             if not newly_terminal:
@@ -169,11 +187,15 @@ def execute(root, command, data, clock=None):
                 elif command == "finish":
                     model.finish(state, data, now)
             state["revision"] += 1
+        integrity.register_scratch(state)
         validate_state(state)
+        integrity.protect_outputs(root, state)
         # State precedes every external side effect, including scratch creation.
         atomic_write(root / "STATE.json", json.dumps(state, indent=2, allow_nan=False) + "\n")
+        if state.get("integrity", {}).get("status") in ("drift", "unverified"):
+            atomic_write(root / "INTEGRITY.json", json.dumps(state["integrity"], indent=2) + "\n")
         for seat in state["seats"].values():
-            if seat.get("status") == "prepared":
+            if state["status"] not in model.TERMINAL and seat.get("status") == "prepared":
                 scratch = Path(seat["scratch"])
                 if scratch.is_symlink() or scratch.parent.is_symlink():
                     raise ValueError(f"refusing symlink scratch directory: {scratch}")

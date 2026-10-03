@@ -18,6 +18,8 @@ tie — break ties using a documented heuristic.
 Resolve `<plugin-root>` as three directories above this installed file's directory.
 Resolve every reference below against that root. Read `references/liveness.md`
 completely before any dispatch; use `bin/council-state.py` for all four phases.
+Read `references/integrity.md` before init or recovery. Require `integrity.status:"clean"`
+at every required helper gate; stop on changed or unverified inputs without restoring files.
 
 **Load on demand, not all at once:**
 - `references/council-protocol.md` — full phase-by-phase protocol with prompt templates

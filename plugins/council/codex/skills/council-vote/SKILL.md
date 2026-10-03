@@ -40,6 +40,10 @@ full canonical role at the start of the member prompt; the role's Claude `tools`
 
 ## Invariants
 
+Read `<plugin-root>/references/integrity.md` before init or recovery. Require
+`integrity.status:"clean"` at every required helper gate. Preserve changed files and
+invalid findings; never restore inputs or replace a failed baseline to continue.
+
 1. The panel has exactly three distinct archetypes: a domain specialist, an architectural
    generalist, and a challenger selected for the likely failure mode.
 2. Round-1 research is blind. Start all members before collecting any response.

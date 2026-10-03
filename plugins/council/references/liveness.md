@@ -4,6 +4,8 @@ Both host implementations must use `bin/council-state.py`; never maintain parall
 deadline or retry arithmetic in the chair's reasoning. Read this file completely before
 dispatch. The phase templates in `council-protocol.md` describe the **payload inside**
 the envelope below, not an alternative wire format.
+Also read `integrity.md`: its mandatory input checks precede dispatch, acceptance, progression,
+recovery, and final decisions. Integrity failures abort without consuming a seat retry.
 
 ## Command boundary
 
@@ -27,7 +29,7 @@ this helper. Members cannot write state or phase artifacts.
 
 | Command | Additional JSON fields | Meaning |
 |---|---|---|
-| `init` | `question`, `chair` (native session ID), `host` (`claude`/`codex`), `archetypes` (three distinct strings) | Persist a unique sitting before dispatch |
+| `init` | `question`, `chair` (native session ID), `host` (`claude`/`codex`), `archetypes` (three distinct strings); optional `repository_root`, `reconciliation` (see `integrity.md`) | Persist a unique sitting and content baseline before dispatch |
 | `begin-phase` | `phase`: `research`, `vote`, `deliberation`, or `runoff` | Persist the whole panel's intents and deadlines |
 | `record` | `seat`, `attempt_id`, `kind`, event fields below | Record observed transport facts |
 | `advance` | none | Apply deadlines before/after transport and between bounded waits |
@@ -71,7 +73,7 @@ are operational limits, not measured percentiles.
 1. Preflight nonblocking native dispatch, result collection, clock access, interruption,
    and three member slots. If unavailable, `finish` with an actionable abort before
    spawning; do not simulate votes. Do not weaken permissions to gain capability.
-2. `begin-phase`; snapshot existing repository changes. For each participant, record
+2. Require a clean baseline from `init`, then a clean `begin-phase` integrity check. For each participant, record
    intent, dispatch, and record its returned identity. Start every initial member before
    collecting any research response. Bookkeeping calls between dispatches do not expose
    other proposals. Use the native parallel form when available.
@@ -134,8 +136,9 @@ Use only the assigned `scratch` directory for measurement artifacts or disposabl
 copies. Do not modify repository files, chair artifacts, shared scratch, or other seats'
 directories. The chair creates each private path. Long measurements must use short
 collection calls or targeted batches; no ten-minute synchronous tool call. These are
-instructions plus the existing host checks, not a claim of structural sandbox enforcement
-(AGE-77 remains separate).
+instructions plus the executable persistent-change checks in `integrity.md`, not a claim of
+structural sandbox enforcement. Mutating experiments require a disposable copy/worktree;
+the chair must not measure the same tree concurrently with those writers.
 
 The helper accepts bare JSON or exactly one JSON fence on **both** hosts, rejects invalid
 field types, and validates sender plus council/question/phase/seat/attempt before tally

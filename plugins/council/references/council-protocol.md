@@ -6,6 +6,8 @@ Every prompt template and JSON shape the chair needs to run a full council. The 
 
 Before any dispatch, read `liveness.md` completely and follow its mandatory state-helper
 loop for **every** phase. The examples below are payloads inside its identity envelope.
+Read `integrity.md` too. Every dispatch, delivery, phase transition, recovery, and final
+decision requires the helper's clean input evidence. Preserve and stop on integrity failure.
 
 ## Phase 0 — Slugify and scaffold
 

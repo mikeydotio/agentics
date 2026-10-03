@@ -76,11 +76,14 @@ at `phase-complete`, and preserve the helper's PANEL.md abstentions.
 
 ## Enforce the read-only boundary
 
-After the chair writes the phase's own artifacts and immediately before dispatch, record the
-worktree status. Compare it again after every participating member is accepted or abstained. If files changed
-outside the chair's expected `.council/<slug>/` writes, do not use the affected member result:
-interrupt any still-running members, record the changed paths in `ABORT.md`, and stop. Prompt-only
-read-only enforcement must never be presented as a structural tool restriction.
+Read `references/integrity.md` before init or recovery. The shared helper captures a durable
+content baseline before dispatch and verifies it before dispatch intents, deliveries, phase
+progression, recovery, and final decisions. Require exit zero, `ok:true`, and
+`integrity.status:"clean"` at those gates. On failure stop using findings, preserve current
+files and diagnostics, and interrupt only owned members within the existing cleanup bound.
+Reconciliation requires a fresh baseline and fresh evaluation; never restore user files.
+Mutating experiments use disposable copies/worktrees, never a tree the chair measures
+concurrently. This detects persistent changes; it is not a structural tool restriction.
 
 ## Finish cleanly
 

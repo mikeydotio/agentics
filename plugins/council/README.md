@@ -74,7 +74,11 @@ uncertain dispatch leaves an interrupted `ABORT.md`; a new sitting never overwri
 See [the command and delivery contract](references/liveness.md). Native transport still
 belongs to the chair: the helper proves policy and persistence, not model compliance or
 progress while the host is dead. Members may create measurement artifacts only in their
-assigned private scratch directories; AGE-77's broader enforcement work remains separate.
+assigned private scratch directories. The shared helper records a durable content baseline
+and rejects changed or unverified inputs before dispatch, acceptance, progression and decisions.
+It preserves user edits and invalid findings without restoration. See
+[repository integrity](references/integrity.md) for reconciliation and coverage limits.
+Detection does not establish actor identity or catch writes restored between observations.
 
 ## Suggested gitignore
 
@@ -84,4 +88,5 @@ Add to your project's `.gitignore` if you don't want council transcripts checked
 .council/
 ```
 
-If you do want them in git (useful for shared post-hoc review), leave them tracked.
+For shared post-hoc review, track artifacts only after the sitting ends. Active chair and
+scratch output cannot overlap tracked input files.

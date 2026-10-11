@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "runs": 1,
+  "failures": 0,
+  "failure_rate": 0,
+  "deterministic": true,
+  "exit_codes": [
+    0
+  ],
+  "last_failure_tail": "",
+  "display": "[rca] 0/1 runs failed (deterministic)"
+}

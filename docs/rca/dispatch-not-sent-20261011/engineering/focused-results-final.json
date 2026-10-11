@@ -1,0 +1,55 @@
+[
+  {
+    "name": "green-repro-final",
+    "args": [
+      "python3",
+      "-B",
+      ".rca/dispatch-not-sent-a11/repro.py"
+    ],
+    "exit_code": 0,
+    "elapsed": 0.05053066700929776
+  },
+  {
+    "name": "agents-delivery-final",
+    "args": [
+      "bash",
+      "tests/with-isolated-store.sh",
+      "bash",
+      "plugins/agents/tests/test-delivery.sh"
+    ],
+    "exit_code": 0,
+    "elapsed": 17.099883374990895
+  },
+  {
+    "name": "rca-delivery-final",
+    "args": [
+      "bash",
+      "tests/with-isolated-store.sh",
+      "bash",
+      "plugins/rca/tests/test-delivery.sh"
+    ],
+    "exit_code": 0,
+    "elapsed": 0.9664853329886682
+  },
+  {
+    "name": "forge-delivery-final",
+    "args": [
+      "bash",
+      "tests/with-isolated-store.sh",
+      "bats",
+      "plugins/forge/bin/forge-delivery.bats"
+    ],
+    "exit_code": 0,
+    "elapsed": 3.5534756249981
+  },
+  {
+    "name": "diff-check",
+    "args": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0,
+    "elapsed": 0.025571958045475185
+  }
+]

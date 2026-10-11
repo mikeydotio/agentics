@@ -1,0 +1,14 @@
+{
+  "plugins/agents/bin/delivery_model.py": "924da29fe47f5be22cbb726334bd86e1fe60fe3230338ab87ea214a2b69d4ffb",
+  "plugins/agents/bin/delivery_validation.py": "d05f0baf811723eaa0bd1fc8ab5295e7bdf8088f43ea105ad375bd619b061694",
+  "plugins/agents/references/delivery.md": "16d13bea3a99310ed9767f9feb0d17441632f11bf0da3f3b3f2d569ee0f664cf",
+  "plugins/agents/tests/test-delivery.sh": "1c206492183dd1e67568e247df147f5a5e8fc9f266bb73e8e7404f7400a1ec07",
+  "plugins/agents/tests/test_delivery_mutations.py": "fc640a39d4b659fe15fdb582ae78e8db9b67c5be426a2a975b96b1778a0df9c0",
+  "plugins/forge/bin/delivery_model.py": "924da29fe47f5be22cbb726334bd86e1fe60fe3230338ab87ea214a2b69d4ffb",
+  "plugins/forge/bin/delivery_validation.py": "d05f0baf811723eaa0bd1fc8ab5295e7bdf8088f43ea105ad375bd619b061694",
+  "plugins/forge/references/delivery.md": "16d13bea3a99310ed9767f9feb0d17441632f11bf0da3f3b3f2d569ee0f664cf",
+  "plugins/rca/bin/delivery_model.py": "924da29fe47f5be22cbb726334bd86e1fe60fe3230338ab87ea214a2b69d4ffb",
+  "plugins/rca/bin/delivery_validation.py": "d05f0baf811723eaa0bd1fc8ab5295e7bdf8088f43ea105ad375bd619b061694",
+  "plugins/rca/references/delivery.md": "16d13bea3a99310ed9767f9feb0d17441632f11bf0da3f3b3f2d569ee0f664cf",
+  "plugins/agents/tests/test_delivery_not_sent.py": "49b855bb9a9f77e5d4807dbc5992a5f17fc08acb4eb2e8d9d9adc6c19a1441dc"
+}

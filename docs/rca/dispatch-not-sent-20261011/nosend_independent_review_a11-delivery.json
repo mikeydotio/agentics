@@ -1,0 +1,153 @@
+{
+  "batch_id": "f5f08d9a-e955-46a0-9f3e-bac121774e7f",
+  "task_id": "nosend_independent_review_a11",
+  "task_digest": "a676b7320aad7b763062cc1177f1c5dce32ad8c408d31c9837a397a565034704",
+  "attempt_id": "9578ffc7-7bc4-4a52-9e50-60a4299f92ec",
+  "kind": "result",
+  "payload": {
+    "reviewer": "/root/nosend_independent_review_a11",
+    "correctness_verdict": "BOUNDED_ACCEPTANCE",
+    "hypothesis_ruling": "SURVIVES",
+    "apply_to_this_record_verdict": "SUPPORTED_AS_EXPLICIT_SAME_OWNER_ATTESTATION",
+    "blocking_findings": [],
+    "scope": {
+      "repository": "/Users/mikey/Documents/Codex/2026-10-07/task-4/agentics-rca-reconcile-a11",
+      "base": "b81530c16ac7df731616ae9259450871b5c801b4",
+      "candidate": "Unreleased v3.9.5-based AGE-114 repair",
+      "reviewed": "All 12 changed files, including the untracked regression suite. Reviewed canonical runtime/docs and verified all corresponding Forge/RCA copies have identical hashes. Inspected preserved test results and BDocs recovery evidence.",
+      "not_reviewed": "Unrelated native BDocs bounds fix, product semantics, release readiness or deployment.",
+      "execution": "Read-only source, history, JSON and hash inspection. No tests, file writes, state mutations, staging, commits, native builds, credential reads or subagent dispatches."
+    },
+    "root_cause_assessment": {
+      "chain": [
+        "The existing protocol durably records dispatch-attempted before invoking transport.",
+        "An interruption before the invocation leaves an unmatched attempted event; terminal transport events cannot supply a truthful dispatch identity.",
+        "The old finish predicate requires every attempted ID to have a dispatched ID, and terminal recover returns without resolving the distinction between unsent and uncertain transport.",
+        "Consequently, even independently reviewed no-send evidence cannot resolve this record through the old supported API."
+      ],
+      "depth": [
+        "Why does finish refuse? Its attempted-minus-confirmed set is nonempty.",
+        "Why does that remain nonempty? This prepared attempt has no native dispatch identity and cannot truthfully receive one.",
+        "Why cannot reviewed evidence resolve it? The event algebra has no audited no-invocation outcome for a terminal attempt."
+      ],
+      "alternatives_challenged": [
+        {
+          "alternative": "A live or unknown worker, rather than a missing transition, explains the refusal.",
+          "assessment": "Unknown transport must remain blocking, but the isolated reproduction never invokes native transport and receives the same refusal. The old predicate does not consult current worker availability. Thus worker availability cannot explain the protocol gap; whether this particular historical attempt was unsent requires the separate evidence assessment below."
+        },
+        {
+          "alternative": "A stale revision, owner-session mismatch or integrity failure explains the refusal.",
+          "assessment": "A10 preserved status/recover/finish results show revision 4, the original owner session, empty survivors and explicit integrity/artifact flags, followed by the specific uncertain-dispatch error. The unchanged old terminal-recover branch and finish predicate explain that result without a revision or clock failure."
+        }
+      ],
+      "git_history": "Commit 131857a1ad7f2c9fa91bb56ff72b48fcf5f9d9fa, dated 2026-09-12, introduced the historical attempted-minus-confirmed reconciliation predicate while fixing AGE-104 uncertainty preservation. The October interruption exposes the absence of a no-send outcome; it does not justify removing that earlier uncertainty protection.",
+      "would_change_verdict": "A native invocation for the original attempt, evidence of an unresolved survivor, or a supported command sequence that permits unknown transport to reconcile without the required attestation would invalidate this assessment."
+    },
+    "implementation_assessment": [
+      {
+        "area": "Exact event admission",
+        "result": "PASS",
+        "evidence": "plugins/agents/bin/delivery_model.py:171 and delivery_validation.py:61",
+        "detail": "Admission requires failed/interrupted batch state, failed/interrupted current task, exact batch/task/digest/attempt/original-session values, a prior matching attempted event, prior terminal history, explicit true no_transport, nonempty reason/evidence/reviewer and valid SHA256 syntax. Known native identity, payload, dispatch confirmation, stopped/integrity claims and extra result-like fields are rejected."
+      },
+      {
+        "area": "Preserved failure and bounded execution",
+        "result": "PASS",
+        "evidence": "plugins/agents/bin/delivery_model.py:174 and :258; plugins/agents/tests/test_delivery_not_sent.py:70",
+        "detail": "The event only appends evidence. It does not accept or stop the task, manufacture a payload, change attempts, extend deadlines or emit new transport. Reconciliation changes the batch bookkeeping while preserving the failed task."
+      },
+      {
+        "area": "Multiple attempts, survivors and review gates",
+        "result": "PASS",
+        "evidence": "plugins/agents/bin/delivery_validation.py:110; delivery_model.py:258; tests/test_delivery_not_sent.py:176 and :195",
+        "detail": "Every attempted send must be covered by confirmation or validated no-send evidence. Another unresolved attempt still blocks. Current-attempt matching rejects a retired reader attempt. Existing survivor, integrity and artifact-review requirements remain."
+      },
+      {
+        "area": "Idempotence and conflicts",
+        "result": "PASS",
+        "evidence": "plugins/agents/bin/delivery_model.py:175; tests/test_delivery_not_sent.py:127",
+        "detail": "An identical repeat appends no second evidence entry and only advances the command revision. Changed reason, reference, reviewer or hash is rejected rather than replacing the original evidence."
+      },
+      {
+        "area": "Persistence and reload",
+        "result": "PASS",
+        "evidence": "plugins/agents/bin/delivery_validation.py:92 and :192; delivery_store.py:128 and :147; tests/test_delivery_not_sent.py:212",
+        "detail": "Stored attestations are revalidated against current task identity and preceding history. Duplicate, contradictory, removed or renamed evidence cannot clear an unresolved reconciled record. Revision checks and atomic persistence remain unchanged."
+      },
+      {
+        "area": "Trusted-owner boundary",
+        "result": "EXPLICIT LIMIT",
+        "evidence": "plugins/agents/references/delivery.md:152",
+        "detail": "The helper validates supplied identity fields, including the stored session string; it does not authenticate the calling session or reviewer. It also does not read the evidence reference or verify its contents against the hash. This is an audited trusted-owner attestation, not transport authentication. Acceptance relies on retaining that distinction."
+      }
+    ],
+    "experiment_review": {
+      "verdict": "Recorded evidence meaningfully supports the narrow repair; no independent test execution was performed during this review.",
+      "evidence": [
+        "RED.json and engineering/red-repro.stderr preserve the original uncertain-dispatch refusal.",
+        "engineering/green-repro-final.stdout records successful reconciliation while retaining interrupted task state and absent payload.",
+        "engineering/focused-results-final.json and raw final logs show exit 0 for Agents delivery suites: 4 mutation/runner methods, 20 existing delivery methods and 9 no-send methods; RCA: 4 methods; Forge: both Bats wrappers.",
+        "The new suite uses the production store and actual Agents/RCA/Forge source-copy CLIs, rather than a mock state machine.",
+        "plugins/agents/tests/test_delivery_mutations.py:95 requires a successful unchanged baseline before five disposable single-variable mutations. Removing no-send resolution restores failure; suppressing uncertainty, identity validation, explicit attestation or reload validation is caught.",
+        "The recorded intermediate reload failures demonstrate that stopped/integrity claims and removed/renamed evidence were exposed before their guards were added."
+      ],
+      "limits": [
+        "The protocol tests cannot prove historical transport absence or authenticate evidence.",
+        "The inspected approval/remediation documents specify the intended invariants, but their chronology is not independently authenticated.",
+        "The final mutation log reports method success rather than retaining each mutant's individual stderr. Inspection of the executed harness shows each mutant must fail with unittest failure/error output and is restored in finally.",
+        "This is candidate source validation, not a released or installed-plugin certification."
+      ]
+    },
+    "original_bdocs_record_assessment": {
+      "batch_id": "acda521b-ea29-46e3-bec1-7b7cf15e2028",
+      "task_id": "reference_product_resume_20261011_a2",
+      "attempt_id": "f29cf95b-1769-4e27-9135-e987e1eb19ab",
+      "task_digest": "ecad6272f41d971917af080eb57201d037afee551abd7ec459cd3914999b5d60",
+      "original_owner_session": "01a11933-ac34-7404-8eb1-62da90f24031",
+      "observed_state": "Revision 4, interrupted, no agent_id, no payload, no survivors, stopped false and task integrity_ok false.",
+      "supporting_evidence": [
+        "original-session-turn.json:729 records the exact batch initialization and prepare command. The inspected delivery_owner.py:14 prepare branch advances the helper, records dispatch-attempted and writes the prompt; it invokes no native transport.",
+        "The retained sequence after that command contains a cloud-thread message output, a process scan, the interrupted finish command and the final answer. No subsequent subAgentActivity or collaboration invocation is represented.",
+        "The representation does retain earlier native activity: original-session-turn.json:448 records an interaction with the separate native undo worker. Absence after this attempt is therefore not explained by wholesale removal of all native activity from the representation.",
+        "original-session-turn.json:754 contains the contemporaneous interruption reason explicitly stating that no follow-up/spawn call was made and writes the same fact into the handoff. The original STATE.json history preserves that reason at approximately 60.5 seconds after preparation.",
+        "A10's supported recovery attempt and A11's snapshots preserve the same task/history. I independently recomputed all five snapshot hashes and found each equal to its current source and recorded hash."
+      ],
+      "decision": "The combined contemporaneous owner statement, retained command/activity sequence and unchanged record support a transparent no-send attestation by the original owner for precisely this attempt. I found no material contradictory evidence. This does not establish an authenticated host-level transport history, and empty worker inventory alone would be insufficient.",
+      "application_conditions": [
+        "Use the reviewed candidate helper explicitly, leaving the installed plugin unchanged.",
+        "Preserve the original snapshots and this review; bind the attestation to a preserved evidence package and its actual SHA256.",
+        "Use only the original batch/task/attempt/digest/session identities above; do not invent an agent identity, dispatch event, stopped fact or successful result.",
+        "Recheck revision, source hash, survivors and owner/artifact integrity immediately before application. Any contradictory native-call evidence requires leaving the record unresolved.",
+        "After the event and finish, inspect persisted state and the runs guard to confirm that only the intended bookkeeping changed and the failed task/history remain."
+      ]
+    },
+    "nonblocking_findings": [
+      {
+        "severity": "LOW",
+        "location": ".rca/dispatch-not-sent-a11/bdocs-original/reference_product_a2-external-reconciliation.json:10",
+        "finding": "The claim that the final explicitly records that the prompt was not dispatched overstates the retained final-answer text. The explicit statement is in the preceding interrupted finish command and handoff content at original-session-turn.json:754; the final at :763 says reference integration remains unfinished and links the handoff.",
+        "recommendation": "Preserve the historical artifact unchanged. Correct the attribution in the new attestation/review evidence rather than repeating the inaccurate wording."
+      }
+    ],
+    "verified_hashes": {
+      "delivery_model_py_agents_forge_rca": "924da29fe47f5be22cbb726334bd86e1fe60fe3230338ab87ea214a2b69d4ffb",
+      "delivery_validation_py_agents_forge_rca": "d05f0baf811723eaa0bd1fc8ab5295e7bdf8088f43ea105ad375bd619b061694",
+      "delivery_md_agents_forge_rca": "16d13bea3a99310ed9767f9feb0d17441632f11bf0da3f3b3f2d569ee0f664cf",
+      "test_delivery_sh": "1c206492183dd1e67568e247df147f5a5e8fc9f266bb73e8e7404f7400a1ec07",
+      "test_delivery_mutations_py": "fc640a39d4b659fe15fdb582ae78e8db9b67c5be426a2a975b96b1778a0df9c0",
+      "test_delivery_not_sent_py": "49b855bb9a9f77e5d4807dbc5992a5f17fc08acb4eb2e8d9d9adc6c19a1441dc",
+      "bdocs_original_state": "98ed117d063a3e93796b5792b366e689f37a845e511d4c6b4a8afba18b319ba5",
+      "bdocs_original_liveness": "97ee6b63f21dcbf8c5879a1b0de1ee086f610e68c7ec6df70a12abd20d0373bd",
+      "bdocs_original_baseline": "286ae6bca133d7565efd758ba6b99cfe6d5c796a9287152698f32206a39d51b8",
+      "bdocs_original_prompt": "253214dc445348d31288e74d9c3c7353e7268d1b8f975077bac5e3bcb013ea70",
+      "bdocs_original_external_reconciliation": "2a56a49ec31caf6af5a9ab3fb67e5e9cf8b48202e1c403a99951949c6d0815ff",
+      "original_session_turn": "8a266d02be35d141832a2075c4bc3f526946eefa45d3d68a6a5d37a10f21ae8d"
+    },
+    "changed_paths": [],
+    "remaining_gates": [
+      "Owner application and post-application verification have not occurred in this review.",
+      "No merge, release, shared installation or broader recovery policy is approved by this verdict.",
+      "Any changed candidate runtime hash requires review of that delta."
+    ]
+  }
+}

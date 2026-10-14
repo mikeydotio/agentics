@@ -43,14 +43,91 @@ Handle delivery_recovery before any artifact-based routing, fresh work or cleanu
 The helper is bundled locally and remains available in the override-only fallback.
 
 
-Run `bash "<plugin-root>/bin/resolve-agents-root.sh"` and inspect its exit code:
+Run `bash "<plugin-root>/bin/resolve-agents-root.sh"` and inspect its exit code.
+Redirect its stdout to a private output file, then read that file only after success;
+do not capture this bounded command through shell command substitution. Python 3 is
+required. The mandatory deadline defaults to 10 seconds; `RCA_RESOLVER_TIMEOUT_SECONDS`
+may select a finite value greater than 0 and at most 60. It cannot disable the bound.
+The supervisor owns validation, registry execution, and a separate child process group,
+with at most 0.8 seconds of TERM/KILL cleanup after the observed deadline/cancellation.
+Interpreter startup and uninterruptible filesystem/kernel operations are outside that
+runtime guarantee. No CLI invocation is automatically retried.
+
 
 - 0: read the absolute root from stdout. For each role run
   `bash "<agents-root>/bin/resolve-agent.sh" <role>` and read the returned canonical role.
 - 1: Agents is genuinely unavailable. Use the RCA override-only fallback and record the
   missing canonical role and reduced enforcement in the step artifact.
 - 2 or any unexpected failure: preserve diagnostics and stop dispatch. A malformed
-  registry, invalid explicit override, or damaged enabled installation is not absence.
+  registry, invalid explicit override, damaged enabled installation, or unexplained
+  validator exit is not absence. Exit 1 requires the private validator's explicit
+  unavailable outcome as well as normal child completion and an absent owned group.
+- 124: the supervisor observed its deadline. Preserve evidence and stop dispatch.
+- 130/143: the supervisor accepted SIGINT/SIGTERM before outcome completion. Preserve
+  evidence and stop dispatch.
+  A registry CLI exiting 124, 130, or 143 is an external failure mapped to 2; its exit
+  alone does not establish a local timeout, cancellation, or permission decision.
+
+Failures before stdout publication leave stdout empty. Cancellation or an I/O error
+during success-output write/flush can leave part or all of the path in stdout; publication
+is not atomic with process exit. **Discard stdout unless the final process status is 0.**
+Such failures record `stdout_publication_started` and warn that the output is unusable.
+The diagnostic names a unique private mode-0700 evidence
+directory with raw child stderr/stdout, completed registry output when available, and
+`result.json`: phase, elapsed/configured time, PID/PGID, child status, local reason,
+signal, TERM/KILL attempts, reap result, and owned-group observation. The stderr excerpt
+is bounded; retain the raw files. If cancellation or I/O failure occurs after success
+artifact cleanup has begun, a reconstructed failure record explicitly says original raw
+captures may be missing; it is not represented as retaining those captures. Metadata
+persistence errors are reported best-effort and fail closed. If a corrected outcome
+cannot be persisted, diagnostics explicitly say `result.json` may describe an earlier
+outcome and the process exit is authoritative. A remaining owned group prevents success
+or absence.
+A clear group observation does **not** attest absence of descendants that detached into
+another group. Account for such uncertain descendants independently before resumption.
+
+### Final outcome and cancellation boundary
+
+Cancellation remains active through metadata persistence, diagnostic write/flush, and
+success-output write/flush. The completion cutoff is entry to a short signal-mask
+section after those operations. It inspects the first latched signal and any pending
+SIGINT/SIGTERM before accepting the prepared outcome. No filesystem or stream I/O runs
+with those signals masked. If cancellation invalidated the prepared outcome, signals
+are unmasked and a corrected cancellation record/diagnostic is produced before another
+commit attempt. The first accepted signal is immutable; when both signals are already
+pending, their delivery order is unknowable and the lower signal number is selected.
+
+At most one transition to I/O failure and one to cancellation are permitted: no more than
+three finalization passes, and no repeated registry/validation attempt. Later diagnostics
+supersede provisional earlier diagnostics when an outcome changes. After a successful
+commit, signal handling explicitly preserves that completed outcome and only return
+remains; signals arriving after the cutoff may therefore be post-completion. This is a
+logical completion boundary, not a claim that file output and process exit are one atomic
+OS operation. Blocking finalization I/O still depends on the caller/filesystem making
+progress; its signals stay unmasked and any accepted cancellation is reconciled before
+completion.
+
+### Resuming after resolver failure
+
+Keep dispatch stopped until all of these conditions are recorded:
+
+1. Preserve the failed attempt's exact exit, diagnostics, and evidence. Do not relabel
+   a historical interruption as a timeout or infer a transient failure from either code.
+2. Reconcile process custody and the delivery ledger. Bound and account for every
+   known outstanding attempt, including any uncertain detached descendants.
+3. Distinguish execution/connectivity failures from permission, approval, or content
+   screening denials. A denial remains blocked until its applicable approval is resolved;
+   timeout handling never grants an alternate path around it.
+4. Record specific existing caller authority, or obtain authority, for **one fresh
+   attempt**. A timeout, generic continuation request, or new session supplies no retry
+   authority. A candidate source patch does not repair an installed helper; use the
+   reviewed, validated installed version when depending on the repair.
+5. The fresh authorized attempt must return 0 and select the same approved identity and
+   canonical roles. Preserve the prior attempt. Do not manufacture recovery through an
+   override, fallback, alternate identity, or replacement specialist.
+
+There is no automatic retry or automatic transition from failed resolution to dispatch.
+
 
 A missing role after successfully resolving Agents is a configuration error, not a reason
 to silently use a different specialist. Explicit AGENTS_PLUGIN_ROOT is a user selection;

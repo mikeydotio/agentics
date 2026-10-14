@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,17 +21,19 @@ class AgentResolution(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.plugin = self.root / "market/rca/3.9.1"
-        self.plugin.joinpath("bin").mkdir(parents=True)
-        shutil.copy(ROOT / "bin/resolve-agents-root.sh", self.plugin / "bin")
+        shutil.copytree(ROOT / "bin", self.plugin / "bin")
         self.fakebin = self.root / "fake-bin"
         self.fakebin.mkdir()
+        # Use the resolved interpreter, avoiding platform launcher setup work.
+        (self.fakebin / "python3").symlink_to(sys.executable)
         codex = self.fakebin / "codex"
         codex.write_text('#!/bin/sh\ncat "$REGISTRY_FILE"\nexit "${REGISTRY_EXIT:-0}"\n')
         codex.chmod(0o755)
         self.registry = self.root / "registry.json"
         self.registry.write_text('{"installed":[]}')
         self.env = dict(os.environ, CODEX_HOME=str(self.root / "codex home"),
-                        REGISTRY_FILE=str(self.registry), PATH=f"{self.fakebin}:{os.environ['PATH']}")
+                        REGISTRY_FILE=str(self.registry), TMPDIR=str(self.root),
+                        RCA_RESOLVER_TIMEOUT_SECONDS="2", PATH=f"{self.fakebin}:{os.environ['PATH']}")
         self.env.pop("AGENTS_PLUGIN_ROOT", None)
 
     def agents(self, path, version="3.9.1"):
@@ -56,7 +59,7 @@ class AgentResolution(unittest.TestCase):
     def run_resolver(self, expected=0):
         """Assert diagnostic exits as well as the resolved absolute path."""
         result = subprocess.run(["bash", str(self.plugin / "bin/resolve-agents-root.sh")],
-                                env=self.env, text=True, capture_output=True, check=False)
+                                env=self.env, text=True, capture_output=True, check=False, timeout=5)
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         if expected:
             self.assertEqual(result.stdout, "")

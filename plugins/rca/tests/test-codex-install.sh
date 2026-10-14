@@ -33,7 +33,16 @@ DELIVERY_TEST_BIN="$INSTALLED_ROOT/bin" python3 -B -W error "$RCA_ROOT/../agents
 
 # Run contracts from the installed copy, so relative-to-source assumptions fail.
 python3 -B -m unittest discover -s "$INSTALLED_ROOT/tests" -p codex_contract_test.py -v
-RESOLVED_AGENTS="$(unset AGENTS_PLUGIN_ROOT; CODEX_HOME="$SMOKE_CODEX_HOME" bash "$INSTALLED_ROOT/bin/resolve-agents-root.sh")"
+if (
+  unset AGENTS_PLUGIN_ROOT
+  CODEX_HOME="$SMOKE_CODEX_HOME" bash "$INSTALLED_ROOT/bin/resolve-agents-root.sh" > "$SMOKE_ROOT/resolved-agents"
+); then
+  RESOLVED_AGENTS="$(<"$SMOKE_ROOT/resolved-agents")"
+else
+  resolver_status=$?
+  printf 'ERROR: installed Agents resolution failed (exit %s)\n' "$resolver_status" >&2
+  exit "$resolver_status"
+fi
 for role in qa-engineer investigator evidence-collector experimenter hypothesis-challenger \
             software-architect software-engineer technical-writer; do
   role_path="$(bash "$RESOLVED_AGENTS/bin/resolve-agent.sh" "$role")"

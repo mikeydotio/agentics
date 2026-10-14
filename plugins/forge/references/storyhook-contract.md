@@ -23,7 +23,6 @@ unsure of with `story help <command>` or `story help --all`.
 | Add comment | `story comment <id> "<text>"` | Free text or a JSON blob serialized as text — never raw untrusted text (see **Structured Feedback**) |
 | Set priority | `story prioritize <id> <critical\|high\|medium\|low\|none>` | |
 | Add/remove labels | `story label <id> <csv>` / `story unlabel <id> <csv>` | |
-| Assign | `story assign <id> <member-id\|handle>` | |
 | Set "awaiting" reason (does NOT change state) | `story block <id> "<reason>"` / `story unblock <id>` | Orthogonal to the `blocked` *state* — see **Blocked: State vs. Awaiting** |
 | Reopen a closed story | `story reopen <id>` | |
 | Delete | `story delete <id> "<reason>"` | |

@@ -590,8 +590,9 @@ stranded under an unbumped `2.25.1`, so no install ever received it.
 
 - RCA registry ownership repair: implemented; 31 resolver tests and 5 contracts pass.
 - Independent source review: clear; release and installed recovery are unverified.
-- Baseline instruction drift: remove the obsolete assignment row already absent from the current generator.
-- Full repository gate: rerun after the instruction correction; isolated installation smoke passes.
+- Baseline instruction drift: obsolete assignment rows removed to match current grammar.
+- Full repository gate: all 27 targets pass; isolated installation smoke passes.
+- Fix committed as b2da312; postmortem records prevention tests and remaining limits.
 - Forge and Council registry ownership remain separate follow-up work.
 - Preserve local RCA evidence; no merge, version change, or installation authorized here.
 

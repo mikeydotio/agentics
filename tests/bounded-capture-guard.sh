@@ -272,6 +272,20 @@ PINS
 )
 REG_TOTAL=9
 
+# The RCA executable now owns a bound in Python. Pin ALL same-named shell
+# references, including Council's still-unbounded callers, so a new consumer
+# demands review. Only those two existing Council test files are out of scope
+# for the new capture prohibition; none of L1-L4 is relaxed.
+RESOLVER_RE='resolve-agents-root[.]sh'
+RESOLVER_CAPTURE="${OPEN}[^)]*${RESOLVER_RE}"
+RESOLVER_PINS=$(cat <<'PINS'
+plugins/council/tests/codex-compat.sh	5
+plugins/council/tests/smoke-codex-install.sh	1
+plugins/rca/tests/test-codex-install.sh	1
+PINS
+)
+RESOLVER_TOTAL=7
+
 sum_counts() { awk -F'\t' '{s += $2} END {print s + 0}'; }
 
 # ---------------------------------------------------------------------------
@@ -398,6 +412,42 @@ test_l4_registry_occurrence_total_is_pinned() {
         echo "expected $REG_TOTAL registry occurrences in total, found $n"
         return 1
     }
+}
+
+# L5 — the file-based RCA supervisor has no shell function definition to pin.
+test_l5_resolver_reference_census_is_exact() {
+    local actual
+    actual=$(census_repo "$RESOLVER_RE" | sort)
+    [ "$actual" = "$(printf '%s\n' "$RESOLVER_PINS" | sort)" ] || {
+        echo "resolver references changed; review each consumer's ownership/capture:"
+        printf '%s\n' "$actual"
+        return 1
+    }
+    [ "$(printf '%s\n' "$actual" | sum_counts)" = "$RESOLVER_TOTAL" ]
+}
+
+test_l5_rca_resolver_is_never_captured() {
+    local hits
+    hits=$(scan_lines "$RESOLVER_CAPTURE" | "$GREP" -vE \
+        '^plugins/council/tests/(codex-compat|smoke-codex-install)[.]sh:' || true)
+    [ -z "$hits" ] || {
+        echo "capture of the bounded RCA resolver; redirect to a file:"
+        printf '%s\n' "$hits"
+        return 1
+    }
+}
+
+test_l5_resolver_capture_calibration() {
+    local line
+    for line in 'out=$(bash "$INSTALLED_ROOT/bin/resolve-agents-root.sh")' \
+        'out=`bash "$RCA/bin/resolve-agents-root.sh"`' \
+        'out=$(unset AGENTS_PLUGIN_ROOT; env X=y bash "$RCA/bin/resolve-agents-root.sh")'; do
+        flags "$RESOLVER_CAPTURE" "$line" || {
+            printf 'missed resolver capture: %s\n' "$line"; return 1;
+        }
+    done
+    ! flags "$RESOLVER_CAPTURE" 'bash "$RCA/bin/resolve-agents-root.sh" > "$OUT"' \
+        || { echo 'file capture misclassified'; return 1; }
 }
 
 # ---------------------------------------------------------------------------

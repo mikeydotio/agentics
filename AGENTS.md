@@ -586,6 +586,16 @@ stranded under an unbumped `2.25.1`, so no install ever received it.
   `git push origin v<X.Y.Z>` (no force needed on a first push). Then
   `/semver validate` should be all-PASS.
 
+## Current resolver recovery status (2026-10-14)
+
+- RCA registry ownership repair: implemented; 31 resolver tests and 5 contracts pass.
+- Independent source review: clear; release and installed recovery are unverified.
+- Baseline instruction drift: obsolete assignment rows removed to match current grammar.
+- Full repository gate: all 27 targets pass; isolated installation smoke passes.
+- Fix committed as b2da312; postmortem records prevention tests and remaining limits.
+- Forge and Council registry ownership remain separate follow-up work.
+- Preserve local RCA evidence; no merge, version change, or installation authorized here.
+
 ## Hardening Roadmap
 
 The forge × storyhook seam underwent a full hardening pass (2026-07 audit + 8-workstream plan,
@@ -762,7 +772,6 @@ story graph --blocked-by AGE-1   # trace why a story is blocked
 | Move to a state | `story move AGE-<n> <state>` |
 | Add a comment | `story comment AGE-<n> "comment text"` |
 | Set priority | `story prioritize AGE-<n> high` |
-| Assign a story | `story assign AGE-<n> <member>` |
 | Add a label | `story label AGE-<n> <label>` |
 | Block a story | `story block AGE-<n> "reason"` |
 | Unblock a story | `story unblock AGE-<n>` |

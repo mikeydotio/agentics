@@ -17,12 +17,45 @@ SKILL_MD="${FORGE_SETUP_SKILL:-$BATS_TEST_DIRNAME/../claude/skills/decompose/SKI
 REFERENCE_MD="$BATS_TEST_DIRNAME/../references/story-decomposition.md"
 
 setup() {
-  TEST_DIR="$(mktemp -d)"
-  ( cd "$TEST_DIR" && git init -q . && story project new --prefix SC >/dev/null )
+  FORGE_FIXTURE_STORY="$(type -P story)" || return 1
+  FORGE_FIXTURE_PYTHON="$(type -P python3)" || return 1
+  FORGE_FIXTURE_HELPER="$BATS_TEST_DIRNAME/../tests/fixture_story.py"
+  # This root must survive Bats and suite-store cleanup when shutdown fails.
+  FORGE_FIXTURE_ROOT="$(mktemp -d /tmp/forge-storyhook-fixture.XXXXXXXX)" || return 1
+  FORGE_FIXTURE_OWNER_PID="${BASHPID:-$$}"
+  TEST_DIR="$FORGE_FIXTURE_ROOT/repo"
+  readonly FORGE_FIXTURE_STORY FORGE_FIXTURE_PYTHON FORGE_FIXTURE_HELPER
+  readonly FORGE_FIXTURE_ROOT FORGE_FIXTURE_OWNER_PID TEST_DIR
+  export FORGE_FIXTURE_STORY FORGE_FIXTURE_PYTHON FORGE_FIXTURE_HELPER
+  export FORGE_FIXTURE_ROOT FORGE_FIXTURE_OWNER_PID
+  printf '%s\n' "$FORGE_FIXTURE_OWNER_PID" "$FORGE_FIXTURE_STORY" > "$FORGE_FIXTURE_ROOT/owner"
+  mkdir -p "$TEST_DIR" "$FORGE_FIXTURE_ROOT/home" "$FORGE_FIXTURE_ROOT/templates"
+  story() {
+    "$FORGE_FIXTURE_PYTHON" -B "$FORGE_FIXTURE_HELPER" \
+      "$FORGE_FIXTURE_ROOT" "$FORGE_FIXTURE_OWNER_PID" "$FORGE_FIXTURE_STORY" "$@"
+  }
+  export -f story
+  (
+    cd "$TEST_DIR" &&
+      env -i PATH="$PATH" HOME="$HOME" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+        GIT_TEMPLATE_DIR="$FORGE_FIXTURE_ROOT/templates" git init -q . &&
+      story project new --prefix SC >/dev/null
+  )
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  if [ -z "${FORGE_FIXTURE_ROOT:-}" ] || [ ! -d "$FORGE_FIXTURE_ROOT" ] ||
+      [ -L "$FORGE_FIXTURE_ROOT" ] || [ ! -x "${FORGE_FIXTURE_PYTHON:-}" ] ||
+      [ ! -f "${FORGE_FIXTURE_HELPER:-}" ]; then
+    echo "StoryHook fixture identity unavailable; retained: ${FORGE_FIXTURE_ROOT:-unallocated}" >&2
+    return 1
+  fi
+  if ! "$FORGE_FIXTURE_PYTHON" -B "$FORGE_FIXTURE_HELPER" \
+      "$FORGE_FIXTURE_ROOT" "$FORGE_FIXTURE_OWNER_PID" "$FORGE_FIXTURE_STORY" daemon stop; then
+    echo "StoryHook fixture shutdown failed; retained: $FORGE_FIXTURE_ROOT (see stop.log)" >&2
+    return 1
+  fi
+  rm -rf "$FORGE_FIXTURE_ROOT"
 }
 
 # The documented `story state add`/`story type add` lines, in file order.

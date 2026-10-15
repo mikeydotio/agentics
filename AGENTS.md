@@ -586,15 +586,19 @@ stranded under an unbumped `2.25.1`, so no install ever received it.
   `git push origin v<X.Y.Z>` (no force needed on a first push). Then
   `/semver validate` should be all-PASS.
 
-## Current resolver recovery status (2026-10-14)
+## Current resolver and Forge recovery status (2026-10-15)
 
-- RCA registry ownership repair: implemented; 31 resolver tests and 5 contracts pass.
-- Independent source review: clear; release and installed recovery are unverified.
-- Baseline instruction drift: obsolete assignment rows removed to match current grammar.
-- Full repository gate: all 27 targets pass; isolated installation smoke passes.
-- Fix committed as b2da312; postmortem records prevention tests and remaining limits.
-- Forge and Council registry ownership remain separate follow-up work.
-- Preserve local RCA evidence; no merge, version change, or installation authorized here.
+- RCA resolver repair landed in PR #215 (merge ce7e306); prior 27-target gate passed.
+- The subsequent release gate failed at Forge setup teardown; that failure remains recorded.
+- Deterministic reproduction confirms fixture deletion before an admitted lock owner releases.
+- Historical writer identity and the exact directory-not-empty interleaving remain unknown.
+- Fixture repair committed as e7cb061: private identity, bounded normal stop, preserve on failure.
+- Six regression methods/seven scenarios passed; five real CLI cases passed for each doc variant.
+- Independent source review found no must-fix defects; all tested source hashes matched.
+- Focused test window released at 00:10:46 UTC; known test groups absent and shared lock free.
+- Repair is ready for draft PR review; merging requires separate approval.
+- No full release-gate rerun, release, or installation occurred after this repair.
+- Preserve original evidence and residue; see docs/rca/forge-fixture-teardown.md and HANDOFF.md.
 
 ## Hardening Roadmap
 

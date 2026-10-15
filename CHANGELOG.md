@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v3.9.6] - 2026-10-14
+
+### Fixed
+- drain private fixture owners before cleanup (e7cb061)
+- own resolver deadlines, cancellation, and output lifetime (b2da312)
+
+### Changed
+- Merge pull request #216 from mikeydotio/fix/forge-storyhook-fixture-lifecycle-20261014 (38c9d26)
+- Merge pull request #215 from mikeydotio/fix/rca-resolver-bounded-recovery-20261014 (ce7e306)
+- Merge pull request #211 from mikeydotio/fix/AGE-112-semver-pre-hooks (b81530c)
+
+### Documentation
+- record Forge fixture ownership recovery (d47e6b0)
+- record resolver recovery diagnosis and prevention (301aeb2)
+
+_[manual]_
+
 ## [v3.9.5] - 2026-09-20
 
 ### Fixed

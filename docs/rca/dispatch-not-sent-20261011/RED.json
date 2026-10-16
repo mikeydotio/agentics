@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "runs": 1,
+  "failures": 1,
+  "failure_rate": 1,
+  "deterministic": true,
+  "exit_codes": [
+    1
+  ],
+  "last_failure_tail": "Traceback (most recent call last):\n  File \"/Users/mikey/Documents/Codex/2026-10-07/task-4/agentics-rca-reconcile-a11/.rca/dispatch-not-sent-a11/repro.py\", line 17, in <module>\n    call('finish',outcome='reconciled',reason='Partial evidence preserved; no native work claimed',integrity_ok=True,artifacts_reconciled=True)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/mikey/Documents/Codex/2026-10-07/task-4/agentics-rca-reconcile-a11/.rca/dispatch-not-sent-a11/repro.py\", line 10, in call\n    state=execute(root,command,values)['state']\n          ~~~~~~~^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/mikey/Documents/Codex/2026-10-07/task-4/agentics-rca-reconcile-a11/plugins/agents/bin/delivery_store.py\", line 141, in execute\n    model.finish(s, data, now)\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^\n  File \"/Users/mikey/Documents/Codex/2026-10-07/task-4/agentics-rca-reconcile-a11/plugins/agents/bin/delivery_model.py\", line 253, in finish\n    raise ValueError(\"uncertain native dispatch requires external identity reconciliation\")\nValueError: uncertain native dispatch requires external identity reconciliation",
+  "display": "[rca] 1/1 runs failed (deterministic)"
+}

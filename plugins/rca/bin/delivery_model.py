@@ -1,7 +1,7 @@
 """Owner-independent bounded delivery transitions; no transport or filesystem effects."""
 import uuid
 
-from delivery_validation import body, digest, integer, text
+from delivery_validation import body, digest, integer, no_send_evidence, text, unresolved_dispatches
 
 TERMINAL = ("succeeded", "failed", "interrupted", "reconciled")
 
@@ -168,6 +168,17 @@ def record(s, data, now):
     if not matches:
         raise ValueError("unknown task_id")
     t = matches[0]
+    if kind == "dispatch-not-sent":
+        if s["status"] not in ("failed", "interrupted"):
+            raise ValueError("no-send attestation requires failed or interrupted state")
+        evidence = no_send_evidence(s, t, data, s["history"])
+        previous = [e for e in s["history"] if e["event"] == kind and e["attempt_id"] == t["attempt_id"]]
+        if previous:
+            if any(previous[0].get(key) != value for key, value in evidence.items()):
+                raise ValueError("conflicting no-send attestation; preserve original evidence")
+            return
+        s["history"].append(dict(evidence, at=now, event=kind))
+        return
     if data.get("attempt_id") != t["attempt_id"]:
         note(s, now, "rejected", t, "Retired attempt event")
         return
@@ -247,9 +258,7 @@ def finish(s, data, now):
     if outcome == "reconciled":
         if s["status"] not in ("failed", "interrupted") or s["remaining"]:
             raise ValueError("reconciliation requires terminal failure and confirmed shutdown")
-        attempted = {e["attempt_id"] for e in s["history"] if e["event"] == "dispatch-attempted"}
-        confirmed = {e["attempt_id"] for e in s["history"] if e["event"] == "dispatched"}
-        if attempted - confirmed:
+        if unresolved_dispatches(s):
             raise ValueError("uncertain native dispatch requires external identity reconciliation")
         if data.get("integrity_ok") is not True or data.get("artifacts_reconciled") is not True:
             raise ValueError("reconciliation requires integrity and artifact review")

@@ -2,6 +2,7 @@
 import hashlib
 import json
 import math
+import re
 
 
 def text(value, name):
@@ -55,6 +56,62 @@ def body(raw):
     if not isinstance(result, dict):
         raise ValueError("delivery must be a JSON object")
     return result
+
+
+def no_send_evidence(s, t, data, prior):
+    """Validate an owner's reviewed no-send attestation, not transport absence itself."""
+    identity = dict(batch_id=s["batch_id"], task_id=t["task_id"],
+                    attempt_id=t["attempt_id"], task_digest=t["task_digest"], session=s["session"])
+    if any(data.get(key) != value for key, value in identity.items()):
+        raise ValueError("no-send evidence must identify the exact original session and current attempt")
+    if s["status"] not in ("failed", "interrupted", "reconciled") or t["status"] not in ("failed", "interrupted"):
+        raise ValueError("no-send evidence requires terminal failure")
+    if t["agent_id"] is not None or t["payload"] is not None:
+        raise ValueError("no-send evidence conflicts with known native identity or payload")
+    if t["stopped"] or t["integrity_ok"]:
+        raise ValueError("no-send evidence cannot claim native shutdown or task integrity")
+    if any(e["event"] == "dispatched" and e["attempt_id"] == t["attempt_id"] for e in s["history"]):
+        raise ValueError("no-send evidence conflicts with confirmed dispatch")
+    if not any(e["event"] == "dispatch-attempted" and e["task_id"] == t["task_id"] and
+               e["attempt_id"] == t["attempt_id"] for e in prior):
+        raise ValueError("no-send evidence requires a prior current dispatch-attempted event")
+    if not any(e["event"] in ("failed", "interrupted") for e in prior):
+        raise ValueError("no-send evidence requires prior terminal failure history")
+    if data.get("no_transport") is not True:
+        raise ValueError("no-send evidence requires explicit no_transport:true attestation")
+    evidence = dict(identity, no_transport=True)
+    for key in ("reason", "evidence", "evidence_sha256", "reviewer"):
+        evidence[key] = text(data.get(key), key)
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", evidence["evidence_sha256"]):
+        raise ValueError("evidence_sha256 must be a 64-character hexadecimal SHA256")
+    if data.keys() - evidence.keys() - {"revision", "kind", "at", "event"}:
+        raise ValueError("unexpected no-send evidence fields")
+    return evidence
+
+
+def no_send_attempts(s):
+    """Revalidate stored attestations before letting them resolve an uncertain send."""
+    attempts = set()
+    for index, event in enumerate(s["history"]):
+        if event["event"] != "dispatch-not-sent":
+            continue
+        matches = [t for t in s["tasks"] if t["task_id"] == event.get("task_id")]
+        if len(matches) != 1:
+            raise ValueError("no-send evidence has an unknown task")
+        no_send_evidence(s, matches[0], event, s["history"][:index])
+        number(event.get("at"), "no-send evidence time")
+        attempt = event["attempt_id"]
+        if attempt in attempts:
+            raise ValueError("duplicate stored no-send evidence")
+        attempts.add(attempt)
+    return attempts
+
+
+def unresolved_dispatches(s):
+    """Resolve each attempted send only by dispatch confirmation or validated no-send evidence."""
+    attempted = {e["attempt_id"] for e in s["history"] if e["event"] == "dispatch-attempted"}
+    confirmed = {e["attempt_id"] for e in s["history"] if e["event"] == "dispatched"}
+    return attempted - confirmed - no_send_attempts(s)
 
 
 def validate(s):
@@ -132,3 +189,6 @@ def validate(s):
         raise ValueError("invalid cleanup ownership")
     if s["status"] == "succeeded" and not all(t["status"] == "accepted" and t["integrity_ok"] for t in s["tasks"]):
         raise ValueError("invalid successful outcome")
+    unresolved = unresolved_dispatches(s)
+    if s["status"] == "reconciled" and unresolved:
+        raise ValueError("invalid reconciled outcome: uncertain native dispatch")

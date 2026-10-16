@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-11T17:21:52.170558+00:00",
+  "beforeSHA256": "98ed117d063a3e93796b5792b366e689f37a845e511d4c6b4a8afba18b319ba5",
+  "afterSHA256": "018f4086d47cfd3526db806b1d33cb79eba84307eb3c9f3bbb377afa3310f798",
+  "originalRevision": 4,
+  "currentRevision": 6,
+  "status": "reconciled",
+  "taskStatus": "interrupted",
+  "taskUnchanged": true,
+  "originalHistoryPreserved": true,
+  "addedEvents": [
+    "dispatch-not-sent",
+    "reconciled"
+  ],
+  "allOtherFieldsUnchanged": true,
+  "ownerBaselineFiles": 5067,
+  "ownerUnchanged": true,
+  "runsBlocked": false,
+  "candidateCommit": "9f71d47aba745dde8e2bbfac30b6abe4a4ac8b18",
+  "installedPluginUnchanged": true,
+  "evidencePackageSHA256": "9cc75b20b6b20a97f9fa2adf8ddf33ca3d3d5c0ad4b48a121cf0ddf36ade8544"
+}

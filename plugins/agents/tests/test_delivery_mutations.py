@@ -47,7 +47,7 @@ class MutationTests(unittest.TestCase):
 
     def test_shell_runner_preserves_isolation_and_each_failure(self):
         """The real suite boundary propagates every failure without running later legs."""
-        legs = ["test_delivery_mutations.py", "test_delivery.py", "sync-agent-delivery.py"]
+        legs = ["test_delivery_mutations.py", "test_delivery.py", "test_delivery_not_sent.py", "sync-agent-delivery.py"]
         with tempfile.TemporaryDirectory(dir="/tmp", prefix="delivery-runner-") as directory:
             root = Path(directory)
             interpreter = root / "python3"
@@ -79,6 +79,46 @@ if [ "$leg" = "$DELIVERY_FAIL_LEG" ]; then exit 17; fi
                     for _, invoker, store in calls:
                         self.assertEqual(invoker, "local")
                         self.assertTrue(store.startswith("/private/tmp/agentics-store."), store)
+
+    def test_no_send_negative_controls(self):
+        """A no-send fix must preserve validation and uncertainty in disposable copies."""
+        with tempfile.TemporaryDirectory(dir="/tmp", prefix="delivery-no-send-mutations-") as directory:
+            target = Path(directory) / "bin"
+            shutil.copytree(ROOT / "bin", target)
+
+            def run(*cases):
+                return subprocess.run([sys.executable, "-B", "-W", "error",
+                                       str(ROOT / "tests/test_delivery_not_sent.py"), *cases],
+                                      env=dict(os.environ, DELIVERY_TEST_BIN=str(target)),
+                                      capture_output=True, text=True, timeout=30)
+
+            baseline = run()
+            self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
+            mutations = [
+                ("delivery_validation.py", "return attempted - confirmed - no_send_attempts(s)",
+                 "return attempted - confirmed", "test_verified_no_send_preserves_failure_and_deadlines"),
+                ("delivery_validation.py", "return attempted - confirmed - no_send_attempts(s)",
+                 "return set()", "test_other_uncertain_attempt_survivors_and_review_gates_remain"),
+                ("delivery_validation.py", "if any(data.get(key) != value for key, value in identity.items()):",
+                 "if False:", "test_missing_or_wrong_attestation_is_rejected_without_mutation"),
+                ("delivery_validation.py", 'if data.get("no_transport") is not True:',
+                 "if False:", "test_missing_or_wrong_attestation_is_rejected_without_mutation"),
+                ("delivery_validation.py", 'no_send_evidence(s, matches[0], event, s["history"][:index])',
+                 "pass", "test_tampered_stored_attestation_fails_closed_on_reload"),
+            ]
+            for filename, before, after, case in mutations:
+                with self.subTest(invariant=before):
+                    path = target / filename
+                    source = path.read_text()
+                    self.assertEqual(source.count(before), 1)
+                    path.write_text(source.replace(before, after))
+                    try:
+                        result = run("NotSentTests." + case)
+                        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                        self.assertRegex(result.stderr, r"FAILED \((?:failures|errors)=",
+                                         result.stdout + result.stderr)
+                    finally:
+                        path.write_text(source)
 
     def test_packaging_requires_each_prerequisite(self):
         """An unavailable packaging runtime is an explicit failed check, never a pass."""

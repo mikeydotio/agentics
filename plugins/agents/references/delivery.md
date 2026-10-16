@@ -66,6 +66,7 @@ existing integrity checks. The helper validates delivery, not filesystem permiss
 | progress | agent_id, working, evidence | Current-attempt progress, not presence or idle notification |
 | failure | category, reason | transport may retry; permission/capability/integrity never retry |
 | stopped | agent_id, stopped, integrity_ok | Confirm old execution ended; separately verify baseline |
+| dispatch-not-sent | batch_id, task_digest, session, no_transport, reason, evidence, evidence_sha256, reviewer | Owner attests independently reviewed evidence of no native invocation for an exact failed/interrupted attempt |
 
 Consume dispatch/probe actions exactly once by recording the attempted event before
 transport. A crash between attempted and returned identity is uncertain; never replay
@@ -148,8 +149,28 @@ the host is dead; the bound applies to an operating owner and makes resumed work
 After failed/interrupted work, explicit reconciliation may use finish outcome reconciled
 with reason, integrity_ok:true and artifacts_reconciled:true only after all owned agents
 are confirmed stopped and partial artifacts are preserved/reconciled against the baseline.
-An uncertain send with no observable native identity cannot be declared clean. Never
-automatically reconcile, delete a batch, or loop through fresh batches after failure.
+An uncertain send with no observable native identity cannot be declared clean merely
+because the worker inventory is empty. If preserved evidence establishes that **no
+native spawn/follow-up invocation occurred**, the original owner session may record
+`dispatch-not-sent` for the current unmatched `dispatch-attempted`. Supply exact original
+batch, task, digest, attempt and session identities; `no_transport:true`; a nonempty
+reason; a preserved evidence reference and its 64-digit hexadecimal SHA256; and the
+independent reviewer's identity. The owner attests that review occurred. The helper
+validates and records these fields; it does not authenticate the reviewer, read the
+reference, verify the hash against its contents, or prove transport absence. Uncertain
+invocation or unknown native identity still blocks reconciliation. Cross-session
+no-send recovery is unsupported.
+
+This event is valid only while failed/interrupted and rejects known native identities,
+dispatch confirmations, payloads and missing evidence. It appends structured history;
+it does not accept/stop the task, create a result, refresh deadlines or authorize a
+retry. An identical repeated attestation adds no second evidence entry (the command
+revision still advances); conflicting evidence is rejected. Stored attestations are
+revalidated on load. `finish` still requires no survivors, owner integrity verification,
+artifact review, and resolution of **every** attempted send. `reconciled` clears recovery
+bookkeeping, not the failed task or its absent result. Preserve the original record and
+review evidence before attesting; do not use the event when a native call may have run.
+Never automatically reconcile, delete a batch, or loop through fresh batches after failure.
 
 Surface display and notices for probe, extension, retry, failure, interruption, recovery,
 and cleanup with task, elapsed seconds, reason and audit path. Include limitations and

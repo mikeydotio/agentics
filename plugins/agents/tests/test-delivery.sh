@@ -6,4 +6,5 @@ REPO_ROOT="$(cd "$TESTS_DIR/../../.." && pwd)"
 
 python3 -B -W error "$TESTS_DIR/test_delivery_mutations.py"
 python3 -B -W error "$TESTS_DIR/test_delivery.py"
+python3 -B -W error "$TESTS_DIR/test_delivery_not_sent.py"
 python3 -B "$REPO_ROOT/scripts/sync-agent-delivery.py" --check
